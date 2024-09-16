@@ -117,6 +117,8 @@ class Scene {
 private:
 	TwinEEngine *_engine;
 
+	void loadModel(ActorStruct &actor, int32 modelIndex, bool lba1);
+
 	/** Process zone extra bonus */
 	void processZoneExtraBonus(ZoneStruct *zone);
 	void setActorStaticFlags(ActorStruct *act, uint32 staticFlags);
@@ -147,7 +149,7 @@ private:
 	int16 _samplePlayed = 0;
 
 public:
-	int16 _sceneMusic = 0;  // CubeJingle
+	int16 _cubeJingle = 0;
 private:
 	IVec3 _sceneHeroPos;
 	IVec3 _zoneHeroPos;
@@ -222,7 +224,7 @@ public:
 	void reloadCurrentScene();
 
 	/** Change to another scene */
-	void changeScene();
+	void changeCube();
 
 	/** For the buggy to get the 2D coordinates of an exterior cube in the map */
 	bool loadSceneCubeXY(int sceneNum, int32 *cubeX, int32 *cubeY);

@@ -220,7 +220,7 @@ int32 ScriptLifeV2::lPLAY_MUSIC(TwinEEngine *engine, LifeScriptContext &ctx) {
 	debugC(3, kDebugLevels::kDebugScripts, "LIFE::lPLAY_MUSIC()");
 	const int32 val = lPLAY_CD_TRACK(engine, ctx);
 	if (engine->isLBA2()) {
-		engine->_scene->_sceneMusic = 255;
+		engine->_scene->_cubeJingle = 255;
 		engine->_music->_nextMusic = -1;
 		if (engine->_gameState->hasGameFlag(157) > 0) {
 			engine->_music->_stopLastMusic = false;
@@ -510,7 +510,7 @@ int32 ScriptLifeV2::lRAIN(TwinEEngine *engine, LifeScriptContext &ctx) {
 	int32 n = engine->_redraw->addOverlay(OverlayType::koRain, 0, 0, 0, 0, OverlayPosType::koNormal, 1);
 	if (n != -1) {
 		// Rain n/10s
-		engine->_redraw->overlayList[n].lifeTime = engine->timerRef + engine->toSeconds(num / 10);
+		engine->_redraw->overlayList[n].timerEnd = engine->timerRef + engine->toSeconds(num / 10);
 		engine->_flagRain = true;
 		engine->_sound->startRainSample();
 	}
@@ -579,7 +579,7 @@ int32 ScriptLifeV2::lSHADOW_OBJ(TwinEEngine *engine, LifeScriptContext &ctx) {
 	debugC(3, kDebugLevels::kDebugScripts, "LIFE::SHADOW_OBJ(%i, %s)", actorIdx, castShadow ? "true" : "false");
 	ActorStruct *actor = engine->_scene->getActor(actorIdx);
 	if (actor->_lifePoint > 0) {
-		actor->_staticFlags.bDoesntCastShadow = !castShadow;
+		actor->_staticFlags.bNoShadow = !castShadow;
 	}
 	return 0;
 }
@@ -590,7 +590,7 @@ int32 ScriptLifeV2::lECLAIR(TwinEEngine *engine, LifeScriptContext &ctx) {
 	int32 n = engine->_redraw->addOverlay(OverlayType::koFlash, 0, 0, 0, 0, OverlayPosType::koNormal, 1);
 	if (n != -1) {
 		// Eclair n/10s
-		engine->_redraw->overlayList[n].lifeTime = engine->timerRef + engine->toSeconds(num / 10);
+		engine->_redraw->overlayList[n].timerEnd = engine->timerRef + engine->toSeconds(num / 10);
 	}
 	return 0;
 }
@@ -646,7 +646,7 @@ int32 ScriptLifeV2::lACTION(TwinEEngine *engine, LifeScriptContext &ctx) {
 int32 ScriptLifeV2::lSET_FRAME(TwinEEngine *engine, LifeScriptContext &ctx) {
 	const int frame = ctx.stream.readByte();
 	debugC(3, kDebugLevels::kDebugScripts, "LIFE::lSET_FRAME(%i)", (int)frame);
-	if (!ctx.actor->_staticFlags.bIsSpriteActor) {
+	if (!ctx.actor->_staticFlags.bSprite3D) {
 		// TODO: ObjectSetFrame(ctx.actorIdx, frame);
 	}
 	return -1;
@@ -655,7 +655,7 @@ int32 ScriptLifeV2::lSET_FRAME(TwinEEngine *engine, LifeScriptContext &ctx) {
 int32 ScriptLifeV2::lSET_SPRITE(TwinEEngine *engine, LifeScriptContext &ctx) {
 	const int16 num = ctx.stream.readSint16LE();
 	debugC(3, kDebugLevels::kDebugScripts, "LIFE::lSET_SPRITE(%i)", (int)num);
-	if (ctx.actor->_staticFlags.bIsSpriteActor) {
+	if (ctx.actor->_staticFlags.bSprite3D) {
 		engine->_actor->initSprite(num, ctx.actorIdx);
 	}
 	return 0;

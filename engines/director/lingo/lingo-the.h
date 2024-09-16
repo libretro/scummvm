@@ -112,6 +112,7 @@ enum TheEntityType {
 	kTheRightMouseUp,
 	kTheRollOver,
 	kTheRomanLingo,
+	kTheRunMode,
 	kTheScummvmVersion,			// set the Director version via lingo in tests
 	kTheSearchCurrentFolder,
 	kTheSearchPath,
@@ -159,6 +160,7 @@ enum TheFieldType {
 	kTheBackColor,
 	kTheBlend,
 	kTheBottom,
+	kTheCastLibNum,
 	kTheCastNum,
 	kTheCastType,
 	kTheCenter,

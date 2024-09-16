@@ -42,6 +42,15 @@ Common::SharedPtr<PlugIn> createMIDI();
 Common::SharedPtr<PlugIn> createStandard();
 Common::SharedPtr<PlugIn> createObsidian(const Common::SharedPtr<Obsidian::WordGameData> &wgData);
 Common::SharedPtr<PlugIn> createMTI();
+Common::SharedPtr<PlugIn> createFTTS();
+Common::SharedPtr<PlugIn> createRWC();
+
+Common::SharedPtr<PlugIn> createKnowWonder();
+
+Common::SharedPtr<PlugIn> createAXLogic();
+Common::SharedPtr<PlugIn> createHoologic();
+Common::SharedPtr<PlugIn> createMLine();
+Common::SharedPtr<PlugIn> createThereware();
 
 } // End of namespace PlugIns
 

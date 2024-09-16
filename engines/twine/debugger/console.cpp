@@ -230,16 +230,16 @@ bool TwinEConsole::doSetHolomapFlag(int argc, const char **argv) {
 
 	const int idx = atoi(argv[1]);
 	if (idx == -1) {
-		for (int i = 0; i < NUM_LOCATIONS; ++i) {
-			_engine->_holomap->setHolomapPosition(i);
+		for (int i = 0; i < _engine->numHoloPos(); ++i) {
+			_engine->_holomap->setHoloPos(i);
 		}
 		return true;
 	}
-	if (idx >= 0 && idx >= NUM_LOCATIONS) {
-		debugPrintf("given index exceeds the max allowed value of %i\n", NUM_LOCATIONS - 1);
+	if (idx < 0 || idx >= _engine->numHoloPos()) {
+		debugPrintf("given index exceeds the max allowed value of %i\n", _engine->numHoloPos() - 1);
 		return true;
 	}
-	_engine->_holomap->setHolomapPosition(idx);
+	_engine->_holomap->setHoloPos(idx);
 	return true;
 }
 
@@ -288,14 +288,14 @@ bool TwinEConsole::doPrintInventoryFlag(int argc, const char **argv) {
 
 bool TwinEConsole::doPrintHolomapFlag(int argc, const char **argv) {
 	if (argc <= 1) {
-		for (int i = 0; i < _engine->numLocations(); ++i) {
+		for (int i = 0; i < _engine->numHoloPos(); ++i) {
 			debugPrintf("[%03d] = %d\n", i, _engine->_gameState->_holomapFlags[i]);
 		}
 		return true;
 	}
 
 	const uint16 idx = atoi(argv[1]);
-	if (idx < _engine->numLocations()) {
+	if (idx < _engine->numHoloPos()) {
 		debugPrintf("[%03d] = %d\n", idx, _engine->_gameState->_holomapFlags[idx]);
 	}
 
@@ -369,7 +369,7 @@ bool TwinEConsole::doListMenuText(int argc, const char **argv) {
 }
 
 bool TwinEConsole::doSetHeroPosition(int argc, const char **argv) {
-	IVec3 &pos = _engine->_scene->_sceneHero->_pos;
+	IVec3 &pos = _engine->_scene->_sceneHero->_posObj;
 	if (argc < 4) {
 		debugPrintf("Current hero position: %i:%i:%i\n", pos.x, pos.y, pos.z);
 		return true;
@@ -395,7 +395,7 @@ bool TwinEConsole::doPlayMidi(int argc, const char **argv) {
 		return true;
 	}
 	int newMidiIndex = atoi(argv[1]);
-	_engine->_music->playMidiMusic(newMidiIndex);
+	_engine->_music->playMidiFile(newMidiIndex);
 	return true;
 }
 
@@ -405,7 +405,7 @@ bool TwinEConsole::doPlayMusic(int argc, const char **argv) {
 		return true;
 	}
 	int newMusicTrackIndex = atoi(argv[1]);
-	_engine->_music->playTrackMusic(newMusicTrackIndex);
+	_engine->_music->playMusic(newMusicTrackIndex);
 	return true;
 }
 
@@ -421,7 +421,7 @@ bool TwinEConsole::doChangeScene(int argc, const char **argv) {
 	}
 	_engine->_scene->_needChangeScene = atoi(argv[1]);
 	_engine->_scene->_heroPositionType = ScenePositionType::kScene;
-	_engine->_scene->changeScene();
+	_engine->_scene->changeCube();
 	return true;
 }
 

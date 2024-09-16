@@ -149,6 +149,8 @@ private:
 
 	MediaCueMessengerModifier(const MediaCueMessengerModifier &other);
 
+	void destructCueSource();
+
 	Common::SharedPtr<Modifier> shallowClone() const override;
 	const char *getDefaultName() const override;
 
@@ -366,6 +368,79 @@ private:
 	const char *getDefaultName() const override;
 };
 
+class PrintModifier : public Modifier {
+public:
+	PrintModifier();
+	~PrintModifier();
+
+	bool respondsToEvent(const Event &evt) const override;
+	VThreadState consumeMessage(Runtime *runtime, const Common::SharedPtr<MessageProperties> &msg) override;
+	void disable(Runtime *runtime) override;
+
+	MiniscriptInstructionOutcome writeRefAttribute(MiniscriptThread *thread, DynamicValueWriteProxy &writeProxy, const Common::String &attrib) override;
+
+	bool load(const PlugInModifierLoaderContext &context, const Data::Standard::PrintModifier &data);
+
+#ifdef MTROPOLIS_DEBUG_ENABLE
+	const char *debugGetTypeName() const override { return "Print Modifier"; }
+	void debugInspect(IDebugInspectionReport *report) const override;
+#endif
+
+private:
+	Common::SharedPtr<Modifier> shallowClone() const override;
+	const char *getDefaultName() const override;
+
+	Event _executeWhen;
+	Common::String _filePath;
+};
+
+class NavigateModifier : public Modifier {
+public:
+	NavigateModifier();
+	~NavigateModifier();
+
+	bool load(const PlugInModifierLoaderContext &context, const Data::Standard::NavigateModifier &data);
+
+	bool respondsToEvent(const Event &evt) const override;
+	VThreadState consumeMessage(Runtime *runtime, const Common::SharedPtr<MessageProperties> &msg) override;
+
+	void disable(Runtime *runtime) override;
+
+#ifdef MTROPOLIS_DEBUG_ENABLE
+	const char *debugGetTypeName() const override { return "Navigate Modifier"; }
+	void debugInspect(IDebugInspectionReport *report) const override;
+#endif
+
+private:
+	Common::SharedPtr<Modifier> shallowClone() const override;
+	const char *getDefaultName() const override;
+};
+
+class OpenTitleModifier : public Modifier {
+public:
+	OpenTitleModifier();
+	~OpenTitleModifier();
+
+	bool load(const PlugInModifierLoaderContext &context, const Data::Standard::OpenTitleModifier &data);
+
+	bool respondsToEvent(const Event &evt) const override;
+	VThreadState consumeMessage(Runtime *runtime, const Common::SharedPtr<MessageProperties> &msg) override;
+
+	void disable(Runtime *runtime) override;
+
+#ifdef MTROPOLIS_DEBUG_ENABLE
+	const char *debugGetTypeName() const override { return "Open Title Modifier"; }
+	void debugInspect(IDebugInspectionReport *report) const override;
+#endif
+
+private:
+	Common::SharedPtr<Modifier> shallowClone() const override;
+	const char *getDefaultName() const override;
+
+	Event _executeWhen;
+	Common::String _pathOrUrl;
+	bool _addToReturnList;
+};
 
 class StandardPlugIn : public MTropolis::PlugIn {
 public:
@@ -386,6 +461,9 @@ private:
 	PlugInModifierFactory<SysInfoModifier, Data::Standard::SysInfoModifier> _sysInfoModifierFactory;
 	PlugInModifierFactory<PanningModifier, Data::Standard::PanningModifier> _panningModifierFactory;
 	PlugInModifierFactory<FadeModifier, Data::Standard::FadeModifier> _fadeModifierFactory;
+	PlugInModifierFactory<PrintModifier, Data::Standard::PrintModifier> _printModifierFactory;
+	PlugInModifierFactory<NavigateModifier, Data::Standard::NavigateModifier> _navigateModifierFactory;
+	PlugInModifierFactory<OpenTitleModifier, Data::Standard::OpenTitleModifier> _openTitleModifierFactory;
 
 	StandardPlugInHacks _hacks;
 };

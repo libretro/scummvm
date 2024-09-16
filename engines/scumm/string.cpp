@@ -1077,7 +1077,7 @@ void ScummEngine::displayDialog() {
 		// If the string is centered and this is MI1 Sega CD, don't add linebreaks right away;
 		// we will take care of it in a different way just below ... :-)
 		if (_game.platform != Common::kPlatformSegaCD ||
-			(_game.platform != Common::kPlatformSegaCD && !_charset->_center)) {
+			(_game.platform == Common::kPlatformSegaCD && !_charset->_center)) {
 			_charset->addLinebreaks(0, _charsetBuffer + _charsetBufPos, 0, maxWidth);
 		}
 	}
@@ -1614,7 +1614,7 @@ int ScummEngine::convertVerbMessage(byte *dst, int dstSize, int var) {
 	num = readVar(var);
 	if (num) {
 		for (k = 1; k < _numVerbs; k++) {
-			// Fix ZAK FM-TOWNS bug #1734 by emulating exact (inconsistant?) behavior of the original code
+			// Fix ZAK FM-TOWNS bug #1734 by emulating exact (inconsistent?) behavior of the original code
 			if (num == _verbs[k].verbid && !_verbs[k].type && (!_verbs[k].saveid || (_game.version == 3 && _game.platform == Common::kPlatformFMTowns))) {
 				// Process variation of Korean postpositions
 				// Used by Korean fan translated games (monkey1, monkey2)
@@ -2329,8 +2329,9 @@ Common::CodePage ScummEngine::getDialogCodePage() const {
 		return Common::kWindows949;
 	case Common::JA_JPN:
 		return Common::kWindows932;
-	case Common::ZH_TWN:
 	case Common::ZH_CHN:
+		return Common::kWindows936;
+	case Common::ZH_TWN:
 		return Common::kWindows950;
 	case Common::RU_RUS:
 		return Common::kDos866;

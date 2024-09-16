@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ScummVM 2.1.0git\n"
 "Report-Msgid-Bugs-To: scummvm-devel@lists.scummvm.org\n"
-"POT-Creation-Date: 2024-09-03 19:24+0000\n"
+"POT-Creation-Date: 2024-09-16 10:02+0000\n"
 "PO-Revision-Date: 2023-12-14 14:28+0000\n"
 "Last-Translator: Niv Baehr <bloop93@gmail.com>\n"
 "Language-Team: Hebrew <https://translations.scummvm.org/projects/scummvm/"
@@ -312,7 +312,7 @@ msgstr "אחסון אחר עובד כעת. האם להפריע לו?"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:601 engines/kyra/gui/saveload_eob.cpp:634
 #: engines/parallaction/metaengine.cpp:143
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4008
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4028
 #: engines/toon/toon.cpp:1543
 msgid "Yes"
 msgstr "כן"
@@ -325,7 +325,7 @@ msgstr "כן"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:601 engines/kyra/gui/saveload_eob.cpp:634
 #: engines/parallaction/metaengine.cpp:149
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4008
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4028
 #: engines/toon/toon.cpp:1543
 msgid "No"
 msgstr "לא"
@@ -354,9 +354,9 @@ msgstr "תוכן קוד JSON משובש."
 #: engines/groovie/script.cpp:665 engines/mtropolis/mtropolis.cpp:114
 #: engines/mtropolis/mtropolis.cpp:124 engines/parallaction/saveload.cpp:270
 #: engines/saga/music.cpp:102 engines/sci/engine/kgraphics.cpp:76
-#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1260
-#: engines/scumm/scumm.cpp:1633 engines/scumm/scumm.cpp:2121
-#: engines/scumm/scumm.cpp:2137 engines/sky/compact.cpp:140
+#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1268
+#: engines/scumm/scumm.cpp:1641 engines/scumm/scumm.cpp:2129
+#: engines/scumm/scumm.cpp:2145 engines/sky/compact.cpp:140
 #: engines/sword1/animation.cpp:532 engines/sword1/animation.cpp:563
 #: engines/sword1/animation.cpp:571 engines/sword1/control.cpp:2813
 #: engines/sword1/logic.cpp:1732 engines/sword2/animation.cpp:426
@@ -992,10 +992,10 @@ msgstr "פעולה"
 #: gui/gui-manager.cpp:176 engines/metaengine.cpp:117
 #: engines/crab/input/input.cpp:95 engines/crab/input/input.cpp:145
 #: engines/dragons/metaengine.cpp:159 engines/freescape/movement.cpp:35
-#: engines/griffon/metaengine.cpp:121 engines/grim/grim.cpp:473
-#: engines/grim/grim.cpp:554 engines/icb/icb.cpp:68 engines/icb/icb.cpp:152
-#: engines/scumm/metaengine.cpp:899 engines/twine/metaengine.cpp:478
-#: engines/twine/metaengine.cpp:545 engines/twp/metaengine.cpp:154
+#: engines/griffon/metaengine.cpp:121 engines/grim/grim.cpp:481
+#: engines/grim/grim.cpp:562 engines/icb/icb.cpp:68 engines/icb/icb.cpp:152
+#: engines/scumm/metaengine.cpp:904 engines/twine/metaengine.cpp:467
+#: engines/twine/metaengine.cpp:534 engines/twp/metaengine.cpp:154
 #: engines/wintermute/keymapper_tables.h:1290
 #: engines/wintermute/keymapper_tables.h:1373
 #: engines/wintermute/keymapper_tables.h:1449
@@ -1007,10 +1007,10 @@ msgstr "למעלה"
 #: gui/gui-manager.cpp:182 engines/metaengine.cpp:123
 #: engines/crab/input/input.cpp:101 engines/crab/input/input.cpp:151
 #: engines/dragons/metaengine.cpp:165 engines/freescape/movement.cpp:42
-#: engines/griffon/metaengine.cpp:127 engines/grim/grim.cpp:478
-#: engines/grim/grim.cpp:559 engines/icb/icb.cpp:73 engines/icb/icb.cpp:157
-#: engines/scumm/metaengine.cpp:866 engines/twine/metaengine.cpp:485
-#: engines/twine/metaengine.cpp:553 engines/twp/metaengine.cpp:155
+#: engines/griffon/metaengine.cpp:127 engines/grim/grim.cpp:486
+#: engines/grim/grim.cpp:567 engines/icb/icb.cpp:73 engines/icb/icb.cpp:157
+#: engines/scumm/metaengine.cpp:871 engines/twine/metaengine.cpp:474
+#: engines/twine/metaengine.cpp:542 engines/twp/metaengine.cpp:155
 #: engines/wintermute/keymapper_tables.h:1296
 #: engines/wintermute/keymapper_tables.h:1379
 #: engines/wintermute/keymapper_tables.h:1456
@@ -1022,9 +1022,9 @@ msgstr "למטה"
 #: gui/gui-manager.cpp:188 engines/metaengine.cpp:129
 #: engines/crab/input/input.cpp:107 engines/crab/input/input.cpp:157
 #: engines/dragons/metaengine.cpp:171 engines/griffon/metaengine.cpp:133
-#: engines/grim/grim.cpp:483 engines/grim/grim.cpp:564 engines/icb/icb.cpp:78
-#: engines/icb/icb.cpp:162 engines/scumm/metaengine.cpp:879
-#: engines/twine/metaengine.cpp:500 engines/twine/metaengine.cpp:568
+#: engines/grim/grim.cpp:491 engines/grim/grim.cpp:572 engines/icb/icb.cpp:78
+#: engines/icb/icb.cpp:162 engines/scumm/metaengine.cpp:884
+#: engines/twine/metaengine.cpp:489 engines/twine/metaengine.cpp:557
 #: engines/twp/metaengine.cpp:152 engines/wintermute/keymapper_tables.h:320
 #: engines/wintermute/keymapper_tables.h:1302
 #: engines/wintermute/keymapper_tables.h:1385
@@ -1037,9 +1037,9 @@ msgstr "שמאלה"
 #: gui/gui-manager.cpp:194 engines/metaengine.cpp:135
 #: engines/crab/input/input.cpp:113 engines/crab/input/input.cpp:163
 #: engines/dragons/metaengine.cpp:177 engines/griffon/metaengine.cpp:139
-#: engines/grim/grim.cpp:488 engines/grim/grim.cpp:569 engines/icb/icb.cpp:83
-#: engines/icb/icb.cpp:167 engines/scumm/metaengine.cpp:886
-#: engines/twine/metaengine.cpp:492 engines/twine/metaengine.cpp:561
+#: engines/grim/grim.cpp:496 engines/grim/grim.cpp:577 engines/icb/icb.cpp:83
+#: engines/icb/icb.cpp:167 engines/scumm/metaengine.cpp:891
+#: engines/twine/metaengine.cpp:481 engines/twine/metaengine.cpp:550
 #: engines/twp/metaengine.cpp:153 engines/wintermute/keymapper_tables.h:326
 #: engines/wintermute/keymapper_tables.h:1308
 #: engines/wintermute/keymapper_tables.h:1391
@@ -3635,11 +3635,11 @@ msgstr "לחיצה ימנית"
 
 #. I18N: Action in In Cold Blood
 #: engines/metaengine.cpp:79 engines/agos/metaengine.cpp:252
-#: engines/crab/input/input.cpp:261 engines/grim/grim.cpp:541
+#: engines/crab/input/input.cpp:261 engines/grim/grim.cpp:549
 #: engines/hdb/metaengine.cpp:258 engines/icb/icb.cpp:137
 #: engines/icb/icb.cpp:203 engines/mohawk/myst.cpp:595
 #: engines/mohawk/riven.cpp:876 engines/sky/metaengine.cpp:126
-#: engines/twine/metaengine.cpp:231 engines/wintermute/keymapper_tables.h:1608
+#: engines/twine/metaengine.cpp:220 engines/wintermute/keymapper_tables.h:1608
 msgid "Pause"
 msgstr "השהיה"
 
@@ -3648,7 +3648,7 @@ msgid "Game menu"
 msgstr "תפריט משחק"
 
 #: engines/metaengine.cpp:92 engines/freescape/movement.cpp:82
-#: engines/grim/grim.cpp:524 engines/grim/grim.cpp:620
+#: engines/grim/grim.cpp:532 engines/grim/grim.cpp:628
 #: engines/made/metaengine.cpp:121 engines/mohawk/myst.cpp:566
 #: engines/mohawk/riven.cpp:847 engines/wintermute/keymapper_tables.h:220
 #: engines/wintermute/keymapper_tables.h:1092
@@ -3671,8 +3671,8 @@ msgstr "תיבת דו-שיח לניבוי קלט"
 #. and allows confirming popup dialogue prompts (eg. for save game deletion or overwriting)
 #. and also submitting a new save game name, or choosing an existing save game for overwriting.
 #: engines/metaengine.cpp:111 engines/bladerunner/metaengine.cpp:273
-#: engines/griffon/metaengine.cpp:115 engines/grim/grim.cpp:530
-#: engines/grim/grim.cpp:626 engines/sky/metaengine.cpp:101
+#: engines/griffon/metaengine.cpp:115 engines/grim/grim.cpp:538
+#: engines/grim/grim.cpp:634 engines/sky/metaengine.cpp:101
 #: engines/wintermute/keymapper_tables.h:54
 msgid "Confirm"
 msgstr "אישור"
@@ -3882,7 +3882,7 @@ msgid "Global"
 msgstr "כללי"
 
 #: backends/events/default/default-events.cpp:335
-#: engines/twine/metaengine.cpp:350
+#: engines/twine/metaengine.cpp:339
 msgid "Global Main Menu"
 msgstr "תפריט ראשי כללי"
 
@@ -3942,7 +3942,7 @@ msgstr "מיתוג תיקון יחס ממדים"
 #: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:72
 #: backends/graphics3d/ios/ios-graphics3d.cpp:356
 #: backends/graphics3d/openglsdl/openglsdl-graphics3d.cpp:241
-#: engines/twine/metaengine.cpp:360
+#: engines/twine/metaengine.cpp:349
 msgid "Center"
 msgstr "מרכז"
 
@@ -4642,14 +4642,14 @@ msgstr "מצב זכוכית מגדלת כבוי. מפעיל מחדש מצב גר
 msgid "Magnify Mode Off"
 msgstr "מצב זכוכית מגדלת כבוי"
 
-#: backends/platform/android/android.cpp:1054
+#: backends/platform/android/android.cpp:1055
 #: backends/platform/ios7/ios7_osys_misc.mm:249
 #, fuzzy
 #| msgid "Settings"
 msgid "Getting help"
 msgstr "הגדרות"
 
-#: backends/platform/android/android.cpp:1057
+#: backends/platform/android/android.cpp:1058
 msgid ""
 "## Help, I'm lost!\n"
 "\n"
@@ -4671,13 +4671,13 @@ msgid ""
 "checking out a game walkthrough. Good luck!\n"
 msgstr ""
 
-#: backends/platform/android/android.cpp:1066
+#: backends/platform/android/android.cpp:1067
 #: backends/platform/ios7/ios7_osys_misc.mm:261
 #: backends/platform/ios7/ios7_osys_misc.mm:357
 msgid "Touch Controls"
 msgstr "בקרות מגע"
 
-#: backends/platform/android/android.cpp:1069
+#: backends/platform/android/android.cpp:1070
 msgid ""
 "## Touch control modes\n"
 "The touch control mode can be changed by tapping or clicking on the "
@@ -4746,13 +4746,13 @@ msgid ""
 "\n"
 msgstr ""
 
-#: backends/platform/android/android.cpp:1125
+#: backends/platform/android/android.cpp:1126
 #: backends/platform/ios7/ios7_osys_misc.mm:336
 #: backends/platform/ios7/ios7_osys_misc.mm:380
 msgid "Adding Games"
 msgstr "מוסיף משחקים"
 
-#: backends/platform/android/android.cpp:1128
+#: backends/platform/android/android.cpp:1129
 #, fuzzy
 #| msgid ""
 #| "In this new version of ScummVM Android, significant changes were made to "
@@ -5443,8 +5443,8 @@ msgstr "R2"
 
 #. I18N: Hardware key
 #: backends/platform/sdl/miyoo/miyoo.cpp:83
-#: backends/platform/sdl/miyoo/miyoo.cpp:114 engines/grim/grim.cpp:536
-#: engines/grim/grim.cpp:632 engines/hdb/metaengine.cpp:264
+#: backends/platform/sdl/miyoo/miyoo.cpp:114 engines/grim/grim.cpp:544
+#: engines/grim/grim.cpp:640 engines/hdb/metaengine.cpp:264
 #: engines/made/metaengine.cpp:156
 msgid "Menu"
 msgstr "תפריט"
@@ -5802,7 +5802,7 @@ msgstr "הפעלת שילוב עם Discord"
 msgid "Enable any copy protection that would otherwise be bypassed by default."
 msgstr ""
 
-#: engines/agi/metaengine.cpp:422 engines/asylum/asylum.cpp:655
+#: engines/agi/metaengine.cpp:408 engines/asylum/asylum.cpp:655
 #: engines/buried/saveload.cpp:53 engines/mohawk/riven.cpp:759
 #: engines/petka/saveload.cpp:121
 #, fuzzy
@@ -5810,7 +5810,7 @@ msgstr ""
 msgid "This game does not support loading"
 msgstr "מזהה המשחק אינו נתמך."
 
-#: engines/agi/metaengine.cpp:444 engines/asylum/asylum.cpp:666
+#: engines/agi/metaengine.cpp:431 engines/asylum/asylum.cpp:666
 #: engines/buried/saveload.cpp:64 engines/mohawk/riven.cpp:774
 #: engines/petka/saveload.cpp:101
 #, fuzzy
@@ -5861,7 +5861,7 @@ msgstr "שחזור"
 msgid "Quick load or save game isn't supported in this location"
 msgstr "שמירת המשחק או טעינה מהירה לא נתמכות במיקום זה"
 
-#: engines/agos/saveload.cpp:161 engines/scumm/scumm.cpp:2989
+#: engines/agos/saveload.cpp:161 engines/scumm/scumm.cpp:2997
 #, c-format
 msgid ""
 "Failed to load saved game from file:\n"
@@ -5872,7 +5872,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:196 engines/scumm/scumm.cpp:2976
+#: engines/agos/saveload.cpp:196 engines/scumm/scumm.cpp:2984
 #, c-format
 msgid ""
 "Failed to save game to file:\n"
@@ -5883,7 +5883,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:204 engines/scumm/scumm.cpp:3009
+#: engines/agos/saveload.cpp:204 engines/scumm/scumm.cpp:3017
 #, c-format
 msgid ""
 "Successfully saved game in file:\n"
@@ -5995,17 +5995,17 @@ msgstr "מקש ימני"
 msgid "Exit cutscene"
 msgstr "דילוג על סרטוני מעבר"
 
-#: engines/agos/metaengine.cpp:257 engines/vcruise/metaengine.cpp:187
+#: engines/agos/metaengine.cpp:257 engines/vcruise/metaengine.cpp:198
 #, fuzzy
 #| msgid "Music volume up / down"
 msgid "Music volume down"
 msgstr "עוצמת מוזיקה למעלה / למטה"
 
-#: engines/agos/metaengine.cpp:262 engines/vcruise/metaengine.cpp:192
+#: engines/agos/metaengine.cpp:262 engines/vcruise/metaengine.cpp:203
 msgid "Music volume up"
 msgstr "הגברת עוצמת שמע"
 
-#: engines/agos/metaengine.cpp:268 engines/vcruise/metaengine.cpp:177
+#: engines/agos/metaengine.cpp:268 engines/vcruise/metaengine.cpp:188
 #, fuzzy
 #| msgid "Toggle fullscreen"
 msgid "Toggle music on/off"
@@ -6519,7 +6519,7 @@ msgstr "מיתוג קרבות"
 
 #. I18N: This keymap allows skipping video cutscenes
 #: engines/bladerunner/metaengine.cpp:229 engines/scumm/help.cpp:79
-#: engines/scumm/metaengine.cpp:925 engines/twp/metaengine.cpp:162
+#: engines/scumm/metaengine.cpp:930 engines/twp/metaengine.cpp:162
 #: engines/zvision/metaengine.cpp:284
 msgid "Skip cutscene"
 msgstr "דילוג על סרטוני מעבר"
@@ -6700,7 +6700,7 @@ msgstr "דילוג"
 #: engines/hopkins/metaengine.cpp:238 engines/lure/metaengine.cpp:191
 #: engines/made/metaengine.cpp:162 engines/mads/metaengine.cpp:305
 #: engines/saga/metaengine.cpp:441 engines/stark/metaengine.cpp:208
-#: engines/trecision/metaengine.cpp:169 engines/vcruise/metaengine.cpp:151
+#: engines/trecision/metaengine.cpp:169 engines/vcruise/metaengine.cpp:162
 #: engines/wintermute/keymapper_tables.h:920
 msgid "Save game"
 msgstr "שמירת משחק"
@@ -6710,7 +6710,7 @@ msgstr "שמירת משחק"
 #: engines/mohawk/myst_stacks/menu.cpp:283
 #: engines/mohawk/riven_stacks/aspit.cpp:349 engines/saga/metaengine.cpp:431
 #: engines/stark/metaengine.cpp:213 engines/trecision/metaengine.cpp:175
-#: engines/vcruise/metaengine.cpp:156 engines/wintermute/keymapper_tables.h:925
+#: engines/vcruise/metaengine.cpp:167 engines/wintermute/keymapper_tables.h:925
 #: engines/wintermute/keymapper_tables.h:1265
 msgid "Load game"
 msgstr "טוען משחק"
@@ -6803,7 +6803,7 @@ msgstr "הפעלת המרת טקסט לדיבור עבור עצמים ואפשר
 #: engines/griffon/metaengine.cpp:41 engines/lure/metaengine.cpp:54
 #: engines/mads/metaengine.cpp:125 engines/sci/detection_options.h:224
 #: engines/sherlock/metaengine.cpp:113 engines/supernova/metaengine.cpp:50
-#: engines/twine/metaengine.cpp:157
+#: engines/twine/metaengine.cpp:146
 msgid "Use TTS to read the descriptions (if TTS is available)"
 msgstr "שימוש בהמרת טקסט לדיבור לקריאת תיאורים (אם זמינה)"
 
@@ -6900,7 +6900,7 @@ msgstr "הצגת כתוביות סיום של המשחק"
 msgid "Faster game speed"
 msgstr "מהירות סרט מהירה"
 
-#: engines/cine/metaengine.cpp:315 engines/grim/grim.cpp:498
+#: engines/cine/metaengine.cpp:315 engines/grim/grim.cpp:506
 #: engines/hpl1/metaengine.cpp:90 engines/scumm/help.cpp:243
 #: engines/scumm/help.cpp:251
 msgid "Examine"
@@ -6915,12 +6915,12 @@ msgstr "להמריא"
 #. I18N: Action in In Cold Blood
 #: engines/cine/metaengine.cpp:325 engines/crab/input/input.cpp:251
 #: engines/dragons/metaengine.cpp:148 engines/griffon/metaengine.cpp:152
-#: engines/grim/grim.cpp:513 engines/grim/grim.cpp:609
+#: engines/grim/grim.cpp:521 engines/grim/grim.cpp:617
 #: engines/hdb/metaengine.cpp:251 engines/hpl1/metaengine.cpp:94
 #: engines/icb/icb.cpp:101 engines/icb/icb.cpp:179 engines/scumm/help.cpp:229
 #: engines/scumm/help.cpp:238 engines/scumm/help.cpp:245
 #: engines/scumm/help.cpp:253 engines/stark/metaengine.cpp:267
-#: engines/tinsel/metaengine.cpp:312 engines/twine/metaengine.cpp:418
+#: engines/tinsel/metaengine.cpp:312 engines/twine/metaengine.cpp:407
 #: engines/zvision/metaengine.cpp:232
 msgid "Inventory"
 msgstr "מלאי"
@@ -7018,7 +7018,7 @@ msgstr "אינטראקציה"
 
 #. I18N: Combat command in Might & Magic 1
 #: engines/crab/input/input.cpp:125 engines/griffon/metaengine.cpp:145
-#: engines/mm/mm1/metaengine.cpp:65 engines/scumm/metaengine.cpp:912
+#: engines/mm/mm1/metaengine.cpp:65 engines/scumm/metaengine.cpp:917
 msgid "Attack"
 msgstr "תקיפה"
 
@@ -7029,7 +7029,7 @@ msgstr "תקיפה"
 msgid "Block"
 msgstr "לבטל נעילה"
 
-#: engines/crab/input/input.cpp:169 engines/twine/metaengine.cpp:462
+#: engines/crab/input/input.cpp:169 engines/twine/metaengine.cpp:451
 msgid "Accept"
 msgstr "אישור"
 
@@ -7063,7 +7063,7 @@ msgstr ""
 msgid "Reply 6"
 msgstr ""
 
-#: engines/crab/input/input.cpp:221 engines/twine/metaengine.cpp:508
+#: engines/crab/input/input.cpp:221 engines/twine/metaengine.cpp:497
 msgid "Next Page"
 msgstr "הדף הבא"
 
@@ -7300,7 +7300,7 @@ msgstr "החלפת פקודה"
 #: engines/freescape/movement.cpp:96 engines/lure/metaengine.cpp:209
 #: engines/mads/metaengine.cpp:292 engines/mm/mm1/metaengine.cpp:41
 #: engines/mm/mm1/metaengine.cpp:47 engines/saga/metaengine.cpp:328
-#: engines/tinsel/metaengine.cpp:257 engines/twine/metaengine.cpp:436
+#: engines/tinsel/metaengine.cpp:257 engines/twine/metaengine.cpp:425
 #: engines/wintermute/keymapper_tables.h:60
 msgid "Escape"
 msgstr "בריחה"
@@ -7511,41 +7511,41 @@ msgstr ""
 "האם בכל זאת להריץ את %s?"
 
 #. I18N: Action in In Cold Blood
-#: engines/grim/grim.cpp:493 engines/grim/grim.cpp:584
+#: engines/grim/grim.cpp:501 engines/grim/grim.cpp:592
 #: engines/hpl1/metaengine.cpp:82 engines/icb/icb.cpp:131
 #: engines/icb/icb.cpp:197
 msgid "Run"
 msgstr "ריצה"
 
-#: engines/grim/grim.cpp:503 engines/grim/grim.cpp:599
+#: engines/grim/grim.cpp:511 engines/grim/grim.cpp:607
 msgid "Use/Talk"
 msgstr "שימוש/שיחה"
 
-#: engines/grim/grim.cpp:508 engines/grim/grim.cpp:604
+#: engines/grim/grim.cpp:516 engines/grim/grim.cpp:612
 msgid "Pick up/Put away"
 msgstr "איסוף/סילוק"
 
-#: engines/grim/grim.cpp:518 engines/grim/grim.cpp:614
+#: engines/grim/grim.cpp:526 engines/grim/grim.cpp:622
 msgid "Skip dialog lines"
 msgstr "דילוג על שורות בשיחה"
 
-#: engines/grim/grim.cpp:574
+#: engines/grim/grim.cpp:582
 msgid "Cycle Objects Up"
 msgstr "גלילת עצמים מעלה"
 
-#: engines/grim/grim.cpp:579
+#: engines/grim/grim.cpp:587
 msgid "Cycle Objects Down"
 msgstr "גלילת עצמים מטה"
 
-#: engines/grim/grim.cpp:589
+#: engines/grim/grim.cpp:597
 msgid "Quick Room Exit"
 msgstr "יציאה מהירה מהחדר"
 
-#: engines/grim/grim.cpp:594
+#: engines/grim/grim.cpp:602
 msgid "Examine/Look"
 msgstr "בחינה/מבט"
 
-#: engines/grim/grim.cpp:1370
+#: engines/grim/grim.cpp:1378
 msgid "Error: the game could not be saved."
 msgstr "שגיאהL לא ניתן לשמור את המשחק."
 
@@ -8036,7 +8036,7 @@ msgid "Interact via Right Click"
 msgstr "פעולה באמצעות לחיצה ימנית"
 
 #: engines/kyra/engine/eobcommon.cpp:371 engines/kyra/engine/lol.cpp:510
-#: engines/twine/metaengine.cpp:380
+#: engines/twine/metaengine.cpp:369
 msgid "Move Forward"
 msgstr "להתקדם"
 
@@ -8054,13 +8054,13 @@ msgstr "זוז ימינה"
 
 #: engines/kyra/engine/eobcommon.cpp:375 engines/kyra/engine/lol.cpp:514
 #: engines/mm/mm1/metaengine.cpp:97 engines/pegasus/pegasus.cpp:2740
-#: engines/twine/metaengine.cpp:401 engines/zvision/metaengine.cpp:209
+#: engines/twine/metaengine.cpp:390 engines/zvision/metaengine.cpp:209
 msgid "Turn Left"
 msgstr "פונה שמאלה"
 
 #: engines/kyra/engine/eobcommon.cpp:376 engines/kyra/engine/lol.cpp:515
 #: engines/mm/mm1/metaengine.cpp:98 engines/pegasus/pegasus.cpp:2747
-#: engines/twine/metaengine.cpp:394 engines/zvision/metaengine.cpp:215
+#: engines/twine/metaengine.cpp:383 engines/zvision/metaengine.cpp:215
 msgid "Turn Right"
 msgstr "פנה ימינה"
 
@@ -8270,7 +8270,7 @@ msgid "This puzzle is not available in the trial version of the game"
 msgstr "חידה זו אינה זמינה בגרסת הניסיון של המשחק"
 
 #: engines/lure/metaengine.cpp:53 engines/mads/metaengine.cpp:124
-#: engines/sherlock/metaengine.cpp:112 engines/twine/metaengine.cpp:156
+#: engines/sherlock/metaengine.cpp:112 engines/twine/metaengine.cpp:145
 msgid "TTS Narrator"
 msgstr "קריין המרת טקסט לדיבור"
 
@@ -9042,10 +9042,6 @@ msgid ""
 "The game will still play, but some audio will not work."
 msgstr ""
 
-#: engines/mtropolis/plugin/mti.cpp:550
-msgid "Image Viewer"
-msgstr ""
-
 #: engines/mutationofjb/util.cpp:32
 #, c-format
 msgid "Unable to locate the '%s' engine data file"
@@ -9077,7 +9073,7 @@ msgstr ""
 "את העדכונים ניתן להוריד מכאן:\n"
 "%s"
 
-#: engines/myst3/myst3.cpp:1577 engines/pegasus/pegasus.cpp:749
+#: engines/myst3/myst3.cpp:1590 engines/pegasus/pegasus.cpp:749
 msgid "Invalid file name for saving"
 msgstr "שם קובץ לא חוקי לשמירה"
 
@@ -9402,7 +9398,7 @@ msgstr ""
 
 #: engines/saga/metaengine.cpp:333 engines/scumm/help.cpp:80
 #: engines/stark/metaengine.cpp:286 engines/trecision/metaengine.cpp:150
-#: engines/vcruise/metaengine.cpp:171
+#: engines/vcruise/metaengine.cpp:182
 msgid "Pause game"
 msgstr "השהה משחק"
 
@@ -9500,7 +9496,7 @@ msgid "Continue game"
 msgstr "המשך"
 
 #: engines/saga/metaengine.cpp:436 engines/trecision/metaengine.cpp:156
-#: engines/vcruise/metaengine.cpp:166
+#: engines/vcruise/metaengine.cpp:177
 #, fuzzy
 #| msgid "Quit Game"
 msgid "Quit game"
@@ -9891,7 +9887,7 @@ msgid "Your Name:"
 msgstr "שמכם:"
 
 #. I18N: Button, start hosting online multiplayer game
-#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4014
+#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4034
 msgid "Host"
 msgstr ""
 
@@ -9903,7 +9899,7 @@ msgid "Querying games..."
 msgstr "שומר משחק ..."
 
 #. I18N: Join online multiplayer game
-#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4014
+#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4034
 msgid "Join"
 msgstr ""
 
@@ -10155,7 +10151,7 @@ msgid "Enable online competitive mods"
 msgstr ""
 
 #: engines/scumm/dialogs.cpp:1713
-msgid "Enables custom-made modifications intented for online competitive play."
+msgid "Enables custom-made modifications intended for online competitive play."
 msgstr ""
 
 #: engines/scumm/dialogs.cpp:1717
@@ -10819,36 +10815,36 @@ msgstr "כיבוי מצב הדגמה"
 msgid "Enable demo/kiosk mode in the full retail version of Maniac Mansion."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:860
+#: engines/scumm/metaengine.cpp:865
 #, fuzzy
 msgid "Down Left"
 msgstr "פונה שמאלה"
 
-#: engines/scumm/metaengine.cpp:873
+#: engines/scumm/metaengine.cpp:878
 #, fuzzy
 msgid "Down Right"
 msgstr "פנה ימינה"
 
-#: engines/scumm/metaengine.cpp:893
+#: engines/scumm/metaengine.cpp:898
 #, fuzzy
 msgid "Up Left"
 msgstr "שמאלה"
 
-#: engines/scumm/metaengine.cpp:906
+#: engines/scumm/metaengine.cpp:911
 #, fuzzy
 msgid "Up Right"
 msgstr "ימינה"
 
-#: engines/scumm/metaengine.cpp:918
+#: engines/scumm/metaengine.cpp:923
 msgid "Switch weapon"
 msgstr "החלפת נשק"
 
 #. I18N: Lets one skip the bike/car fight sequences in Full Throttle
-#: engines/scumm/metaengine.cpp:932
+#: engines/scumm/metaengine.cpp:937
 msgid "Win the bike fight cheat"
 msgstr "רמאות לניצחון בקרב אופנועים"
 
-#: engines/scumm/saveload.cpp:1976
+#: engines/scumm/saveload.cpp:1977
 #, c-format
 msgid ""
 "Warning: incompatible sound settings detected between the current "
@@ -10862,7 +10858,7 @@ msgid ""
 "this save file."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:292
+#: engines/scumm/scumm.cpp:293
 msgid ""
 "You have enabled 'aspect ratio correction'. However, FM-TOWNS' natural "
 "resolution is 320x240, which doesn't allow aspect ratio correction.\n"
@@ -10873,16 +10869,16 @@ msgstr ""
 "שאינה מאפשרת תיקון יחס ממדים.\n"
 "ניתן להשיג תיקון יחס ממדים על ידי חיתוך הרזולוציה ל-320x200, בלשונית 'מנוע'."
 
-#: engines/scumm/scumm.cpp:1214
+#: engines/scumm/scumm.cpp:1222
 msgid "This game requires the 'Indy' Macintosh executable for its fonts."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1239
+#: engines/scumm/scumm.cpp:1247
 msgid ""
 "This game requires the 'Loom' Macintosh executable for its music and fonts."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1259
+#: engines/scumm/scumm.cpp:1267
 msgid ""
 "Could not find the 'Monkey Island' Macintosh executable to read the\n"
 "instruments from. Music will be disabled."
@@ -10890,17 +10886,17 @@ msgstr ""
 "לא ניתן למצוא את ההפעלה מקינטוש 'אי הקופים' כדי לקרוא את\n"
 "מכשירים מ. המוסיקה תושבת."
 
-#: engines/scumm/scumm.cpp:1267
+#: engines/scumm/scumm.cpp:1275
 #, c-format
 msgid "Could not open Macintosh resource file %s"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1270
+#: engines/scumm/scumm.cpp:1278
 #, c-format
 msgid "Could not find resource fork in Macintosh resource file %s"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1630
+#: engines/scumm/scumm.cpp:1638
 msgid ""
 "Audio files compressed with ScummVM Tools were detected; *.BUN/*.SOU\n"
 "compression is not supported anymore for this game, audio will be disabled.\n"
@@ -10910,7 +10906,7 @@ msgstr ""
 "הדחיסה עבור משחק זה כבר אינה נתמכת, השמע ינוטרל.\n"
 "נא להעתיק את המשחק מהמדיה המקורית ללא הדחיסה."
 
-#: engines/scumm/scumm.cpp:2119
+#: engines/scumm/scumm.cpp:2127
 #, c-format
 msgid ""
 "Native MIDI support requires the Roland Upgrade from LucasArts,\n"
@@ -10919,7 +10915,7 @@ msgstr ""
 "תמיכת MIDI מקומית דורשת את שדרוג הרולנד מ- LucasArts,\n"
 "אבל %s חסר. במקום זאת משתמשים ב- AdLib."
 
-#: engines/scumm/scumm.cpp:2135
+#: engines/scumm/scumm.cpp:2143
 msgid ""
 "This particular version of Monkey Island 1 is known to miss some\n"
 "required resources for MT-32. Using AdLib instead."
@@ -10927,7 +10923,7 @@ msgstr ""
 "גרסה זו של אי הקופים 1 ידועה כחסרה\n"
 "משאבים מסוים שנדרשים עבור MT-32. משתמשים ב-AdLib במקום."
 
-#: engines/scumm/scumm.cpp:3903
+#: engines/scumm/scumm.cpp:3923
 msgid ""
 "Usually, Maniac Mansion would start now. But for that to work, the game "
 "files for Maniac Mansion have to be in the 'Maniac' directory inside the "
@@ -10937,7 +10933,7 @@ msgstr ""
 "Mansion חייבים להיות בספריית 'Maniac' בתוך ספריית המשחק Tentacle, ויש להוסיף "
 "את המשחק ל- ScummVM."
 
-#: engines/scumm/scumm.cpp:4014
+#: engines/scumm/scumm.cpp:4034
 #, fuzzy
 msgid "Would you like to host or join a network play session?"
 msgstr "האם ברצונכם לשמור או לטעון משחק?"
@@ -11614,175 +11610,167 @@ msgid "Enable the debug mode"
 msgstr "הפעלת מצב ניפוי התקלים"
 
 #: engines/twine/metaengine.cpp:78
-msgid "Enable audio CD"
-msgstr "הפעלת תקליטור שמע"
-
-#: engines/twine/metaengine.cpp:79
-msgid "Enable the original audio cd track"
-msgstr "הפעלת רצועת השמע המקורית מהתקליטור"
-
-#: engines/twine/metaengine.cpp:89
 msgid "Enable sound"
 msgstr "הפעלת צליל"
 
-#: engines/twine/metaengine.cpp:90
+#: engines/twine/metaengine.cpp:79
 msgid "Enable the sound for the game"
 msgstr "הפעלת צליל עבור המשחק"
 
-#: engines/twine/metaengine.cpp:100
+#: engines/twine/metaengine.cpp:89
 msgid "Enable text"
 msgstr "הפעלת טקסט"
 
-#: engines/twine/metaengine.cpp:101
+#: engines/twine/metaengine.cpp:90
 msgid "Enable the text for the game"
 msgstr "הפעלת טקסט עבור המשחק"
 
-#: engines/twine/metaengine.cpp:111
+#: engines/twine/metaengine.cpp:100
 msgid "Enable movies"
 msgstr "הפעלת סרטים"
 
-#: engines/twine/metaengine.cpp:112
+#: engines/twine/metaengine.cpp:101
 msgid "Enable the cutscenes for the game"
 msgstr "הפעלת סרטוני מעבר עבור המשחק"
 
-#: engines/twine/metaengine.cpp:122
+#: engines/twine/metaengine.cpp:111
 msgid "Enable mouse"
 msgstr "הפעלת עכבר"
 
-#: engines/twine/metaengine.cpp:123
+#: engines/twine/metaengine.cpp:112
 msgid "Enable the mouse for the UI"
 msgstr "הפעלת עכבר עבור הממשק"
 
-#: engines/twine/metaengine.cpp:133
+#: engines/twine/metaengine.cpp:122
 msgid "Use the USA version"
 msgstr "שימוש בגרסה האמריקאית"
 
-#: engines/twine/metaengine.cpp:134
+#: engines/twine/metaengine.cpp:123
 msgid "Enable the USA specific version flags"
 msgstr "הפעלת תכונות מסוימות עבור הגרסה האמריקאית"
 
-#: engines/twine/metaengine.cpp:144 engines/ultima/metaengine.cpp:96
+#: engines/twine/metaengine.cpp:133 engines/ultima/metaengine.cpp:96
 msgid "Enable high resolution"
 msgstr "הפעלת הפרדה גבוהה"
 
-#: engines/twine/metaengine.cpp:145 engines/ultima/metaengine.cpp:97
+#: engines/twine/metaengine.cpp:134 engines/ultima/metaengine.cpp:97
 msgid "Enable a higher resolution for the game"
 msgstr "הפעלת הפרדה גבוהה יותר עבור המשחק"
 
-#: engines/twine/metaengine.cpp:236
+#: engines/twine/metaengine.cpp:225
 msgid "Debug Next Room"
 msgstr "ניפוי תקלים בחדר הבא"
 
-#: engines/twine/metaengine.cpp:241
+#: engines/twine/metaengine.cpp:230
 msgid "Debug Previous Room"
 msgstr "ניפוי תקלים בחדר הקודם"
 
-#: engines/twine/metaengine.cpp:246
+#: engines/twine/metaengine.cpp:235
 msgid "Debug Apply Celling Grid"
 msgstr "ניפוי תקלים החלת רשת תאים"
 
-#: engines/twine/metaengine.cpp:251
+#: engines/twine/metaengine.cpp:240
 msgid "Debug Increase Celling Grid Index"
 msgstr "ניפוי תקלים הגברת מיקום רשת תאים"
 
-#: engines/twine/metaengine.cpp:256
+#: engines/twine/metaengine.cpp:245
 msgid "Debug Decrease Celling Grid Index"
 msgstr "ניפוי תקלים הפחתת מיקום רשת תאים"
 
-#: engines/twine/metaengine.cpp:261
+#: engines/twine/metaengine.cpp:250
 msgid "Debug Grid Camera Up"
 msgstr "ניפוי תקלים רשת מצלמה למעלה"
 
-#: engines/twine/metaengine.cpp:266
+#: engines/twine/metaengine.cpp:255
 msgid "Debug Grid Camera Down"
 msgstr "ניפוי תקלים רשת מצלמה למטה"
 
-#: engines/twine/metaengine.cpp:271
+#: engines/twine/metaengine.cpp:260
 msgid "Debug Grid Camera Left"
 msgstr "ניפוי תקלים רשת מצלמה שמאלה"
 
-#: engines/twine/metaengine.cpp:277
+#: engines/twine/metaengine.cpp:266
 msgid "Debug Grid Camera Right"
 msgstr "ניפוי תקלים רשת מצלמה ימינה"
 
-#: engines/twine/metaengine.cpp:282
+#: engines/twine/metaengine.cpp:271
 msgid "Place actor at center of screen"
 msgstr "מיקום השחקן במרכז המסך"
 
-#: engines/twine/metaengine.cpp:287
+#: engines/twine/metaengine.cpp:276
 msgid "Debug Menu"
 msgstr "תפריט ניפוי תקלים"
 
-#: engines/twine/metaengine.cpp:292
+#: engines/twine/metaengine.cpp:281
 msgid "Debug Menu Execute"
 msgstr "הרצת תפריט ניפוי תקלים"
 
-#: engines/twine/metaengine.cpp:297 engines/twine/metaengine.cpp:317
+#: engines/twine/metaengine.cpp:286 engines/twine/metaengine.cpp:306
 msgid "Normal Behaviour"
 msgstr "התנהגות רגילה"
 
-#: engines/twine/metaengine.cpp:302 engines/twine/metaengine.cpp:322
+#: engines/twine/metaengine.cpp:291 engines/twine/metaengine.cpp:311
 msgid "Athletic Behaviour"
 msgstr "התנהגות ספורטיבית"
 
-#: engines/twine/metaengine.cpp:307 engines/twine/metaengine.cpp:327
+#: engines/twine/metaengine.cpp:296 engines/twine/metaengine.cpp:316
 msgid "Aggressive Behaviour"
 msgstr "התנהגות תוקפנית"
 
-#: engines/twine/metaengine.cpp:312 engines/twine/metaengine.cpp:332
+#: engines/twine/metaengine.cpp:301 engines/twine/metaengine.cpp:321
 msgid "Discreet Behaviour"
 msgstr "התנהגות התגנבותית"
 
-#: engines/twine/metaengine.cpp:337
+#: engines/twine/metaengine.cpp:326
 msgid "Behaviour Action"
 msgstr "פעולת התנהגות"
 
-#: engines/twine/metaengine.cpp:343
+#: engines/twine/metaengine.cpp:332
 msgid "Change Behaviour"
 msgstr "החלפת התנהגות"
 
-#: engines/twine/metaengine.cpp:355
+#: engines/twine/metaengine.cpp:344
 msgid "Options Menu"
 msgstr "תפריט אפשרויות"
 
-#: engines/twine/metaengine.cpp:367
+#: engines/twine/metaengine.cpp:356
 msgid "Use Selected Object"
 msgstr "שימוש בחפץ שנבחר"
 
-#: engines/twine/metaengine.cpp:373
+#: engines/twine/metaengine.cpp:362
 msgid "Throw Magic Ball"
 msgstr "הטלת כדור קסם"
 
-#: engines/twine/metaengine.cpp:387
+#: engines/twine/metaengine.cpp:376
 msgid "Move Backward"
 msgstr "תזוזה לאחור"
 
-#: engines/twine/metaengine.cpp:408
+#: engines/twine/metaengine.cpp:397
 msgid "Use Protopack"
 msgstr "שימוש בפרוטו-פק"
 
-#: engines/twine/metaengine.cpp:413
+#: engines/twine/metaengine.cpp:402
 msgid "Open Holomap"
 msgstr "פתיחת הולומפ"
 
-#: engines/twine/metaengine.cpp:426
+#: engines/twine/metaengine.cpp:415
 msgid "Special Action"
 msgstr "פעולה מיוחדת"
 
-#: engines/twine/metaengine.cpp:432
+#: engines/twine/metaengine.cpp:421
 msgid "Scenery Zoom"
 msgstr ""
 
-#: engines/twine/metaengine.cpp:470 engines/twine/metaengine.cpp:522
-#: engines/twine/metaengine.cpp:538
+#: engines/twine/metaengine.cpp:459 engines/twine/metaengine.cpp:511
+#: engines/twine/metaengine.cpp:527
 msgid "Abort"
 msgstr "ביטול"
 
-#: engines/twine/metaengine.cpp:575
+#: engines/twine/metaengine.cpp:564
 msgid "Previous location"
 msgstr "המיקום הקודם"
 
-#: engines/twine/metaengine.cpp:580
+#: engines/twine/metaengine.cpp:569
 msgid "Next location"
 msgstr "המיקום הבא"
 
@@ -12204,43 +12192,51 @@ msgstr "צלילים מוקלטים מראש"
 msgid "Preload sounds. May improve performance on slow hard drives."
 msgstr ""
 
-#: engines/vcruise/metaengine.cpp:146
+#: engines/vcruise/metaengine.cpp:108
+msgid "Faster video decoder (lower quality)"
+msgstr ""
+
+#: engines/vcruise/metaengine.cpp:109
+msgid "Reduce video decoding CPU usage at the cost of quality."
+msgstr ""
+
+#: engines/vcruise/metaengine.cpp:157
 #, fuzzy
 #| msgid "Display/Hide Info Screen"
 msgid "Display help screen"
 msgstr "הצג / הסתר מסך מידע"
 
-#: engines/vcruise/metaengine.cpp:161
+#: engines/vcruise/metaengine.cpp:172
 #, fuzzy
 #| msgid "Open 3DS Settings"
 msgid "Open sound settings"
 msgstr "פתיחת הגדרות 3DS"
 
-#: engines/vcruise/metaengine.cpp:182
+#: engines/vcruise/metaengine.cpp:193
 #, fuzzy
 #| msgid "Special sound effects volume"
 msgid "Toggle sound effects on/off"
 msgstr "עוצמת אפקטים קוליים מיוחדים"
 
-#: engines/vcruise/metaengine.cpp:197
+#: engines/vcruise/metaengine.cpp:208
 #, fuzzy
 #| msgid "Special sound effects volume"
 msgid "Sound effect volume down"
 msgstr "עוצמת אפקטים קוליים מיוחדים"
 
-#: engines/vcruise/metaengine.cpp:202
+#: engines/vcruise/metaengine.cpp:213
 #, fuzzy
 #| msgid "Special sound effects volume"
 msgid "Sound effect volume up"
 msgstr "עוצמת אפקטים קוליים מיוחדים"
 
-#: engines/vcruise/metaengine.cpp:207
+#: engines/vcruise/metaengine.cpp:218
 #, fuzzy
 #| msgid "Speech Options"
 msgid "Skip current animation"
 msgstr "אפשרויות דיבור"
 
-#: engines/vcruise/metaengine.cpp:211
+#: engines/vcruise/metaengine.cpp:222
 msgid "Cycle item in scene (debug cheat)"
 msgstr ""
 
@@ -12987,6 +12983,12 @@ msgstr ""
 "New ו-Arial. לחלופין,ניתן להוריד את חבילת GNU FreeFont או גופני Liberation. "
 "יש להעתיק את כל הגופנים מהחבילה שנבחרה, לדוגמה, FreeMono, FreeSans ו-"
 "FreeSerif או LiberationMono, LiberationSans ו-LiberationSerif בהתאמה."
+
+#~ msgid "Enable audio CD"
+#~ msgstr "הפעלת תקליטור שמע"
+
+#~ msgid "Enable the original audio cd track"
+#~ msgstr "הפעלת רצועת השמע המקורית מהתקליטור"
 
 #~ msgid "Missing game code"
 #~ msgstr "קוד משחק חסר"

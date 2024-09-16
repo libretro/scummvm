@@ -27,6 +27,11 @@ namespace M4 {
 namespace Riddle {
 namespace Rooms {
 
+Room501::Room501() : Room() {
+	Common::fill(_items, _items + 12, 0);
+	Common::fill(_queuedDigi, _queuedDigi + 4, (const char *)nullptr);
+}
+
 void Room501::init() {
 	digi_preload("501_s01");
 	_agentTalkLoop = series_load("AGENT TALK LOOP");
@@ -85,6 +90,1025 @@ void Room501::init() {
 }
 
 void Room501::daemon() {
+	int frame;
+
+	switch (_G(kernel).trigger) {
+	case 501:
+		_val9 = 1;
+		_xyzzy1 = 0;
+		_xyzzy2 = -1;
+		_xyzzy3 = 0;
+
+		_ripTalkLoop = series_load("RIP TALK LOOP");
+		player_update_info();
+		_shadow = series_show("SAFARI SHADOW 3", 0xf00, 128, -1, -1, 0,
+			_G(player_info).scale, _G(player_info).x, _G(player_info).y);
+		_ripley = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x700, 0,
+			triggerMachineByHashCallbackNegative, "Rip Delta Machine State");
+
+		switch (_val3) {
+		case 3:
+			ws_hide_walker();
+			sendWSMessage_10000(1, _ripley, _ripTalkLoop, 2, 11, 502,
+				_ripTalkLoop, 11, 11, 0);
+			_val9 = 3;
+			break;
+
+		case 4:
+			sendWSMessage_10000(1, _ripley, _ripTalkLoop, 11, 11, 502,
+				_ripTalkLoop, 11, 11, 0);
+			_val9 = 3;
+			break;
+
+		case 5:
+			sendWSMessage_10000(1, _ripley, _ripTalkLoop, 11, 11, 502,
+				_ripTalkLoop, 11, 11, 0);
+			_val3 = 3;
+			_val9 = 3;
+			break;
+
+		default:
+			break;
+		}
+		break;
+
+	case 502:
+		if (_val9 == 3 && _val3 == 3 && _val6 != -1) {
+			kernel_trigger_dispatchx(_val6);
+			_val6 = -1;
+		}
+		if (_val9 == 7 && _val3 == 7 && _xyzzy2 != -1) {
+			kernel_trigger_dispatchx(_xyzzy2);
+			_xyzzy2 = -1;
+		}
+		if (_val9 == 13 && _val3 == 13 && _xyzzy4 != -1) {
+			kernel_trigger_dispatchx(_xyzzy4);
+			_xyzzy4 = -1;
+		}
+		if (_val9 == 3 && _val3 == 4 && _val7 != -1) {
+			kernel_trigger_dispatchx(_val7);
+			_val7 = -1;
+		}
+
+		if (_xyzzy1) {
+			terminateMachineAndNull(_ripley);
+
+			if (!_xyzzy3)
+				ws_unhide_walker();
+
+			terminateMachineAndNull(_shadow);
+			_val5 = 0;
+
+			if (_val9 == 3)
+				series_unload(_ripTalkLoop);
+
+		} else {
+			kernel_timing_trigger(1, 503);
+		}
+		break;
+
+	case 503:
+		switch (_val9) {
+		case 3:
+			switch (_val3) {
+			case 2:
+				_val3 = 3;
+				_val6 = kernel_trigger_create(508);
+				kernel_timing_trigger(1, 502);
+				break;
+			case 3:
+				sendWSMessage_10000(1, _ripley, _ripTalkLoop, 11, 11, 502,
+					_ripTalkLoop, 11, 11, 0);
+				break;
+			case 4:
+				frame = imath_ranged_rand(52, 76);
+				sendWSMessage_10000(1, _ripley, _ripTalkLoop, frame, frame, 502,
+					_ripTalkLoop, frame, frame, 0);
+				break;
+			case 6:
+				_xyzzy5 = 1;
+				digi_play((_val4 == 1) ? "501x02" : "501x03", 1);
+				sendWSMessage_10000(1, _ripley, _ripSeries1, 1, 85, 502,
+					_ripSeries1, 85, 85, 0);
+				_val3 = 7;
+				_val9 = 7;
+				break;
+			case 9:
+				_xyzzy5 = 1;
+				sendWSMessage_10000(1, _ripley, _ripParcelExchange, 90, 1, 502,
+					_ripParcelExchange, 1, 1, 0);
+				_val3 = 10;
+				break;
+			case 10:
+				digi_play("COM084", 1, 255, -1, 997);
+				kernel_timing_trigger(1, 505);
+				sendWSMessage_10000(1, _ripley, _ripParcelExchange, 1, 1, 502,
+					_ripParcelExchange, 1, 1, 0);
+				_val3 = 3;
+				break;
+			case 11:
+				_xyzzy5 = 1;
+				sendWSMessage_10000(1, _ripley, _ripParcelExchange, 1, 90, 502,
+					_ripParcelExchange, 90, 90, 0);
+				_val3 = 12;
+				break;
+			case 12:
+				kernel_timing_trigger(1, 505);
+				sendWSMessage_10000(1, _ripley, _ripParcelExchange, 1, 1, 502,
+					_ripParcelExchange, 1, 1, 0);
+				_val3 = 3;
+				break;
+			case 13:
+				sendWSMessage_10000(1, _ripley, _ripTalkLoop, 11, 2, 502,
+					_ripTalkLoop, 2, 2, 0);
+				_val9 = 13;
+				break;
+			case 14:
+				_xyzzy5 = 1;
+				sendWSMessage_10000(1, _ripley, _ripMoneyExchange, 1, 85, 502,
+					_ripMoneyExchange, 85, 85, 0);
+				_val3 = 15;
+				break;
+			case 15:
+				kernel_timing_trigger(1, 505);
+				sendWSMessage_10000(1, _ripley, _ripMoneyExchange, 85, 85, 502,
+					_ripMoneyExchange, 85, 85, 0);
+				_val3 = 3;
+				_val6 = kernel_trigger_create(551);
+
+				if (!inv_player_has("PERUVIAN INTI"))
+					inv_give_to_player("PERUVIAN INTI");
+				break;
+			case 16:
+				_ripSignsPaper = series_load("RIP SIGNS PAPER");
+				_xyzzy5 = 1;
+				digi_play(conv_sound_to_play(), 1);
+				sendWSMessage_10000(1, _ripley, _ripSignsPaper, 1, 91, 502,
+					_ripSignsPaper, 91, 91, 0);
+				_val3 = 17;
+				break;
+			case 17:
+				sendWSMessage_10000(1, _ripley, _ripSignsPaper, 85, 92, -1,
+					_ripSignsPaper, 90, 92, 4);
+				digi_play("950_S35", 1, 255, 502);
+				_val3 = 18;
+				break;
+			case 18:
+				if (!_paper) {
+					_paper = series_place_sprite("one frame paper", 0, 0, 0, 100, 0x780);
+					_flag = 1;
+				}
+
+				kernel_timing_trigger(1, 505);
+				sendWSMessage_10000(1, _ripley, _ripSignsPaper, 92, 111, 502,
+					_ripSignsPaper, 111, 111, 0);
+				_val3 = 3;
+				break;
+			case 19:
+				_ripMoneyExchange = series_load("MONEY XCHANGE");
+				_xyzzy5 = 1;
+				sendWSMessage_10000(1, _ripley, _ripMoneyExchange, 61, 85, 502,
+					_ripMoneyExchange, 85, 85, 0);
+				_val3 = 20;
+				break;
+			case 20:
+				if (!inv_player_has("US DOLLARS"))
+					inv_give_to_player("US DOLLARS");
+
+				kernel_timing_trigger(1, 505);
+				sendWSMessage_10000(1, _ripley, _ripSignsPaper, 85, 85, 502,
+					_ripSignsPaper, 85, 85, 0);
+				_val3 = 3;
+				break;
+			default:
+				break;
+			}
+			break;
+
+		case 7:
+			switch (_val3) {
+			case 3:
+				kernel_timing_trigger(1, 504);
+				sendWSMessage_10000(1, _ripley, _ripSeries1, 86, 94, 502,
+					_ripTalkLoop, 11, 11, 0);
+				_val3 = 3;
+				_val9 = 3;
+				break;
+			case 7:
+				sendWSMessage_10000(1, _ripley, _ripSeries1, 85, 85, 502,
+					_ripSeries1, 85, 85, 0);
+				break;
+			case 8:
+				sendWSMessage_10000(1, _ripley, _ripSeries1, 85, 86, 502,
+					_ripSeries1, 86, 85, 0);
+				_val3 = 7;
+				break;
+			default:
+				break;
+			}
+			break;
+
+		case 13:
+			switch (_val3) {
+			case 3:
+				sendWSMessage_10000(1, _ripley, _ripTalkLoop, 2, 11, 502,
+					_ripTalkLoop, 11, 11, 0);
+				_val9 = 3;
+				break;
+			case 13:
+				sendWSMessage_10000(1, _ripley, _ripTalkLoop, 11, 2, 502,
+					_ripTalkLoop, 2, 2, 0);
+				break;
+			default:
+				break;
+			}
+			break;
+
+		default:
+			break;
+		}
+		break;
+
+	case 504:
+		_xyzzy8 = 1;
+		_val1 = 1;
+		_xyzzy6 = -1;
+		_xyzzy7 = -1;
+		_xyzzy5 = -1;
+		_agent = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x700, 0,
+			triggerMachineByHashCallbackNegative, "Agent at Desk");
+		sendWSMessage_10000(1, _agent, _agentTalkLoop, 1, 1, 506,
+			_agentTalkLoop, 1, 1, 0);
+		_xyzzy8 = 1;
+		break;
+
+	case 505:
+		_xyzzy8 = 5;
+		_val1 = 5;
+		_xyzzy6 = -1;
+		_xyzzy7 = -1;
+		_xyzzy5 = -1;
+		_agent = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x700, 0,
+			triggerMachineByHashCallbackNegative, "Agent at Desk");
+		sendWSMessage_10000(1, _agent, _agentStridesForward, 15, 15, 506,
+			_agentStridesForward, 15, 15, 0);
+		break;
+
+	case 506:
+		if (_val1 == 1 && _xyzzy8 == 1 && _xyzzy6 != -1) {
+			kernel_trigger_dispatchx(_xyzzy6);
+			_xyzzy6 = -1;
+		}
+		if (_val1 == 5 && _xyzzy8 == 5 && _xyzzy7 != -1) {
+			kernel_trigger_dispatchx(_xyzzy7);
+			_xyzzy7 = -1;
+		}
+		if (_xyzzy5 == 1) {
+			terminateMachineAndNull(_agent);
+		} else {
+			kernel_timing_trigger(1, 507);
+		}
+		break;
+
+	case 507:
+		switch (_xyzzy8) {
+		case 1:
+			switch (_val1) {
+			case 1:
+				sendWSMessage_10000(1, _agent, _agentTalkLoop, 1, 1, 506,
+					_agentTalkLoop, 1, 1, 0);
+				break;
+			case 2:
+				frame = imath_ranged_rand(1, 50);
+				sendWSMessage_10000(1, _agent, _agentTalkLoop, frame, frame, 506,
+					_agentTalkLoop, frame, frame, 0);
+				break;
+			case 3:
+				player_set_commands_allowed(false);
+				_ripMoneyExchange = series_load("MONEY XCHANGE");
+				ws_hide_walker();
+				sendWSMessage_10000(1, _agent, _ripMoneyExchange, 1, 86, 506,
+					_ripMoneyExchange, 1, 1, 0);
+				_val1 = 4;
+				break;
+			case 4:
+				ws_unhide_walker();
+				sendWSMessage_10000(1, _agent, _agentTalkLoop, 1, 1, 506,
+					_agentTalkLoop, 1, 1, 0);
+				series_unload(_ripMoneyExchange);
+				_val1 = 1;
+				player_set_commands_allowed(true);
+				break;
+			case 5:
+				sendWSMessage_10000(1, _agent, _agentStridesForward, 1, 15, 506,
+					_agentStridesForward, 15, 15, 0);
+				_xyzzy8 = 5;
+				break;
+			default:
+				break;
+			}
+			break;
+
+		case 5:
+			switch (_val1) {
+			case 1:
+				sendWSMessage_10000(1, _agent, _agentStridesForward, 15, 1, 506,
+					_agentTalkLoop, 1, 1, 0);
+				_xyzzy8 = 1;
+				break;
+
+			case 5:
+				sendWSMessage_10000(1, _agent, _agentStridesForward, 15, 15, 506,
+					_agentStridesForward, 15, 15, 0);
+				break;
+
+			case 6:
+				sendWSMessage_10000(1, _agent, _puffinExchange, 1, 46, 502,
+					_puffinExchange, 46, 46, 0);
+				digi_play("501R36", 1);
+				break;
+
+			default:
+				break;
+			}
+			break;
+
+		default:
+			break;
+		}
+		break;
+
+	case 508:
+		_val8 = 0;
+		_G(kernel).trigger_mode = KT_PARSE;
+		conv_load("conv501a", 10, 10, 747);
+
+		conv_export_value_curr((_G(flags)[V088] >= 3) ? 1 : 0, 0);
+		_hasItems = updateItems();
+		conv_export_pointer_curr(&_G(flags)[V182], 1);
+
+		if (inv_player_has("DRIFTWOOD PUFFIN")) {
+			_xyzzy9 = 2;
+		} else if (_G(flags)[V183] == 1) {
+			_xyzzy9 = 1;
+		} else {
+			_xyzzy9 = 0;
+		}
+
+		_hasLetter = inv_player_has("MENENDEZ'S LETTER");
+		conv_export_pointer_curr(&_hasLetter, 3);
+		conv_export_pointer_curr(&_hasItems, 4);
+		conv_export_pointer_curr(&_G(flags)[V145], 5);
+		conv_export_value_curr(_G(flags)[146] > 0 ? 1 : 0, 6);
+		conv_export_pointer_curr(&_G(flags)[V143], 7);
+		conv_export_pointer_curr(&_G(flags)[V142], 8);
+		conv_export_pointer_curr(&_G(flags)[V147], 9);
+		conv_export_value_curr(_G(flags)[145] == 1 ||
+			_G(flags)[V146] > 0 || _G(flags)[V143] == 1 ? 1 : 0, 10);
+
+		_hasStickAndShellMap = inv_player_has("STICK AND SHELL MAP");
+		_hasWheeledToy = inv_player_has("WHEELED TOY");
+		_hasRebusAmulet = inv_player_has("REBUS AMULET");
+		_hasShrunkenHead = inv_player_has("SHRUNKEN HEAD");
+		_hasSilverButterfly = inv_player_has("SILVER BUTTERFLY");
+		_hasPostageStamp = inv_player_has("POSTAGE STAMP");
+		_hasGermanBanknote = inv_player_has("GERMAN BANKNOTE");
+		_hasWhaleBoneHorn = inv_player_has("WHALE BONE HORN");
+		_hasChisel = inv_player_has("CHISEL");
+		_hasIncenseBurner = inv_player_has("INCENSE BURNER");
+		_hasRomanovEmerald = inv_player_has("ROMANOV EMERALD");
+
+		conv_export_pointer_curr(&_hasCrystalSkull, 11);
+		conv_export_pointer_curr(&_hasStickAndShellMap, 12);
+		conv_export_pointer_curr(&_hasWheeledToy, 13);
+		conv_export_pointer_curr(&_hasRebusAmulet, 14);
+		conv_export_pointer_curr(&_hasShrunkenHead, 15);
+		conv_export_pointer_curr(&_hasSilverButterfly, 16);
+		conv_export_pointer_curr(&_hasPostageStamp, 17);
+		conv_export_pointer_curr(&_hasGermanBanknote, 18);
+		conv_export_pointer_curr(&_hasWhaleBoneHorn, 19);
+		conv_export_pointer_curr(&_hasChisel, 20);
+		conv_export_pointer_curr(&_hasIncenseBurner, 21);
+		conv_export_pointer_curr(&_hasRomanovEmerald, 22);
+		conv_export_pointer_curr(&_G(flags)[V035], 30);
+		conv_play();
+		break;
+
+	case 509:
+		_val3 = 3;
+		_val6 = kernel_trigger_create(510);
+		break;
+
+	case 510:
+		if (_val8 == 1) {
+			kernel_timing_trigger(1, 512);
+		} else {
+			_val3 = 13;
+			_xyzzy4 = kernel_trigger_create(511);
+		}
+		break;
+
+	case 511:
+	case 524:
+		_xyzzy1 = 1;
+		player_set_commands_allowed(true);
+		break;
+
+	case 512:
+		player_set_commands_allowed(false);
+		pal_fade_init(21, 255, 0, 30, 513);
+		break;
+
+	case 513:
+		switch (_convEntry) {
+		case 0:
+			_G(flags)[V129] = 1;
+			break;
+		case 1:
+			_G(flags)[V129] = 2;
+			break;
+		case 2:
+			_G(flags)[V129] = 0;
+			break;
+		case 3:
+			_G(flags)[V129] = 3;
+			break;
+		case 4:
+			_G(flags)[V129] = 5;
+			break;
+		default:
+			break;
+		}
+
+		if (_G(flags)[V161] == 1)
+			_G(flags)[V371] = 1;
+
+		_G(game).setRoom((_convEntry == 5) ? 504 : 495);
+
+		if (_G(flags)[V035] == 1)
+			_G(flags)[V147] = 1;
+		break;
+
+	case 514:
+		_val1 = 1;
+		_val3 = 3;
+		_val6 = kernel_trigger_create(515);
+		kernel_timing_trigger(2, 501);
+		break;
+
+	case 515:
+		_val3 = 4;
+		digi_play("501r01", 1, 255, 516);
+		break;
+
+	case 516:
+		_val3 = 3;
+		_val1 = 2;
+		digi_play("501x01", 1, 255, 517);
+		break;
+
+	case 517:
+		_val4 = checkFlags(true);
+		_val1 = 1;
+
+		if (_val4 > 0) {
+			_ripSeries1 = series_load("TELEGRAM XCHANGE");
+			kernel_timing_trigger(1, 518);
+		} else {
+			kernel_timing_trigger(1, 523);
+		}
+		break;
+
+	case 518:
+		_val3 = 6;
+		_xyzzy2 = kernel_trigger_create(526);
+		break;
+
+	case 522:
+		kernel_timing_trigger(30, 514);
+		break;
+
+	case 523:
+		_val3 = 13;
+		_xyzzy4 = kernel_trigger_create(524);
+		break;
+
+	case 526:
+		Common::fill(_queuedDigi, _queuedDigi + 4, (const char *)nullptr);
+		inv_give_to_player("MESSAGE LOG");
+
+		if (_val4 <= 0) {
+			kernel_timing_trigger(1, 523);
+		} else {
+			if (_digiName) {
+				_queuedDigi[0] = _digiName;
+				_digiName = nullptr;
+			} else if (_G(flags)[V364] == 1) {
+				_queuedDigi[0] = "201R26";
+				_G(flags)[V364] = 0;
+			} else if (_G(flags)[V365] == 1) {
+				_queuedDigi[0] = "201R61";
+				_G(flags)[V365] = 0;
+			} else if (_G(flags)[V373] == 1) {
+				_queuedDigi[0] = "401R36";
+				_G(flags)[V373] = 0;
+			} else if (_G(flags)[V366] == 1) {
+				_queuedDigi[0] = "401R31";
+				_G(flags)[V366] = 0;
+			} else if (_G(flags)[V370] == 1) {
+				_queuedDigi[0] = "501R02B";
+				_queuedDigi[1] = nullptr;
+				_queuedDigi[2] = nullptr;
+				_G(flags)[V370] = 0;
+			} else if (_G(flags)[V372] == 1) {
+				_queuedDigi[0] = "701R39";
+				_queuedDigi[1] = "701R39A";
+				_G(flags)[V372] = 0;
+			} else if (_G(flags)[V367] == 1) {
+				_queuedDigi[0] = "401R37";
+				_G(flags)[V367] = 0;
+				_val2 = 1;
+			} else if (_G(flags)[V368] == 1) {
+				_queuedDigi[0] = "401R38";
+				_G(flags)[V368] = 0;
+				_val2 = 1;
+			} else if (_G(flags)[V369] == 1) {
+				_queuedDigi[0] = "401R39";
+				_G(flags)[V369] = 0;
+				_val2 = 1;
+			}
+
+			kernel_timing_trigger(1, 527);
+		}
+		break;
+
+	case 527:
+		_val3 = 7;
+		_xyzzy2 = kernel_trigger_create(528);
+		break;
+
+	case 528:
+		if (_queuedDigi[0])
+			digi_play(_queuedDigi[0], 1, 255, 529);
+		else
+			kernel_timing_trigger(1, 529);
+		break;
+
+	case 529:
+		if (_queuedDigi[1])
+			digi_play(_queuedDigi[1], 1, 255, 530);
+		else
+			kernel_timing_trigger(1, 530);
+		break;
+
+	case 530:
+		if (_queuedDigi[2])
+			digi_play(_queuedDigi[2], 1, 255, 531);
+		else
+			kernel_timing_trigger(1, 531);
+		break;
+
+	case 531:
+		if (_queuedDigi[3])
+			digi_play(_queuedDigi[3], 1, 255, 532);
+		else
+			kernel_timing_trigger(1, 532);
+		break;
+
+	case 532:
+		if (_val2 == 1) {
+			_val2 = 0;
+			kernel_timing_trigger(1, 534);
+		} else {
+			if (--_val4 > 0) {
+				_val3 = 8;
+				_xyzzy2 = kernel_trigger_create(526);
+			} else {
+				kernel_timing_trigger(1, 533);
+			}
+		}
+		break;
+
+	case 533:
+		_val3 = 3;
+		_val6 = kernel_trigger_create(523);
+		break;
+
+	case 534:
+		_val3 = 3;
+		_val6 = kernel_trigger_create(535);
+		break;
+
+	case 535:
+		_ripParcelExchange = series_load("PARCEL XCHANGE");
+		_val1 = 5;
+		_xyzzy7 = kernel_trigger_create(536);
+		break;
+
+	case 536:
+		_val3 = 9;
+		_xyzzy7 = kernel_trigger_create(537);
+		break;
+
+	case 537:
+		if (!inv_player_has("ROMANOV EMERALD"))
+			inv_give_to_player("ROMANOV EMERALD");
+
+		_val1 = 1;
+		_xyzzy6 = kernel_trigger_create(538);
+		break;
+
+	case 538:
+		series_unload(_ripParcelExchange);
+		kernel_timing_trigger(1, 523);
+		break;
+
+	case 539:
+		_ripParcelExchange = series_load("PARCEL XCHANGE");
+		_val3 = 3;
+		_val6 = kernel_trigger_create(540);
+		break;
+
+	case 540:
+		_val1 = 5;
+		_xyzzy7 = kernel_trigger_create(540);
+		break;
+
+	case 541:
+		_val3 = 11;
+		_val6 = kernel_trigger_create(542);
+		break;
+
+	case 542:
+		_val1 = 1;
+		_xyzzy6 = kernel_trigger_create(543);
+		break;
+
+	case 543: {
+		series_unload(_ripParcelExchange);
+
+		int item = conv_current_entry();
+		if (item >= 1 && item <= 12) {
+			static const char *ITEMS[12] = {
+				"CRYSTAL SKULL", "STICK AND SHELL MAP",
+				"WHEELED TOY", "REBUS AMULET", "SHRUNKEN HEAD",
+				"SILVER BUTTERFLY", "POSTAGE STAMP",
+				"GERMAN BANKNOTE", "WHALE BONE HORN",
+				"CHISEL",  "INCENSE BURNER",  "INCENSE BURNER"
+			};
+
+			inv_move_object(ITEMS[item - 1], (item == 12) ? NOWHERE : 305);
+		}
+		conv_resume();
+		break;
+	}
+
+	case 544:
+		player_set_commands_allowed(false);
+		digi_preload("950_s34");
+		_ripSketching = series_load("RIP SKETCHING IN NOTEBOOK POS 2");
+		setGlobals1(_ripSketching, 1, 17, 17, 17, 0, 18, 39, 37, 39, 1);
+		sendWSMessage_110000(545);
+		break;
+
+	case 545:
+		sendWSMessage_120000(-1);
+		digi_play("950_s34", 2, 200, 546);
+		break;
+
+	case 546:
+		sendWSMessage_110000(547);
+		break;
+
+	case 547:
+		sendWSMessage_140000(548);
+		break;
+
+	case 548:
+		_G(flags)[V148] = 1;
+		series_unload(_ripSketching);
+		digi_unload("950_s34");
+		player_set_commands_allowed(true);
+		break;
+
+	case 549:
+		player_set_commands_allowed(false);
+		_ripMoneyExchange = series_load("MONEY XCHANGE");
+		_val3 = 3;
+		_val6 = kernel_trigger_create(550);
+		break;
+
+	case 550:
+		_val3 = 14;
+		break;
+
+	case 551:
+		_xyzzy7 = kernel_trigger_create(552);
+		break;
+
+	case 552:
+		_val1 = 1;
+		_xyzzy6 = kernel_trigger_create(553);
+		break;
+
+	case 553:
+		series_unload(_ripMoneyExchange);
+		player_set_commands_allowed(true);
+		conv_resume();
+		break;
+
+	case 555:
+		_puffinExchange = series_load("PUFFIN XCHANGE");
+		_val1 = 5;
+		kernel_timing_trigger(1, 501);
+		_val3 = 3;
+		_val6 = kernel_trigger_create(556);
+		break;
+
+	case 556:
+		_xyzzy7 = kernel_trigger_create(557);
+		break;
+
+	case 557:
+		_deltaPuffinMachine = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x700, 0,
+			triggerMachineByHashCallbackNegative, "Delta Puffin Machine State");
+		_xyzzy3 = 1;
+		_xyzzy1 = 1;
+		_xyzzy5 = 1;
+		_xyzzy10 = 1;
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 1, 1, 558,
+			_puffinExchange, 1, 39, 0);
+		digi_play("501R36", 1, 255, 559);
+		break;
+
+	case 558:
+	case 569:
+	case 597:
+	case 600:
+		_xyzzy10 = 0;
+		break;
+
+	case 559:
+		kernel_timing_trigger(1, (_xyzzy10 == 1) ? 559 : 561);
+		break;
+
+	case 561:
+		inv_move_object("DRIFTWOOD PUFFIN", 501);
+		_xyzzy10 = 1;
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 39, 41, 562,
+			_puffinExchange, 41, 39, 2);
+		digi_play("501X05", 1, 255, 563);
+		break;
+
+	case 562:
+		midi_play("SADBOY2", 255, 0, -1, 949);
+		break;
+
+	case 563:
+		kernel_timing_trigger(1, (_xyzzy10 == 1) ? 563 : 564);
+		break;
+
+	case 564:
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 40, 47, 565,
+			_puffinExchange, 47, 47, 0);
+		break;
+
+	case 565:
+		kernel_timing_trigger(1, 501);
+		_val3 = 4;
+		_val7 = kernel_trigger_create(566);
+		break;
+
+	case 566:
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 48, 48, -1,
+			_puffinExchange, 48, 48, 0);
+		digi_play("501R37", 1, 255, 567);
+		break;
+
+	case 567:
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 47, 40, 568,
+			_puffinExchange, 47, 47, 0);
+		_xyzzy3 = 1;
+		_xyzzy1 = 1;
+		break;
+
+	case 568:
+		_xyzzy10 = 0;
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 39, 41, 569,
+			_puffinExchange, 39, 41, 2);
+		digi_play("501X06", 1, 255, 570);
+		break;
+
+	case 570:
+		kernel_timing_trigger(1, (_xyzzy10 == 1) ? 570 : 571);
+		break;
+
+	case 571:
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 40, 47, 572,
+			_puffinExchange, 47, 47, 0);
+		break;
+
+	case 572:
+		kernel_timing_trigger(1, 501);
+		_val3 = 4;
+		_val7 = kernel_trigger_create(573);
+		break;
+
+	case 573:
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 48, 48, -1,
+			_puffinExchange, 48, 48, 0);
+		digi_play("501R38", 1, 255, 574);
+		break;
+
+	case 574:
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 49, 65, 575,
+			_puffinExchange, 65, 65, 0);
+		_xyzzy3 = 1;
+		_xyzzy1 = 1;
+		break;
+
+	case 575:
+		terminateMachineAndNull(_clock);
+		_clock = series_place_sprite("501 PUFFIN CLOCK", 0, 0, 0, 100, 0x780);
+		_xyzzy10 = 1;
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 66, 135, 576,
+			_puffinExchange, 135, 135, 0);
+		digi_play("501x07", 1, 255, 577);
+		break;
+
+	case 576:
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 135, 135, -1,
+			_puffinExchange, 135, 135, 0);
+		break;
+
+	case 577:
+		kernel_timing_trigger(1, (_xyzzy10 == 1) ? 577 : 576);
+		break;
+
+	case 578:
+		kernel_timing_trigger(1, 505);
+		kernel_timing_trigger(1, 501);
+		_val3 = 5;
+		_val6 = kernel_trigger_create(579);
+		break;
+
+	case 579:
+		terminateMachineAndNull(_deltaPuffinMachine);
+		kernel_examine_inventory_object("PING CLOCK FACING",
+			_G(master_palette), 5, 1, 195, 126, -1, nullptr, -1);
+
+		if (!inv_player_has("CLOCK FACING"))
+			inv_give_to_player("CLOCK FACING");
+
+		_val1 = 1;
+		_xyzzy6 = kernel_trigger_create(580);
+		break;
+
+	case 580:
+		digi_play("501x08", 1, 255, 581);
+		break;
+
+	case 581:
+		_val1 = 1;
+		_val3 = 4;
+		digi_play("501R39", 1, 255, 582);
+		break;
+
+	case 582:
+		_val3 = 13;
+		_xyzzy4 = kernel_trigger_create(583);
+		break;
+
+	case 583:
+		_G(flags)[V143] = 1;
+		_G(flags)[V142] = 1;
+		series_unload(_puffinExchange);
+		_xyzzy3 = 0;
+		_xyzzy1 = 1;
+		player_set_commands_allowed(true);
+		break;
+
+	case 585:
+		_val3 = 3;
+		_val6 = kernel_trigger_create(586);
+		_val1 = 5;
+		break;
+
+	case 586:
+		_xyzzy7 = kernel_trigger_create(587);
+		break;
+
+	case 587:
+		_val3 = 16;
+		_val6 = kernel_trigger_create(588);
+		break;
+
+	case 588:
+		_val1 = 5;
+		_xyzzy7 = kernel_trigger_create(589);
+		break;
+
+	case 589:
+		_val3 = 19;
+		_val6 = kernel_trigger_create(590);
+		break;
+
+	case 590:
+		_val1 = 1;
+		_xyzzy6 = kernel_trigger_create(591);
+		break;
+
+	case 591:
+		series_unload(_ripSignsPaper);
+		player_set_commands_allowed(true);
+		conv_resume();
+		break;
+
+	case 594:
+		_puffinExchange = series_load("PUFFIN XCHANGE");
+		_val1 = 5;
+		kernel_timing_trigger(1, 501);
+		_val3 = 3;
+		_val6 = kernel_trigger_create(595);
+		break;
+
+	case 595:
+		_xyzzy7 = kernel_trigger_create(596);
+		break;
+
+	case 596:
+		_deltaPuffinMachine = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x700, 0,
+			triggerMachineByHashCallbackNegative, "Delta Puffin Machine State");
+		_xyzzy3 = 1;
+		_xyzzy1 = 1;
+		_xyzzy5 = 1;
+		_xyzzy10 = 1;
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 1, 1, 558,
+			_puffinExchange, 1, 39, 0);
+		digi_play("501R36", 1, 255, 598);
+		break;
+
+	case 598:
+		kernel_timing_trigger(1, (_xyzzy10 == 1) ? 598 : 599);
+		break;
+
+	case 599:
+		_xyzzy10 = 1;
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 39, 41, 600,
+			_puffinExchange, 41, 39, 2);
+		digi_play("501X05", 1, 255, 601);
+		break;
+
+	case 601:
+		kernel_timing_trigger(1, (_xyzzy10 == 1) ? 601 : 602);
+		break;
+
+	case 602:
+		sendWSMessage_10000(1, _deltaPuffinMachine, _puffinExchange, 39, 1, 603,
+			_puffinExchange, 1, 1, 0);
+		break;
+
+	case 603:
+		kernel_timing_trigger(1, 505);
+		kernel_timing_trigger(1, 501);
+		_val3 = 5;
+		_val6 = kernel_trigger_create(604);
+		break;
+
+	case 604:
+		terminateMachineAndNull(_deltaPuffinMachine);
+		_val1 = 1;
+		_xyzzy6 = kernel_trigger_create(605);
+		break;
+
+	case 605:
+		_val3 = 13;
+		_xyzzy4 = kernel_trigger_create(606);
+		break;
+
+	case 606:
+		series_unload(_puffinExchange);
+		_xyzzy3 = 0;
+		_xyzzy1 = 1;
+		player_set_commands_allowed(true);
+		break;
+
+	case 610:
+		_val3 = 4;
+		digi_play("COM084", 1, 255, 611, 997);
+		break;
+
+	case 611:
+		_val3 = 3;
+		break;
+
+	case 612:
+		player_set_commands_allowed(true);
+		break;
+
+	default:
+		break;
+	}
 }
 
 void Room501::parser() {
@@ -339,6 +1363,25 @@ void Room501::conv501a() {
 	}
 
 	conv_resume();
+}
+
+bool Room501::updateItems() {
+	Common::fill(_items, _items + 12, 0);
+	_itemsCount = 0;
+
+	static const char *ITEMS[12] = {
+		"CRYSTAL SKULL", "STICK AND SHELL MAP", "WHEELED TOY",
+		"REBUS AMULET", "SHRUNKEN HEAD", "SILVER BUTTERFLY",
+		"POSTAGE STAMP", "GERMAN BANKNOTE", "WHALE BONE HORN",
+		"CHISEL", "INCENSE BURNER", "ROMANOV EMERALD"
+	};
+
+	for (int i = 0; i < 12; ++i) {
+		if (inv_player_has(ITEMS[i]))
+			_items[_itemsCount++] = i + 1;
+	}
+
+	return _itemsCount > 0;
 }
 
 } // namespace Rooms

@@ -243,6 +243,7 @@ public:
 	Graphics::ManagedSurface *loadAndConvertNeoImage(Common::SeekableReadStream *stream, int offset, byte *palette = nullptr);
 	Graphics::ManagedSurface *loadAndCenterScrImage(Common::SeekableReadStream *stream);
 	void loadPalettes(Common::SeekableReadStream *file, int offset);
+	byte *loadPalette(Common::SeekableReadStream *file);
 	void swapPalette(uint16 areaID);
 	virtual byte *findCGAPalette(uint16 levelID);
 	const CGAPaletteEntry *_rawCGAPaletteByArea;
@@ -317,6 +318,7 @@ public:
 	void generateDemoInput();
 	virtual void pressedKey(const int keycode);
 	virtual void releasedKey(const int keycode);
+	Common::Point getNormalizedPosition(Common::Point position);
 	virtual bool onScreenControls(Common::Point mouse);
 	void move(CameraMovement direction, uint8 scale, float deltaTime);
 	void resolveCollisions(Math::Vector3d newPosition);
@@ -398,8 +400,8 @@ public:
 	virtual void executeMakeInvisible(FCLInstruction &instruction);
 	void executeMakeVisible(FCLInstruction &instruction);
 	void executeToggleVisibility(FCLInstruction &instruction);
-	void executeDestroy(FCLInstruction &instruction);
-	void executeRedraw(FCLInstruction &instruction);
+	virtual void executeDestroy(FCLInstruction &instruction);
+	virtual void executeRedraw(FCLInstruction &instruction);
 	void executeSound(FCLInstruction &instruction);
 	void executeDelay(FCLInstruction &instruction);
 	bool executeEndIfNotEqual(FCLInstruction &instruction);
@@ -510,7 +512,7 @@ public:
 	bool _fontLoaded;
 	virtual void drawStringInSurface(const Common::String &str, int x, int y, uint32 fontColor, uint32 backColor, Graphics::Surface *surface, int offset = 0);
 	virtual void drawStringInSurface(const Common::String &str, int x, int y, uint32 primaryFontColor, uint32 secondaryFontColor, uint32 backColor, Graphics::Surface *surface, int offset = 0);
-	Graphics::Surface *drawStringsInSurface(const Common::Array<Common::String> &lines);
+	Graphics::Surface *drawStringsInSurface(const Common::Array<Common::String> &lines, Graphics::Surface *surface);
 
 	// Game state
 	virtual void initGameState();
@@ -528,6 +530,7 @@ public:
 	bool _endGamePlayerEndArea;
 	bool _forceEndGame;
 	bool _playerWasCrushed;
+	Common::HashMap<uint16, bool> _exploredAreas;
 	ObjectArray _sensors;
 	virtual void checkSensors();
 	virtual void drawSensorShoot(Sensor *sensor);

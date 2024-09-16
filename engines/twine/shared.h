@@ -31,7 +31,8 @@
 /** Number of colors used in the game */
 #define NUMOFCOLORS 256
 
-#define NUM_LOCATIONS 334 /* 150 for lba1 */
+#define MAX_HOLO_POS 150 /* lba1 */
+#define MAX_HOLO_POS_2 334 /* lba2 */
 
 #define NUM_INVENTORY_ITEMS 28
 /**
@@ -84,6 +85,7 @@
 // FLAG_ARDOISE
 #define GAMEFLAG_ARDOISE 28
 
+// NUM_PERSO
 #define OWN_ACTOR_SCENE_INDEX 0
 #define IS_HERO(x) ((x) == OWN_ACTOR_SCENE_INDEX)
 
@@ -676,7 +678,7 @@ enum InventoryItems {
 
 struct TwineResource {
 	const char *hqr;
-	const int32 index;
+	int32 index;
 
 	constexpr TwineResource(const char *_hqr, int32 _index) : hqr(_hqr), index(_index) {
 	}

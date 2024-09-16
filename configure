@@ -1350,6 +1350,11 @@ for ac_option in $@; do
 		A52_CFLAGS="-I$arg/include"
 		A52_LIBS="-L$arg/lib"
 		;;
+	--with-mpcdec-prefix=*)
+		arg=`echo $ac_option | cut -d '=' -f 2`
+		LIBMPCDEC_CFLAGS="-I$arg/include"
+		LIBMPCDEC_LIBS="-L$arg/lib"
+		;;
 	--with-alsa-prefix=*)
 		arg=`echo $ac_option | cut -d '=' -f 2`
 		ALSA_CFLAGS="-I$arg/include"
@@ -2121,13 +2126,13 @@ if test "$_host_os" = android; then
 	esac
 
 	# These values can get overriden below by environments variables
-	_ar="$_android_toolchain/bin/$_ar"
-	_as="$_android_toolchain/bin/$_as"
-	_dwp="$_android_toolchain/bin/$_dwp"
-	_ranlib="$_android_toolchain/bin/$_ranlib"
-	_strip="$_android_toolchain/bin/$_strip"
+	_ar="$_android_toolchain/bin/llvm-ar cr"
+	_as="$_android_toolchain/bin/llvm-as"
+	_dwp="$_android_toolchain/bin/llvm-dwp"
+	_ranlib="$_android_toolchain/bin/llvm-ranlib"
+	_strip="$_android_toolchain/bin/llvm-strip"
 	if test -z "$STRINGS"; then
-		STRINGS="$_android_toolchain/bin/$_host_alias-strings"
+		STRINGS="$_android_toolchain/bin/llvm-strings"
 	fi
 	if test -z "$PKG_CONFIG_LIBDIR"; then
 		PKG_CONFIG_LIBDIR="$_android_toolchain/sysroot/usr/lib/$_host_alias/$_android_version/pkgconfig"
@@ -2281,6 +2286,9 @@ if test "$have_gcc" = yes; then
 		cxx_version=`gcc_get_define __clang_version__`
 		cxx_version="`echo "${cxx_version}" | sed -e 's/"\([^ ]*\) .*/\1/'`"
 		cxx_version="clang $cxx_version, ok"
+
+		_clang_major=`gcc_get_define __clang_major__`
+		_clang_minor=`gcc_get_define __clang_minor__`
 
 		append_var CXXFLAGS "-Wshadow"
 	else
@@ -2626,89 +2634,6 @@ case $_endian in
 esac
 
 #
-# Determine a data type with the given length
-#
-find_type_with_size() {
-	for datatype in int short char long "long long" __int64 "long long int" unknown; do
-		cat > tmp_find_type_with_size.cpp << EOF
-typedef $datatype ac__type_sizeof_;
-int main() {
-	static int test_array [1 - 2 * !(((long int) (sizeof (ac__type_sizeof_))) == $1)];
-	test_array [0] = 0;
-	return 0;
-}
-EOF
-		if $CXX $CXXFLAGS -c -o $TMPO.o tmp_find_type_with_size.cpp >> "$TMPLOG" 2>&1 ; then
-			break
-		else
-			if test "$datatype" = "unknown"; then
-				echo "couldn't find data type with $1 bytes"
-				exit 1
-			fi
-			continue
-		fi
-	done
-	cc_check_clean tmp_find_type_with_size.cpp
-	echo $datatype
-}
-
-#
-# Check whether the system is 32-bit
-#
-pointer_is_32bit() {
-	cat > tmp_pointer_is_32bit.cpp << EOF
-int main() {
-	static int test_array[1 - 2 * !(sizeof(void *) == 4)];
-	test_array[0] = 0;
-	return 0;
-}
-EOF
-	$CXX $CXXFLAGS -c -o $TMPO.o tmp_pointer_is_32bit.cpp >> "$TMPLOG" 2>&1
-	status=$?
-	cc_check_clean tmp_pointer_is_32bit.cpp
-	return $status
-}
-
-echo_n "Checking 64-bitness... "
-pointer_is_32bit
-if test $? -eq 0; then
-	signed_type_ptr=int32
-	unsigned_type_ptr=uint32
-	echo "no"
-else
-	signed_type_ptr=int64
-	unsigned_type_ptr=uint64
-	echo "yes"
-fi
-
-#
-# Determine data type sizes
-#
-echo_n "Type with 1 byte... "
-type_1_byte=`find_type_with_size 1`
-TMPR="$?"
-echo "$type_1_byte"
-test $TMPR -eq 0 || exit 1	# check exit code of subshell
-
-echo_n "Type with 2 bytes... "
-type_2_byte=`find_type_with_size 2`
-TMPR="$?"
-echo "$type_2_byte"
-test $TMPR -eq 0 || exit 1	# check exit code of subshell
-
-echo_n "Type with 4 bytes... "
-type_4_byte=`find_type_with_size 4`
-TMPR="$?"
-echo "$type_4_byte"
-test $TMPR -eq 0 || exit 1	# check exit code of subshell
-
-echo_n "Type with 8 bytes... "
-type_8_byte=`find_type_with_size 8`
-TMPR="$?"
-echo "$type_8_byte"
-test $TMPR -eq 0 || exit 1	# check exit code of subshell
-
-#
 # Check whether memory alignment is required
 #
 # For some CPU types, unaligned memory access is either not supported at
@@ -2882,7 +2807,6 @@ case $_host_os in
 		# already typedefs (u)int32 as (unsigned) long and suppress
 		# those noisy format warnings caused by the 'long' 4 byte
 		append_var CXXFLAGS "-Wno-format"
-		type_4_byte='long'
 		;;
 	android)
 		case $_host in
@@ -3322,9 +3246,6 @@ EOF
 		append_var LDFLAGS "-Wl,--export-dynamic"
 		append_var LDFLAGS "-L/usr/local/lib"
 		append_var CXXFLAGS "-D__MORPHOS_SHAREDLIBS"
-		# We have to use 'long' for our 4 byte typedef because MorphOS already typedefs (u)int32
-		# as (unsigned) long, and consequently we'd get a compiler error otherwise.
-		type_4_byte='long'
 		# Suppress format warnings as the long 4 byte causes noisy warnings.
 		append_var CXXFLAGS "-Wno-format"
 		add_line_to_config_mk 'MORPHOS = 1'
@@ -5599,14 +5520,7 @@ echocheck "libmpeg2 >= 0.4.0"
 if test "$_mpeg2" = auto ; then
 	_mpeg2=no
 	cat > $TMPC << EOF
-typedef signed $type_1_byte int8_t;
-typedef signed $type_2_byte int16_t;
-typedef signed $type_4_byte int32_t;
-
-typedef unsigned $type_1_byte uint8_t;
-typedef unsigned $type_2_byte uint16_t;
-typedef unsigned $type_4_byte uint32_t;
-
+#include <inttypes.h>
 extern "C" {
 #include <mpeg2dec/mpeg2.h>
 }
@@ -5645,14 +5559,7 @@ echocheck "liba52"
 if test "$_a52" = auto ; then
 	_a52=no
 	cat > $TMPC << EOF
-typedef signed $type_1_byte int8_t;
-typedef signed $type_2_byte int16_t;
-typedef signed $type_4_byte int32_t;
-
-typedef unsigned $type_1_byte uint8_t;
-typedef unsigned $type_2_byte uint16_t;
-typedef unsigned $type_4_byte uint32_t;
-
+#include <inttypes.h>
 extern "C" {
 #include <a52dec/a52.h>
 }
@@ -5914,12 +5821,7 @@ define_in_config_if_yes "$_libmikmod" "USE_MIKMOD"
 echocheck "libmpcdec"
 
 if test "$_libmpcdec" != "no"; then
-	if test "$_pkg_config" = "yes" && $_pkgconfig --exists libmpcdec; then
-		append_var LIBMPCDEC_LIBS "`$_pkgconfig --libs libmpcdec`"
-		append_var LIBMPCDEC_CFLAGS "`$_pkgconfig --cflags libmpcdec`"
-	else
-		append_var LIBMPCDEC_LIBS "-lmpcdec"
-	fi
+	append_var LIBMPCDEC_LIBS "-lmpcdec"
 
 	if test "$_libmpcdec" = "auto"; then
 		_libmpcdec=no
@@ -5933,7 +5835,27 @@ if test "$_libmpcdec" != "no"; then
 			return 0;
 		}
 EOF
-		cc_check $LIBMPCDEC_CFLAGS $LIBMPCDEC_LIBS && _libmpcdec=yes
+		if cc_check $LIBMPCDEC_CFLAGS $LIBMPCDEC_LIBS; then
+			_libmpcdec=yes
+		else
+			cat > $TMPC << EOF
+			#include <mpcdec/mpcdec.h>
+			int main(void) {
+				mpc_decoder decoder;
+				mpc_reader reader;
+				mpc_streaminfo info;
+
+				mpc_decoder_setup(&decoder, &reader);
+				mpc_decoder_initialize(&decoder, &info);
+
+				return 0;
+			}
+EOF
+			if cc_check $LIBMPCDEC_CFLAGS $LIBMPCDEC_LIBS; then
+				_libmpcdec=yes
+				add_line_to_config_h '#define USE_MPCDEC_OLD_API'
+			fi
+		fi
 	fi
 
 	if test "$_libmpcdec" = "yes"; then
@@ -7102,6 +7024,12 @@ case $_host_cpu in
 			_ext_avx2=yes
 		fi
 		_ext_neon=no
+		# SSE2 is always available on x86_64
+		if !(test "$have_clang" = yes && ((test $_clang_major -gt 5) || (test $_clang_major -eq 5 && test $_clang_minor -gt 0))) &&
+		   !(test "$have_gcc" = yes && ((test $_cxx_major -gt 4) || (test $_cxx_major -eq 4 && test $_cxx_minor -gt 9))); then
+			# Need GCC 4.9+ or Clang 5.0+ for target pragma
+			_ext_avx2=no
+		fi
 		;;
 	i[3-6]86)
 		if test "$_ext_sse2" = auto ; then
@@ -7111,6 +7039,12 @@ case $_host_cpu in
 			_ext_avx2=no
 		fi
 		_ext_neon=no
+		if !(test "$have_clang" = yes && (test $_clang_major -gt 5) || (test $_clang_major -eq 5 && test $_clang_minor -gt 0)) &&
+		   !(test "$have_gcc" = yes && (test $_cxx_major -gt 4) || (test $_cxx_major -eq 4 && test $_cxx_minor -gt 9)); then
+			# Need GCC 4.9+ or Clang 5.0+ for target pragma
+			_ext_sse2=no
+			_ext_avx2=no
+		fi
 		;;
 	aarch64)
 		if test "$_ext_neon" = auto ; then
@@ -7118,17 +7052,19 @@ case $_host_cpu in
 		fi
 		_ext_sse2=no
 		_ext_avx2=no
+		# On aarch64 neon is always available and doesn't need a target pragma
 		;;
 	arm*)
 		if test "$_ext_neon" = auto ; then
 			_ext_neon=no
 		fi
-		if test "$_ext_neon" = yes ; then
-			# -mfpu=neon doesn't work with aarch64 but neon is available
-			add_line_to_config_mk 'NEON_CXXFLAGS = -mfpu=neon'
-		fi
 		_ext_sse2=no
 		_ext_avx2=no
+		if !(test "$have_clang" = yes && (test $_clang_major -gt 19) || (test $_clang_major -eq 19 && test $_clang_minor -gt 1)) &&
+		   !(test "$have_gcc" = yes && (test $_cxx_major -gt 4) || (test $_cxx_major -eq 4 && test $_cxx_minor -gt 9)); then
+			# Need GCC 4.9+ or Clang 19.1+ for target pragma
+			_ext_neon=no
+		fi
 		;;
 	*)
 		_ext_sse2=no
@@ -7136,15 +7072,6 @@ case $_host_cpu in
 		_ext_neon=no
 		;;
 esac
-
-if test "$have_gcc" = yes; then
-	# Need 4.9 for pragma target
-	if (test $_cxx_major -lt 4) || (test $_cxx_major -eq 4 && test $_cxx_minor -lt 9); then
-		_ext_sse2=no
-		_ext_avx2=no
-		_ext_neon=no
-	fi
-fi
 
 define_in_config_if_yes "$_ext_sse2" 'SCUMMVM_SSE2'
 echo_n "Enabling x86/amd64 SSE2... "
@@ -7315,10 +7242,7 @@ case $_host_os in
 			esac
 		done
 
-		# -lgcc is carefully placed here - we want to catch
-		# all toolchain symbols in *our* libraries rather
-		# than pick up anything unhygienic from the Android libs.
-		LIBS="-Wl,-Bstatic $static_libs -Wl,-Bdynamic -lgcc $system_libs -llog -landroid -ljnigraphics -lEGL"
+		LIBS="-Wl,-Bstatic $static_libs -Wl,-Bdynamic $system_libs -llog -landroid -ljnigraphics -lEGL"
 		;;
 	ds)
 		# Moved -Wl,--gc-sections here to avoid it interfering with the library checks
@@ -7425,29 +7349,6 @@ cat > config.h.new << EOF
 
 $_config_h_data
 $(cat config.h.engines)
-
-/* Data types */
-#ifndef SCUMMVM_DONT_DEFINE_TYPES
-typedef unsigned $type_1_byte byte;
-typedef unsigned int uint;
-typedef unsigned $type_1_byte uint8;
-typedef unsigned $type_2_byte uint16;
-typedef unsigned $type_4_byte uint32;
-typedef unsigned $type_8_byte uint64;
-typedef signed $type_1_byte int8;
-typedef signed $type_2_byte int16;
-typedef signed $type_4_byte int32;
-typedef signed $type_8_byte int64;
-#endif
-
-typedef $signed_type_ptr intptr;
-typedef $unsigned_type_ptr uintptr;
-
-#if defined(__APPLE__) && !defined(__ppc__)
-#ifndef _UINT64
-#define _UINT64
-#endif
-#endif
 
 #endif /* CONFIG_H */
 EOF

@@ -70,10 +70,7 @@ void Actor::restartHeroScene() {
 }
 
 void Actor::loadBehaviourEntity(ActorStruct *actor, EntityData &entityData, int16 &bodyAnimIndex, int32 index) {
-	if (!entityData.loadFromHQR(Resources::HQR_FILE3D_FILE, index, _engine->isLBA1())) {
-		error("Failed to load actor 3d data for index: %i", index);
-	}
-
+	_engine->_resources->loadEntityData(entityData, index);
 	actor->_entityDataPtr = &entityData;
 	bodyAnimIndex = entityData.getAnimIndex(AnimationTypes::kStanding);
 	if (bodyAnimIndex == -1) {
@@ -213,7 +210,7 @@ void Actor::initSprite(int32 spriteNum, int32 actorIdx) {
 	ActorStruct *localActor = _engine->_scene->getActor(actorIdx);
 
 	localActor->_sprite = spriteNum;
-	if (!localActor->_staticFlags.bIsSpriteActor) {
+	if (!localActor->_staticFlags.bSprite3D) {
 		return;
 	}
 	if (spriteNum != -1 && localActor->_body != spriteNum) {
@@ -247,7 +244,7 @@ int32 Actor::searchBody(BodyType bodyIdx, int32 actorIdx, ActorBoundingBox &acto
 
 void Actor::initBody(BodyType bodyIdx, int16 actorIdx) {
 	ActorStruct *localActor = _engine->_scene->getActor(actorIdx);
-	if (localActor->_staticFlags.bIsSpriteActor) {
+	if (localActor->_staticFlags.bSprite3D) {
 		return;
 	}
 
@@ -321,7 +318,7 @@ void Actor::copyInterAnim(const BodyData &src, BodyData &dest) {
 void Actor::startInitObj(int16 actorIdx) {
 	ActorStruct *actor = _engine->_scene->getActor(actorIdx);
 
-	if (actor->_staticFlags.bIsSpriteActor) {
+	if (actor->_staticFlags.bSprite3D) {
 		if (actor->_strengthOfHit != 0) {
 			actor->_workFlags.bIsHitting = 1;
 		}
@@ -332,7 +329,7 @@ void Actor::startInitObj(int16 actorIdx) {
 
 		_engine->_movements->initRealAngle(LBAAngles::ANGLE_0, LBAAngles::ANGLE_0, LBAAngles::ANGLE_0, &actor->realAngle);
 
-		if (actor->_staticFlags.bUsesClipping) {
+		if (actor->_staticFlags.bSpriteClip) {
 			actor->_animStep = actor->posObj();
 		}
 	} else {
@@ -361,7 +358,7 @@ void Actor::initObject(int16 actorIdx) {
 	*actor = ActorStruct(_engine->getMaxLife());
 
 	actor->_actorIdx = actorIdx;
-	actor->_pos = IVec3(0, SIZE_BRICK_Y, 0);
+	actor->_posObj = IVec3(0, SIZE_BRICK_Y, 0);
 
 	memset(&actor->_staticFlags, 0, sizeof(StaticFlagsStruct));
 	memset(&actor->_workFlags, 0, sizeof(DynamicFlagsStruct));
@@ -403,7 +400,7 @@ void Actor::hitObj(int32 actorIdx, int32 actorIdxAttacked, int32 hitforce, int32
 			}
 		}
 
-		_engine->_extra->initSpecial(actor->_pos.x, actor->_pos.y + 1000, actor->_pos.z, ExtraSpecialType::kHitStars);
+		_engine->_extra->initSpecial(actor->_posObj.x, actor->_posObj.y + 1000, actor->_posObj.z, ExtraSpecialType::kHitStars);
 
 		if (!actorIdxAttacked) {
 			_engine->_movements->_lastJoyFlag = true;
@@ -443,7 +440,7 @@ void Actor::giveExtraBonus(int32 actorIdx) {
 	} else {
 		const ActorStruct *sceneHero = _engine->_scene->_sceneHero;
 		const int32 angle = _engine->_movements->getAngle(actor->posObj(), sceneHero->posObj());
-		const IVec3 pos(actor->_pos.x, actor->_pos.y + actor->_boundingBox.maxs.y, actor->_pos.z);
+		const IVec3 pos(actor->_posObj.x, actor->_posObj.y + actor->_boundingBox.maxs.y, actor->_posObj.z);
 		_engine->_extra->addExtraBonus(pos, LBAAngles::ANGLE_70, angle, bonusSprite, actor->_bonusAmount);
 		_engine->_sound->playSample(Samples::ItemPopup, 1, pos, actorIdx);
 	}
@@ -497,19 +494,6 @@ void Actor::posObjectAroundAnother(uint8 numsrc, uint8 numtopos) {
 
 	objtopos->Obj.Beta = ClampAngle(GetAngle2D(xb, zb, objtopos->Obj.X, objtopos->Obj.Z));
 #endif
-}
-
-void ActorStruct::loadModel(int32 modelIndex, bool lba1) {
-	_body = modelIndex;
-	if (!_staticFlags.bIsSpriteActor) {
-		debug(1, "Init actor with model %i", modelIndex);
-		if (!_entityData.loadFromHQR(Resources::HQR_FILE3D_FILE, modelIndex, lba1)) {
-			error("Failed to load entity data for index %i", modelIndex);
-		}
-		_entityDataPtr = &_entityData;
-	} else {
-		_entityDataPtr = nullptr;
-	}
 }
 
 int16 ActorMoveStruct::getRealValueFromTime(int32 time) {

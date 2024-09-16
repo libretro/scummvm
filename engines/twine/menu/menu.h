@@ -30,6 +30,7 @@ namespace TwinE {
 #define MAX_BUTTONS 10
 #define PLASMA_WIDTH 320
 #define PLASMA_HEIGHT 50
+#define kDemoMenu 9999
 #define kQuitEngine 9998
 
 class BodyData;
@@ -181,7 +182,7 @@ private:
 	/** Used to run the advanced options menu */
 	int32 advoptionsMenu();
 	/** Used to run the volume menu */
-	int32 volumeMenu();
+	int32 volumeOptions();
 	int32 languageMenu();
 	/** Used to run the save game management menu */
 	int32 savemanageMenu();
@@ -189,10 +190,12 @@ private:
 	Common::Rect calcBehaviourRect(int32 left, int32 top, HeroBehaviourType behaviour) const;
 	bool isBehaviourHovered(int32 left, int32 top, HeroBehaviourType behaviour) const;
 	void drawBehaviour(int32 left, int32 top, HeroBehaviourType behaviour, int32 angle, bool cantDrawBox);
-	void drawInventoryItems(int32 left, int32 top);
+	void drawListInventory(int32 left, int32 top);
 	void prepareAndDrawBehaviour(int32 left, int32 top, int32 angle, HeroBehaviourType behaviour); // DrawComportement
 	void drawBehaviourMenu(int32 left, int32 top, int32 angle); // DrawMenuComportement
-	void drawItem(int32 left, int32 top, int32 item);
+	Common::Rect calcItemRect(int32 left, int32 top, int32 item, int32 *centerX = nullptr, int32 *centerY = nullptr) const;
+	// draw the 2d sprite of the item
+	void drawOneInventory(int32 left, int32 top, int32 item);
 
 	void drawSpriteAndString(int32 left, int32 top, const SpriteData &spriteData, const Common::String &str, int32 color = COLOR_GOLD);
 
@@ -226,7 +229,8 @@ public:
 	 * @param menuSettings menu settings array with the information to build the menu options
 	 * @return pressed menu button identification
 	 */
-	int32 processMenu(MenuSettings *menuSettings);
+	void menuDemo();
+	int32 doGameMenu(MenuSettings *menuSettings);
 
 	bool init();
 

@@ -30,12 +30,23 @@ namespace Rooms {
 
 class Room501 : public Room {
 private:
+	machine *_ripley = nullptr;
+	machine *_shadow = nullptr;
+	machine *_agent = nullptr;
 	machine *_clock = nullptr;
 	machine *_paper = nullptr;
+	machine *_deltaPuffinMachine = nullptr;
 	int _agentTalkLoop = 0;
 	int _agentStridesForward = 0;
+	int _puffinExchange = 0;
 	const char *_digiName = nullptr;
+	int _convEntry = 0;
 	bool _flag = false;
+	int _ripTalkLoop = 0;
+	int _ripSeries1 = 0;
+	int _ripParcelExchange = 0;
+	int _ripMoneyExchange = 0;
+	int _ripSignsPaper = 0;
 	int _val1 = 0;
 	int _val2 = 0;
 	int _val3 = 0;
@@ -44,12 +55,47 @@ private:
 	int _val6 = 0;
 	int _val7 = 0;
 	int _val8 = 0;
-	int _convEntry = 0;
+	int _val9 = 0;
+	int _xyzzy1 = 0;
+	int _xyzzy2 = 0;
+	int _xyzzy3 = 0;
+	int _xyzzy4 = 0;
+	int _xyzzy5 = 0;
+	int _xyzzy6 = 0;
+	int _xyzzy7 = 0;
+	int _xyzzy8 = 0;
+	int _xyzzy9 = 0;
+	int _xyzzy10 = 0;
+	int _itemsCount = 0;
+	int _items[12];
+	int32 _hasItems = 0;
+	int32 _hasLetter = 0;
+	int32 _hasCrystalSkull = 0;
+	int32 _hasStickAndShellMap = 0;
+	int32 _hasWheeledToy = 0;
+	int32 _hasRebusAmulet = 0;
+	int32 _hasShrunkenHead = 0;
+	int32 _hasSilverButterfly = 0;
+	int32 _hasPostageStamp = 0;
+	int32 _hasGermanBanknote = 0;
+	int32 _hasWhaleBoneHorn = 0;
+	int32 _hasChisel = 0;
+	int32 _hasIncenseBurner = 0;
+	int32 _hasRomanovEmerald = 0;
+	const char *_queuedDigi[4];
+	int _ripSketching = 0;
 
 	void conv501a();
 
+	/**
+	 * Sets up the items array with any key items the player
+	 * has in their inventory
+	 * @return	True if the player has at least one item
+	 */
+	bool updateItems();
+
 public:
-	Room501() : Room() {}
+	Room501();
 	~Room501() override {}
 
 	void init() override;

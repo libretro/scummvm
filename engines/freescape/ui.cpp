@@ -69,12 +69,8 @@ void FreescapeEngine::titleScreen() {
 	_gfx->clear(0, 0, 0, true);
 }
 
-Graphics::Surface *FreescapeEngine::drawStringsInSurface(const Common::Array<Common::String> &lines) {
-	uint32 color = _gfx->_texturePixelFormat.ARGBToColor(0x00, 0x00, 0x00, 0x00);
-	Graphics::Surface *surface = new Graphics::Surface();
-	surface->create(_screenW, _screenH, _gfx->_texturePixelFormat);
-	surface->fillRect(_fullscreenViewArea, color);
-
+Graphics::Surface *FreescapeEngine::drawStringsInSurface(const Common::Array<Common::String> &lines, Graphics::Surface *surface) {
+	uint32 color = 0;
 	uint32 back = _gfx->_texturePixelFormat.ARGBToColor(0x00, 0x00, 0x00, 0x00);
 
 	switch (_renderMode) {
@@ -136,28 +132,40 @@ void FreescapeEngine::borderScreen() {
 
 	if (isDOS() || isSpectrum()) {
 		Common::Array<Common::String> lines;
+		int pad = 25;
+		if (isSpectrum() && isCastle())
+			pad = 22;
+		else if (isDOS() && !isCastle())
+			pad = 30;
+
 		if (isDOS())
-			lines.push_back(centerAndPadString("Configuration Menu", 30));
+			lines.push_back(centerAndPadString("Configuration Menu", pad));
 		else
-			lines.push_back(centerAndPadString("Control Options", 25));
+			lines.push_back(centerAndPadString("Control Options", pad));
 		lines.push_back("");
-		lines.push_back(centerAndPadString("1: KEYBOARD ONLY   ", isDOS() ? 30 : 25));
-		lines.push_back(centerAndPadString("2: IBM JOYSTICK    ", isDOS() ? 30 : 25));
-		lines.push_back(centerAndPadString("3: AMSTRAD JOYSTICK", isDOS() ? 30 : 25));
+		lines.push_back(centerAndPadString("1: KEYBOARD ONLY   ", pad));
+		lines.push_back(centerAndPadString("2: IBM JOYSTICK    ", pad));
+		lines.push_back(centerAndPadString("3: AMSTRAD JOYSTICK", pad));
 		lines.push_back("");
 		lines.push_back("");
 		if (isDOS())
-			lines.push_back(centerAndPadString("SPACEBAR:  BEGIN MISSION", 30));
+			lines.push_back(centerAndPadString("SPACEBAR:  BEGIN MISSION", pad));
 		else
-			lines.push_back(centerAndPadString("Enter: Begin Mission", 25));
+			lines.push_back(centerAndPadString("Enter: Begin Mission", pad));
 		lines.push_back("");
 		if (isDOS())
-			lines.push_back(centerAndPadString("COPYRIGHT 1988 INCENTIVE", 30));
+			lines.push_back(centerAndPadString("COPYRIGHT 1988 INCENTIVE", pad));
 		else
-			lines.push_back(centerAndPadString("(c) 1988 Incentive", 25));
+			lines.push_back(centerAndPadString("(c) 1988 Incentive", pad));
 
 		lines.push_back("");
-		Graphics::Surface *surface = drawStringsInSurface(lines);
+
+		uint32 color = _gfx->_texturePixelFormat.ARGBToColor(0x00, 0x00, 0x00, 0x00);
+		Graphics::Surface *surface = new Graphics::Surface();
+		surface->create(_screenW, _screenH, _gfx->_texturePixelFormat);
+		surface->fillRect(_fullscreenViewArea, color);
+
+		surface = drawStringsInSurface(lines, surface);
 		drawBorderScreenAndWait(surface, 6 * 60);
 		surface->free();
 		delete surface;
@@ -183,7 +191,13 @@ void FreescapeEngine::drawFullscreenMessageAndWait(Common::String message) {
 	for (int i = 0; i < numberOfLines; i++) {
 		lines.push_back(message.substr(letterPerLine * i, letterPerLine));
 	}
-	Graphics::Surface *surface = drawStringsInSurface(lines);
+
+	uint32 color = _gfx->_texturePixelFormat.ARGBToColor(0x00, 0x00, 0x00, 0x00);
+	Graphics::Surface *surface = new Graphics::Surface();
+	surface->create(_screenW, _screenH, _gfx->_texturePixelFormat);
+	surface->fillRect(_fullscreenViewArea, color);
+
+	surface = drawStringsInSurface(lines, surface);
 	drawBorderScreenAndWait(surface);
 	surface->free();
 	delete surface;

@@ -47,89 +47,35 @@ struct AnimTimerDataStruct;
  * text for the visible arrows.
  */
 class Holomap {
-private:
+protected:
 	TwinEEngine *_engine;
-
-	struct Location {
-		int16 angleX;
-		int16 angleY;
-		int16 size;
-		TextId textIndex = TextId::kNone;
-		char name[30] = "";
-	};
-
-	IVec3 _holomapSurface[561];
-
-	// original game size: 2244 (lba1)
-	struct HolomapSort {
-		int16 z = 0;
-		uint16 projectedPosIdx = 0;
-	};
-	HolomapSort _holomapSort[16 * 32];
-
-	struct HolomapProjectedPos {
-		uint16 x1 = 0;
-		uint16 y1 = 0;
-		uint16 x2 = 0;
-		uint16 y2 = 0;
-	};
-	HolomapProjectedPos _projectedSurfacePositions[561];
-	int _projectedSurfaceIndex = 0;
-	//float _distanceModifier = 1.0f;
-
-	int32 _numLocations = 0;
-	Location _locations[NUM_LOCATIONS];
-
-	int32 _holomapPaletteIndex = 0;
-	uint8 _paletteHolomap[NUMOFCOLORS * 3]{0};
-
-	void drawHolomapText(int32 centerx, int32 top, const char *title);
-	int32 searchNextArrow(int32 currentLocation, int32 dir) const;
-
-	void drawListPos(int xRot, int yRot, int zRot, bool lower);
-
-	/**
-	 * Renders a holomap path with single path points appearing slowly one after another
-	 */
-	void drawHoloObj(const IVec3 &angle, int32 x, int32 y);
-	void computeCoorGlobe(Common::SeekableReadStream *holomapSurfaceStream);
-	void computeCoorMapping();
-	void computeGlobeProj();
-	void drawHoloMap(uint8 *holomapImage, uint32 holomapImageSize);
-	void renderHolomapVehicle(uint &frameNumber, ActorMoveStruct &move, AnimTimerDataStruct &animTimerData, BodyData &bodyData, AnimData &animData);
-
-	/**
-	 * Controls the size/zoom of the holomap planet
-	 */
-	int32 distance(float distance) const;
-	int32 scale(float val) const;
-
 public:
-	Holomap(TwinEEngine *engine);
+	Holomap(TwinEEngine *engine) : _engine(engine) {}
+	virtual ~Holomap() {}
 
 	/**
 	 * Set Holomap location position
 	 * @param locationIdx Scene where position must be set
 	 */
-	void setHolomapPosition(int32 locationIdx);
+	virtual bool setHoloPos(int32 locationIdx) = 0;
 
-	bool loadLocations();
+	virtual bool loadLocations() = 0;
 
-	const char *getLocationName(int index) const;
+	virtual const char *getLocationName(int index) const = 0;
 
 	/**
 	 * Clear Holomap location position
 	 * @param locationIdx Scene where position must be cleared
 	 */
-	void clearHolomapPosition(int32 locationIdx);
+	virtual void clrHoloPos(int32 locationIdx) = 0;
 
-	void drawHolomapTrajectory(int32 trajectoryIndex);
+	virtual void drawHolomapTrajectory(int32 trajectoryIndex) = 0;
 
 	/** Load Holomap content */
-	void initHoloDatas();
+	virtual void initHoloDatas() = 0;
 
 	/** Main holomap process loop */
-	void holoMap();
+	virtual void holoMap() = 0;
 };
 
 } // namespace TwinE

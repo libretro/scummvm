@@ -18,7 +18,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+#include "common/config-manager.h"
 #include "common/file.h"
+
 #include "graphics/managed_surface.h"
 
 #include "video/mpegps_decoder.h"
@@ -81,12 +83,13 @@ bool winVideo::open_file(const Common::Path fname) {
 	if (!_videostream->open(filename.c_str())) {
 		warning("WinVideo::open: Failed to open file %s", filename.c_str());
 		delete _videostream;
+		_videostream = nullptr;
 		return false;
 	}
 
 	if (!_decoder->loadStream(_videostream)) {
-		warning("WinVideo::play: Failed to Load Stream");
-		delete _videostream;
+		warning("WinVideo::open: Failed to Load Stream");
+		_videostream = nullptr;
 		return false;
 	}
 
@@ -99,6 +102,7 @@ bool winVideo::play() {
 		return false;
 	}
 
+	_decoder->setVolume(ConfMan.getInt("music_volume"));
 	_decoder->start();
 	return true;
 }

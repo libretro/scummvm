@@ -1758,7 +1758,7 @@ bool Runtime::runFrame() {
 bool Runtime::bootGame(bool newGame) {
 	assert(_gameState == kGameStateBoot);
 
-	if (!ConfMan.hasKey("vcruise_increase_drag_distance") || ConfMan.hasKey("vcruise_increase_drag_distance"))
+	if (!ConfMan.hasKey("vcruise_increase_drag_distance") || ConfMan.getBool("vcruise_increase_drag_distance"))
 		_lmbDragTolerance = 3;
 
 	if (ConfMan.hasKey("vcruise_mute_music") && ConfMan.getBool("vcruise_mute_music"))
@@ -4624,6 +4624,10 @@ void Runtime::changeAnimation(const AnimationDef &animDef, uint initialFrame, bo
 
 		if (aviFile->open(aviFileName)) {
 			_animDecoder.reset(new Video::AVIDecoder());
+
+			if (ConfMan.hasKey("vcruise_fast_video_decoder") && ConfMan.getBool("vcruise_fast_video_decoder"))
+				_animDecoder->setVideoCodecAccuracy(Image::CodecAccuracy::Fast);
+
 			if (!_animDecoder->loadStream(aviFile)) {
 				warning("Animation file %i could not be loaded", animFile);
 				return;

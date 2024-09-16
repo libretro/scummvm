@@ -164,8 +164,19 @@ Common::Error QDEngineEngine::run() {
 	_gameD->load_script(script_name.c_str());
 
 	if (ConfMan.getBool("dump_scripts")) {
-		_gameD->save_script("qd_game.xml");
-		debug("Dumped qd_game.xml%s", debugChannelSet(-1, kDebugLog) ? " in human-readable form" : "");
+		Common::String fname = "qd_game";
+
+		if (debugChannelSet(-1, kDebugLog)) {
+			fname += "_" + g_engine->getGameId();
+
+			if (g_engine->getLanguage() != Common::RU_RUS)
+				fname += "-" + Common::String(Common::getLanguageCode(g_engine->getLanguage()));
+		}
+
+		fname += ".xml";
+
+		_gameD->save_script(fname.c_str());
+		debug("Dumped %s%s", fname.c_str(), debugChannelSet(-1, kDebugLog) ? " in human-readable form" : "");
 	}
 
 	_gameD->set_scene_loading_progress_callback(qd_show_load_progress);
@@ -297,7 +308,6 @@ Common::Error QDEngineEngine::run() {
 			}
 			resD.quant();
 			_gameD->redraw();
-
 		} else {
 			was_inactive = true;
 			g_system->delayMillis(100);
@@ -305,6 +315,7 @@ Common::Error QDEngineEngine::run() {
 		}
 
 		g_system->updateScreen();
+		g_system->delayMillis(10);
 	}
 
 	delete _gameD;
@@ -479,11 +490,13 @@ void restore_graphics() {
 }
 
 void scan_qda() {
+	debug("======== QDA Scan start ========");
+
 	for (int i = 0; i < 3; i++) {
 		Common::Archive *archive = qdFileManager::instance().get_package(i);
 		Common::ArchiveMemberList members;
 
-		if (archive)
+		if (archive) {
 			archive->listMembers(members);
 
 			for (auto &it : members) {
@@ -515,7 +528,10 @@ void scan_qda() {
 					}
 				}
 			}
+		}
 	}
+
+	debug("======== QDA Scan end ========");
 }
 
 } // namespace QDEngine
@@ -526,7 +542,9 @@ byte *transCyrillic(const Common::String &str) {
 	static byte tmp[1024];
 
 #ifndef WIN32
-	static int trans[] = { 0xa8, 0xd081, 0xb8, 0xd191, 0xc0, 0xd090,
+	static int trans[] = {
+		0xa0, 0xc2a0,
+		0xa8, 0xd081, 0xab, 0xc2ab, 0xb8, 0xd191, 0xbb, 0xc2bb, 0xc0, 0xd090,
 		0xc1, 0xd091, 0xc2, 0xd092, 0xc3, 0xd093, 0xc4, 0xd094,
 		0xc5, 0xd095, 0xc6, 0xd096, 0xc7, 0xd097, 0xc8, 0xd098,
 		0xc9, 0xd099, 0xca, 0xd09a, 0xcb, 0xd09b, 0xcc, 0xd09c,
@@ -573,15 +591,26 @@ byte *transCyrillic(const Common::String &str) {
 				}
 			}
 
-			if (*p == 0x96) {  // "–" -- EN DASH
+			if (*p == 0x85) {  // "…" -- Horizontal Ellipsis
+				tmp[i++] = 0xE2;
+				tmp[i++] = 0x80;
+				tmp[i++] = 0xA6;
+			} else if (*p == 0x96) {  // "–" -- EN DASH
 				tmp[i++] = 0xE2;
 				tmp[i++] = 0x80;
 				tmp[i++] = 0x93;
+			} else if (*p == 0x97) {  // "–" -- EM DASH
+				tmp[i++] = 0xE2;
+				tmp[i++] = 0x80;
+				tmp[i++] = 0x94;
+			} else if (*p == 0xB9) {  // "№" -- NUMERO DASH
+				tmp[i++] = 0xE2;
+				tmp[i++] = 0x84;
+				tmp[i++] = 0x96;
 			} else {
 				if (!trans[j]) {
 					warning("transCyrillic: no mapping for %d (0x%x)", *p, *p);
-					tmp[i++] = '?';
-					tmp[i++] = '?';
+					tmp[i++] = '^';
 				}
 			}
 		}

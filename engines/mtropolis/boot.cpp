@@ -743,7 +743,7 @@ bool BootScriptParser::parseNumber(char firstChar, Common::String &outToken) {
 		}
 
 		if (isAlpha(ch)) {
-			warning("Invalid floating point constantin boot script");
+			warning("Invalid floating point constant in boot script");
 			return false;
 		}
 
@@ -1078,6 +1078,13 @@ public:
 		kPlugInStandard,
 		kPlugInObsidian,
 		kPlugInMIDI,
+		kPlugInFTTS,
+		kPlugInRWC,
+		kPlugInKnowWonder,
+		kPlugInAxLogic,
+		kPlugInHoologic,
+		kPlugInMLine,
+		kPlugInThereware,
 	};
 
 	enum BitDepth {
@@ -1111,6 +1118,38 @@ public:
 	void bootMTIRetailWinRu();
 	void bootSPQRMac();
 	void bootSPQRWin();
+	void bootPurpleMoonWin();
+	void bootDilbertWin();
+	void bootEasyBakeWin();
+	void bootC9SamplerWin();
+	void bootFTTSWin();
+	void bootArchitectureWin();
+	void bootDrawMarvelWin();
+	void bootDinosaurFinderWin();
+	void bootAnimalDoctorWin();
+	void bootIvoclarWin();
+	void bootBeatrixWin();
+	void bootPoserWin();
+	void bootRWCWin();
+	void bootAngelicaWin();
+	void bootAlbertWin();
+	void bootWhitetailWin();
+	void bootNotebookWin();
+	void bootMsbAnimalWin();
+	void bootMsbBugsWin();
+	void bootMsbConcertWin();
+	void bootMsbFlightWin();
+	void bootMsbMarsWin();
+	void bootMsbVolcanoWin();
+	void bootMsbWhalesWin();
+	void bootTelemedWin();
+	void bootWorldBrokeWin();
+	void bootFreeWillyWin();
+	void bootHerculesWin();
+	void bootMindGymWin();
+	void bootStarTrekWin();
+
+
 	void bootGeneric();
 	void bootUsingBootScript();
 
@@ -1407,6 +1446,212 @@ void BootScriptContext::bootSPQRWin() {
 	addPlugIn(kPlugInStandard);
 }
 
+void BootScriptContext::bootPurpleMoonWin() {
+	addPlugIn(kPlugInStandard);
+	setMainSegmentFile("workspace/0Sampler.mpl");
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootDilbertWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	addPlugIn(kPlugInThereware);
+	addPlugIn(kPlugInAxLogic);
+	addPlugIn(kPlugInHoologic);
+	setMainSegmentFile("workspace/HIJINKS/Hijinks1.mpl");
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootEasyBakeWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/EB/INTRO.MFX");
+}
+
+void BootScriptContext::bootC9SamplerWin() {
+	addPlugIn(kPlugInStandard);
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion100);
+	setMainSegmentFile("workspace/RUNSAMP.C9A");
+}
+
+void BootScriptContext::bootFTTSWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInFTTS);
+	addPlugIn(kPlugInHoologic);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootArchitectureWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInHoologic);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootDrawMarvelWin() {
+	addPlugIn(kPlugInStandard);
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion100);
+	setMainSegmentFile("workspace/MDRAW.C9A");
+}
+
+void BootScriptContext::bootDinosaurFinderWin() {
+	addPlugIn(kPlugInStandard);
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion100);
+	setMainSegmentFile("workspace/WBDFR1.C9A");
+}
+
+void BootScriptContext::bootAnimalDoctorWin() {
+	addPlugIn(kPlugInStandard);
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion100);
+	setMainSegmentFile("workspace/VET.C9A");
+}
+
+void BootScriptContext::bootIvoclarWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInMLine);
+}
+
+void BootScriptContext::bootBeatrixWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInHoologic);
+	//Force V112 mode for PlugInModifier::load
+	//Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootPoserWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInThereware);
+}
+
+void BootScriptContext::bootRWCWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInThereware);
+	addPlugIn(kPlugInRWC);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootAngelicaWin() {
+	addPlugIn(kPlugInStandard);
+	setMainSegmentFile("workspace/mfx/Splash.mfx");
+}
+
+void BootScriptContext::bootAlbertWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInHoologic);
+	addPlugIn(kPlugInThereware);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootWhitetailWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInThereware);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootNotebookWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/YN/Hallway.mfx");
+}
+
+void BootScriptContext::bootMsbAnimalWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/MSB/Startup.mfw");
+}
+
+void BootScriptContext::bootMsbBugsWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/MSB/SignIn.mfx");
+}
+
+void BootScriptContext::bootMsbConcertWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/MSB/SignInC.mfx");
+}
+
+void BootScriptContext::bootMsbFlightWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/MSB/SignInF.mfx");
+}
+
+void BootScriptContext::bootMsbMarsWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/MSB/SignInM.mfx");
+}
+
+void BootScriptContext::bootMsbVolcanoWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/MSB/SignInV.mfx");
+}
+
+void BootScriptContext::bootMsbWhalesWin() {
+	addPlugIn(kPlugInStandard);
+	addPlugIn(kPlugInKnowWonder);
+	setMainSegmentFile("workspace/MSB/SignInW.mfx");
+}
+
+void BootScriptContext::bootTelemedWin() {
+	addPlugIn(kPlugInStandard);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootWorldBrokeWin() {
+	addPlugIn(kPlugInStandard);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootFreeWillyWin() {
+	addPlugIn(kPlugInStandard);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootHerculesWin() {
+	addPlugIn(kPlugInStandard);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootMindGymWin() {
+	addPlugIn(kPlugInStandard);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
+void BootScriptContext::bootStarTrekWin() {
+	addPlugIn(kPlugInStandard);
+	// Force V112 mode for PlugInModifier::load
+	// Autodetected V100 causes error there
+	setRuntimeVersion(RuntimeVersion::kRuntimeVersion112);
+}
+
 void BootScriptContext::bootGeneric() {
 	addPlugIn(kPlugInStandard);
 }
@@ -1465,7 +1710,14 @@ void BootScriptContext::executeFunction(const Common::String &functionName, cons
 	const EnumBinding plugInEnum[] = {ENUM_BINDING(kPlugInMTI),
 									  ENUM_BINDING(kPlugInStandard),
 									  ENUM_BINDING(kPlugInObsidian),
-									  ENUM_BINDING(kPlugInMIDI)};
+									  ENUM_BINDING(kPlugInMIDI),
+									  ENUM_BINDING(kPlugInFTTS),
+									  ENUM_BINDING(kPlugInRWC),
+									  ENUM_BINDING(kPlugInKnowWonder),
+									  ENUM_BINDING(kPlugInAxLogic),
+									  ENUM_BINDING(kPlugInHoologic),
+									  ENUM_BINDING(kPlugInMLine),
+									  ENUM_BINDING(kPlugInThereware),};
 
 	const EnumBinding bitDepthEnum[] = {ENUM_BINDING(kBitDepthAuto),
 										ENUM_BINDING(kBitDepth8),
@@ -1757,67 +2009,67 @@ const Game games[] = {
 	// Uncle Albert's Magical Album - German - Windows
 	{
 		MTBOOT_ALBERT1_WIN_DE,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Magical Album - English - Windows
 	{
 		MTBOOT_ALBERT1_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Magical Album - French - Windows
 	{
 		MTBOOT_ALBERT1_WIN_FR,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Magical Album - Dutch - Windows
 	{
 		MTBOOT_ALBERT1_WIN_NL,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Fabulous Voyage - German - Windows
 	{
 		MTBOOT_ALBERT2_WIN_DE,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Fabulous Voyage - English - Windows
 	{
 		MTBOOT_ALBERT2_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Fabulous Voyage - English - Windows
 	{
 		MTBOOT_ALBERT2_WIN_FR,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Fabulous Voyage - Dutch - Windows
 	{
 		MTBOOT_ALBERT2_WIN_NL,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Mysterious Island - German - Windows
 	{
 		MTBOOT_ALBERT3_WIN_DE,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Mysterious Island - English - Windows
 	{
 		MTBOOT_ALBERT3_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Mysterious Island - French - Windows
 	{
 		MTBOOT_ALBERT3_WIN_FR,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Mysterious Island - Dutch - Windows
 	{
 		MTBOOT_ALBERT3_WIN_NL,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// Uncle Albert's Mysterious Island - Catalan - Windows
 	{
 		MTBOOT_ALBERT3_WIN_CA,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAlbertWin
 	},
 	// SPQR: The Empire's Darkest Hour - Retail - Windows - English
 	{
@@ -1832,12 +2084,12 @@ const Game games[] = {
 	// Star Trek: The Game Show - Retail - Windows
 	{
 		MTBOOT_STTGS_RETAIL_WIN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootStarTrekWin
 	},
 	// Star Trek: The Game Show - Demo - Windows
 	{
 		MTBOOT_STTGS_DEMO_WIN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootStarTrekWin
 	},
 	// Unit: Rebooted
 	{
@@ -1847,72 +2099,77 @@ const Game games[] = {
 	// Mind Gym - Windows - English
 	{
 		MTBOOT_MINDGYM_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMindGymWin
 	},
 	// Mind Gym - Windows - German
 	{
 		MTBOOT_MINDGYM_WIN_DE,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMindGymWin
 	},
 	// Fun With Architecture - Windows - English
 	{
 		MTBOOT_ARCHITECTURE_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootArchitectureWin
 	},
 	// The Magic World of Beatrix Potter - Windows - English
 	{
 		MTBOOT_BEATRIX_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootBeatrixWin
+	},
+	// The Magic World of Beatrix Potter - Demo - Windows - English
+	{
+		MTBOOT_BEATRIX_DEMO_EN,
+		&BootScriptContext::bootBeatrixWin
 	},
 	// Whitetail Impact - Windows - English
 	{
 		MTBOOT_WT_IMPACT_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootWhitetailWin
 	},
 	// The Day The World Broke - Windows - English
 	{
 		MTBOOT_WORLDBROKE_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootWorldBrokeWin
 	},
 	// The Totally Techie World of Young Dilbert: Hi-Tech Hijinks - Windows - English
 	{
 		MTBOOT_DILBERT_WIN_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootDilbertWin
 	},
 	// Free Willy Activity Center - Windows - English
 	{
 		MTBOOT_FREEWILLY_WIN_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootFreeWillyWin
 	},
 	// Hercules & Xena Learning Adventure: Quest for the Scrolls - Windows - English
 	{
 		MTBOOT_HERCULES_WIN_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootHerculesWin
 	},
 	// I Can Be a Dinosaur Finder - Retail - Windows - English
 	{
 		MTBOOT_IDINO_RETAIL_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootDinosaurFinderWin
 	},
 	// I Can Be an Animal Doctor - Retail - Windows - English
 	{
 		MTBOOT_IDOCTOR_RETAIL_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootAnimalDoctorWin
 	},
 	// How to Draw the Marvel Way - Windows - English
 	{
 		MTBOOT_DRAWMARVELWAY_WIN_EN,
-		&BootScriptContext::bootGeneric,
+		&BootScriptContext::bootDrawMarvelWin,
 	},
 	// FairyTale: A True Story - Activity Center - Windows - English
 	{
 		MTBOOT_FTTS_WIN_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootFTTSWin
 	},
 	// Purple Moon Sampler - Demo - Windows - English
 	{
 		MTBOOT_PURPLEMOON_WIN_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootPurpleMoonWin
 	},
 	// Chomp! The Video Game - Retail - Windows - English
 	{
@@ -1932,22 +2189,22 @@ const Game games[] = {
 	// IVOCLAR - Windows - English
 	{
 		MTBOOT_IVOCLAR_WIN_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootIvoclarWin
 	},
 	// Real Wild Child! Australian Rock Music 1950s-90s - Windows - English
 	{
 		MTBOOT_REALWILD_WIN_EN,
-	 	&BootScriptContext::bootGeneric
+		&BootScriptContext::bootRWCWin
 	},
 	// How to Build a Telemedicine Program - Windows - English
 	{
 		MTBOOT_TELEMED_WIN_EN,
-	 	&BootScriptContext::bootGeneric
+	 	&BootScriptContext::bootTelemedWin
 	},
 	// Rugrats: Totally Angelica Boredom Buster - Windows - English
 	{
 		MTBOOT_ANGELICA_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootAngelicaWin
 	},
 	// Babe and Friends: Animated Early Reader - Windows - English
 	{
@@ -1962,7 +2219,7 @@ const Game games[] = {
 	// Easy-Bake Kitchen - Windows - English
 	{
 		MTBOOT_EASYBAKE_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootEasyBakeWin
 	},
 	// The Forgotten: It Begins - Windows - English
 	{
@@ -1997,37 +2254,37 @@ const Game games[] = {
 	// The Magic School Bus Explores the World of Animals - Windows - English
 	{
 		MTBOOT_MSB_ANIMAL_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMsbAnimalWin
 	},
 	// The Magic School Bus Explores Bugs - Windows - English
 	{
 		MTBOOT_MSB_BUGS_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMsbBugsWin
 	},
 	// The Magic School Bus In Concert - Windows - English
 	{
 		MTBOOT_MSB_CONCERT_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMsbConcertWin
 	},
 	// The Magic School Bus Discovers Flight - Windows - English
 	{
 		MTBOOT_MSB_FLIGHT_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMsbFlightWin
 	},
 	// The Magic School Bus Lands on Mars - Windows - English
 	{
 		MTBOOT_MSB_MARS_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMsbMarsWin
 	},
 	// The Magic School Bus Volcano Adventure - Windows - English
 	{
 		MTBOOT_MSB_VOLCANO_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMsbVolcanoWin
 	},
 	// The Magic School Bus Whales & Dolphins - Windows - English
 	{
 		MTBOOT_MSB_WHALES_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootMsbWhalesWin
 	},
 	// Mykropolis Planet der Roboter - Windows - German
 	{
@@ -2037,7 +2294,7 @@ const Game games[] = {
 	// Your Notebook (with help from Amelia) - Windows - English
 	{
 		MTBOOT_NOTEBOOK_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootNotebookWin
 	},
 	// Pferd & Pony Lass uns reiten	- Windows - English
 	{
@@ -2057,26 +2314,31 @@ const Game games[] = {
 	// Poser 3 Content Sampler - Windows - English
 	{
 		MTBOOT_POSER3_SAMPLER_ZYGOTE_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootPoserWin
 	},
 	// Another Poser 3 content sampler - Windows - English
 	{
 		MTBOOT_POSER3_ZYGOTE_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootPoserWin
 	},
 	// Whitetail Extreme - Windows - English
 	{
 		MTBOOT_WT_EXTREME_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootWhitetailWin
 	},
 	// Cloud 9 CD Sampler Volume 2 - Windows - English
 	{
 		MTBOOT_C9SAMPLER_WIN_EN,
-		&BootScriptContext::bootGeneric
+		&BootScriptContext::bootC9SamplerWin
 	},
 	// Adobe 24 Hours Tools Sampler - Windows - English
 	{
 		MTBOOT_ADOBE24_WIN_EN,
+		&BootScriptContext::bootGeneric
+	},
+	// Byzantine: The Betrayal - Demo - Windows - English
+	{
+		MTBOOT_BYZANTINE_DEMO_WIN_EN,
 		&BootScriptContext::bootGeneric
 	},
 };
@@ -2105,6 +2367,41 @@ Common::SharedPtr<MTropolis::PlugIn> loadObsidianPlugIn(const MTropolisGameDescr
 Common::SharedPtr<MTropolis::PlugIn> loadMTIPlugIn(const MTropolisGameDescription &gameDesc) {
 	Common::SharedPtr<MTropolis::PlugIn> mtiPlugIn(PlugIns::createMTI());
 	return mtiPlugIn;
+}
+
+Common::SharedPtr<MTropolis::PlugIn> loadFTTSPlugIn(const MTropolisGameDescription &gameDesc) {
+	Common::SharedPtr<MTropolis::PlugIn> fttsPlugIn(PlugIns::createFTTS());
+	return fttsPlugIn;
+}
+
+Common::SharedPtr<MTropolis::PlugIn> loadRWCPlugIn(const MTropolisGameDescription &gameDesc) {
+	Common::SharedPtr<MTropolis::PlugIn> rwcPlugIn(PlugIns::createRWC());
+	return rwcPlugIn;
+}
+
+Common::SharedPtr<MTropolis::PlugIn> loadKnowWonderPlugIn(const MTropolisGameDescription &gameDesc) {
+	Common::SharedPtr<MTropolis::PlugIn> kwPlugIn(PlugIns::createKnowWonder());
+	return kwPlugIn;
+}
+
+Common::SharedPtr<MTropolis::PlugIn> loadAXLogicPlugIn(const MTropolisGameDescription &gameDesc) {
+	Common::SharedPtr<MTropolis::PlugIn> axPlugIn(PlugIns::createAXLogic());
+	return axPlugIn;
+}
+
+Common::SharedPtr<MTropolis::PlugIn> loadHoologicPlugIn(const MTropolisGameDescription &gameDesc) {
+	Common::SharedPtr<MTropolis::PlugIn> hlPlugIn(PlugIns::createHoologic());
+	return hlPlugIn;
+}
+
+Common::SharedPtr<MTropolis::PlugIn> loadMLinePlugIn(const MTropolisGameDescription &gameDesc) {
+	Common::SharedPtr<MTropolis::PlugIn> mlinePlugIn(PlugIns::createMLine());
+	return mlinePlugIn;
+}
+
+Common::SharedPtr<MTropolis::PlugIn> loadTherewarePlugIn(const MTropolisGameDescription &gameDesc) {
+	Common::SharedPtr<MTropolis::PlugIn> twPlugIn(PlugIns::createThereware());
+	return twPlugIn;
 }
 
 enum PlayerType {
@@ -2979,6 +3276,27 @@ BootConfiguration bootProject(const MTropolisGameDescription &gameDesc) {
 			break;
 		case Boot::BootScriptContext::kPlugInMTI:
 			plugIns.push_back(Boot::loadMTIPlugIn(gameDesc));
+			break;
+		case Boot::BootScriptContext::kPlugInFTTS:
+			plugIns.push_back(Boot::loadFTTSPlugIn(gameDesc));
+			break;
+		case Boot::BootScriptContext::kPlugInRWC:
+			plugIns.push_back(Boot::loadRWCPlugIn(gameDesc));
+			break;
+		case Boot::BootScriptContext::kPlugInKnowWonder:
+			plugIns.push_back(Boot::loadKnowWonderPlugIn(gameDesc));
+			break;
+		case Boot::BootScriptContext::kPlugInAxLogic:
+			plugIns.push_back(Boot::loadAXLogicPlugIn(gameDesc));
+			break;
+		case Boot::BootScriptContext::kPlugInHoologic:
+			plugIns.push_back(Boot::loadHoologicPlugIn(gameDesc));
+			break;
+		case Boot::BootScriptContext::kPlugInMLine:
+			plugIns.push_back(Boot::loadMLinePlugIn(gameDesc));
+			break;
+		case Boot::BootScriptContext::kPlugInThereware:
+			plugIns.push_back(Boot::loadTherewarePlugIn(gameDesc));
 			break;
 		default:
 			error("Unknown plug-in ID");

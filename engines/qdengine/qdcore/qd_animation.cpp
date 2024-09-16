@@ -138,6 +138,8 @@ void qdAnimation::quant(float dt) {
 }
 
 void qdAnimation::redraw(int x, int y, int z, int mode) const {
+	debugC(2, kDebugGraphics, "qdAnimation::redraw([%d, %d, %d], mode: %d), name: '%s'", x, y, z, mode, transCyrillic(_parent ? _parent->name() : name()));
+
 	if (check_flag(QD_ANIMATION_FLAG_FLIP_HORIZONTAL))
 		mode |= GR_FLIP_HORIZONTAL;
 
@@ -148,12 +150,14 @@ void qdAnimation::redraw(int x, int y, int z, int mode) const {
 		mode |= GR_BLACK_FON;
 
 	if (tileAnimation()) {
-		tileAnimation()->drawFrame(Vect2i(x, y), get_cur_frame_number(), mode);
+		tileAnimation()->drawFrame(Vect2i(x, y), get_cur_frame_number(), mode, -1);
 	} else if (const qdAnimationFrame *p = get_cur_frame())
 		p->redraw(x, y, z, mode);
 }
 
 void qdAnimation::redraw(int x, int y, int z, float scale, int mode) const {
+	debugC(2, kDebugGraphics, "qdAnimation::redraw([%d, %d, %d], scale: %f, mode: %d), name: '%s'", x, y, z, scale, mode, transCyrillic(_parent ? _parent->name() : name()));
+
 	if (fabs(scale - 1.0f) < 0.01f) {
 		redraw(x, y, z, mode);
 		return;
@@ -168,11 +172,25 @@ void qdAnimation::redraw(int x, int y, int z, float scale, int mode) const {
 	if (check_flag(QD_ANIMATION_FLAG_BLACK_FON))
 		mode |= GR_BLACK_FON;
 
-	if (const qdAnimationFrame *p = get_cur_frame(scale))
-		p->redraw(x, y, z, scale, mode);
+	if (tileAnimation()) {
+		tileAnimation()->drawFrame_scale(Vect2i(x, y), get_cur_frame_number(), scale, mode);
+	} else {
+		const qdAnimationFrame *scaled_frame;
+		int scale_index = get_scale_index(scale);
+
+		if (scale_index == -1)
+			scaled_frame = get_cur_frame();
+		else
+			scaled_frame = get_scaled_frame(get_cur_frame_number(), scale_index);
+
+		if (scaled_frame)
+			scaled_frame->redraw(x, y, z, scale, mode);
+	}
 }
 
 void qdAnimation::redraw_rot(int x, int y, int z, float angle, int mode) const {
+	debugC(2, kDebugGraphics, "qdAnimation::redraw_rot([%d, %d, %d], angle: %f, mode: %d), name: '%s'", x, y, z, angle, mode, transCyrillic(_parent ? _parent->name() : name()));
+
 	if (check_flag(QD_ANIMATION_FLAG_FLIP_HORIZONTAL))
 		mode |= GR_FLIP_HORIZONTAL;
 
@@ -186,6 +204,8 @@ void qdAnimation::redraw_rot(int x, int y, int z, float angle, int mode) const {
 }
 
 void qdAnimation::redraw_rot(int x, int y, int z, float angle, const Vect2f &scale, int mode) const {
+	debugC(2, kDebugGraphics, "qdAnimation::redraw_rot([%d, %d, %d], angle: %f, scale: [%f, %f], mode: %d), name: '%s'", x, y, z, angle, scale.x, scale.y, mode, transCyrillic(_parent ? _parent->name() : name()));
+
 	if (fabs(scale.x - 1.0f) < 0.01f && fabs(scale.y - 1.0f) < 0.01f) {
 		redraw_rot(x, y, z, angle, mode);
 		return;
@@ -197,8 +217,28 @@ void qdAnimation::redraw_rot(int x, int y, int z, float angle, const Vect2f &sca
 	if (check_flag(QD_ANIMATION_FLAG_FLIP_VERTICAL))
 		mode |= GR_FLIP_VERTICAL;
 
-	if (const qdAnimationFrame *p = get_cur_frame())
-		p->redraw_rot(x, y, z, angle, scale, mode);
+	if (tileAnimation()) {
+		tileAnimation()->drawFrame(Vect2i(x, y), get_cur_frame_number(), angle, scale, mode);
+	} else if (fabs(scale.x - scale.y) < 0.01f) {
+		if (const qdAnimationFrame *p = get_cur_frame())
+			p->redraw_rot(x, y, z, angle, scale, mode);
+	} else {
+		const qdAnimationFrame *scaled_frame;
+		float newScale = scale.x;
+		int scale_index = get_scale_index(newScale);
+
+		if (scale_index == -1)
+			scaled_frame = get_cur_frame();
+		else
+			scaled_frame = get_scaled_frame(get_cur_frame_number(), scale_index);
+
+		if (scaled_frame) {
+			if (fabs(newScale - 1.0) >= 0.01f)
+				scaled_frame->redraw_rot(x, y, z, angle, Vect2f(newScale, newScale), mode);
+			else
+				scaled_frame->redraw_rot(x, y, z, angle, mode);
+		}
+	}
 }
 
 void qdAnimation::draw_mask(int x, int y, int z, uint32 mask_color, int mask_alpha, int mode) const {
@@ -211,7 +251,9 @@ void qdAnimation::draw_mask(int x, int y, int z, uint32 mask_color, int mask_alp
 	if (check_flag(QD_ANIMATION_FLAG_BLACK_FON))
 		mode |= GR_BLACK_FON;
 
-	if (const qdAnimationFrame *p = get_cur_frame())
+	if (tileAnimation())
+		tileAnimation()->drawMask(Vect2i(x, y), get_cur_frame_number(), mask_color, mask_alpha, mode, -1);
+	else if (const qdAnimationFrame *p = get_cur_frame())
 		p->draw_mask(x, y, z, mask_color, mask_alpha, mode);
 }
 
@@ -230,8 +272,20 @@ void qdAnimation::draw_mask(int x, int y, int z, uint32 mask_color, int mask_alp
 	if (check_flag(QD_ANIMATION_FLAG_BLACK_FON))
 		mode |= GR_BLACK_FON;
 
-	if (const qdAnimationFrame *p = get_cur_frame(scale))
-		p->draw_mask(x, y, z, mask_color, mask_alpha, scale, mode);
+	if (tileAnimation()) {
+		tileAnimation()->drawMask_scale(Vect2i(x, y), get_cur_frame_number(), mask_color, mask_alpha, scale, mode);
+	} else {
+		int scale_index = get_scale_index(scale);
+		const qdAnimationFrame *scaled_frame;
+
+		if (scale_index == -1)
+			scaled_frame = get_cur_frame();
+		else
+			scaled_frame = get_scaled_frame(get_cur_frame_number(), scale_index);
+
+		if (scaled_frame)
+			scaled_frame->draw_mask(x, y, z, mask_color, mask_alpha, scale, mode);
+	}
 }
 
 void qdAnimation::draw_mask_rot(int x, int y, int z, float angle, uint32 mask_color, int mask_alpha, int mode) const {
@@ -242,7 +296,7 @@ void qdAnimation::draw_mask_rot(int x, int y, int z, float angle, uint32 mask_co
 		mode |= GR_FLIP_VERTICAL;
 
 	if (tileAnimation()) {
-		tileAnimation()->drawFrame(Vect2i(x, y), get_cur_frame_number(), angle, mode);
+		tileAnimation()->drawMask_rot(Vect2i(x, y), get_cur_frame_number(), mask_color, mask_alpha, angle, mode);
 	} else if (const qdAnimationFrame *p = get_cur_frame())
 		p->draw_mask_rot(x, y, z, angle, mask_color, mask_alpha, mode);
 }
@@ -259,8 +313,30 @@ void qdAnimation::draw_mask_rot(int x, int y, int z, float angle, uint32 mask_co
 	if (check_flag(QD_ANIMATION_FLAG_FLIP_VERTICAL))
 		mode |= GR_FLIP_VERTICAL;
 
-	if (const qdAnimationFrame *p = get_cur_frame())
-		p->draw_mask_rot(x, y, z, angle, mask_color, mask_alpha, scale, mode);
+	if (tileAnimation()) {
+		tileAnimation()->drawMask_rot(Vect2i(x, y), get_cur_frame_number(), mask_color, mask_alpha, angle, scale, mode);
+	} else if (fabs(scale.x - scale.y) >= 0.01f) {
+		if (const qdAnimationFrame *p = get_cur_frame())
+			p->draw_mask_rot(x, y, z, angle, mask_color, mask_alpha, scale, mode);
+	} else {
+		const qdAnimationFrame *scaled_frame;
+		float newScale = scale.x;
+		int scale_index = get_scale_index(newScale);
+
+		if (scale_index == -1) {
+			scaled_frame = get_cur_frame();
+		} else {
+			scaled_frame = get_scaled_frame(get_cur_frame_number(), scale_index);
+		}
+
+		if (scaled_frame) {
+			if (fabs(newScale - 1.0) >= 0.01) {
+				scaled_frame->draw_mask_rot(x, y, z, angle, mask_color, mask_alpha, Vect2f(newScale, newScale), mode);
+			} else {
+				scaled_frame->draw_mask_rot(x, y, z, angle, mask_color, mask_alpha, mode);
+			}
+		}
+	}
 }
 
 void qdAnimation::draw_contour(int x, int y, uint32 color) const {
@@ -275,8 +351,13 @@ void qdAnimation::draw_contour(int x, int y, uint32 color) const {
 	if (check_flag(QD_ANIMATION_FLAG_BLACK_FON))
 		mode |= GR_BLACK_FON;
 
-	const qdAnimationFrame *p = get_cur_frame();
-	if (p) p->draw_contour(x, y, color, mode);
+	if (tileAnimation()) {
+		tileAnimation()->drawContour(Vect2i(x, y), get_cur_frame_number(), color, mode, -1);
+	} else {
+		const qdAnimationFrame *p = get_cur_frame();
+		if (p)
+			p->draw_contour(x, y, color, mode);
+	}
 }
 
 void qdAnimation::draw_contour(int x, int y, uint32 color, float scale) const {
@@ -291,8 +372,16 @@ void qdAnimation::draw_contour(int x, int y, uint32 color, float scale) const {
 	if (check_flag(QD_ANIMATION_FLAG_BLACK_FON))
 		mode |= GR_BLACK_FON;
 
-	const qdAnimationFrame *p = get_cur_frame();
-	if (p) p->draw_contour(x, y, color, scale, mode);
+	if (tileAnimation()) {
+		if (fabs(scale - 1.0) >= 0.01f)
+			tileAnimation()->drawContour(Vect2i(x, y), get_cur_frame_number(), color, scale, mode);
+		else
+			tileAnimation()->drawContour(Vect2i(x, y), get_cur_frame_number(), color, mode, -1);
+	} else {
+		const qdAnimationFrame *p = get_cur_frame();
+		if (p)
+			p->draw_contour(x, y, color, scale, mode);
+	}
 }
 
 qdAnimationFrame *qdAnimation::get_cur_frame() {
@@ -496,14 +585,19 @@ bool qdAnimation::hit(int x, int y) const {
 	int xx = x;
 	int yy = y;
 
-	const qdAnimationFrame *p = get_cur_frame();
-	if (p) {
-		if (check_flag(QD_ANIMATION_FLAG_FLIP_HORIZONTAL))
-			xx = -x;
-		if (check_flag(QD_ANIMATION_FLAG_FLIP_VERTICAL))
-			yy = -y;
+	if (check_flag(QD_ANIMATION_FLAG_FLIP_HORIZONTAL))
+		xx = -x;
+	if (check_flag(QD_ANIMATION_FLAG_FLIP_VERTICAL))
+		yy = -y;
 
-		return p->hit(xx, yy);
+	if (tileAnimation()) {
+		Vect2i pos(xx, yy);
+
+		return tileAnimation()->hit(get_cur_frame_number(), pos);
+	} else {
+		const qdAnimationFrame *p = get_cur_frame();
+		if (p)
+			return p->hit(xx, yy);
 	}
 
 	return false;
@@ -513,14 +607,19 @@ bool qdAnimation::hit(int x, int y, float scale) const {
 	int xx = x;
 	int yy = y;
 
-	const qdAnimationFrame *p = get_cur_frame();
-	if (p) {
-		if (check_flag(QD_ANIMATION_FLAG_FLIP_HORIZONTAL))
-			xx = -x;
-		if (check_flag(QD_ANIMATION_FLAG_FLIP_VERTICAL))
-			yy = -y;
+	if (check_flag(QD_ANIMATION_FLAG_FLIP_HORIZONTAL))
+		xx = -x;
+	if (check_flag(QD_ANIMATION_FLAG_FLIP_VERTICAL))
+		yy = -y;
 
-		return p->hit(xx, yy, scale);
+	if (tileAnimation()) {
+		Vect2i pos(xx, yy);
+
+		return tileAnimation()->hit(get_cur_frame_number(), pos); // Weirdly, but there is no _scale variant
+	} else {
+		const qdAnimationFrame *p = get_cur_frame();
+		if (p)
+			return p->hit(xx, yy, scale);
 	}
 
 	return false;
@@ -596,6 +695,8 @@ bool qdAnimation::qda_load(Common::Path fpath) {
 		debugC(1, kDebugLoad, "qdAnimation::qda_load() tileAnimation %s", transCyrillic(fpath.toString()));
 		_tileAnimation = new grTileAnimation;
 		_tileAnimation->load(fh, version);
+
+		//_tileAnimation->dumpTiles(fpath, 50);
 	}
 
 	init_size();
@@ -896,7 +997,7 @@ Vect2i qdAnimation::remove_edges() {
 }
 
 bool qdAnimation::load_data(Common::SeekableReadStream &fh, int save_version) {
-	debugC(3, kDebugSave, "  qdAnimation::load_data(): before %ld", fh.pos());
+	debugC(3, kDebugSave, "  qdAnimation::load_data(): before: %d", (int)fh.pos());
 
 	if (!qdNamedObject::load_data(fh, save_version))
 		return false;
@@ -933,12 +1034,12 @@ bool qdAnimation::load_data(Common::SeekableReadStream &fh, int save_version) {
 	_status = st;
 	_is_finished = (finished) ? true : false;
 
-	debugC(2, kDebugSave, "  qdAnimation::load_data(): after %ld", fh.pos());
+	debugC(2, kDebugSave, "  qdAnimation::load_data(): after: %d", (int)fh.pos());
 	return true;
 }
 
 bool qdAnimation::save_data(Common::WriteStream &fh) const {
-	debugC(3, kDebugSave, "  qdAnimation::save_data(): before %ld", fh.pos());
+	debugC(3, kDebugSave, "  qdAnimation::save_data(): before: %d", (int)fh.pos());
 
 	if (!qdNamedObject::save_data(fh)) return false;
 
@@ -956,7 +1057,7 @@ bool qdAnimation::save_data(Common::WriteStream &fh) const {
 	fh.writeFloatLE(_cur_time);
 	fh.writeFloatLE(_length);
 
-	debugC(3, kDebugSave, "  qdAnimation::save_data(): after %ld", fh.pos());
+	debugC(3, kDebugSave, "  qdAnimation::save_data(): after: %d", (int)fh.pos());
 	return true;
 }
 
@@ -1077,4 +1178,44 @@ uint32 qdAnimation::resource_data_size() const {
 	return size;
 }
 #endif
+
+#define defFlag(x) { x, #x }
+
+struct FlagsList {
+	int f;
+	const char *s;
+} static flagList[] = {
+	defFlag(QD_ANIMATION_FLAG_REFERENCE),
+	defFlag(QD_ANIMATION_FLAG_REFERENCE),
+	defFlag(QD_ANIMATION_FLAG_LOOP),
+	defFlag(QD_ANIMATION_FLAG_FLIP_HORIZONTAL),
+	defFlag(QD_ANIMATION_FLAG_FLIP_VERTICAL),
+	defFlag(QD_ANIMATION_FLAG_BLACK_FON),
+	defFlag(QD_ANIMATION_FLAG_SUPPRESS_ALPHA),
+	defFlag(QD_ANIMATION_FLAG_CROP),
+	defFlag(QD_ANIMATION_FLAG_COMPRESS),
+	defFlag(QD_ANIMATION_FLAG_TILE_COMPRESS),
+};
+
+Common::String qdAnimation::flag2str(int fl) {
+	Common::String res;
+
+	for (int i = 0; i < ARRAYSIZE(flagList); i++) {
+		if (fl & flagList[i].f) {
+			if (!res.empty())
+				res += " | ";
+
+			res += flagList[i].s;
+
+			fl &= ~flagList[i].f;
+		}
+	}
+
+	if (fl)
+		res += Common::String::format(" | %x", fl);
+
+	return res;
+}
+
+
 } // namespace QDEngine

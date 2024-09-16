@@ -113,14 +113,14 @@ void CastleEngine::loadAssetsZXFullGame() {
 	loadMessagesVariableSize(&file, 0x4bd, 71);
 	switch (_language) {
 		case Common::ES_ESP:
-			loadRiddles(&file, 0xcf0 - 1 - 1 - 1, 8);
+			loadRiddles(&file, 0x1470 - 4, 8);
 			loadMessagesVariableSize(&file, 0xf3d, 71);
 			load8bitBinary(&file, 0x6aab - 2, 16);
 			loadSpeakerFxZX(&file, 0xca0, 0xcdc);
 			loadFonts(&file, 0x1218 + 16, _font);
 			break;
 		case Common::EN_ANY:
-			loadRiddles(&file, 0x1460 - 1 - 3, 8);
+			loadRiddles(&file, 0x145c, 9);
 			load8bitBinary(&file, 0x6a3b, 16);
 			loadSpeakerFxZX(&file, 0xc91, 0xccd);
 			loadFonts(&file, 0x1219, _font);
@@ -137,7 +137,7 @@ void CastleEngine::loadAssetsZXFullGame() {
 	_gfx->readFromPalette(7, r, g, b);
 	uint32 white = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 
-	_keysFrame = loadFrameWithHeader(&file, 0xdf7, white, red);
+	_keysBorderFrames.push_back(loadFrameWithHeader(&file, 0xdf7, white, red));
 
 	uint32 green = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0, 0xff, 0);
 	_spiritsMeterIndicatorFrame = loadFrameWithHeader(&file, _language == Common::ES_ESP ? 0xe5e : 0xe4f, green, white);
@@ -158,10 +158,10 @@ void CastleEngine::loadAssetsZXFullGame() {
 	_gfx->readFromPalette(6, r, g, b);
 	uint32 yellow = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 	uint32 black = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0, 0, 0);
-	_strenghtBackgroundFrame = loadFrameWithHeader(&file, 0xed7, yellow, black);
-	_strenghtBarFrame = loadFrameWithHeader(&file, 0xf63, yellow, black);
+	_strenghtBackgroundFrame = loadFrameWithHeader(&file, _language == Common::ES_ESP ? 0xee6 : 0xed7, yellow, black);
+	_strenghtBarFrame = loadFrameWithHeader(&file, _language == Common::ES_ESP ? 0xf72 : 0xf63, yellow, black);
 
-	_strenghtWeightsFrames = loadFramesWithHeader(&file, 0xf83, 4, yellow, black);
+	_strenghtWeightsFrames = loadFramesWithHeader(&file, _language == Common::ES_ESP ? 0xf92 : 0xf83, 4, yellow, black);
 
 	for (auto &it : _areaMap) {
 		it._value->addStructure(_areaMap[255]);
@@ -223,14 +223,14 @@ void CastleEngine::drawZXUI(Graphics::Surface *surface) {
 		drawStringInSurface(_currentArea->_name, 120, 179, front, black, surface);
 
 	for (int k = 0; k < _numberKeys; k++) {
-		surface->copyRectToSurface((const Graphics::Surface)*_keysFrame, 99 - k * 4, 177, Common::Rect(0, 0, 6, 11));
+		surface->copyRectToSurface((const Graphics::Surface)*_keysBorderFrames[0], 99 - k * 4, 177, Common::Rect(0, 0, 6, 11));
 	}
 
 	uint32 green = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0, 0xff, 0);
 
 	surface->fillRect(Common::Rect(152, 156, 216, 164), green);
 	surface->copyRectToSurface((const Graphics::Surface)*_spiritsMeterIndicatorFrame, 140 + _spiritsMeterPosition, 156, Common::Rect(0, 0, 15, 8));
-	drawEnergyMeter(surface);
+	drawEnergyMeter(surface, Common::Point(63, 154));
 }
 
 } // End of namespace Freescape

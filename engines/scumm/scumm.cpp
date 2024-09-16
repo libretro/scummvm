@@ -72,6 +72,7 @@
 #include "scumm/players/player_he.h"
 #include "scumm/resource.h"
 #include "scumm/he/resource_he.h"
+#include "scumm/he/basketball/basketball.h"
 #include "scumm/he/moonbase/moonbase.h"
 #include "scumm/scumm_v0.h"
 #include "scumm/scumm_v8.h"
@@ -246,7 +247,7 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 		_debugMode = true;
 
 	_copyProtection = ConfMan.getBool("copy_protection");
-	if (ConfMan.getBool("demo_mode"))
+    if (ConfMan.getBool("demo_mode") || ConfMan.getBool("enable_demo_mode"))
 		_game.features |= GF_DEMO;
 	if (ConfMan.hasKey("nosubtitles")) {
 		// We replaced nosubtitles *ages* ago. Just convert it silently
@@ -667,7 +668,8 @@ ScummEngine_v6::ScummEngine_v6(OSystem *syst, const DetectorResult &dr)
 ScummEngine_v60he::ScummEngine_v60he(OSystem *syst, const DetectorResult &dr)
 	: ScummEngine_v6(syst, dr) {
 #ifdef ENABLE_HE
-	_moonbase = 0;
+	_moonbase = nullptr;
+	_basketball = nullptr;
 #endif
 
 	memset(_hInFileTable, 0, sizeof(_hInFileTable));
@@ -777,7 +779,7 @@ ScummEngine_v90he::ScummEngine_v90he(OSystem *syst, const DetectorResult &dr)
 	_videoParams.wizResNum = 0;
 
 #ifdef USE_ENET
-	/* Online stuff for compatable HE games */
+	/* Online stuff for compatible HE games */
 	_net = 0;
 	if (_game.id == GID_FOOTBALL || _game.id == GID_BASEBALL2001 || _game.id == GID_FOOTBALL2002 ||
 		_game.id == GID_MOONBASE) {
@@ -824,16 +826,22 @@ ScummEngine_v100he::ScummEngine_v100he(OSystem *syst, const DetectorResult &dr) 
 	if (_game.id == GID_MOONBASE)
 		_moonbase = new Moonbase(this);
 
+	if (_game.id == GID_BASKETBALL)
+		_basketball = new Basketball(this);
+
 	VAR_U32_USER_VAR_A = 0xFF;
 	VAR_U32_USER_VAR_B = 0xFF;
 	VAR_U32_USER_VAR_C = 0xFF;
 	VAR_U32_USER_VAR_D = 0xFF;
 	VAR_U32_USER_VAR_E = 0xFF;
 	VAR_U32_USER_VAR_F = 0xFF;
+	VAR_U32_USER_VAR_G = 0xFF;
+	VAR_U32_USER_VAR_H = 0xFF;
 }
 
 ScummEngine_v100he::~ScummEngine_v100he() {
 	delete _moonbase;
+	delete _basketball;
 }
 
 ScummEngine_vCUPhe::ScummEngine_vCUPhe(OSystem *syst, const DetectorResult &dr) : Engine(syst){
@@ -3392,7 +3400,7 @@ void ScummEngine_v3::scummLoop_handleSaveLoad() {
 					byte restoreScript = (_game.platform == Common::kPlatformFMTowns) ? 17 : 18;
 					args[0] = 2;
 					runScript(restoreScript, 0, 0, args);
-					// Reset two variables, similiar to what the save script would do, to avoid minor glitches
+					// Reset two variables, similar to what the save script would do, to avoid minor glitches
 					// of the verb image on the right of the distaff (image remainung blank when moving the
 					// mouse cursor over an object, bug #13369).
 					VAR(saveLoadVar + 2) = VAR(saveLoadVar + 3) = 0;
@@ -3506,6 +3514,18 @@ void ScummEngine_v5::scummLoop_handleSaveLoad() {
 			if ((_game.id == GID_MONKEY || _game.id == GID_MONKEY2) && VAR_ENTRY_SCRIPT2 != 0xFF && VAR(VAR_ENTRY_SCRIPT2))
 				runScript(VAR(VAR_ENTRY_SCRIPT2), 0, 0, nullptr);
 		}
+	}
+
+	// Reset the room palette after changing it in room 36 and
+	// loading a savegame (which doesn't trigger a startScene() call)...
+	if (haveToApplyMonkey1PaletteFix()) {
+		for (int i = 0; i < ARRAYSIZE(_roomPalette); i++) {
+			_roomPalette[i] = i;
+		}
+
+		// If we're coming from a different room, apply the fix...
+		if (_currentRoom == 36)
+			_roomPalette[47] = 15;
 	}
 
 	if (_completeScreenRedraw) {

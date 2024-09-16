@@ -159,12 +159,12 @@ static const int keyMapTable[] = {
 	Common::KEYCODE_RSHIFT,			VK_RSHIFT,
 	Common::KEYCODE_LSHIFT,			VK_LSHIFT,
 	Common::KEYCODE_RCTRL,			VK_RCONTROL,
-	Common::KEYCODE_LCTRL,			VK_LCONTROL,
+	Common::KEYCODE_LCTRL,			VK_CONTROL,
 	Common::KEYCODE_RALT,			VK_RMENU,
 	Common::KEYCODE_LALT,			VK_LMENU,
 	Common::KEYCODE_RMETA,			VK_RWIN,
 	Common::KEYCODE_LMETA,			VK_LWIN,
-	Common::KEYCODE_LSUPER,			-1,
+	Common::KEYCODE_LSUPER,			VK_LWIN,
 	Common::KEYCODE_RSUPER,			-1,
 	Common::KEYCODE_MODE,			-1,
 	Common::KEYCODE_COMPOSE,		-1,
@@ -225,7 +225,7 @@ static const int unmappedTable[] {
 	VK_MBUTTON,
 
 	VK_SHIFT,
-	VK_CONTROL,
+	VK_LCONTROL,
 
 	VK_EXECUTE,
 	VK_SNAPSHOT,

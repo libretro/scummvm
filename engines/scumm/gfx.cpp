@@ -869,7 +869,7 @@ const byte *ScummEngine::postProcessDOSGraphics(VirtScreen *vs, int &pitch, int 
 		}
 
 	} else if (renderHerc || _renderMode == Common::kRenderCGA_BW) {
-		// The monochrome rendering is very similiar for Hercules and CGA b/w. For Hercules we have to do some corrections to fit into the 350 pixels height.
+		// The monochrome rendering is very similar for Hercules and CGA b/w. For Hercules we have to do some corrections to fit into the 350 pixels height.
 		// For Hercules V1/2, the text and verb vs are rendered in normal height, only the main vs gets scaled by leaving out every other line. Hercules V4
 		// instead scales everything in a 4-to-7 lines ratio. And for all versions, we center the image horizontally within the 720 pixels width.
 		// For CGA b/w the origial resolution is 640x200, so we just scale that to our 640x400 by repeating each line.
@@ -2476,31 +2476,6 @@ bool Gdi::drawStrip(byte *dstPtr, VirtScreen *vs, int x, int y, const int width,
 			_roomPalette[11] = 86;
 		if (_roomPalette[13] == 13 && _roomPalette[80] == 80)
 			_roomPalette[13] = 80;
-	}
-
-	// WORKAROUND: In the CD version of MI1, the sign about how the dogs
-	// are only sleeping has a dark blue background instead of white. This
-	// makes the sign harder to read, so temporarily remap the color while
-	// drawing it. The text is also slightly different, but that is taken
-	// care of elsewhere.
-	//
-	// The SEGA CD version uses the old colors already, and the FM Towns
-	// version makes the text more readable by giving it a black outline.
-
-	else if (_vm->_game.id == GID_MONKEY &&
-			!(_vm->_game.features & GF_ULTIMATE_TALKIE) &&
-			_vm->_game.platform != Common::kPlatformSegaCD &&
-			_vm->_game.platform != Common::kPlatformFMTowns &&
-			_vm->_currentRoom == 36 &&
-			vs->number == kMainVirtScreen &&
-			y == 8 && x >= 7 && x <= 30 && height == 88 &&
-			_vm->enhancementEnabled(kEnhVisualChanges)) {
-		_roomPalette[47] = 15;
-
-		byte result = decompressBitmap(dstPtr, vs->pitch, smap_ptr + offset, height);
-
-		_roomPalette[47] = 47;
-		return result;
 	}
 
 	// WORKAROUND: In the French VGA floppy version of MI1, the easter egg
@@ -4704,7 +4679,7 @@ void ScummEngine::dissolveEffect(int width, int height) {
 	//   The original construct the image piece by piece but blits it
 	//   every time it finds an offset smaller than the height of the virtual
 	//   screen. This is trivial to do in our code, so we just sleep for a
-	//   quarter frame everytime the condition above is met.
+	//   quarter frame every time the condition above is met.
 	//
 	// If we ever get a blitsToFreeze == 0, we will use 18 in its place
 	// since it's the most typical value got out of the calculations.

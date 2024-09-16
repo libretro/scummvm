@@ -203,7 +203,7 @@ public:
 	void putSprMask_a(int x, int y, int sx, int sy, const byte *p, uint32 mask_color, int mask_alpha, int mode);
 	void putSprMask_a(int x, int y, int sx, int sy, const byte *p, uint32 mask_color, int mask_alpha, int mode, float scale);
 
-	void putTileSpr(int x, int y, const grTileSprite &sprite, bool has_alpha, int mode);
+	void putTileSpr(int x, int y, const grTileSprite &sprite, bool has_alpha, int mode, Graphics::ManagedSurface *surface = nullptr, bool clip = true);
 
 	void putChar(int x, int y, uint32 color, int font_sx, int font_sy, const byte *font_alpha, const grScreenRegion &char_region);
 
@@ -237,6 +237,9 @@ public:
 	void setPixelFast(int x, int y, int r, int g, int b);
 
 	void setPixel(int x, int y, int r, int g, int b);
+
+	void surfaceOverride(Graphics::ManagedSurface *target);
+	void resetSurfaceOverride();
 
 	void getPixel(int x, int y, uint16 &col);
 	void getPixel(int x, int y, byte &r, byte &g, byte &b);
@@ -496,8 +499,7 @@ protected:
 	void *_hWnd;
 
 	Graphics::ManagedSurface *_screenBuf = nullptr;
-
-	int *_yTable;
+	Graphics::ManagedSurface *_realScreenBuf = nullptr;
 
 	char *_temp_buffer;
 	int _temp_buffer_size;

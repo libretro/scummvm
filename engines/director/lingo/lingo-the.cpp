@@ -128,6 +128,7 @@ TheEntity entities[] = {
 	{ kTheRightMouseUp,		"rightMouseUp",		false, 500, true },	//					D5 f
 	{ kTheRollOver,			"rollOver",			false, 500, true },	//					D5 f, undocumented
 	{ kTheRomanLingo,		"romanLingo",		false, 300, false },	//		D3.1 p
+	{ kTheRunMode, 			"runMode",			false, 500, false },//					D5 f, documented in D6
 	{ kTheScummvmVersion,	"scummvmVersion",	false, 200, true }, // 					ScummVM only
 	{ kTheSearchCurrentFolder,"searchCurrentFolder",false,400, true },//			D4 f
 	{ kTheSearchPath,		"searchPath",		false, 400, true },	//			D4 f
@@ -202,12 +203,14 @@ TheEntityField fields[] = {
 
 	// Common cast fields
 	{ kTheCast,		"backColor",	kTheBackColor,	400 },//				D4 p
+	{ kTheCast,		"castLibNum",	kTheCastLibNum,	500 },// 					D5 p
 	{ kTheCast,		"castType",		kTheCastType,	400 },//				D4 p
 	{ kTheCast,		"filename",		kTheFileName,	400 },//				D4 p
 	{ kTheCast,		"foreColor",	kTheForeColor,	400 },//				D4 p
 	{ kTheCast,		"height",		kTheHeight,		400 },//				D4 p
 	{ kTheCast,		"loaded",		kTheLoaded,		400 },//				D4 p
 	{ kTheCast,		"modified",		kTheModified,	400 },//				D4 p
+	{ kTheCast,		"memberNum",	kTheMemberNum,	500 },//					D5 p
 	{ kTheCast,		"name",			kTheName,		300 },//		D3 p
 	{ kTheCast,		"number",		kTheNumber,		300 },//		D3 p
 	{ kTheCast,		"rect",			kTheRect,		400 },//				D4 p
@@ -790,6 +793,13 @@ Datum Lingo::getTheEntity(int entity, Datum &id, int field) {
 		d = g_lingo->_romanLingo;
 		warning("BUILDBOT: the romanLingo is get, value is %d", g_lingo->_romanLingo);
 		break;
+	case kTheRunMode:
+		if (ConfMan.hasKey("director_runMode"))
+			d = Datum(ConfMan.get("director_runMode"));
+		else {
+			d = Datum("Projector");
+		}
+		break;
 	case kTheScummvmVersion:
 		d = _vm->getVersion();
 		break;
@@ -1336,6 +1346,9 @@ Datum Lingo::getTheSprite(Datum &id1, int field) {
 	case kTheCastNum:
 	case kTheMemberNum:
 		d = sprite->_castId.member;
+		break;
+	case kTheCastLibNum:
+		d = sprite->_castId.castLib;
 		break;
 	case kTheConstraint:
 		d = (int)channel->_constraint;

@@ -212,6 +212,7 @@ static LingoV4TheEntity lingoV4TheEntity[] = {
 	{ 0x06, 0x21, kTheSprite,			kTheLoc,			true, kTEAItemId },
 	{ 0x06, 0x22, kTheSprite,			kTheRect,			true, kTEAItemId },
 	{ 0x06, 0x23, kTheSprite,			kTheMemberNum,		true, kTEAItemId }, // D5
+	{ 0x06, 0x24, kTheSprite, 			kTheCastLibNum, 	true, kTEAItemId },
 	{ 0x06, 0x25, kTheSprite,			kTheMember,			true, kTEAItemId },
 
 	{ 0x07, 0x01, kTheBeepOn,			kTheNOField,		true, kTEANOArgs },
@@ -376,7 +377,12 @@ Datum Lingo::findVarV4(int varType, const Datum &id) {
 		}
 		break;
 	case 6: // field
-		res = id.asMemberID();
+		if (g_director->getVersion() < 500) {
+			res = id.asMemberID();
+		} else {
+			Datum castName = g_lingo->pop();
+			res = castName.asMemberID(kCastTypeAny, id.asInt());
+		}
 		res.type = FIELDREF;
 		break;
 	default:

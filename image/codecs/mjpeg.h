@@ -46,12 +46,14 @@ public:
 	~MJPEGDecoder() override;
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
+	void setCodecAccuracy(CodecAccuracy accuracy) override;
 	Graphics::PixelFormat getPixelFormat() const override { return _pixelFormat; }
 	bool setOutputPixelFormat(const Graphics::PixelFormat &format) override { _pixelFormat = format; return true; }
 
 private:
 	Graphics::PixelFormat _pixelFormat;
 	Graphics::Surface *_surface;
+	CodecAccuracy _accuracy;
 };
 
 } // End of namespace Image

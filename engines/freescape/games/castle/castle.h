@@ -34,7 +34,6 @@ public:
 	Graphics::ManagedSurface *_menuRunIndicator;
 	Graphics::ManagedSurface *_menuFxOnIndicator;
 	Graphics::ManagedSurface *_menuFxOffIndicator;
-	Graphics::ManagedSurface *_something;
 	Graphics::ManagedSurface *_menu;
 
 	void initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *infoScreenKeyMap, const char *target) override;
@@ -55,7 +54,8 @@ public:
 
 	void drawDOSUI(Graphics::Surface *surface) override;
 	void drawZXUI(Graphics::Surface *surface) override;
-	void drawEnergyMeter(Graphics::Surface *surface);
+	void drawAmigaAtariSTUI(Graphics::Surface *surface) override;
+	void drawEnergyMeter(Graphics::Surface *surface, Common::Point origin);
 	void pressedKey(const int keycode) override;
 	void checkSensors() override;
 	void updateTimeVariables() override;
@@ -64,6 +64,8 @@ public:
 
 	void executePrint(FCLInstruction &instruction) override;
 	void executeMakeInvisible(FCLInstruction &instruction) override;
+	void executeDestroy(FCLInstruction &instruction) override;
+	void executeRedraw(FCLInstruction &instruction) override;
 	void gotoArea(uint16 areaID, int entranceID) override;
 	Common::Error saveGameStreamExtended(Common::WriteStream *stream, bool isAutosave = false) override;
 	Common::Error loadGameStreamExtended(Common::SeekableReadStream *stream) override;
@@ -75,19 +77,33 @@ public:
 
 	void drawStringInSurface(const Common::String &str, int x, int y, uint32 fontColor, uint32 backColor, Graphics::Surface *surface, int offset = 0) override;
 	//void drawStringInSurface(const Common::String &str, int x, int y, uint32 primaryFontColor, uint32 secondaryFontColor, uint32 backColor, Graphics::Surface *surface, int offset = 0) override;
+	Graphics::ManagedSurface *loadFrameWithHeaderDOS(Common::SeekableReadStream *file);
+	Common::Array <Graphics::ManagedSurface *>loadFramesWithHeaderDOS(Common::SeekableReadStream *file, int numFrames);
+
 	Common::Array<Graphics::ManagedSurface *> loadFramesWithHeader(Common::SeekableReadStream *file, int pos, int numFrames, uint32 front, uint32 back);
 	Graphics::ManagedSurface *loadFrameWithHeader(Common::SeekableReadStream *file, int pos, uint32 front, uint32 back);
 	Graphics::ManagedSurface *loadFrame(Common::SeekableReadStream *file, Graphics::ManagedSurface *surface, int width, int height, uint32 back);
 	Graphics::ManagedSurface *loadFrameFromPlanes(Common::SeekableReadStream *file, int widthInBytes, int height);
 	Graphics::ManagedSurface *loadFrameFromPlanesInternal(Common::SeekableReadStream *file, Graphics::ManagedSurface *surface, int width, int height);
 
-	Graphics::ManagedSurface *_keysFrame;
+	Graphics::ManagedSurface *loadFrameFromPlanesVertical(Common::SeekableReadStream *file, int widthInBytes, int height);
+	Graphics::ManagedSurface *loadFrameFromPlanesInternalVertical(Common::SeekableReadStream *file, Graphics::ManagedSurface *surface, int width, int height, int plane);
+
+	Common::Array<Graphics::ManagedSurface *>_keysBorderFrames;
+	Common::Array<Graphics::ManagedSurface *>_keysMenuFrames;
+	Graphics::ManagedSurface *_spiritsMeterIndicatorBackgroundFrame;
 	Graphics::ManagedSurface *_spiritsMeterIndicatorFrame;
 	Graphics::ManagedSurface *_strenghtBackgroundFrame;
 	Graphics::ManagedSurface *_strenghtBarFrame;
 	Common::Array<Graphics::ManagedSurface *> _strenghtWeightsFrames;
-	Graphics::ManagedSurface *_flagFrames[4];
+	Common::Array<Graphics::ManagedSurface *> _flagFrames;
 	Graphics::ManagedSurface *_thunderFrame;
+	Graphics::ManagedSurface *_riddleTopFrame;
+	Graphics::ManagedSurface *_riddleBackgroundFrame;
+	Graphics::ManagedSurface *_riddleBottomFrame;
+
+	Graphics::ManagedSurface *_endGameThroneFrame;
+	Graphics::ManagedSurface *_endGameBackgroundFrame;
 
 	int _numberKeys;
 	bool _useRockTravel;
@@ -103,6 +119,7 @@ private:
 	void loadDOSFonts(Common::SeekableReadStream *file, int pos);
 	void drawFullscreenRiddleAndWait(uint16 riddle);
 	void drawRiddle(uint16 riddle, uint32 front, uint32 back, Graphics::Surface *surface);
+	void tryToCollectKey();
 	void addGhosts();
 	Texture *_optionTexture;
 };

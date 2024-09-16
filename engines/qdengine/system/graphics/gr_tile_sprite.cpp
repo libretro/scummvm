@@ -96,14 +96,16 @@ bool decodeRLE(const uint32 *in_data, uint32 *out_data) {
 
 } // namespace tile_compress
 
-void grDispatcher::putTileSpr(int x, int y, const grTileSprite &sprite, bool has_alpha, int mode) {
+void grDispatcher::putTileSpr(int x, int y, const grTileSprite &sprite, bool has_alpha, int mode, Graphics::ManagedSurface *surf, bool clip) {
 	int px = 0;
 	int py = 0;
 
 	int psx = GR_TILE_SPRITE_SIZE_X;
 	int psy = GR_TILE_SPRITE_SIZE_Y;
 
-	if (!clip_rectangle(x, y, px, py, psx, psy)) return;
+	if (clip && !clip_rectangle(x, y, px, py, psx, psy))
+		return;
+
 	int dx = -1;
 	int dy = -1;
 
@@ -119,11 +121,13 @@ void grDispatcher::putTileSpr(int x, int y, const grTileSprite &sprite, bool has
 	} else
 		dy = 1;
 
+	if (!surf)
+		surf = _screenBuf;
 
 	const byte *data_ptr = (const byte *)(sprite.data() + px + py * GR_TILE_SPRITE_SIZE_X);
 
 	for (int i = 0; i < psy; i++) {
-		uint16 *scr_buf = reinterpret_cast<uint16 *>(_screenBuf->getBasePtr(x, y));
+		uint16 *scr_buf = reinterpret_cast<uint16 *>(surf->getBasePtr(x, y));
 		const byte *data_line = data_ptr;
 
 		for (int j = 0; j < psx; j++) {

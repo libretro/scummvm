@@ -77,7 +77,7 @@ void Renderer::projIso(IVec3 &pos, int32 x, int32 y, int32 z) {
 
 IVec3 Renderer::projectPoint(int32 cX, int32 cY, int32 cZ) { // ProjettePoint
 	IVec3 pos;
-	if (_isUsingIsoProjection) {
+	if (_typeProj == TYPE_ISO) {
 		projIso(pos, cX, cY, cZ);
 		return pos;
 	}
@@ -112,7 +112,7 @@ void Renderer::setProjection(int32 x, int32 y, int32 kfact, int32 lfactx, int32 
 	_lFactorX = lfactx;
 	_lFactorY = lfacty;
 
-	_isUsingIsoProjection = false;
+	_typeProj = TYPE_3D;
 }
 
 void Renderer::setPosCamera(int32 x, int32 y, int32 z) {
@@ -126,7 +126,7 @@ void Renderer::setIsoProjection(int32 x, int32 y, int32 scale) {
 	_projectionCenter.y = y;
 	_projectionCenter.z = scale; // not used - IsoScale is always 512
 
-	_isUsingIsoProjection = true;
+	_typeProj = TYPE_ISO;
 }
 
 void Renderer::flipMatrix() { // FlipMatrice
@@ -135,8 +135,8 @@ void Renderer::flipMatrix() { // FlipMatrice
 	SWAP(_matrixWorld.row2.z, _matrixWorld.row3.y);
 }
 
-IVec3 Renderer::setInverseAngleCamera(int32 x, int32 y, int32 z) {
-	setAngleCamera(x, y, z);
+IVec3 Renderer::setInverseAngleCamera(int32 alpha, int32 beta, int32 gamma) {
+	setAngleCamera(alpha, beta, gamma);
 	flipMatrix();
 	_cameraRot = longWorldRot(_cameraPos.x, _cameraPos.y, _cameraPos.z);
 	return _cameraRot;
@@ -209,10 +209,10 @@ IVec3 Renderer::rot(const IMatrix3x3 &matrix, int32 x, int32 y, int32 z) {
 	return IVec3(vx, vy, vz);
 }
 
-void Renderer::setFollowCamera(int32 transPosX, int32 transPosY, int32 transPosZ, int32 cameraAlpha, int32 cameraBeta, int32 cameraGamma, int32 cameraZoom) {
-	_cameraPos.x = transPosX;
-	_cameraPos.y = transPosY;
-	_cameraPos.z = transPosZ;
+void Renderer::setFollowCamera(int32 targetX, int32 targetY, int32 targetZ, int32 cameraAlpha, int32 cameraBeta, int32 cameraGamma, int32 cameraZoom) {
+	_cameraPos.x = targetX;
+	_cameraPos.y = targetY;
+	_cameraPos.z = targetZ;
 
 	setAngleCamera(cameraAlpha, cameraBeta, cameraGamma);
 	_cameraRot.z += cameraZoom;
@@ -233,8 +233,7 @@ IVec2 Renderer::rotate(int32 side, int32 forward, int32 angle) const {
 }
 
 void Renderer::rotMatIndex2(IMatrix3x3 *pDest, const IMatrix3x3 *pSrc, const IVec3 &angleVec) {
-	IMatrix3x3 matrix1;
-	IMatrix3x3 matrix2;
+	IMatrix3x3 tmp;
 	const int32 lAlpha = angleVec.x;
 	const int32 lBeta = angleVec.y;
 	const int32 lGamma = angleVec.z;
@@ -243,55 +242,61 @@ void Renderer::rotMatIndex2(IMatrix3x3 *pDest, const IMatrix3x3 *pSrc, const IVe
 		int32 nSin = sinTab[ClampAngle(lAlpha)];
 		int32 nCos = sinTab[ClampAngle(lAlpha + LBAAngles::ANGLE_90)];
 
-		matrix1.row1.x = pSrc->row1.x;
-		matrix1.row2.x = pSrc->row2.x;
-		matrix1.row3.x = pSrc->row3.x;
+		pDest->row1.x = pSrc->row1.x;
+		pDest->row2.x = pSrc->row2.x;
+		pDest->row3.x = pSrc->row3.x;
 
-		matrix1.row1.y = (pSrc->row1.z * nSin + pSrc->row1.y * nCos) / SCENE_SIZE_HALF;
-		matrix1.row1.z = (pSrc->row1.z * nCos - pSrc->row1.y * nSin) / SCENE_SIZE_HALF;
-		matrix1.row2.y = (pSrc->row2.z * nSin + pSrc->row2.y * nCos) / SCENE_SIZE_HALF;
-		matrix1.row2.z = (pSrc->row2.z * nCos - pSrc->row2.y * nSin) / SCENE_SIZE_HALF;
-		matrix1.row3.y = (pSrc->row3.z * nSin + pSrc->row3.y * nCos) / SCENE_SIZE_HALF;
-		matrix1.row3.z = (pSrc->row3.z * nCos - pSrc->row3.y * nSin) / SCENE_SIZE_HALF;
-	} else {
-		matrix1 = *pSrc;
+		pDest->row1.y = (pSrc->row1.z * nSin + pSrc->row1.y * nCos) / SCENE_SIZE_HALF;
+		pDest->row1.z = (pSrc->row1.z * nCos - pSrc->row1.y * nSin) / SCENE_SIZE_HALF;
+		pDest->row2.y = (pSrc->row2.z * nSin + pSrc->row2.y * nCos) / SCENE_SIZE_HALF;
+		pDest->row2.z = (pSrc->row2.z * nCos - pSrc->row2.y * nSin) / SCENE_SIZE_HALF;
+		pDest->row3.y = (pSrc->row3.z * nSin + pSrc->row3.y * nCos) / SCENE_SIZE_HALF;
+		pDest->row3.z = (pSrc->row3.z * nCos - pSrc->row3.y * nSin) / SCENE_SIZE_HALF;
+		pSrc = pDest;
 	}
 
 	if (lGamma) {
 		int32 nSin = sinTab[ClampAngle(lGamma)];
 		int32 nCos = sinTab[ClampAngle(lGamma + LBAAngles::ANGLE_90)];
 
-		matrix2.row1.z = matrix1.row1.z;
-		matrix2.row2.z = matrix1.row2.z;
-		matrix2.row3.z = matrix1.row3.z;
+		tmp.row1.z = pSrc->row1.z;
+		tmp.row2.z = pSrc->row2.z;
+		tmp.row3.z = pSrc->row3.z;
 
-		matrix2.row1.x = (matrix1.row1.y * nSin + matrix1.row1.x * nCos) / SCENE_SIZE_HALF;
-		matrix2.row1.y = (matrix1.row1.y * nCos - matrix1.row1.x * nSin) / SCENE_SIZE_HALF;
-		matrix2.row2.x = (matrix1.row2.y * nSin + matrix1.row2.x * nCos) / SCENE_SIZE_HALF;
-		matrix2.row2.y = (matrix1.row2.y * nCos - matrix1.row2.x * nSin) / SCENE_SIZE_HALF;
-		matrix2.row3.x = (matrix1.row3.y * nSin + matrix1.row3.x * nCos) / SCENE_SIZE_HALF;
-		matrix2.row3.y = (matrix1.row3.y * nCos - matrix1.row3.x * nSin) / SCENE_SIZE_HALF;
-	} else {
-		matrix2 = matrix1;
+		tmp.row1.x = (pSrc->row1.y * nSin + pSrc->row1.x * nCos) / SCENE_SIZE_HALF;
+		tmp.row1.y = (pSrc->row1.y * nCos - pSrc->row1.x * nSin) / SCENE_SIZE_HALF;
+		tmp.row2.x = (pSrc->row2.y * nSin + pSrc->row2.x * nCos) / SCENE_SIZE_HALF;
+		tmp.row2.y = (pSrc->row2.y * nCos - pSrc->row2.x * nSin) / SCENE_SIZE_HALF;
+		tmp.row3.x = (pSrc->row3.y * nSin + pSrc->row3.x * nCos) / SCENE_SIZE_HALF;
+		tmp.row3.y = (pSrc->row3.y * nCos - pSrc->row3.x * nSin) / SCENE_SIZE_HALF;
 	}
 
 	if (lBeta) {
 		int32 nSin = sinTab[ClampAngle(lBeta)];
 		int32 nCos = sinTab[ClampAngle(lBeta + LBAAngles::ANGLE_90)];
 
-		pDest->row1.y = matrix2.row1.y;
-		pDest->row2.y = matrix2.row2.y;
-		pDest->row3.y = matrix2.row3.y;
+		if (pSrc == pDest) {
+			tmp.row1.x = pSrc->row1.x;
+			tmp.row1.z = pSrc->row1.z;
+			tmp.row2.x = pSrc->row2.x;
+			tmp.row2.z = pSrc->row2.z;
+			tmp.row3.x = pSrc->row3.x;
+			tmp.row3.z = pSrc->row3.z;
+			pSrc = &tmp;
+		} else {
+			pDest->row1.y = pSrc->row1.y;
+			pDest->row2.y = pSrc->row2.y;
+			pDest->row3.y = pSrc->row3.y;
+		}
 
-		pDest->row1.x = (matrix2.row1.x * nCos - matrix2.row1.z * nSin) / SCENE_SIZE_HALF;
-		pDest->row1.z = (matrix2.row1.x * nSin + matrix2.row1.z * nCos) / SCENE_SIZE_HALF;
-		pDest->row2.x = (matrix2.row2.x * nCos - matrix2.row2.z * nSin) / SCENE_SIZE_HALF;
-		pDest->row2.z = (matrix2.row2.x * nSin + matrix2.row2.z * nCos) / SCENE_SIZE_HALF;
-
-		pDest->row3.x = (matrix2.row3.x * nCos - matrix2.row3.z * nSin) / SCENE_SIZE_HALF;
-		pDest->row3.z = (matrix2.row3.x * nSin + matrix2.row3.z * nCos) / SCENE_SIZE_HALF;
-	} else {
-		*pDest = matrix2;
+		pDest->row1.x = (pSrc->row1.x * nCos - pSrc->row1.z * nSin) / SCENE_SIZE_HALF;
+		pDest->row1.z = (pSrc->row1.x * nSin + pSrc->row1.z * nCos) / SCENE_SIZE_HALF;
+		pDest->row2.x = (pSrc->row2.x * nCos - pSrc->row2.z * nSin) / SCENE_SIZE_HALF;
+		pDest->row2.z = (pSrc->row2.x * nSin + pSrc->row2.z * nCos) / SCENE_SIZE_HALF;
+		pDest->row3.x = (pSrc->row3.x * nCos - pSrc->row3.z * nSin) / SCENE_SIZE_HALF;
+		pDest->row3.z = (pSrc->row3.x * nSin + pSrc->row3.z * nCos) / SCENE_SIZE_HALF;
+	} else if (pSrc != pDest) {
+		*pDest = *pSrc;
 	}
 }
 
@@ -702,21 +707,22 @@ int32 Renderer::computePolyMinMax(int16 polyRenderType, ComputedVertex **offTabP
 	}
 
 	if (hasBeenClipped) {
+		// search the new Ymin or Ymax
 		ymin = 32767;
 		ymax = -32768;
 
-		for (int32 i = 0; i < clippedNumVertices; i++) {
-			if (offTabPoly[0][i].y < ymin) {
-				ymin = offTabPoly[0][i].y;
+		for (int32 n = 0; n < clippedNumVertices; ++n) {
+			if (offTabPoly[0][n].y < ymin) {
+				ymin = offTabPoly[0][n].y;
 			}
 
-			if (offTabPoly[0][i].y > ymax) {
-				ymax = offTabPoly[0][i].y;
+			if (offTabPoly[0][n].y > ymax) {
+				ymax = offTabPoly[0][n].y;
 			}
 		}
 
 		if (ymin >= ymax) {
-			return 0;
+			return 0; // No valid polygon after clipping
 		}
 	}
 
@@ -745,8 +751,9 @@ bool Renderer::computePoly(int16 polyRenderType, const ComputedVertex *vertices,
 	int32 dx, dy, x, y, dc;
 	int32 step, reminder;
 
+	// Drawing lines between vertices
 	for (; numVertices > 0; --numVertices, pTabPoly++) {
-		pCoul = NULL;
+		pCoul = nullptr;
 		p0 = pTabPoly;
 		p1 = p0 + 1;
 
@@ -755,7 +762,7 @@ bool Renderer::computePoly(int16 polyRenderType, const ComputedVertex *vertices,
 			// forget same Y points
 			continue;
 		} else if (dy > 0) {
-			// Y descend donc buffer gauche
+			// Y therefore goes down left buffer
 			if (p0->x <= p1->x) {
 				incY = 1;
 			} else {
@@ -792,8 +799,8 @@ bool Renderer::computePoly(int16 polyRenderType, const ComputedVertex *vertices,
 		step = dx / dy;
 		reminder = ((dx % dy) >> 1) + 0x7FFF;
 
-		dx = step >> 16; // recup partie haute division (entier)
-		step &= 0xFFFF;  // conserve partie basse (mantisse)
+		dx = step >> 16; // recovery part high division (entire)
+		step &= 0xFFFF;  // preserves lower part (mantissa)
 		x = p0->x;
 
 		for (y = dy; y >= 0; --y) {
@@ -1183,8 +1190,9 @@ void Renderer::svgaPolyTriche(int16 vtop, int16 Ymax, uint16 color) const {
 
 void Renderer::renderPolygons(const CmdRenderPolygon &polygon, ComputedVertex *vertices) {
 	int16 vtop, vbottom;
-	if (computePoly(polygon.renderType, vertices, polygon.numVertices, vtop, vbottom)) {
-		fillVertices(vtop, vbottom, polygon.renderType, polygon.colorIndex);
+	uint8 renderType = polygon.renderType;
+	if (computePoly(renderType, vertices, polygon.numVertices, vtop, vbottom)) {
+		fillVertices(vtop, vbottom, renderType, polygon.colorIndex);
 	}
 }
 
@@ -1390,6 +1398,7 @@ uint8 *Renderer::preparePolygons(const Common::Array<BodyPolygon> &polygons, int
 		renderBufferPtr += sizeof(CmdRenderPolygon);
 
 		ComputedVertex *const vertices = (ComputedVertex *)(void*)renderBufferPtr;
+
 		renderBufferPtr += destinationPolygon->numVertices * sizeof(ComputedVertex);
 
 		ComputedVertex *vertex = vertices;
@@ -1494,7 +1503,7 @@ bool Renderer::renderObjectIso(const BodyData &bodyData, RenderCommand **renderC
 			const CmdRenderSphere *sphere = (const CmdRenderSphere *)(const void*)pointer;
 			int32 radius = sphere->radius;
 
-			if (_isUsingIsoProjection) {
+			if (_typeProj == TYPE_ISO) {
 				// * sqrt(sx+sy) / 512 (isometric scale)
 				radius = (radius * 34) / ISO_SCALE;
 			} else {
@@ -1577,7 +1586,7 @@ void Renderer::animModel(ModelData *modelData, const BodyData &bodyData, RenderC
 	const I16Vec3 *pointPtr = &modelData->computedPoints[0];
 	I16Vec3 *pointPtrDest = &modelData->flattenPoints[0];
 
-	if (_isUsingIsoProjection) {
+	if (_typeProj == TYPE_ISO) {
 		do {
 			const int32 coX = pointPtr->x + poswr.x;
 			const int32 coY = pointPtr->y + poswr.y;
@@ -1705,7 +1714,7 @@ bool Renderer::affObjetIso(int32 x, int32 y, int32 z, int32 alpha, int32 beta, i
 	modelRect.bottom = SCENE_SIZE_MIN;
 
 	IVec3 poswr; // PosXWr, PosYWr, PosZWr
-	if (!_isUsingIsoProjection) {
+	if (_typeProj == TYPE_3D) {
 		poswr = longWorldRot(x, y, z) - _cameraRot;
 	} else {
 		poswr.x = x;
@@ -1716,6 +1725,7 @@ bool Renderer::affObjetIso(int32 x, int32 y, int32 z, int32 alpha, int32 beta, i
 	if (!bodyData.isAnimated()) {
 #if 0
 		// TODO: fill modeldata.flattenedpoints
+		// not used in original source release
 		int32 numOfPrimitives = 0;
 		RenderCommand* renderCmds = _renderCmds;
 		return renderModelElements(numOfPrimitives, bodyData, &renderCmds, &_modelData, modelRect);
@@ -1725,7 +1735,9 @@ bool Renderer::affObjetIso(int32 x, int32 y, int32 z, int32 alpha, int32 beta, i
 	}
 	// restart at the beginning of the renderTable
 	RenderCommand *renderCmds = _renderCmds;
-	animModel(&_modelData, bodyData, renderCmds, renderAngle, poswr, modelRect);
+	if (bodyData.isAnimated()) {
+		animModel(&_modelData, bodyData, renderCmds, renderAngle, poswr, modelRect);
+	}
 	if (!renderObjectIso(bodyData, &renderCmds, &_modelData, modelRect)) {
 		modelRect.right = -1;
 		modelRect.bottom = -1;

@@ -524,6 +524,7 @@ class ScummEngine : public Engine, public Common::Serializable {
 	friend class MacGuiImpl;
 	friend class MacIndy3Gui;
 	friend class MacLoomGui;
+	friend class LogicHEBasketball;
 
 public:
 	/* Put often used variables at the top.
@@ -1388,6 +1389,7 @@ protected:
 	void palManipulate();
 	uint32 findClosestPaletteColor(byte *palette, int paletteLength, byte r, byte g, byte b);
 	void applyGrayscaleToPaletteRange(int min, int max); // For Sam&Max original noir mode
+	bool haveToApplyMonkey1PaletteFix();
 
 public:
 	uint8 *getHEPaletteSlot(uint16 palSlot);

@@ -98,17 +98,6 @@ const uint8 *PCjrSound::getVoicePointer(uint voiceNum) {
 	return _data + voiceStartOffset;
 }
 
-#if 0
-static const uint16 period[] = {
-	1024, 1085, 1149, 1218, 1290, 1367,
-	1448, 1534, 1625, 1722, 1825, 1933
-};
-
-static int noteToPeriod(int note) {
-	return 10 * (period[note % 12] >> (note / 12 - 3));
-}
-#endif
-
 void SoundMgr::unloadSound(int resnum) {
 	if (_vm->_game.dirSound[resnum].flags & RES_LOADED) {
 		if (_vm->_game.sounds[resnum]->isPlaying()) {
@@ -154,11 +143,7 @@ void SoundMgr::startSound(int resnum, int flag) {
 	// Reset the flag
 	_endflag = flag;
 
-	if (_vm->getVersion() < 0x2000) {
-		_vm->_game.vars[_endflag] = 0;
-	} else {
-		_vm->setFlag(_endflag, false);
-	}
+	_vm->setFlagOrVar(_endflag, false);
 }
 
 void SoundMgr::stopSound() {
@@ -174,19 +159,16 @@ void SoundMgr::stopSound() {
 	// This is needed all the time, some games wait until music got played and when a sound/music got stopped early
 	// it would otherwise block the game (for example Death Angel jingle in back door poker room in Police Quest 1, room 71)
 	if (_endflag != -1) {
-		if (_vm->getVersion() < 0x2000) {
-			_vm->_game.vars[_endflag] = 1;
-		} else {
-			_vm->setFlag(_endflag, true);
-		}
+		_vm->setFlagOrVar(_endflag, true);
 	}
 
 	_endflag = -1;
 }
 
+// FIXME: This is called from SoundGen classes on unsynchronized background threads.
 void SoundMgr::soundIsFinished() {
 	if (_endflag != -1)
-		_vm->setFlag(_endflag, true);
+		_vm->setFlagOrVar(_endflag, true);
 
 	if (_playingSound != -1)
 		_vm->_game.sounds[_playingSound]->stop();
@@ -223,10 +205,6 @@ SoundMgr::SoundMgr(AgiBase *agi, Audio::Mixer *pMixer) {
 		_soundGen = new SoundGenMIDI(_vm, pMixer);
 		break;
 	}
-}
-
-void SoundMgr::setVolume(uint8 volume) {
-	// TODO
 }
 
 SoundMgr::~SoundMgr() {

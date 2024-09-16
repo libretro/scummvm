@@ -107,15 +107,15 @@ void Dart::CheckDartCol(ActorStruct *ptrobj) {
 	int32 x0, y0, z0, x1, y1, z1;
 	int32 xt0, yt0, zt0, xt1, yt1, zt1;
 
-	if (ptrobj->_staticFlags.bIsHidden)
+	if (ptrobj->_staticFlags.bIsInvisible)
 		return;
 
-	x0 = ptrobj->_pos.x + ptrobj->_boundingBox.mins.x;
-	x1 = ptrobj->_pos.x + ptrobj->_boundingBox.maxs.x;
-	y0 = ptrobj->_pos.y + ptrobj->_boundingBox.mins.y;
-	y1 = ptrobj->_pos.y + ptrobj->_boundingBox.maxs.y;
-	z0 = ptrobj->_pos.z + ptrobj->_boundingBox.mins.z;
-	z1 = ptrobj->_pos.z + ptrobj->_boundingBox.maxs.z;
+	x0 = ptrobj->_posObj.x + ptrobj->_boundingBox.mins.x;
+	x1 = ptrobj->_posObj.x + ptrobj->_boundingBox.maxs.x;
+	y0 = ptrobj->_posObj.y + ptrobj->_boundingBox.mins.y;
+	y1 = ptrobj->_posObj.y + ptrobj->_boundingBox.maxs.y;
+	z0 = ptrobj->_posObj.z + ptrobj->_boundingBox.mins.z;
+	z1 = ptrobj->_posObj.z + ptrobj->_boundingBox.maxs.z;
 
 	ptrd = ListDart;
 

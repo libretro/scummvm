@@ -650,7 +650,7 @@ static const ExtraGuiOption comiObjectLabelsOption = {
 	0
 };
 
-static const ExtraGuiOption mmnesObjectLabelsOption = {
+static const ExtraGuiOption mmnesClassicPaletteOption = {
 	_s("Use NES Classic Palette"),
 	_s("Use a more neutral color palette that closely emulates the NES Classic"),
 	"mm_nes_classic_palette",
@@ -761,7 +761,7 @@ static const ExtraGuiOption enableCopyProtection = {
 	0
 };
 
-static const ExtraGuiOption mmDemoObjectLabelsOption = {
+static const ExtraGuiOption mmDemoModeOption = {
 	_s("Enable demo/kiosk mode"),
 	_s("Enable demo/kiosk mode in the full retail version of Maniac Mansion."),
 	"enable_demo_mode",
@@ -803,7 +803,7 @@ const ExtraGuiOptions ScummMetaEngine::getExtraGuiOptions(const Common::String &
 		}
 	}
 	if (target.empty() || platform == Common::kPlatformNES) {
-		options.push_back(mmnesObjectLabelsOption);
+		options.push_back(mmnesClassicPaletteOption);
 	}
 	if (target.empty() || platform == Common::kPlatformFMTowns) {
 		options.push_back(smoothScrolling);
@@ -816,12 +816,17 @@ const ExtraGuiOptions ScummMetaEngine::getExtraGuiOptions(const Common::String &
 			options.push_back(fmtownsForceHiResMode);
 #endif
 	}
-    if (target.empty() || gameid == "maniac") {
-		// The kiosk demo is only available on Maniac v1
-		bool isValidTarget = !extra.contains("Demo") && extra.contains("V1");
+	if (target.empty() || gameid == "maniac") {
+		// The kiosk demo script is in V1/V2 DOS, V2 Atari ST and V2 Amiga.
+		bool isValidTarget = !extra.contains("Demo") &&
+			(platform == Common::kPlatformDOS   ||
+			 platform == Common::kPlatformAmiga ||
+			 platform == Common::kPlatformAtariST) &&
+			 !guiOptionsString.contains("lang_Italian");
+
 		if (isValidTarget)
-			options.push_back(mmDemoObjectLabelsOption);
-    }
+			options.push_back(mmDemoModeOption);
+	}
 	// The Steam Mac versions of Loom and Indy 3 are more akin to the VGA
 	// DOS versions, and that's how ScummVM usually sees them. But that
 	// rebranding does not happen until later.

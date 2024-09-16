@@ -29,7 +29,7 @@
 namespace QDEngine {
 
 void grDispatcher::putSpr_a(int x, int y, int sx, int sy, const byte *p, int mode, float scale) {
-	debugC(2, kDebugGraphics, "grDispatcher::putSpr_a(%d, %d, %d, %d, scale=%f)", x, y, sx, sy, scale);
+	debugC(4, kDebugGraphics, "grDispatcher::putSpr_a([%d, %d], [%d, %d], mode: %d, scale: %f)", x, y, sx, sy, mode, scale);
 
 	int i, j, sx_dest, sy_dest;
 
@@ -88,7 +88,7 @@ void grDispatcher::putSpr_a(int x, int y, int sx, int sy, const byte *p, int mod
 }
 
 void grDispatcher::putSpr(int x, int y, int sx, int sy, const byte *p, int mode, int spriteFormat, float scale) {
-	debugC(2, kDebugGraphics, "grDispatcher::putSpr(%d, %d, %d, %d, scale=%f)", x, y, sx, sy, scale);
+	debugC(4, kDebugGraphics, "grDispatcher::putSpr([%d, %d], [%d, %d], mode: %d, format: %d, scale: %f)", x, y, sx, sy, mode, spriteFormat, scale);
 
 	int sx_dest = round(float(sx) * scale);
 	int sy_dest = round(float(sy) * scale);
@@ -138,7 +138,7 @@ void grDispatcher::putSpr(int x, int y, int sx, int sy, const byte *p, int mode,
 }
 
 void grDispatcher::putSpr_a(int x, int y, int sx, int sy, const byte *p, int mode) {
-	debugC(2, kDebugGraphics, "grDispatcher::putSpr_a(%d, %d, %d, %d)", x, y, sx, sy);
+	debugC(4, kDebugGraphics, "grDispatcher::putSpr_a([%d, %d], [%d, %d], mode: %d)", x, y, sx, sy, mode);
 
 	int px = 0;
 	int py = 0;
@@ -189,6 +189,8 @@ void grDispatcher::putSpr_a(int x, int y, int sx, int sy, const byte *p, int mod
 }
 
 void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte *data, bool has_alpha, int mode, float angle) {
+	debugC(4, kDebugGraphics, "grDispatcher::putSpr_rot([%d, %d], [%d, %d], alpha: %d, mode: %d, angle: %f)", pos.x, pos.y, size.x, size.y, has_alpha, mode, angle);
+
 	const int F_PREC = 16;
 
 	int xc = pos.x + size.x / 2;
@@ -230,41 +232,41 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 
 	if (has_alpha) {
 		for (int y = 0; y <= sy; y++) {
-					uint16 *screen_ptr = (uint16 *)(_screenBuf + _yTable[y + y0] + x0 * 2);
+			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
 
-					int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + ((size.x + 1 + dx) << (F_PREC - 1));
-					int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + ((size.y + 1 + dy) << (F_PREC - 1));
+			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + ((size.x + 1 + dx) << (F_PREC - 1));
+			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + ((size.y + 1 + dy) << (F_PREC - 1));
 
-					for (int x = 0; x <= sx; x++) {
-						int xb = (xx >> F_PREC);
-						int yb = (yy >> F_PREC);
+			for (int x = 0; x <= sx; x++) {
+				int xb = (xx >> F_PREC);
+				int yb = (yy >> F_PREC);
 
-						if (xb >= 0 && xb < size.x && yb >= 0 && yb < size.y) {
-							if (mode & GR_FLIP_HORIZONTAL)
-								xb = size.x - xb - 1;
-							if (mode & GR_FLIP_VERTICAL)
-								yb = size.y - yb - 1;
+				if (xb >= 0 && xb < size.x && yb >= 0 && yb < size.y) {
+					if (mode & GR_FLIP_HORIZONTAL)
+						xb = size.x - xb - 1;
+					if (mode & GR_FLIP_VERTICAL)
+						yb = size.y - yb - 1;
 
-							const byte *data_ptr = data + size.x * 4 * yb + xb * 4;
+					const byte *data_ptr = data + size.x * 4 * yb + xb * 4;
 
-							uint32 a = data_ptr[3];
-							if (a != 255) {
-								if (a)
-									*screen_ptr = alpha_blend_565(make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]), *screen_ptr, a);
-								else
-									*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
-							}
-						}
-
-						xx += cos_a;
-						yy -= sin_a;
-
-						screen_ptr++;
+					uint32 a = data_ptr[3];
+					if (a != 255) {
+						if (a)
+							*screen_ptr = alpha_blend_565(make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]), *screen_ptr, a);
+						else
+							*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
 					}
 				}
+
+				xx += cos_a;
+				yy -= sin_a;
+
+				screen_ptr++;
+			}
+		}
 	} else {
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)(_screenBuf + _yTable[y + y0] + x0 * 2);
+			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + ((size.x + 1 + dx) << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + ((size.y + 1 + dy) << (F_PREC - 1));
@@ -294,6 +296,8 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 }
 
 void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte *data, bool has_alpha, int mode, float angle, const Vect2f &scale) {
+	debugC(4, kDebugGraphics, "grDispatcher::putSpr_rot([%d, %d], [%d, %d], alpha: %d, mode: %d, angle: %f, scale: [%f, %f])", pos.x, pos.y, size.x, size.y, has_alpha, mode, angle, scale.x, scale.y);
+
 	const int F_PREC = 16;
 
 	int xc = pos.x + round(float(size.x) * scale.x / 2.f);
@@ -319,41 +323,41 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 
 	if (has_alpha) {
 		for (int y = 0; y <= sy; y++) {
-					uint16 *screen_ptr = (uint16 *)(_screenBuf + _yTable[y + y0] + x0 * 2);
+			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
 
-					int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
-					int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
+			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
+			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
 
-					for (int x = 0; x <= sx; x++) {
-						int xb = xx / iscale.x;
-						int yb = yy / iscale.y;
+			for (int x = 0; x <= sx; x++) {
+				int xb = xx / iscale.x;
+				int yb = yy / iscale.y;
 
-						if (xb >= 0 && xb < size.x && yb >= 0 && yb < size.y) {
-							if (mode & GR_FLIP_HORIZONTAL)
-								xb = size.x - xb - 1;
-							if (mode & GR_FLIP_VERTICAL)
-								yb = size.y - yb - 1;
+				if (xb >= 0 && xb < size.x && yb >= 0 && yb < size.y) {
+					if (mode & GR_FLIP_HORIZONTAL)
+						xb = size.x - xb - 1;
+					if (mode & GR_FLIP_VERTICAL)
+						yb = size.y - yb - 1;
 
-							const byte *data_ptr = data + size.x * 4 * yb + xb * 4;
+					const byte *data_ptr = data + size.x * 4 * yb + xb * 4;
 
-							uint32 a = data_ptr[3];
-							if (a != 255) {
-								if (a)
-									*screen_ptr = alpha_blend_565(make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]), *screen_ptr, a);
-								else
-									*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
-							}
-						}
-
-						xx += cos_a;
-						yy -= sin_a;
-
-						screen_ptr++;
+					uint32 a = data_ptr[3];
+					if (a != 255) {
+						if (a)
+							*screen_ptr = alpha_blend_565(make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]), *screen_ptr, a);
+						else
+							*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
 					}
 				}
+
+				xx += cos_a;
+				yy -= sin_a;
+
+				screen_ptr++;
+			}
+		}
 	} else {
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)(_screenBuf + _yTable[y + y0] + x0 * 2);
+			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
@@ -407,7 +411,7 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 		split_rgb565u(mask_color, mr, mg, mb);
 
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)(_screenBuf + _yTable[y + y0] + x0 * 2);
+			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + (size.x + 1) * (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + (size.y + 1) * (1 << (F_PREC - 1));
@@ -456,7 +460,7 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 		uint32 mcl = make_rgb565u(mr, mg, mb);
 
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)(_screenBuf + _yTable[y + y0] + x0 * 2);
+			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + (size.x + 1) * (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + (size.y + 1) * (1 << (F_PREC - 1));
@@ -515,7 +519,7 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 		split_rgb565u(mask_color, mr, mg, mb);
 
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)(_screenBuf + _yTable[y + y0] + x0 * 2);
+			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
@@ -561,7 +565,7 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 		mb = (mb * (255 - mask_alpha)) >> 8;
 
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)(_screenBuf + _yTable[y + y0] + x0 * 2);
+			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
@@ -590,7 +594,7 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 }
 
 void grDispatcher::putSpr(int x, int y, int sx, int sy, const byte *p, int mode, int spriteFormat) {
-	debugC(2, kDebugGraphics, "grDispatcher::putSpr(%d, %d, %d, %d, %d)", x, y, sx, sy, spriteFormat);
+	debugC(4, kDebugGraphics, "grDispatcher::putSpr([%d, %d], [%d, %d], mode: %d, format: %d)", x, y, sx, sy, mode, spriteFormat);
 
 	int px = 0;
 	int py = 0;

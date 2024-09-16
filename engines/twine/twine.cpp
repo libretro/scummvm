@@ -45,7 +45,8 @@
 #include "twine/debugger/debug_grid.h"
 #include "twine/debugger/debug_scene.h"
 #include "twine/detection.h"
-#include "twine/holomap.h"
+#include "twine/holomap_v1.h"
+#include "twine/holomap_v2.h"
 #include "twine/input.h"
 #include "twine/menu/interface.h"
 #include "twine/menu/menu.h"
@@ -92,6 +93,7 @@ ScopedCursor::ScopedCursor(TwinEEngine *engine) : _engine(engine) {
 
 ScopedCursor::~ScopedCursor() {
 	_engine->popMouseCursorVisible();
+	_engine->_input->resetLastHoveredMousePosition();
 }
 
 FrameMarker::FrameMarker(TwinEEngine *engine, uint32 fps) : _engine(engine), _fps(fps) {
@@ -126,7 +128,8 @@ void TwineScreen::update() {
 
 	if (_engine->_redraw->_flagMCGA) {
 		markAllDirty();
-		Graphics::ManagedSurface zoomWorkVideoBuffer(_engine->_workVideoBuffer);
+		Graphics::ManagedSurface zoomWorkVideoBuffer;
+		zoomWorkVideoBuffer.copyFrom(_engine->_workVideoBuffer);
 		const int maxW = zoomWorkVideoBuffer.w;
 		const int maxH = zoomWorkVideoBuffer.h;
 		const int left = CLIP<int>(_engine->_redraw->_sceneryViewX - maxW / 4, 0, maxW / 2);
@@ -208,6 +211,7 @@ TwinEEngine::TwinEEngine(OSystem *system, Common::Language language, uint32 flag
 	if (isLBA1()) {
 		_scriptLife = new ScriptLifeV1(this);
 		_scriptMove = new ScriptMoveV1(this);
+		_holomap = new HolomapV1(this);
 	} else {
 		_scriptLife = new ScriptLifeV2(this);
 		_scriptMove = new ScriptMoveV2(this);
@@ -215,8 +219,8 @@ TwinEEngine::TwinEEngine(OSystem *system, Common::Language language, uint32 flag
 		_dart = new Dart(this);
 		_rain = new Rain(this);
 		_wagon = new Wagon(this);
+		_holomap = new HolomapV2(this);
 	}
-	_holomap = new Holomap(this);
 	_sound = new Sound(this);
 	_text = new Text(this);
 	_debugGrid = new DebugGrid(this);
@@ -385,8 +389,7 @@ Common::Error TwinEEngine::run() {
 	ConfMan.setInt("polygondetails", _cfgfile.PolygonDetails);
 
 	_sound->stopSamples();
-	_music->stopTrackMusic();
-	_music->stopMidiMusic();
+	_music->stopMusic();
 	return Common::kNoError;
 }
 
@@ -509,11 +512,10 @@ void TwinEEngine::initConfigurations() {
 		_cfgfile.Movie = CONF_MOVIE_FLAGIF;
 	}
 
-	_cfgfile.UseCD = ConfGetBoolOrDefault("usecd", false);
 	_cfgfile.Sound = ConfGetBoolOrDefault("sound", true);
 	_cfgfile.Fps = ConfGetIntOrDefault("fps", DEFAULT_FRAMES_PER_SECOND);
 	_cfgfile.Debug = ConfGetBoolOrDefault("debug", false);
-	_cfgfile.Mouse = ConfGetIntOrDefault("mouse", true);
+	_cfgfile.Mouse = ConfGetBoolOrDefault("mouse", true);
 
 	_cfgfile.UseAutoSaving = ConfGetBoolOrDefault("useautosaving", false);
 	_cfgfile.WallCollision = ConfGetBoolOrDefault("wallcollision", false);
@@ -527,7 +529,6 @@ void TwinEEngine::initConfigurations() {
 	if (ttsMan != nullptr)
 		ttsMan->enable(ConfGetBoolOrDefault("tts_narrator", false));
 
-	debug(1, "UseCD:          %s", (_cfgfile.UseCD ? "true" : "false"));
 	debug(1, "Sound:          %s", (_cfgfile.Sound ? "true" : "false"));
 	debug(1, "Movie:          %i", _cfgfile.Movie);
 	debug(1, "Fps:            %i", _cfgfile.Fps);
@@ -779,9 +780,9 @@ void TwinEEngine::processInventoryAction() {
 
 		const IVec2 &destPos = _renderer->rotate(0, 800, _scene->_sceneHero->_beta);
 
-		penguin->_pos = _scene->_sceneHero->posObj();
-		penguin->_pos.x += destPos.x;
-		penguin->_pos.z += destPos.y;
+		penguin->_posObj = _scene->_sceneHero->posObj();
+		penguin->_posObj.x += destPos.x;
+		penguin->_posObj.z += destPos.y;
 		// TODO: HACK for https://bugs.scummvm.org/ticket/13731
 		// The movement of the meca penguin is different from dos version
 		// the problem is that the value set to 1 even if the penguin is not yet spawned
@@ -858,25 +859,33 @@ bool TwinEEngine::runGameEngine() { // mainLoopInteration
 		if (!isMod() && isDemo() && isLBA1()) {
 			// the demo only has these scenes
 			if (_scene->_needChangeScene != LBA1SceneId::Citadel_Island_Prison && _scene->_needChangeScene != LBA1SceneId::Citadel_Island_outside_the_citadel && _scene->_needChangeScene != LBA1SceneId::Citadel_Island_near_the_tavern) {
-				// TODO: PlayMidiFile(6);
+				_music->playMidiFile(6);
 				return true;
 			}
 		}
-		_scene->changeScene();
+		_scene->changeCube();
 	}
 
 	_movements->update();
 
 	_debug->processDebug();
 
-	if (_menuOptions->canShowCredits) {
-		// TODO: if current music playing != 8, than play_track(8);
+	if (_menuOptions->flagCredits) {
+		if (isLBA1()) {
+			if (isCDROM()) {
+				if (_music->getMusicCD() != 8) {
+					_music->playCdTrack(8);
+				}
+			} else if (!_music->isMidiPlaying()) {
+				_music->playMidiFile(9);
+			}
+		}
 		if (_input->toggleAbortAction()) {
 			return true;
 		}
 	} else {
 		// Process give up menu - Press ESC
-		if (_input->toggleAbortAction() && _scene->_sceneHero->_lifePoint > 0 && _scene->_sceneHero->_body != -1 && !_scene->_sceneHero->_staticFlags.bIsHidden) {
+		if (_input->toggleAbortAction() && _scene->_sceneHero->_lifePoint > 0 && _scene->_sceneHero->_body != -1 && !_scene->_sceneHero->_staticFlags.bIsInvisible) {
 			ScopedEngineFreeze scopedFreeze(this);
 			extInitSvga();
 			const int giveUp = _menu->giveupMenu();
@@ -1067,7 +1076,7 @@ bool TwinEEngine::runGameEngine() { // mainLoopInteration
 		}
 
 		if (actor->_staticFlags.bCanDrown) {
-			const uint8 brickSound = _grid->worldCodeBrick(actor->_pos.x, actor->_pos.y - 1, actor->_pos.z);
+			const uint8 brickSound = _grid->worldCodeBrick(actor->_posObj.x, actor->_posObj.y - 1, actor->_posObj.z);
 			actor->_brickSound = brickSound;
 
 			if (brickSound == WATER_BRICK) {
@@ -1081,7 +1090,7 @@ bool TwinEEngine::runGameEngine() { // mainLoopInteration
 						actor->_controlMode = ControlMode::kNoMove;
 						actor->setLife(-1);
 						_actor->_cropBottomScreen = projPos.y;
-						actor->_staticFlags.bDoesntCastShadow = 1;
+						actor->_staticFlags.bNoShadow = 1;
 					}
 				} else {
 					_sound->playSample(Samples::Explode, 1, actor->posObj(), a);
@@ -1099,7 +1108,7 @@ bool TwinEEngine::runGameEngine() { // mainLoopInteration
 			if (IS_HERO(a)) {
 				if (actor->_workFlags.bAnimEnded) {
 					if (_gameState->_inventoryNumLeafs > 0) { // use clover leaf automaticaly
-						_scene->_sceneHero->_pos = _scene->_newHeroPos;
+						_scene->_sceneHero->_posObj = _scene->_newHeroPos;
 
 						_scene->_needChangeScene = _scene->_currentSceneIdx;
 						_gameState->setMaxMagicPoints();
@@ -1154,9 +1163,9 @@ bool TwinEEngine::runGameEngine() { // mainLoopInteration
 
 	// workaround to fix hero redraw after drowning
 	if (_actor->_cropBottomScreen && _redraw->_firstTime) {
-		_scene->_sceneHero->_staticFlags.bIsHidden = 1;
+		_scene->_sceneHero->_staticFlags.bIsInvisible = 1;
 		_redraw->redrawEngineActions(true);
-		_scene->_sceneHero->_staticFlags.bIsHidden = 0;
+		_scene->_sceneHero->_staticFlags.bIsInvisible = 0;
 	}
 
 	_scene->_needChangeScene = SCENE_CEILING_GRID_FADE_1;

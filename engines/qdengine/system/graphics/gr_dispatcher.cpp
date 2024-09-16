@@ -51,7 +51,6 @@ grDispatcher::grDispatcher() : _screenBuf(NULL),
 	zbuffer_(NULL),
 #endif
 	_hWnd(NULL),
-	_yTable(NULL),
 	_temp_buffer(0) {
 	_flags = 0;
 
@@ -89,10 +88,8 @@ bool grDispatcher::finit() {
 	_flags &= ~GR_INITED;
 	_sizeX = _sizeY = 0;
 	_wndPosX = _wndPosY = 0;
-	delete _screenBuf;
-	_screenBuf = nullptr;
-	delete  _yTable;
-	_yTable = NULL;
+	delete _realScreenBuf;
+	_realScreenBuf = nullptr;
 
 	return true;
 }
@@ -103,7 +100,8 @@ bool grDispatcher::init(int sx, int sy, grPixelFormat pixel_format) {
 	_pixel_format = pixel_format;
 
 	initGraphics(sx, sy, &g_engine->_pixelformat);
-	_screenBuf = new Graphics::ManagedSurface(sx, sy, g_engine->_pixelformat);
+	_realScreenBuf = new Graphics::ManagedSurface(sx, sy, g_engine->_pixelformat);
+	_screenBuf = _realScreenBuf;
 
 	_sizeX = sx;
 	_sizeY = sy;
@@ -348,6 +346,14 @@ void grDispatcher::erase(int x, int y, int sx, int sy, int col) {
 
 	_screenBuf->fillRect(Common::Rect(x, y, x + sx, y + sy), col);
 	return;
+}
+
+void grDispatcher::surfaceOverride(Graphics::ManagedSurface *target) {
+	_screenBuf = target;
+}
+
+void grDispatcher::resetSurfaceOverride() {
+	_screenBuf = _realScreenBuf;
 }
 
 void grDispatcher::setPixel(int x, int y, int col) {

@@ -80,7 +80,7 @@ void MenuOptions::newGame() {
 		_engine->_screens->clearScreen();
 
 		if (!aborted) {
-			_engine->_music->playMidiMusic(1);
+			_engine->_music->playMidiFile(1);
 			_engine->_movie->playMovie(FLA_INTROD);
 		}
 
@@ -105,10 +105,10 @@ void MenuOptions::showCredits() {
 	_engine->_scene->_currentSceneIdx = LBA1SceneId::Credits_List_Sequence;
 	_engine->_scene->_needChangeScene = LBA1SceneId::Credits_List_Sequence;
 
-	canShowCredits = true;
+	flagCredits = true;
 	_engine->gameEngineLoop();
 	_engine->_scene->stopRunningGame();
-	canShowCredits = false;
+	flagCredits = false;
 
 	_engine->_cfgfile.ShadowMode = tmpShadowMode;
 
@@ -379,7 +379,7 @@ int MenuOptions::chooseSave(TextId textIdx, bool showEmptySlots) {
 		}
 	}
 
-	const int32 id = _engine->_menu->processMenu(&saveFiles);
+	const int32 id = _engine->_menu->doGameMenu(&saveFiles);
 	switch (id) {
 	case kQuitEngine:
 	case (int32)TextId::kReturnMenu:

@@ -28,19 +28,60 @@
 
 namespace Freescape {
 
+Graphics::ManagedSurface *CastleEngine::loadFrameFromPlanesVertical(Common::SeekableReadStream *file, int widthInBytes, int height) {
+	Graphics::ManagedSurface *surface;
+	surface = new Graphics::ManagedSurface();
+	surface->create(widthInBytes * 8 / 4, height, Graphics::PixelFormat::createFormatCLUT8());
+	surface->fillRect(Common::Rect(0, 0, widthInBytes * 8 / 4, height), 0);
+	loadFrameFromPlanesInternalVertical(file, surface, widthInBytes / 4, height, 0);
+	loadFrameFromPlanesInternalVertical(file, surface, widthInBytes / 4, height, 1);
+	loadFrameFromPlanesInternalVertical(file, surface, widthInBytes / 4, height, 2);
+	loadFrameFromPlanesInternalVertical(file, surface, widthInBytes / 4, height, 3);
+	return surface;
+}
+
+Graphics::ManagedSurface *CastleEngine::loadFrameFromPlanesInternalVertical(Common::SeekableReadStream *file, Graphics::ManagedSurface *surface, int width, int height, int plane) {
+	byte *colors = (byte *)malloc(sizeof(byte) * height * width);
+	file->read(colors, height * width);
+
+	for (int i = 0; i < height * width; i++) {
+		byte color = colors[i];
+		for (int n = 0; n < 8; n++) {
+			int y = i / width;
+			int x = (i % width) * 8 + (7 - n);
+
+			int bit = ((color >> n) & 0x01) << plane;
+			int sample = surface->getPixel(x, y) | bit;
+			assert(sample < 16);
+			surface->setPixel(x, y, sample);
+		}
+	}
+	free(colors);
+	return surface;
+}
+
 void CastleEngine::loadAssetsAmigaDemo() {
 	Common::File file;
 	file.open("x");
 	if (!file.isOpen())
 		error("Failed to open 'x' file");
 
+	_viewArea = Common::Rect(40, 29, 280, 154);
 	loadMessagesVariableSize(&file, 0x8bb2, 178);
-	loadRiddles(&file, 0x96c8, 20);
+	loadRiddles(&file, 0x96c8, 19);
 	load8bitBinary(&file, 0x162a6, 16);
 	loadPalettes(&file, 0x151a6);
 
 	file.seek(0x2be96); // Area 255
 	_areaMap[255] = load8bitArea(&file, 16);
+
+	file.seek(0x3c6d0);
+	byte *borderPalete = loadPalette(&file);
+
+	file.seek(0x2cf28 + 0x28 - 0x2 + 0x28);
+	_border = loadFrameFromPlanesVertical(&file, 160, 200);
+	_border->convertToInPlace(_gfx->_texturePixelFormat, borderPalete, 16);
+	delete[] borderPalete;
 	file.close();
 
 	_areaMap[2]->_groundColor = 1;
@@ -49,6 +90,9 @@ void CastleEngine::loadAssetsAmigaDemo() {
 
 	_areaMap[1]->addFloor();
 	_areaMap[2]->addFloor();
+}
+
+void CastleEngine::drawAmigaAtariSTUI(Graphics::Surface *surface) {
 }
 
 } // End of namespace Freescape

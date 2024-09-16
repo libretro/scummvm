@@ -3277,16 +3277,21 @@ void ScummEngine_v5::decodeParseString() {
 			//
 			// The SEGA CD version uses the old colors already, and
 			// the FM Towns version makes the text more readable by
-			// giving it a black outline.
+			// giving it a black outline. The Macintosh release only
+			// requires changing the color of the background, not the
+			// text.
+			//
+			// See also the related Gdi::drawStrip() workaround.
 
 			else if (_game.id == GID_MONKEY &&
 					!(_game.features & GF_ULTIMATE_TALKIE) &&
 					_game.platform != Common::kPlatformSegaCD &&
 					_game.platform != Common::kPlatformFMTowns &&
+					_game.platform != Common::kPlatformMacintosh &&
 					_currentRoom == 36 &&
 					vm.slot[_currentScript].number == 201 &&
 					color == 2 &&
-					 enhancementEnabled(kEnhVisualChanges)) {
+					enhancementEnabled(kEnhVisualChanges)) {
 				color = findClosestPaletteColor(_currentPalette, 256, 0, 171, 0);
 			}
 
@@ -3342,7 +3347,7 @@ void ScummEngine_v5::decodeParseString() {
 						}
 
 						// Slightly increase the delay (5 frames = 1/25 of a second).
-						// This noticably improves the experience in Loom CD.
+						// This noticeably improves the experience in Loom CD.
 						delay = (int)(delay * 7.5 + 5);
 
 						_sound->playCDTrack(1, 1, offset, delay);

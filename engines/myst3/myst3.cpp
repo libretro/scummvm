@@ -1513,7 +1513,15 @@ bool Myst3Engine::canLoadGameStateCurrently(Common::U32String *msg) {
 
 Common::Error Myst3Engine::loadGameState(int slot) {
 	Common::StringArray filenames = Saves::list(_saveFileMan, getPlatform());
-	return loadGameState(filenames[slot], kTransitionNone);
+
+	// Slots are assigned consecutively, starting from slot 1
+	// Get the Save List index for the selected slot
+	int listIndex = (slot == 0) ? slot : slot - 1;
+	if (!listIndex < filenames.size()) {
+		return Common::kReadingFailed;
+	}
+
+	return loadGameState(filenames[listIndex], kTransitionNone);
 }
 
 Common::Error Myst3Engine::loadGameState(Common::String fileName, TransitionType transition) {
@@ -1573,19 +1581,25 @@ static bool isValidSaveFileName(const Common::String &desc) {
 Common::Error Myst3Engine::saveGameState(int slot, const Common::String &desc, bool isAutosave) {
 	assert(!desc.empty());
 
+	Common::String saveName = desc;
 	if (!isValidSaveFileName(desc)) {
-		return Common::Error(Common::kCreatingFileFailed, _("Invalid file name for saving"));
+		if (isAutosave) {
+			// Fall back to the expected English translation
+			saveName = "Autosave";
+		} else {
+			return Common::Error(Common::kCreatingFileFailed, _("Invalid file name for saving"));
+		}
 	}
 
-	// Try to use an already generated thumbnail
-	const Graphics::Surface *thumbnail = _menu->borrowSaveThumbnail();
-	if (!thumbnail) {
+	// If autosaving, get a fresh thumbnail of the game screen
+	if (isAutosave && !_menu->isOpen()) {
 		_menu->generateSaveThumbnail();
 	}
-	thumbnail = _menu->borrowSaveThumbnail();
+	// Use the currently generated thumbnail
+	const Graphics::Surface *thumbnail = _menu->borrowSaveThumbnail();
 	assert(thumbnail);
 
-	return saveGameState(desc, thumbnail, isAutosave);
+	return saveGameState(saveName, thumbnail, isAutosave);
 }
 
 Common::Error Myst3Engine::saveGameState(const Common::String &desc, const Graphics::Surface *thumbnail, bool isAutosave) {
