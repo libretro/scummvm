@@ -13152,6 +13152,7 @@ static int glad_gl_find_core_gles2(void) {
 int gladLoadGLES2UserPtr( GLADuserptrloadfunc load, void *userptr) {
     int version;
 g_system->logMessage(LogMessageType::kDebug, userptr?"userptr not null":"userptr null");
+g_system->logMessage(LogMessageType::kDebug, load?"load function not null":"load function null");
 
     glad_glGetString = (PFNGLGETSTRINGPROC) load(userptr, "glGetString");
 
