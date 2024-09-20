@@ -22,12 +22,11 @@
  *
  * Commandline:
  *    --merge --api='gl:compatibility=3.3,gles1:common=1.0,gles2=2.0' --extensions='GL_APPLE_flush_buffer_range,GL_APPLE_vertex_array_object,GL_ARB_blend_func_extended,GL_ARB_color_buffer_float,GL_ARB_copy_buffer,GL_ARB_debug_output,GL_ARB_draw_buffers,GL_ARB_draw_elements_base_vertex,GL_ARB_draw_instanced,GL_ARB_framebuffer_object,GL_ARB_geometry_shader4,GL_ARB_imaging,GL_ARB_instanced_arrays,GL_ARB_map_buffer_range,GL_ARB_multisample,GL_ARB_multitexture,GL_ARB_occlusion_query,GL_ARB_point_parameters,GL_ARB_provoking_vertex,GL_ARB_sampler_objects,GL_ARB_shader_objects,GL_ARB_sync,GL_ARB_texture_buffer_object,GL_ARB_texture_compression,GL_ARB_texture_multisample,GL_ARB_texture_non_power_of_two,GL_ARB_timer_query,GL_ARB_transpose_matrix,GL_ARB_uniform_buffer_object,GL_ARB_vertex_array_object,GL_ARB_vertex_buffer_object,GL_ARB_vertex_program,GL_ARB_vertex_shader,GL_ARB_vertex_type_2_10_10_10_rev,GL_ARB_window_pos,GL_ATI_draw_buffers,GL_ATI_separate_stencil,GL_EXT_blend_color,GL_EXT_blend_equation_separate,GL_EXT_blend_func_separate,GL_EXT_blend_minmax,GL_EXT_color_subtable,GL_EXT_convolution,GL_EXT_copy_texture,GL_EXT_direct_state_access,GL_EXT_draw_buffers2,GL_EXT_draw_instanced,GL_EXT_draw_range_elements,GL_EXT_fog_coord,GL_EXT_framebuffer_blit,GL_EXT_framebuffer_multisample,GL_EXT_framebuffer_object,GL_EXT_gpu_shader4,GL_EXT_histogram,GL_EXT_multi_draw_arrays,GL_EXT_packed_depth_stencil,GL_EXT_packed_pixels,GL_EXT_paletted_texture,GL_EXT_point_parameters,GL_EXT_provoking_vertex,GL_EXT_secondary_color,GL_EXT_subtexture,GL_EXT_texture3D,GL_EXT_texture_array,GL_EXT_texture_buffer_object,GL_EXT_texture_compression_s3tc,GL_EXT_texture_integer,GL_EXT_texture_object,GL_EXT_timer_query,GL_EXT_transform_feedback,GL_EXT_vertex_array,GL_INGR_blend_func_separate,GL_KHR_debug,GL_MESA_window_pos,GL_NVX_conditional_render,GL_NV_conditional_render,GL_NV_explicit_multisample,GL_NV_geometry_program4,GL_NV_point_sprite,GL_NV_transform_feedback,GL_NV_vertex_program,GL_NV_vertex_program4,GL_SGIS_point_parameters,GL_SGIS_texture_edge_clamp,GL_SGI_color_table,GL_OES_depth24,GL_OES_packed_depth_stencil,GL_OES_single_precision,GL_OES_texture_npot,GL_EXT_unpack_subimage' c --alias --header-only
- *
+. *
  * Online:
  *    http://glad.sh/#api=gl%3Acompatibility%3D3.3%2Cgles1%3Acommon%3D1.0%2Cgles2%3D2.0&generator=c&options=MERGE%2CALIAS%2CHEADER_ONLY
  *
  */
-
 #ifndef GLAD_GL_H_
 #define GLAD_GL_H_
 
@@ -12909,8 +12908,11 @@ static int glad_gl_find_core_gl(void) {
 
 int gladLoadGLUserPtr( GLADuserptrloadfunc load, void *userptr) {
     int version;
+g_system->logMessage(LogMessageType::kDebug, userptr?"userptr not null":"userptr null");
 
     glad_glGetString = (PFNGLGETSTRINGPROC) load(userptr, "glGetString");
+g_system->logMessage(LogMessageType::kDebug, glad_glGetString?"glad_glGetString not null":"glad_glGetString null");
+
     if(glad_glGetString == NULL) return 0;
     version = glad_gl_find_core_gl();
 
@@ -12926,6 +12928,8 @@ int gladLoadGLUserPtr( GLADuserptrloadfunc load, void *userptr) {
     glad_gl_load_GL_VERSION_3_1(load, userptr);
     glad_gl_load_GL_VERSION_3_2(load, userptr);
     glad_gl_load_GL_VERSION_3_3(load, userptr);
+
+g_system->logMessage(LogMessageType::kDebug, glad_gl_find_extensions_gl() ? "glad_gl_find_extensions_gl() not 0":"glad_gl_find_extensions_gl() is 0");
 
     if (!glad_gl_find_extensions_gl()) return 0;
     glad_gl_load_GL_APPLE_flush_buffer_range(load, userptr);
@@ -13144,14 +13148,21 @@ static int glad_gl_find_core_gles2(void) {
     return GLAD_MAKE_VERSION(major, minor);
 }
 
+#define FORBIDDEN_SYMBOL_ALLOW_ALL
 int gladLoadGLES2UserPtr( GLADuserptrloadfunc load, void *userptr) {
     int version;
+g_system->logMessage(LogMessageType::kDebug, userptr?"userptr not null":"userptr null");
 
     glad_glGetString = (PFNGLGETSTRINGPROC) load(userptr, "glGetString");
+
+g_system->logMessage(LogMessageType::kDebug, glad_glGetString?"glad_glGetString not null":"glad_glGetString null");
+
     if(glad_glGetString == NULL) return 0;
     version = glad_gl_find_core_gles2();
 
     glad_gl_load_GL_ES_VERSION_2_0(load, userptr);
+
+g_system->logMessage(LogMessageType::kDebug, glad_gl_find_extensions_gles2() ? "glad_gl_find_extensions_gles2() not 0":"glad_gl_find_extensions_gles2() is 0");
 
     if (!glad_gl_find_extensions_gles2()) return 0;
     glad_gl_load_GL_EXT_blend_minmax(load, userptr);
