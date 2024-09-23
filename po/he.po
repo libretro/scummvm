@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ScummVM 2.1.0git\n"
 "Report-Msgid-Bugs-To: scummvm-devel@lists.scummvm.org\n"
-"POT-Creation-Date: 2024-09-16 10:02+0000\n"
+"POT-Creation-Date: 2024-09-19 19:33+0000\n"
 "PO-Revision-Date: 2023-12-14 14:28+0000\n"
 "Last-Translator: Niv Baehr <bloop93@gmail.com>\n"
 "Language-Team: Hebrew <https://translations.scummvm.org/projects/scummvm/"
@@ -312,7 +312,7 @@ msgstr "אחסון אחר עובד כעת. האם להפריע לו?"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:601 engines/kyra/gui/saveload_eob.cpp:634
 #: engines/parallaction/metaengine.cpp:143
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4028
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4058
 #: engines/toon/toon.cpp:1543
 msgid "Yes"
 msgstr "כן"
@@ -325,7 +325,7 @@ msgstr "כן"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:601 engines/kyra/gui/saveload_eob.cpp:634
 #: engines/parallaction/metaengine.cpp:149
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4028
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4058
 #: engines/toon/toon.cpp:1543
 msgid "No"
 msgstr "לא"
@@ -354,9 +354,9 @@ msgstr "תוכן קוד JSON משובש."
 #: engines/groovie/script.cpp:665 engines/mtropolis/mtropolis.cpp:114
 #: engines/mtropolis/mtropolis.cpp:124 engines/parallaction/saveload.cpp:270
 #: engines/saga/music.cpp:102 engines/sci/engine/kgraphics.cpp:76
-#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1268
-#: engines/scumm/scumm.cpp:1641 engines/scumm/scumm.cpp:2129
-#: engines/scumm/scumm.cpp:2145 engines/sky/compact.cpp:140
+#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1270
+#: engines/scumm/scumm.cpp:1643 engines/scumm/scumm.cpp:2131
+#: engines/scumm/scumm.cpp:2147 engines/sky/compact.cpp:140
 #: engines/sword1/animation.cpp:532 engines/sword1/animation.cpp:563
 #: engines/sword1/animation.cpp:571 engines/sword1/control.cpp:2813
 #: engines/sword1/logic.cpp:1732 engines/sword2/animation.cpp:426
@@ -994,7 +994,7 @@ msgstr "פעולה"
 #: engines/dragons/metaengine.cpp:159 engines/freescape/movement.cpp:35
 #: engines/griffon/metaengine.cpp:121 engines/grim/grim.cpp:481
 #: engines/grim/grim.cpp:562 engines/icb/icb.cpp:68 engines/icb/icb.cpp:152
-#: engines/scumm/metaengine.cpp:904 engines/twine/metaengine.cpp:467
+#: engines/scumm/metaengine.cpp:903 engines/twine/metaengine.cpp:467
 #: engines/twine/metaengine.cpp:534 engines/twp/metaengine.cpp:154
 #: engines/wintermute/keymapper_tables.h:1290
 #: engines/wintermute/keymapper_tables.h:1373
@@ -1009,7 +1009,7 @@ msgstr "למעלה"
 #: engines/dragons/metaengine.cpp:165 engines/freescape/movement.cpp:42
 #: engines/griffon/metaengine.cpp:127 engines/grim/grim.cpp:486
 #: engines/grim/grim.cpp:567 engines/icb/icb.cpp:73 engines/icb/icb.cpp:157
-#: engines/scumm/metaengine.cpp:871 engines/twine/metaengine.cpp:474
+#: engines/scumm/metaengine.cpp:870 engines/twine/metaengine.cpp:474
 #: engines/twine/metaengine.cpp:542 engines/twp/metaengine.cpp:155
 #: engines/wintermute/keymapper_tables.h:1296
 #: engines/wintermute/keymapper_tables.h:1379
@@ -1023,7 +1023,7 @@ msgstr "למטה"
 #: engines/crab/input/input.cpp:107 engines/crab/input/input.cpp:157
 #: engines/dragons/metaengine.cpp:171 engines/griffon/metaengine.cpp:133
 #: engines/grim/grim.cpp:491 engines/grim/grim.cpp:572 engines/icb/icb.cpp:78
-#: engines/icb/icb.cpp:162 engines/scumm/metaengine.cpp:884
+#: engines/icb/icb.cpp:162 engines/scumm/metaengine.cpp:883
 #: engines/twine/metaengine.cpp:489 engines/twine/metaengine.cpp:557
 #: engines/twp/metaengine.cpp:152 engines/wintermute/keymapper_tables.h:320
 #: engines/wintermute/keymapper_tables.h:1302
@@ -1038,7 +1038,7 @@ msgstr "שמאלה"
 #: engines/crab/input/input.cpp:113 engines/crab/input/input.cpp:163
 #: engines/dragons/metaengine.cpp:177 engines/griffon/metaengine.cpp:139
 #: engines/grim/grim.cpp:496 engines/grim/grim.cpp:577 engines/icb/icb.cpp:83
-#: engines/icb/icb.cpp:167 engines/scumm/metaengine.cpp:891
+#: engines/icb/icb.cpp:167 engines/scumm/metaengine.cpp:890
 #: engines/twine/metaengine.cpp:481 engines/twine/metaengine.cpp:550
 #: engines/twp/metaengine.cpp:153 engines/wintermute/keymapper_tables.h:326
 #: engines/wintermute/keymapper_tables.h:1308
@@ -3402,7 +3402,7 @@ msgstr ""
 "ולקבלת הוראות כיצד לקבל סיוע נוסף."
 
 #: engines/dialogs.cpp:193 engines/ags/ags.cpp:349
-#: engines/glk/magnetic/magnetic.cpp:197 engines/scumm/saveload.cpp:171
+#: engines/glk/magnetic/magnetic.cpp:197 engines/scumm/saveload.cpp:167
 #, fuzzy
 #| msgid "This game does not support loading games from the launcher."
 msgid "This game does not support saving from the menu. Use in-game interface"
@@ -5788,7 +5788,7 @@ msgstr "הוספת תפריט מהירות משחק (כמו בגרסה למחש�
 #: engines/dreamweb/metaengine.cpp:36 engines/lure/metaengine.cpp:41
 #: engines/mads/metaengine.cpp:51 engines/mm/metaengine.cpp:46
 #: engines/saga/metaengine.cpp:52 engines/scumm/dialogs.cpp:1188
-#: engines/scumm/metaengine.cpp:756
+#: engines/scumm/metaengine.cpp:755
 #, fuzzy
 #| msgid "Enable Discord integration"
 msgid "Enable copy protection"
@@ -5798,7 +5798,7 @@ msgstr "הפעלת שילוב עם Discord"
 #: engines/dreamweb/metaengine.cpp:37 engines/lure/metaengine.cpp:42
 #: engines/mads/metaengine.cpp:52 engines/mm/metaengine.cpp:47
 #: engines/saga/metaengine.cpp:53 engines/scumm/dialogs.cpp:1189
-#: engines/scumm/metaengine.cpp:757
+#: engines/scumm/metaengine.cpp:756
 msgid "Enable any copy protection that would otherwise be bypassed by default."
 msgstr ""
 
@@ -5861,7 +5861,7 @@ msgstr "שחזור"
 msgid "Quick load or save game isn't supported in this location"
 msgstr "שמירת המשחק או טעינה מהירה לא נתמכות במיקום זה"
 
-#: engines/agos/saveload.cpp:161 engines/scumm/scumm.cpp:2997
+#: engines/agos/saveload.cpp:161 engines/scumm/scumm.cpp:3027
 #, c-format
 msgid ""
 "Failed to load saved game from file:\n"
@@ -5872,7 +5872,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:196 engines/scumm/scumm.cpp:2984
+#: engines/agos/saveload.cpp:196 engines/scumm/scumm.cpp:3014
 #, c-format
 msgid ""
 "Failed to save game to file:\n"
@@ -5883,7 +5883,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:204 engines/scumm/scumm.cpp:3017
+#: engines/agos/saveload.cpp:204 engines/scumm/scumm.cpp:3047
 #, c-format
 msgid ""
 "Successfully saved game in file:\n"
@@ -6519,7 +6519,7 @@ msgstr "מיתוג קרבות"
 
 #. I18N: This keymap allows skipping video cutscenes
 #: engines/bladerunner/metaengine.cpp:229 engines/scumm/help.cpp:79
-#: engines/scumm/metaengine.cpp:930 engines/twp/metaengine.cpp:162
+#: engines/scumm/metaengine.cpp:929 engines/twp/metaengine.cpp:162
 #: engines/zvision/metaengine.cpp:284
 msgid "Skip cutscene"
 msgstr "דילוג על סרטוני מעבר"
@@ -7018,7 +7018,7 @@ msgstr "אינטראקציה"
 
 #. I18N: Combat command in Might & Magic 1
 #: engines/crab/input/input.cpp:125 engines/griffon/metaengine.cpp:145
-#: engines/mm/mm1/metaengine.cpp:65 engines/scumm/metaengine.cpp:917
+#: engines/mm/mm1/metaengine.cpp:65 engines/scumm/metaengine.cpp:916
 msgid "Attack"
 msgstr "תקיפה"
 
@@ -9073,7 +9073,7 @@ msgstr ""
 "את העדכונים ניתן להוריד מכאן:\n"
 "%s"
 
-#: engines/myst3/myst3.cpp:1590 engines/pegasus/pegasus.cpp:749
+#: engines/myst3/myst3.cpp:1591 engines/pegasus/pegasus.cpp:749
 msgid "Invalid file name for saving"
 msgstr "שם קובץ לא חוקי לשמירה"
 
@@ -9733,7 +9733,7 @@ msgstr "לא ניתן לנגן וידאו %dbpp על מערכת בעומק צב�
 msgid "SCI32 support not compiled in"
 msgstr "תמיכה במנוע SCI32 לא נבנתה"
 
-#: engines/sci/resource/resource.cpp:856
+#: engines/sci/resource/resource.cpp:858
 msgid ""
 "Missing or corrupt game resources have been detected. Some game features may "
 "not work properly. Please check the console for more information, and verify "
@@ -9887,7 +9887,7 @@ msgid "Your Name:"
 msgstr "שמכם:"
 
 #. I18N: Button, start hosting online multiplayer game
-#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4034
+#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4064
 msgid "Host"
 msgstr ""
 
@@ -9899,7 +9899,7 @@ msgid "Querying games..."
 msgstr "שומר משחק ..."
 
 #. I18N: Join online multiplayer game
-#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4034
+#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4064
 msgid "Join"
 msgstr ""
 
@@ -10770,22 +10770,21 @@ msgstr "הפעלת גלילה פחות חלקה במהלך תנועות המצל
 #, fuzzy
 #| msgid ""
 #| "Allow the game to use the in-engine graphical interface and the original "
-#| "save/load menu. \t\tUse it together with the \"Ask for confirmation on "
-#| "exit\" for a more complete experience."
+#| "save/load menu. Use it together with the \"Ask for confirmation on exit\" "
+#| "for a more complete experience."
 msgid ""
 "Allow the game to use the in-engine graphical interface and the original "
 "save/load menu. \t\tUse it together with the \"Ask for confirmation on exit"
-"\" for a more complete experience. \t\tAutosaving is disabled when this mode "
-"is active."
+"\" for a more complete experience."
 msgstr ""
-"המשחק ישתמש בממשק גרפי פנימי של המנוע ובתפריט שמירה/טעינה המקורי.\t\tהשתמשו "
+"המשחק ישתמש בממשק גרפי פנימי של המנוע ובתפריט שמירה/טעינה המקורי. השתמשו "
 "ביחד עם \"בקשה לאישור יציאה\" לחוויה שלמה יותר."
 
-#: engines/scumm/metaengine.cpp:736
+#: engines/scumm/metaengine.cpp:735
 msgid "Enable low latency audio mode"
 msgstr "הפעלת מצב שמע בעיכוב מועט"
 
-#: engines/scumm/metaengine.cpp:737
+#: engines/scumm/metaengine.cpp:736
 msgid ""
 "Allows the game to use low latency audio, at the cost of sound accuracy. \t"
 "\tIt is recommended to enable this feature only if you incur in audio "
@@ -10794,57 +10793,57 @@ msgstr ""
 "אפשור למשחק להשתמש בשמע בעיכוב מועט, על חשבון הדיוק בצלילים.\t\tמומלץ להפעיל "
 "תכונה זו רק אם חוויתם בעיות עיכוב בשמע במהלך משחק רגיל."
 
-#: engines/scumm/metaengine.cpp:746
+#: engines/scumm/metaengine.cpp:745
 msgid "Enable the \"A Pirate I Was Meant To Be\" song"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:747
+#: engines/scumm/metaengine.cpp:746
 msgid ""
 "Enable the song at the beginning of Part 3 of the game, \"A Pirate I Was "
 "Meant To Be\", \t\twhich was cut in international releases. Beware though: "
 "subtitles may not be fully translated."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:765
+#: engines/scumm/metaengine.cpp:764
 #, fuzzy
 #| msgid "Disable demo mode"
 msgid "Enable demo/kiosk mode"
 msgstr "כיבוי מצב הדגמה"
 
-#: engines/scumm/metaengine.cpp:766
+#: engines/scumm/metaengine.cpp:765
 msgid "Enable demo/kiosk mode in the full retail version of Maniac Mansion."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:865
+#: engines/scumm/metaengine.cpp:864
 #, fuzzy
 msgid "Down Left"
 msgstr "פונה שמאלה"
 
-#: engines/scumm/metaengine.cpp:878
+#: engines/scumm/metaengine.cpp:877
 #, fuzzy
 msgid "Down Right"
 msgstr "פנה ימינה"
 
-#: engines/scumm/metaengine.cpp:898
+#: engines/scumm/metaengine.cpp:897
 #, fuzzy
 msgid "Up Left"
 msgstr "שמאלה"
 
-#: engines/scumm/metaengine.cpp:911
+#: engines/scumm/metaengine.cpp:910
 #, fuzzy
 msgid "Up Right"
 msgstr "ימינה"
 
-#: engines/scumm/metaengine.cpp:923
+#: engines/scumm/metaengine.cpp:922
 msgid "Switch weapon"
 msgstr "החלפת נשק"
 
 #. I18N: Lets one skip the bike/car fight sequences in Full Throttle
-#: engines/scumm/metaengine.cpp:937
+#: engines/scumm/metaengine.cpp:936
 msgid "Win the bike fight cheat"
 msgstr "רמאות לניצחון בקרב אופנועים"
 
-#: engines/scumm/saveload.cpp:1977
+#: engines/scumm/saveload.cpp:1970
 #, c-format
 msgid ""
 "Warning: incompatible sound settings detected between the current "
@@ -10869,16 +10868,16 @@ msgstr ""
 "שאינה מאפשרת תיקון יחס ממדים.\n"
 "ניתן להשיג תיקון יחס ממדים על ידי חיתוך הרזולוציה ל-320x200, בלשונית 'מנוע'."
 
-#: engines/scumm/scumm.cpp:1222
+#: engines/scumm/scumm.cpp:1224
 msgid "This game requires the 'Indy' Macintosh executable for its fonts."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1247
+#: engines/scumm/scumm.cpp:1249
 msgid ""
 "This game requires the 'Loom' Macintosh executable for its music and fonts."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1267
+#: engines/scumm/scumm.cpp:1269
 msgid ""
 "Could not find the 'Monkey Island' Macintosh executable to read the\n"
 "instruments from. Music will be disabled."
@@ -10886,17 +10885,17 @@ msgstr ""
 "לא ניתן למצוא את ההפעלה מקינטוש 'אי הקופים' כדי לקרוא את\n"
 "מכשירים מ. המוסיקה תושבת."
 
-#: engines/scumm/scumm.cpp:1275
+#: engines/scumm/scumm.cpp:1277
 #, c-format
 msgid "Could not open Macintosh resource file %s"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1278
+#: engines/scumm/scumm.cpp:1280
 #, c-format
 msgid "Could not find resource fork in Macintosh resource file %s"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1638
+#: engines/scumm/scumm.cpp:1640
 msgid ""
 "Audio files compressed with ScummVM Tools were detected; *.BUN/*.SOU\n"
 "compression is not supported anymore for this game, audio will be disabled.\n"
@@ -10906,7 +10905,7 @@ msgstr ""
 "הדחיסה עבור משחק זה כבר אינה נתמכת, השמע ינוטרל.\n"
 "נא להעתיק את המשחק מהמדיה המקורית ללא הדחיסה."
 
-#: engines/scumm/scumm.cpp:2127
+#: engines/scumm/scumm.cpp:2129
 #, c-format
 msgid ""
 "Native MIDI support requires the Roland Upgrade from LucasArts,\n"
@@ -10915,7 +10914,7 @@ msgstr ""
 "תמיכת MIDI מקומית דורשת את שדרוג הרולנד מ- LucasArts,\n"
 "אבל %s חסר. במקום זאת משתמשים ב- AdLib."
 
-#: engines/scumm/scumm.cpp:2143
+#: engines/scumm/scumm.cpp:2145
 msgid ""
 "This particular version of Monkey Island 1 is known to miss some\n"
 "required resources for MT-32. Using AdLib instead."
@@ -10923,7 +10922,7 @@ msgstr ""
 "גרסה זו של אי הקופים 1 ידועה כחסרה\n"
 "משאבים מסוים שנדרשים עבור MT-32. משתמשים ב-AdLib במקום."
 
-#: engines/scumm/scumm.cpp:3923
+#: engines/scumm/scumm.cpp:3953
 msgid ""
 "Usually, Maniac Mansion would start now. But for that to work, the game "
 "files for Maniac Mansion have to be in the 'Maniac' directory inside the "
@@ -10933,7 +10932,7 @@ msgstr ""
 "Mansion חייבים להיות בספריית 'Maniac' בתוך ספריית המשחק Tentacle, ויש להוסיף "
 "את המשחק ל- ScummVM."
 
-#: engines/scumm/scumm.cpp:4034
+#: engines/scumm/scumm.cpp:4064
 #, fuzzy
 msgid "Would you like to host or join a network play session?"
 msgstr "האם ברצונכם לשמור או לטעון משחק?"
@@ -12983,6 +12982,20 @@ msgstr ""
 "New ו-Arial. לחלופין,ניתן להוריד את חבילת GNU FreeFont או גופני Liberation. "
 "יש להעתיק את כל הגופנים מהחבילה שנבחרה, לדוגמה, FreeMono, FreeSans ו-"
 "FreeSerif או LiberationMono, LiberationSans ו-LiberationSerif בהתאמה."
+
+#, fuzzy
+#~| msgid ""
+#~| "Allow the game to use the in-engine graphical interface and the original "
+#~| "save/load menu. \t\tUse it together with the \"Ask for confirmation on "
+#~| "exit\" for a more complete experience."
+#~ msgid ""
+#~ "Allow the game to use the in-engine graphical interface and the original "
+#~ "save/load menu. \t\tUse it together with the \"Ask for confirmation on "
+#~ "exit\" for a more complete experience. \t\tAutosaving is disabled when "
+#~ "this mode is active."
+#~ msgstr ""
+#~ "המשחק ישתמש בממשק גרפי פנימי של המנוע ובתפריט שמירה/טעינה המקורי.\t"
+#~ "\tהשתמשו ביחד עם \"בקשה לאישור יציאה\" לחוויה שלמה יותר."
 
 #~ msgid "Enable audio CD"
 #~ msgstr "הפעלת תקליטור שמע"

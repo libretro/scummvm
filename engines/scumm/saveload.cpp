@@ -139,10 +139,6 @@ bool ScummEngine::canLoadGameStateCurrently(Common::U32String *msg) {
 }
 
 Common::Error ScummEngine::saveGameState(int slot, const Common::String &desc, bool isAutosave) {
-	// Disable autosaving if the original GUI is in place
-	if (isAutosave && isUsingOriginalGUI())
-		return Common::kNoError;
-
 	requestSave(slot, desc);
 	return Common::kNoError;
 }
@@ -219,9 +215,6 @@ bool ScummEngine::canSaveGameStateCurrently(Common::U32String *msg) {
 	return (VAR_MAINMENU_KEY == 0xFF || (VAR(VAR_MAINMENU_KEY) != 0 && _currentRoom != 0)) && !isOriginalMenuActive;
 }
 
-bool ScummEngine::canSaveAutosaveCurrently() {
-	return !isUsingOriginalGUI();
-}
 
 void ScummEngine::requestSave(int slot, const Common::String &name) {
 	_saveLoadSlot = slot;

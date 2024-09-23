@@ -409,6 +409,36 @@ void Room::sendWSMessage_1a0000(machine *recv, int trigger) {
 	sendWSMessage(0x1a0000, 0, recv, 0, nullptr, 1);
 }
 
+void Room::sendWSMessage_1e0000(machine *recv, int val1, int val2) {
+	_G(globals)[V023] = val1 << 16;
+	_G(globals)[V024] = val2 << 16;
+	sendWSMessage(0x1e0000, 0, recv, 0, nullptr, 1);
+}
+
+void Room::sendWSMessage_1e0000(int val1, int val2) {
+	sendWSMessage_1e0000(_G(my_walker), val1, val2);
+}
+
+void Room::sendWSMessage_1f0000(machine *recv, int val1, int val2) {
+	_G(globals)[V023] = val1 << 16;
+	_G(globals)[V024] = val2 << 16;
+	sendWSMessage(0x1f0000, 0, recv, 0, nullptr, 1);
+}
+
+void Room::sendWSMessage_1f0000(int val1, int val2) {
+	sendWSMessage_1f0000(_G(my_walker), val1, val2);
+}
+
+void Room::sendWSMessage_200000(machine *recv, int trigger) {
+	_G(globals)[V023] = (trigger << 16) / 100;
+	sendWSMessage(0x200000, 0, recv, 0, nullptr, 1);
+}
+
+void Room::sendWSMessage_210000(machine *recv, int trigger) {
+	_G(globals)[V023] = (trigger << 16) / 100;
+	sendWSMessage(0x210000, 0, recv, 0, nullptr, 1);
+}
+
 void Room::sendWSMessage_29a0000(machine *recv, int val1) {
 	_G(globals)[GLB_TEMP_1] = val1 << 24;
 	sendWSMessage(0x29a0000, 0, recv, 0, 0, 1);

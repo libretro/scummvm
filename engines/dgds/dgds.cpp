@@ -32,7 +32,7 @@
 #include "common/substream.h"
 #include "common/system.h"
 
-#include "common/formats/iff_container.h"
+#include "backends/keymapper/keymapper.h"
 
 #include "graphics/cursorman.h"
 #include "graphics/font.h"
@@ -62,6 +62,7 @@
 #include "dgds/scripts.h"
 #include "dgds/sound.h"
 #include "dgds/game_palettes.h"
+#include "dgds/dragon_arcade.h"
 
 // for frame contents debugging
 //#define DUMP_FRAME_DATA 1
@@ -83,7 +84,8 @@ DgdsEngine::DgdsEngine(OSystem *syst, const ADGameDescription *gameDesc)
 	_gdsScene(nullptr), _resource(nullptr), _gamePals(nullptr), _gameGlobals(nullptr),
 	_detailLevel(kDgdsDetailHigh), _textSpeed(1), _justChangedScene1(false), _justChangedScene2(false),
 	_random("dgds"), _currentCursor(-1), _menuToTrigger(kMenuNone), _isLoading(true), _flipMode(false),
-	_rstFileName(nullptr), _difficulty(1), _menu(nullptr), _adsInterp(nullptr), _isDemo(false) {
+	_rstFileName(nullptr), _difficulty(1), _menu(nullptr), _adsInterp(nullptr), _isDemo(false),
+	_dragonArcade(nullptr) {
 	syncSoundSettings();
 
 	_platform = gameDesc->platform;
@@ -124,6 +126,7 @@ DgdsEngine::~DgdsEngine() {
 	delete _menu;
 	delete _inventory;
 	delete _shellGame;
+	delete _dragonArcade;
 
 	_icons.reset();
 	_corners.reset();
@@ -326,7 +329,9 @@ void DgdsEngine::init(bool restarting) {
 	_menu = new Menu();
 	_adsInterp = new ADSInterpreter(this);
 	_inventory = new Inventory();
-	if (_gameId == GID_HOC)
+	if (_gameId == GID_DRAGON)
+		_dragonArcade = new DragonArcade();
+	else if (_gameId == GID_HOC)
 		_shellGame = new ShellGame();
 
 	_backgroundBuffer.create(SCREEN_WIDTH, SCREEN_HEIGHT, Graphics::PixelFormat::createFormatCLUT8());
@@ -457,8 +462,6 @@ Common::Error DgdsEngine::run() {
 	init(false);
 	loadGameFiles();
 
-	// changeScene(55); // to test DRAGON intro sequence (after credits)
-
 	// If a savegame was selected from the launcher, load it now.
 	int saveSlot = ConfMan.getInt("save_slot");
 	if (saveSlot != -1)
@@ -531,6 +534,12 @@ Common::Error DgdsEngine::run() {
 					|| ev.type == Common::EVENT_MOUSEMOVE) {
 				mouseEvent = ev.type;
 				_lastMouse = ev.mouse;
+			} else if (ev.type == Common::EVENT_KEYDOWN) {
+				if (_dragonArcade)
+					_dragonArcade->onKeyDown(ev.kbd);
+			} else if (ev.type == Common::EVENT_KEYUP) {
+				if (_dragonArcade)
+					_dragonArcade->onKeyUp(ev.kbd);
 			}
 		}
 
@@ -694,7 +703,15 @@ bool DgdsEngine::canSaveGameStateCurrently(Common::U32String *msg /*= nullptr*/)
 }
 
 bool DgdsEngine::canSaveAutosaveCurrently() {
-	return canSaveGameStateCurrently() && !_scene->hasVisibleDialog() && !_menu->menuShown();
+	return canSaveGameStateCurrently() && !_scene->hasVisibleDialog() && !_menu->menuShown() && _gameGlobals->getGameIsInteractiveGlobal();
+}
+
+void DgdsEngine::enableKeymapper() {
+	_eventMan->getKeymapper()->setEnabled(true);
+}
+
+void DgdsEngine::disableKeymapper() {
+	_eventMan->getKeymapper()->setEnabled(false);
 }
 
 Common::Error DgdsEngine::syncGame(Common::Serializer &s) {

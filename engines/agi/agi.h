@@ -359,6 +359,8 @@ enum CycleInnerLoopType {
 
 typedef Common::Array<int16> SavedGameSlotIdArray;
 
+struct AgiAppleIIgsDelayOverwriteGameEntry;
+
 /**
  * AGI game structure.
  * This structure contains all global data of an AGI game executed
@@ -450,12 +452,16 @@ struct AgiGame {
 
 	bool automaticRestoreGame;
 
+	byte speedLevel; /**< Current game speed for certain platforms/versions */
+
 	uint16 appleIIgsSpeedControllerSlot;
-	int appleIIgsSpeedLevel;
 
 	const char *getString(int number);
 	void setString(int number, const char *str);
-	void setAppleIIgsSpeedLevel(int appleIIgsSpeedLevel);
+	/**
+	 * Sets the speed level and displays a message box.
+	 */
+	void setSpeedLevel(byte s);
 
 	AgiGame() {
 		_vm = nullptr;
@@ -526,8 +532,9 @@ struct AgiGame {
 
 		automaticRestoreGame = false;
 
+		speedLevel = 2; // normal speed
+
 		appleIIgsSpeedControllerSlot = 0xffff;	// we didn't add yet speed menu
-		appleIIgsSpeedLevel = 2;  // normal speed
 	}
 };
 
@@ -933,6 +940,9 @@ public:
 
 	const Common::String getTargetName() const { return _targetName; }
 
+private:
+	byte getAppleIIgsTimeDelay(const AgiAppleIIgsDelayOverwriteGameEntry *appleIIgsDelayOverwrite, byte &newTimeDelay) const;
+
 	// Objects
 public:
 	int loadObjects(const char *fname);
@@ -1078,6 +1088,10 @@ private:
 
 public:
 	const AgiOpCodeEntry *getOpCodesTable() { return _opCodes; }
+
+private:
+	void goldRushClockTimeWorkaround_OnReadVar();
+	void goldRushClockTimeWorkaround_OnWriteVar(byte oldValue);
 };
 
 } // End of namespace Agi

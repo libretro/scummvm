@@ -94,6 +94,7 @@ public:
 	int16 getGameMinsToAddOnRClick() const { return _gameMinsToAddOnRClick; }
 	int16 getGameMinsToAddOnDragFinished() const { return _gameMinsToAddOnDragFinished; }
 	int16 getGameMinsToAddOnObjInteraction() const { return _gameMinsToAddOnObjInteraction; }
+	int16 getGameIsInteractiveGlobal() { return _gameIsInteractiveGlobal; }
 
 	void setLastSceneNum(int16 num) { _lastOpcode1SceneChageNum = num; }
 
@@ -135,10 +136,13 @@ class DragonGlobals : public Globals {
 public:
 	DragonGlobals(Clock &clock);
 
+	int16 getArcadeState() const { return _arcadeState; }
+	void setArcadeState(int16 state) { _arcadeState = state; }
+
 private:
 	// Dragon-specific globals
 	int16 _sceneOpcode100Var;
-	int16 _arcadeModeState;
+	int16 _arcadeState;
 	int16 _opcode106EndMinutes;
 	DragonDataTable _table;
 

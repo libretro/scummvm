@@ -59,6 +59,7 @@ struct DgdsADS;
 class ADSInterpreter;
 class Globals;
 class ShellGame;
+class DragonArcade;
 
 const float MS_PER_FRAME = 16.6667f;
 
@@ -90,6 +91,23 @@ enum DgdsKeyEvent {
 	kDgdsKeyActivate,
 };
 
+// TODO: Enable keymapper for dragon arcade sequences
+/*
+enum DragonArcadeKeyEvent {
+	kDragonArcadeKeyLeft,
+	kDragonArcadeKeyRight,
+	kDragonArcadeKeyUp,
+	kDragonArcadeKeyDown,
+	kDragonArcadeKeyLeftUp,
+	kDragonArcadeKeyRightUp,
+	kDragonArcadeKeyLeftDown,
+	kDragonArcadeKeyRightDown,
+	kDragonArcadeKeyJumpMode,
+	kDragonArcadeKeyFire,
+};
+*/
+
+
 class DgdsEngine : public Engine {
 public:
 	Common::Platform _platform;
@@ -116,6 +134,9 @@ private:
 	GamePalettes *_gamePals;
 	Globals *_gameGlobals;
 	Inventory *_inventory;
+
+	// Dragon only
+	DragonArcade *_dragonArcade;
 
 	// HoC only
 	ShellGame *_shellGame;
@@ -218,9 +239,13 @@ public:
 	void setMenuToTrigger(MenuId menu) { _menuToTrigger = menu; }
 	bool isInvButtonVisible() const;
 	ShellGame *getShellGame() { return _shellGame; }
+	DragonArcade *getDragonArcade() { return _dragonArcade; }
 
 	static DgdsEngine *getInstance() { return static_cast<DgdsEngine *>(g_engine); }
 	void setFlipMode(bool mode) { _flipMode = mode; }
+
+	void enableKeymapper();
+	void disableKeymapper();
 
 private:
 	Common::Error syncGame(Common::Serializer &s);

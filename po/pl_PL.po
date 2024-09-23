@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ScummVM 1.3.0\n"
 "Report-Msgid-Bugs-To: scummvm-devel@lists.scummvm.org\n"
-"POT-Creation-Date: 2024-09-16 10:02+0000\n"
-"PO-Revision-Date: 2024-02-08 20:26+0000\n"
+"POT-Creation-Date: 2024-09-19 19:33+0000\n"
+"PO-Revision-Date: 2024-09-22 20:18+0000\n"
 "Last-Translator: SkiffPL <skiff@windowslive.com>\n"
 "Language-Team: Polish <https://translations.scummvm.org/projects/scummvm/"
 "scummvm/pl/>\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
 "|| n%100>=20) ? 1 : 2;\n"
-"X-Generator: Weblate 4.4\n"
+"X-Generator: Weblate 5.7.2\n"
 "X-Poedit-KeywordsList: _;gettext;gettext_noop\n"
 "X-Poedit-Basepath: .\n"
 "X-Poedit-Language: Polish\n"
@@ -316,7 +316,7 @@ msgstr "Inna usługa jest aktywna. Czy chcesz ją przerwać?"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:601 engines/kyra/gui/saveload_eob.cpp:634
 #: engines/parallaction/metaengine.cpp:143
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4028
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4058
 #: engines/toon/toon.cpp:1543
 msgid "Yes"
 msgstr "Tak"
@@ -329,7 +329,7 @@ msgstr "Tak"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:601 engines/kyra/gui/saveload_eob.cpp:634
 #: engines/parallaction/metaengine.cpp:149
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4028
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4058
 #: engines/toon/toon.cpp:1543
 msgid "No"
 msgstr "Nie"
@@ -358,9 +358,9 @@ msgstr "Zawartość kodu JSON jest nieprawidłowa."
 #: engines/groovie/script.cpp:665 engines/mtropolis/mtropolis.cpp:114
 #: engines/mtropolis/mtropolis.cpp:124 engines/parallaction/saveload.cpp:270
 #: engines/saga/music.cpp:102 engines/sci/engine/kgraphics.cpp:76
-#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1268
-#: engines/scumm/scumm.cpp:1641 engines/scumm/scumm.cpp:2129
-#: engines/scumm/scumm.cpp:2145 engines/sky/compact.cpp:140
+#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1270
+#: engines/scumm/scumm.cpp:1643 engines/scumm/scumm.cpp:2131
+#: engines/scumm/scumm.cpp:2147 engines/sky/compact.cpp:140
 #: engines/sword1/animation.cpp:532 engines/sword1/animation.cpp:563
 #: engines/sword1/animation.cpp:571 engines/sword1/control.cpp:2813
 #: engines/sword1/logic.cpp:1732 engines/sword2/animation.cpp:426
@@ -667,11 +667,11 @@ msgstr "Ścieżki"
 
 #: gui/editgamedialog.cpp:291
 msgid "Check Integrity"
-msgstr ""
+msgstr "Sprawdź integralność"
 
 #: gui/editgamedialog.cpp:291
 msgid "Perform integrity check for all game files"
-msgstr ""
+msgstr "Sprawdź integralność plików gry"
 
 #: gui/editgamedialog.cpp:296
 msgid "Game Path:"
@@ -840,27 +840,24 @@ msgstr "Uwagi:"
 #: gui/integrity-dialog.cpp:100
 msgid ""
 "Verifying file integrity may take a long time to complete. Please wait...\n"
-msgstr ""
+msgstr "Weryfikacja integralności plików może długo potrwać. Proszę czekać...\n"
 
 #: gui/integrity-dialog.cpp:107 gui/integrity-dialog.cpp:168
 msgid "Calculating file checksums..."
-msgstr ""
+msgstr "Obliczanie sum kontrolnych pliku..."
 
 #: gui/integrity-dialog.cpp:120
 msgid "Launch Email Client"
-msgstr ""
+msgstr "Uruchom klienta e-mail"
 
 #: gui/integrity-dialog.cpp:174
-#, fuzzy
-#| msgid "Scan complete!"
 msgid "Calculation complete"
-msgstr "Skanowanie zakończone!"
+msgstr "Skanowanie zakończone"
 
 #: gui/integrity-dialog.cpp:263
-#, fuzzy, c-format
-#| msgid "Downloaded %s %S / %s %S"
+#, c-format
 msgid "Calculated %s %S / %s %S"
-msgstr "Pobrano %s %S / %s %S"
+msgstr "Wyliczone %s %S / %s %S"
 
 #: gui/integrity-dialog.cpp:513
 msgid ""
@@ -870,21 +867,30 @@ msgid ""
 "If you are sure that this is a valid unknown variant, please send the "
 "following e-mail to integrity@scummvm.org"
 msgstr ""
+"### Wyniki\n"
+"Zestaw plików gry nie jest nam znany.\n"
+"\n"
+"Jeśli jesteś pewien, że jest to prawidłowa nieznana odmiana, wyślij "
+"następującą wiadomość e-mail na adres integrity@scummvm.org"
 
 #: gui/integrity-dialog.cpp:537
 msgid ""
 "The game doesn't seem to have any files. Are you sure the path is correct?"
 msgstr ""
+"Wygląda na to, że gra nie ma żadnych plików. Czy ścieżka na pewno jest "
+"prawidłowa?"
 
 #: gui/integrity-dialog.cpp:542
 msgid ""
 "The game doesn't seem to have any metadata associated with it, so it is "
 "unable to be matched. Please fill in the correct metadata for the game."
 msgstr ""
+"Gra nie ma żadnych metadanych z nią powiązanych, więc nie można jej "
+"dopasować. Proszę wypełnić poprawne metadane dla gry."
 
 #: gui/integrity-dialog.cpp:569
 msgid "Files all OK"
-msgstr ""
+msgstr "Wszystkie pliki są prawidłowe"
 
 #: gui/filebrowser-dialog.cpp:53
 msgid "Choose file for loading"
@@ -1006,7 +1012,7 @@ msgstr "Interakcja"
 #: engines/dragons/metaengine.cpp:159 engines/freescape/movement.cpp:35
 #: engines/griffon/metaengine.cpp:121 engines/grim/grim.cpp:481
 #: engines/grim/grim.cpp:562 engines/icb/icb.cpp:68 engines/icb/icb.cpp:152
-#: engines/scumm/metaengine.cpp:904 engines/twine/metaengine.cpp:467
+#: engines/scumm/metaengine.cpp:903 engines/twine/metaengine.cpp:467
 #: engines/twine/metaengine.cpp:534 engines/twp/metaengine.cpp:154
 #: engines/wintermute/keymapper_tables.h:1290
 #: engines/wintermute/keymapper_tables.h:1373
@@ -1021,7 +1027,7 @@ msgstr "W górę"
 #: engines/dragons/metaengine.cpp:165 engines/freescape/movement.cpp:42
 #: engines/griffon/metaengine.cpp:127 engines/grim/grim.cpp:486
 #: engines/grim/grim.cpp:567 engines/icb/icb.cpp:73 engines/icb/icb.cpp:157
-#: engines/scumm/metaengine.cpp:871 engines/twine/metaengine.cpp:474
+#: engines/scumm/metaengine.cpp:870 engines/twine/metaengine.cpp:474
 #: engines/twine/metaengine.cpp:542 engines/twp/metaengine.cpp:155
 #: engines/wintermute/keymapper_tables.h:1296
 #: engines/wintermute/keymapper_tables.h:1379
@@ -1035,7 +1041,7 @@ msgstr "W dół"
 #: engines/crab/input/input.cpp:107 engines/crab/input/input.cpp:157
 #: engines/dragons/metaengine.cpp:171 engines/griffon/metaengine.cpp:133
 #: engines/grim/grim.cpp:491 engines/grim/grim.cpp:572 engines/icb/icb.cpp:78
-#: engines/icb/icb.cpp:162 engines/scumm/metaengine.cpp:884
+#: engines/icb/icb.cpp:162 engines/scumm/metaengine.cpp:883
 #: engines/twine/metaengine.cpp:489 engines/twine/metaengine.cpp:557
 #: engines/twp/metaengine.cpp:152 engines/wintermute/keymapper_tables.h:320
 #: engines/wintermute/keymapper_tables.h:1302
@@ -1050,7 +1056,7 @@ msgstr "W lewo"
 #: engines/crab/input/input.cpp:113 engines/crab/input/input.cpp:163
 #: engines/dragons/metaengine.cpp:177 engines/griffon/metaengine.cpp:139
 #: engines/grim/grim.cpp:496 engines/grim/grim.cpp:577 engines/icb/icb.cpp:83
-#: engines/icb/icb.cpp:167 engines/scumm/metaengine.cpp:891
+#: engines/icb/icb.cpp:167 engines/scumm/metaengine.cpp:890
 #: engines/twine/metaengine.cpp:481 engines/twine/metaengine.cpp:550
 #: engines/twp/metaengine.cpp:153 engines/wintermute/keymapper_tables.h:326
 #: engines/wintermute/keymapper_tables.h:1308
@@ -1396,7 +1402,7 @@ msgstr "Wybierz kryteria grupowania elmenetów"
 
 #: gui/launcher.cpp:263
 msgid "Click here to see Help"
-msgstr ""
+msgstr "Kliknij tutaj, aby zobaczyć pomoc"
 
 #. I18N: Button Quit ScummVM program. Q is the shortcut, Ctrl+Q, put it in parens for non-latin (~Q~)
 #: gui/launcher.cpp:267 engines/dialogs.cpp:91
@@ -3128,10 +3134,8 @@ msgid "PC-9801 (16 Colors)"
 msgstr "PC-9801 (16 kolorów)"
 
 #: common/rendermode.cpp:48
-#, fuzzy
-#| msgid "PC-9801 (16 Colors)"
 msgid "PC-9801 (8 Colors)"
-msgstr "PC-9801 (16 kolorów)"
+msgstr "PC-9801 (8 kolorów)"
 
 #. I18N: Macintosh black-and-white
 #: common/rendermode.cpp:53
@@ -3140,7 +3144,7 @@ msgstr "Macintosh (cz-b)"
 
 #: common/rendermode.cpp:57
 msgid "VGA Grey Scale"
-msgstr ""
+msgstr "Skala szarości VGA"
 
 #: common/rendermode.cpp:92
 msgctxt "lowres"
@@ -3224,10 +3228,8 @@ msgid "ScummVM"
 msgstr "ScummVM"
 
 #: dists/android.strings.xml.cpp:31
-#, fuzzy
-#| msgid "ScummVM"
 msgid "ScummVM (debug)"
-msgstr "ScummVM"
+msgstr "ScummVM (tryb debugowania)"
 
 #: dists/android.strings.xml.cpp:32
 msgid "Graphic adventure game engine"
@@ -3246,16 +3248,12 @@ msgid "Quit"
 msgstr "Zakończ"
 
 #: dists/android.strings.xml.cpp:35
-#, fuzzy
-#| msgid "Config File Error"
 msgid "Log File Error"
-msgstr "Błąd pliku konfiguracyjnego"
+msgstr "Błąd pliku dziennika"
 
 #: dists/android.strings.xml.cpp:36
-#, fuzzy
-#| msgid "Unable to read ScummVM config file or create a new one!"
 msgid "Unable to read ScummVM log file or create a new one!"
-msgstr "Nie można odczytać lub utworzyć pliku konfiguracyjnego ScummVM!"
+msgstr "Nie można odczytać lub utworzyć pliku dziennika ScummVM!"
 
 #: dists/android.strings.xml.cpp:37
 msgid "Config File Error"
@@ -3339,44 +3337,36 @@ msgstr ""
 "Uprawnienia dostępu do pamięci masowej dla ScummVM zostały unieważnione!"
 
 #: dists/android.strings.xml.cpp:55
-#, fuzzy
-#| msgid "the video mode could not be changed"
 msgid "Configuration file could not be parsed"
-msgstr "nie udało się zmienić trybu wideo"
+msgstr "Nie można przetworzyć pliku konfiguracyjnego"
 
 #: dists/android.strings.xml.cpp:56
-#, fuzzy
-#| msgid "In 2D games"
 msgid "Run a game"
-msgstr "W grach 2D"
+msgstr "Uruchom grę"
 
 #: dists/android.strings.xml.cpp:57
-#, fuzzy
-#| msgid "Search in game list"
 msgid "Search a game"
-msgstr "Wyszukaj grę na liście"
+msgstr "Znajdź grę"
 
 #: dists/android.strings.xml.cpp:58
 msgid ""
 "No games (yet)\n"
 "Open ScummVM and add your games here."
 msgstr ""
+"Brak gier\n"
+"Otwórz ScummVM i dodaj gry."
 
 #: dists/android.strings.xml.cpp:59
-#, fuzzy
-#| msgid "Game Options"
 msgid "Game icon"
-msgstr "Opcje gry"
+msgstr "Ikona gry"
 
 #: dists/android.strings.xml.cpp:60
-#, fuzzy
-#| msgid "Show object labels"
 msgid "Shortcut label"
-msgstr "Pokaż etykiety obiektów"
+msgstr "Etykieta skrótu"
 
 #: dists/android.strings.xml.cpp:61
 msgid "Shortcut icon"
-msgstr ""
+msgstr "Ikona skrótu"
 
 #. I18N: One line summary as shown in *nix distributions
 #: dists/org.scummvm.scummvm.metainfo.xml.cpp:32
@@ -3520,7 +3510,7 @@ msgstr ""
 "pliku README."
 
 #: engines/dialogs.cpp:193 engines/ags/ags.cpp:349
-#: engines/glk/magnetic/magnetic.cpp:197 engines/scumm/saveload.cpp:171
+#: engines/glk/magnetic/magnetic.cpp:197 engines/scumm/saveload.cpp:167
 msgid "This game does not support saving from the menu. Use in-game interface"
 msgstr "Ta gra nie obsługuje zapisywania z menu. Użyj interfejsu gry"
 
@@ -3721,10 +3711,8 @@ msgid "Matched game IDs for the %s engine:"
 msgstr "Pasujące identyfikatory gry dla silnika %s:"
 
 #: engines/metaengine.cpp:39
-#, fuzzy
-#| msgid "Game id not supported"
 msgid "Game not implemented"
-msgstr "Identyfikator gry nie jest wspierany"
+msgstr "Gra nie jest obsługiwana"
 
 #: engines/metaengine.cpp:58 engines/saga/metaengine.cpp:267
 msgid "Default game keymap"
@@ -5362,10 +5350,8 @@ msgstr ""
 "\n"
 
 #: backends/platform/ios7/ios7_osys_misc.mm:314
-#, fuzzy
-#| msgid "Toggle virtual keyboard"
 msgid "External keyboard"
-msgstr "Przełącz klawiaturę wirtualną"
+msgstr "Zewnętrzna klawiatura"
 
 #: backends/platform/ios7/ios7_osys_misc.mm:317
 msgid ""
@@ -5391,6 +5377,26 @@ msgid ""
 "| `CMD + RIGHT`     | END               \n"
 "\n"
 msgstr ""
+"## Korzystanie z klawiatury\n"
+"Obsługiwane są klawiatury zewnętrzne, a od wersji iOS 13.4 większość "
+"klawiszy specjalnych, np. klawisze funkcyjne, Home i End, jest mapowanych.\n"
+"W przypadku klawiatur zewnętrznych, w których brakuje klawiszy specjalnych, "
+"np. klawiatury Apple Magic Keyboard dla iPadów, klawisze specjalne można "
+"aktywować za pomocą następujących kombinacji klawiszy:\n"
+"\n"
+"| Kombinacja klawiszy | Akcja\n"
+"| --------------------|-------------------\n"
+"| `CMD + 1`           | F1                \n"
+"| `CMD + 2`           | F2                \n"
+"| `...`               | ...               \n"
+"| `CMD + 0`           | F10               \n"
+"| `CMD + SHIFT + 1`   | F11               \n"
+"| `CMD + SHIFT + 2`   | F12               \n"
+"| `CMD + UP`          | PAGE UP           \n"
+"| `CMD + DOWN`        | PAGE DOWN         \n"
+"| `CMD + LEFT`        | HOME              \n"
+"| `CMD + RIGHT`       | END               \n"
+"\n"
 
 #: backends/platform/ios7/ios7_osys_misc.mm:339
 msgid ""
@@ -5511,87 +5517,69 @@ msgstr ""
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:46
 msgid "LIBRETRO PLAYLIST GENERATOR"
-msgstr ""
+msgstr "GENERATOR LISTY ODTWARZANIA LIBRETRO"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:47
 msgid "(check '? > Libretro playlist' for detailed info)"
 msgstr ""
+"(sprawdź '? > Lista odtwarzania Libretro', aby uzyskać szczegółowe "
+"informacje)"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:48
-#, fuzzy
-#| msgid "Plugins Path:"
 msgid "Playlists Path"
-msgstr "Wtyczki:"
+msgstr "Ścieżka list odtwarzania"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:49
-#, fuzzy
-#| msgid "Specifies where your saved games are put"
 msgid "Specifies where your playlist will be saved."
-msgstr "Określa gdzie zapisywać stan gry"
+msgstr "Określa gdzie zapisywać listy odtwarzania."
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:52
-#, fuzzy
-#| msgid "Platform:"
 msgid "Playlist format:"
-msgstr "Platforma:"
+msgstr "Format listy odtwarzania:"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:57
-#, fuzzy
-#| msgid "Goto location"
 msgid "Hooks location:"
-msgstr "Przejdź do lokalizacji"
+msgstr "Lokalizacja hooków:"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:59
-#, fuzzy
-#| msgid "Add a new folder"
 msgid "All in save folder"
-msgstr "Dodaj nowy katalog"
+msgstr "Wszystko w folderze zapisów stanów gier"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:60
 msgid "One in each game folder"
-msgstr ""
+msgstr "Po jednym w każdym folderze gry"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:62
 msgid "Clear existing hooks"
-msgstr ""
+msgstr "Wyczyść istniejące hooki"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:64
 msgid "Generate playlist"
-msgstr ""
+msgstr "Generuj listę odtwarzania"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:66
-#, fuzzy
-#| msgid "Status:"
 msgid "Status: "
-msgstr "Stan:"
+msgstr "Stan: "
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:148
-#, fuzzy
-#| msgid "Failed to save game to file."
 msgid "Failed, can't access playlist file"
-msgstr "Nie udało się zapisać stanu gry do pliku."
+msgstr "Nie udało się uzyskać dostępu listy odtwarzania"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:224
-#, fuzzy
-#| msgid "Reading data failed"
 msgid "cleaning failed"
-msgstr "Błąd odczytu danych"
+msgstr "oczyszczanie nieudane"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:226
-#, fuzzy
-#| msgid "Failed to read the file!"
 msgid "Failed, can't create hook files"
-msgstr "Nie udało się odczytać pliku!"
+msgstr "Błąd. Nie można utworzyć plików hook"
 
 #: backends/platform/libretro/src/libretro-options-widget.cpp:236
-#, fuzzy
-#| msgid "Select additional game directory"
 msgid "Select Playlist directory"
-msgstr "Wybierz dodatkowy katalog gry"
+msgstr "Wybierz katalog list odtwarzania"
 
 #: backends/platform/libretro/src/libretro-os-utils.cpp:173
 msgid "Libretro playlist"
-msgstr ""
+msgstr "Lista odtwarzania Libretro"
 
 #: backends/platform/libretro/src/libretro-os-utils.cpp:176
 msgid ""
@@ -5608,6 +5596,20 @@ msgid ""
 "\n"
 "The core also supports dedicated per game **hook** plain text files with **."
 msgstr ""
+"## Listy odtwarzania Libretro dla rdzenia ScummVM\n"
+"Listy odtwarzania używane w interfejsach użytkownika Libretro (np. Retroarch)"
+" to zwykłe pliki tekstowe, używane do bezpośredniego uruchamiania gry z "
+"określonym rdzeniem z poziomu interfejsu użytkownika. Listy te przekazują "
+"rdzeniowi ścieżkę do określonego pliku zawartości, który ma zostać "
+"załadowany (np. ROM).\n"
+"\n"
+"Rdzeń ScummVM może zaakceptować jako zawartość ścieżkę do dowolnego pliku w "
+"prawidłowym folderze gry, system wykrywania spróbuje automatycznie wykryć "
+"grę z folderu nadrzędnego pliku zawartości i uruchomić grę z domyślnymi "
+"opcjami ScummVM.\n"
+"\n"
+"Rdzeń obsługuje również dedykowane pliki zwykłego tekstu **hook** dla każdej "
+"gry z **."
 
 #: backends/platform/maemo/maemo.cpp:157
 msgid "Click Mode"
@@ -5764,64 +5766,44 @@ msgid "BSD License"
 msgstr "Licencja BSD"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:329
-#, fuzzy
-#| msgid "GPL License"
 msgid "Apache License"
-msgstr "Licencja GPL"
+msgstr "Licencja Apache"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:330
-#, fuzzy
-#| msgid "BSD License"
 msgid "BSL License"
-msgstr "Licencja BSD"
+msgstr "Licencja BSL"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:331
-#, fuzzy
-#| msgid "GPL License"
 msgid "GLAD License"
-msgstr "Licencja GPL"
+msgstr "Licencja GLAD"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:332
-#, fuzzy
-#| msgid "BSD License"
 msgid "ISC License"
-msgstr "Licencja BSD"
+msgstr "Licencja ISC"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:333
-#, fuzzy
-#| msgid "GPL License"
 msgid "Lua License"
-msgstr "Licencja GPL"
+msgstr "Licencja Lua"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:334
-#, fuzzy
-#| msgid "GPL License"
 msgid "MIT License"
-msgstr "Licencja GPL"
+msgstr "Licencja MIT"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:335
-#, fuzzy
-#| msgid "GPL License"
 msgid "MKV License"
-msgstr "Licencja GPL"
+msgstr "Licencja MKV"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:336
-#, fuzzy
-#| msgid "GPL License"
 msgid "MPL License"
-msgstr "Licencja GPL"
+msgstr "Licencja MPL"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:337
-#, fuzzy
-#| msgid "GPL License"
 msgid "TinyGL License"
-msgstr "Licencja GPL"
+msgstr "Licencja TinyGL"
 
 #: backends/platform/sdl/macosx/appmenu_osx.mm:338
-#, fuzzy
-#| msgid "Freefont License"
 msgid "Catharon License"
-msgstr "Licencja Freefont"
+msgstr "Licencja Catharon"
 
 #. I18N: Hardware key
 #: backends/platform/sdl/miyoo/miyoo.cpp:79
@@ -6094,14 +6076,12 @@ msgid "Do not emulate NTSC artifacts for text"
 msgstr "Nie emuluj artefaktów NTSC dla tekstu"
 
 #: engines/adl/metaengine.cpp:104
-#, fuzzy
-#| msgid "Use silver cursors"
 msgid "Use checkered cursor"
-msgstr "Użyj srebrnych kursorów"
+msgstr "Użyj kursorów w szachownicę"
 
 #: engines/adl/metaengine.cpp:105
 msgid "Use the checkered cursor from later Apple II models"
-msgstr ""
+msgstr "Użyj kursora w szachownicę z późniejszych modeli Apple II"
 
 #: engines/agi/detection_tables.h:261
 msgid "Early AGI games for Tandy Color Computer are not yet supported."
@@ -6197,19 +6177,19 @@ msgstr "Dodaj menu szybkości gry (podobnie jak w wersji PC)"
 #: engines/dreamweb/metaengine.cpp:36 engines/lure/metaengine.cpp:41
 #: engines/mads/metaengine.cpp:51 engines/mm/metaengine.cpp:46
 #: engines/saga/metaengine.cpp:52 engines/scumm/dialogs.cpp:1188
-#: engines/scumm/metaengine.cpp:756
-#, fuzzy
-#| msgid "Enable Discord integration"
+#: engines/scumm/metaengine.cpp:755
 msgid "Enable copy protection"
-msgstr "Włącz integrację z Discord"
+msgstr "Włącz ochronę przed kopiowaniem"
 
 #: engines/agi/metaengine.cpp:184 engines/agos/metaengine.cpp:45
 #: engines/dreamweb/metaengine.cpp:37 engines/lure/metaengine.cpp:42
 #: engines/mads/metaengine.cpp:52 engines/mm/metaengine.cpp:47
 #: engines/saga/metaengine.cpp:53 engines/scumm/dialogs.cpp:1189
-#: engines/scumm/metaengine.cpp:757
+#: engines/scumm/metaengine.cpp:756
 msgid "Enable any copy protection that would otherwise be bypassed by default."
 msgstr ""
+"Włącz zabezpieczenia przed kopiowaniem, które w innym przypadku zostałyby "
+"domyślnie pominięte."
 
 #: engines/agi/metaengine.cpp:408 engines/asylum/asylum.cpp:655
 #: engines/buried/saveload.cpp:53 engines/mohawk/riven.cpp:759
@@ -6267,7 +6247,7 @@ msgid "Quick load or save game isn't supported in this location"
 msgstr ""
 "Szybkie wczytywanie i zapisywanie gry nie jest obsługiwane w tej lokalizacji"
 
-#: engines/agos/saveload.cpp:161 engines/scumm/scumm.cpp:2997
+#: engines/agos/saveload.cpp:161 engines/scumm/scumm.cpp:3027
 #, c-format
 msgid ""
 "Failed to load saved game from file:\n"
@@ -6278,7 +6258,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:196 engines/scumm/scumm.cpp:2984
+#: engines/agos/saveload.cpp:196 engines/scumm/scumm.cpp:3014
 #, c-format
 msgid ""
 "Failed to save game to file:\n"
@@ -6289,7 +6269,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:204 engines/scumm/scumm.cpp:3017
+#: engines/agos/saveload.cpp:204 engines/scumm/scumm.cpp:3047
 #, c-format
 msgid ""
 "Successfully saved game in file:\n"
@@ -6357,23 +6337,19 @@ msgstr "Obsługa AGOS 2 nie jest wkompilowana"
 #. It is never disabled and it is not game specific
 #: engines/agos/metaengine.cpp:227
 msgid "AGOS main"
-msgstr ""
+msgstr "Główny AGOS"
 
 #: engines/agos/metaengine.cpp:228 engines/cine/metaengine.cpp:259
 #: engines/hopkins/metaengine.cpp:209 engines/lure/metaengine.cpp:169
 #: engines/made/metaengine.cpp:103 engines/mads/metaengine.cpp:275
 #: engines/stark/metaengine.cpp:185 engines/tinsel/metaengine.cpp:240
 #: engines/trecision/metaengine.cpp:121
-#, fuzzy
-#| msgid "Game Options"
 msgid "Game keymappings"
-msgstr "Opcje gry"
+msgstr "Mapowanie klawiszy gry"
 
 #: engines/agos/metaengine.cpp:229
-#, fuzzy
-#| msgid "Game Options"
 msgid "Yes/No keymapping"
-msgstr "Opcje gry"
+msgstr "Mapowanie klawiszy tak/nie"
 
 #: engines/agos/metaengine.cpp:232 engines/cge/metaengine.cpp:203
 #: engines/cge2/metaengine.cpp:216 engines/cine/metaengine.cpp:265
@@ -6382,8 +6358,6 @@ msgstr "Opcje gry"
 #: engines/mads/metaengine.cpp:280 engines/saga/metaengine.cpp:278
 #: engines/stark/metaengine.cpp:189 engines/tinsel/metaengine.cpp:245
 #: engines/trecision/metaengine.cpp:125
-#, fuzzy
-#| msgid "Left Click"
 msgid "Left click"
 msgstr "Kliknięcie LPM"
 
@@ -6398,8 +6372,6 @@ msgid "Right click"
 msgstr "Kliknięcie PPM"
 
 #: engines/agos/metaengine.cpp:244
-#, fuzzy
-#| msgid "Skip cutscene"
 msgid "Exit cutscene"
 msgstr "Pomiń scenkę"
 
@@ -6416,14 +6388,10 @@ msgid "Toggle music on/off"
 msgstr "Włącz/wyłącz muzykę"
 
 #: engines/agos/metaengine.cpp:273
-#, fuzzy
-#| msgid "Toggle sound effects on/off"
 msgid "Toggle sound effect on/off"
-msgstr "Włącz/wyłącz efekty dźwiękowe"
+msgstr "Włącz/wyłącz efekt dźwiękowy"
 
 #: engines/agos/metaengine.cpp:278
-#, fuzzy
-#| msgid "Toggle fast mode"
 msgid "Toggle fast mode on/off"
 msgstr "Przełącz tryb szybki"
 
@@ -6435,10 +6403,8 @@ msgid "Walk forward"
 msgstr "Idź do przodu"
 
 #: engines/agos/metaengine.cpp:296
-#, fuzzy
-#| msgid "Run backward"
 msgid "Turn backward"
-msgstr "Biegnij do tyłu"
+msgstr "Odwróć się do tyłu"
 
 #: engines/agos/metaengine.cpp:302 engines/mohawk/riven.cpp:901
 #: engines/wintermute/keymapper_tables.h:161
@@ -6457,68 +6423,54 @@ msgid "Turn right"
 msgstr "Obrót w prawo"
 
 #: engines/agos/metaengine.cpp:316
-#, fuzzy
-#| msgid "Text speed slower / faster"
 msgid "Text speed - Fast"
-msgstr "Zwiększ/zmniejsz prędkość tekstu"
+msgstr "Prędkość tekstu - wysoka"
 
 #: engines/agos/metaengine.cpp:321
-#, fuzzy
-#| msgid "Walking speed: Medium"
 msgid "Text speed - Medium"
-msgstr "Szybkość chodzenia: średnia"
+msgstr "Prędkość tekstu - średnia"
 
 #: engines/agos/metaengine.cpp:326
-#, fuzzy
-#| msgid "Text speed slower / faster"
 msgid "Text speed - Slow"
-msgstr "Zwiększ/zmniejsz prędkość tekstu"
+msgstr "Prędkość tekstu - niska"
 
 #: engines/agos/metaengine.cpp:331
-#, fuzzy
-#| msgid "Show Object Line"
 msgid "Show objects to interact"
-msgstr "Pokaż linię obiektu"
+msgstr "Pokaż interaktywne obiekty"
 
 #: engines/agos/metaengine.cpp:338
-#, fuzzy
-#| msgid "Toggle sound effects on/off"
 msgid "Toggle background sounds on/off"
-msgstr "Włącz/wyłącz efekty dźwiękowe"
+msgstr "Włącz/wyłącz dźwięki otoczenia"
 
 #. I18N: Characters are game actors
 #: engines/agos/metaengine.cpp:347
-#, fuzzy
-#| msgid "Switching characters:"
 msgid "Switch characters"
-msgstr "Zmiana postaci:"
+msgstr "Zmień postać"
 
 #: engines/agos/metaengine.cpp:353
-#, fuzzy
-#| msgid "Toggle music on/off"
 msgid "Toggle hitbox names on/off"
-msgstr "Włącz/wyłącz muzykę"
+msgstr "Włącz/wyłącz nazwy pól trafień"
 
 #: engines/agos/metaengine.cpp:360
 msgid "Switches between speech only and combined speech and subtitles"
-msgstr ""
+msgstr "Przełącza między samą mową a mową i napisami"
 
 #: engines/agos/metaengine.cpp:366
 msgid "Switches between subtitles only and combined speech and subtitles"
-msgstr ""
+msgstr "Przełącza między samymi napisami a łączoną mową i napisami"
 
 #: engines/agos/metaengine.cpp:376
 msgid "High speed mode on/off in Swampy Adventures"
-msgstr ""
+msgstr "Włączanie/wyłączanie trybu dużej prędkości w Swampy Adventures"
 
 #: engines/agos/metaengine.cpp:382 engines/lure/metaengine.cpp:295
 #: engines/trecision/metaengine.cpp:181
 msgid "Press \"Yes\" key"
-msgstr ""
+msgstr "Naciśnij klawisz \"Tak\""
 
 #: engines/agos/metaengine.cpp:387 engines/lure/metaengine.cpp:310
 msgid "Press \"No\" key"
-msgstr ""
+msgstr "Naciśnij klawisz \"Nie\""
 
 #: engines/agos/midi.cpp:187 engines/kyra/sound/sound_pc_midi.cpp:76
 msgid ""
@@ -6935,7 +6887,7 @@ msgstr "Przełącz tryb walki"
 
 #. I18N: This keymap allows skipping video cutscenes
 #: engines/bladerunner/metaengine.cpp:229 engines/scumm/help.cpp:79
-#: engines/scumm/metaengine.cpp:930 engines/twp/metaengine.cpp:162
+#: engines/scumm/metaengine.cpp:929 engines/twp/metaengine.cpp:162
 #: engines/zvision/metaengine.cpp:284
 msgid "Skip cutscene"
 msgstr "Pomiń scenkę"
@@ -7440,7 +7392,7 @@ msgstr "Rozmowa/interakcja"
 
 #. I18N: Combat command in Might & Magic 1
 #: engines/crab/input/input.cpp:125 engines/griffon/metaengine.cpp:145
-#: engines/mm/mm1/metaengine.cpp:65 engines/scumm/metaengine.cpp:917
+#: engines/mm/mm1/metaengine.cpp:65 engines/scumm/metaengine.cpp:916
 msgid "Attack"
 msgstr "Atak"
 
@@ -9498,7 +9450,7 @@ msgstr ""
 "Aktualizacje można pobrać z:\n"
 "%s"
 
-#: engines/myst3/myst3.cpp:1590 engines/pegasus/pegasus.cpp:749
+#: engines/myst3/myst3.cpp:1591 engines/pegasus/pegasus.cpp:749
 msgid "Invalid file name for saving"
 msgstr "Nieprawidłowa nazwa pliku do zapisania"
 
@@ -10173,7 +10125,7 @@ msgstr ""
 msgid "SCI32 support not compiled in"
 msgstr "Obsługa SCI32 nie jest wkompilowana"
 
-#: engines/sci/resource/resource.cpp:856
+#: engines/sci/resource/resource.cpp:858
 msgid ""
 "Missing or corrupt game resources have been detected. Some game features may "
 "not work properly. Please check the console for more information, and verify "
@@ -10331,7 +10283,7 @@ msgid "Your Name:"
 msgstr "Nazwa:"
 
 #. I18N: Button, start hosting online multiplayer game
-#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4034
+#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4064
 msgid "Host"
 msgstr "Hostuj"
 
@@ -10341,7 +10293,7 @@ msgid "Querying games..."
 msgstr "Uzyskiwanie listy gier..."
 
 #. I18N: Join online multiplayer game
-#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4034
+#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4064
 msgid "Join"
 msgstr "Dołącz"
 
@@ -11229,23 +11181,22 @@ msgstr ""
 #, fuzzy
 #| msgid ""
 #| "Allow the game to use the in-engine graphical interface and the original "
-#| "save/load menu. \t\tUse it together with the \"Ask for confirmation on "
-#| "exit\" for a more complete experience."
+#| "save/load menu. Use it together with the \"Ask for confirmation on exit\" "
+#| "for a more complete experience."
 msgid ""
 "Allow the game to use the in-engine graphical interface and the original "
 "save/load menu. \t\tUse it together with the \"Ask for confirmation on exit"
-"\" for a more complete experience. \t\tAutosaving is disabled when this mode "
-"is active."
+"\" for a more complete experience."
 msgstr ""
 "Zezwól grze na korzystanie z wbudowanego interfejsu graficznego i "
-"oryginalnego menu zapisywania oraz wczytywania. \t\tUżyj go razem z opcją "
+"oryginalnego menu zapisywania oraz wczytywania. Użyj go razem z opcją "
 "\"Pytaj o potwierdzenie przy wyjściu”, aby uzyskać pełniejsze wrażenia."
 
-#: engines/scumm/metaengine.cpp:736
+#: engines/scumm/metaengine.cpp:735
 msgid "Enable low latency audio mode"
 msgstr "Włącz tryb dźwięku o niskim opóźnieniu"
 
-#: engines/scumm/metaengine.cpp:737
+#: engines/scumm/metaengine.cpp:736
 msgid ""
 "Allows the game to use low latency audio, at the cost of sound accuracy. \t"
 "\tIt is recommended to enable this feature only if you incur in audio "
@@ -11255,11 +11206,11 @@ msgstr ""
 "dźwięku. \t\tZaleca się włączenie tej funkcji wyłącznie w przypadku "
 "problemów z opóźnieniami dźwięku podczas normalnej rozgrywki."
 
-#: engines/scumm/metaengine.cpp:746
+#: engines/scumm/metaengine.cpp:745
 msgid "Enable the \"A Pirate I Was Meant To Be\" song"
 msgstr "Włącz piosenkę \"A Pirate I Was Meant To Be\""
 
-#: engines/scumm/metaengine.cpp:747
+#: engines/scumm/metaengine.cpp:746
 msgid ""
 "Enable the song at the beginning of Part 3 of the game, \"A Pirate I Was "
 "Meant To Be\", \t\twhich was cut in international releases. Beware though: "
@@ -11269,42 +11220,42 @@ msgstr ""
 "gry, \t\tktóra została wycięta w międzynarodowych wydaniach. Uważaj jednak: "
 "napisy mogą nie być w pełni przetłumaczone."
 
-#: engines/scumm/metaengine.cpp:765
+#: engines/scumm/metaengine.cpp:764
 #, fuzzy
 #| msgid "Disable demo mode"
 msgid "Enable demo/kiosk mode"
 msgstr "Wyłącz tryb demonstracyjny"
 
-#: engines/scumm/metaengine.cpp:766
+#: engines/scumm/metaengine.cpp:765
 msgid "Enable demo/kiosk mode in the full retail version of Maniac Mansion."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:865
+#: engines/scumm/metaengine.cpp:864
 msgid "Down Left"
 msgstr "W dół w lewo"
 
-#: engines/scumm/metaengine.cpp:878
+#: engines/scumm/metaengine.cpp:877
 msgid "Down Right"
 msgstr "W dół w prawo"
 
-#: engines/scumm/metaengine.cpp:898
+#: engines/scumm/metaengine.cpp:897
 msgid "Up Left"
 msgstr "W górę w lewo"
 
-#: engines/scumm/metaengine.cpp:911
+#: engines/scumm/metaengine.cpp:910
 msgid "Up Right"
 msgstr "W górę w prawo"
 
-#: engines/scumm/metaengine.cpp:923
+#: engines/scumm/metaengine.cpp:922
 msgid "Switch weapon"
 msgstr "Zmień broń"
 
 #. I18N: Lets one skip the bike/car fight sequences in Full Throttle
-#: engines/scumm/metaengine.cpp:937
+#: engines/scumm/metaengine.cpp:936
 msgid "Win the bike fight cheat"
 msgstr "Cheat 'wygraj walkę na motocyklu'"
 
-#: engines/scumm/saveload.cpp:1977
+#: engines/scumm/saveload.cpp:1970
 #, c-format
 msgid ""
 "Warning: incompatible sound settings detected between the current "
@@ -11330,19 +11281,19 @@ msgstr ""
 "Korekcję proporcji obrazu można osiągnąć poprzez zmniejszenie rozdzielczości "
 "do 320x200 w zakładce \"silnik”."
 
-#: engines/scumm/scumm.cpp:1222
+#: engines/scumm/scumm.cpp:1224
 msgid "This game requires the 'Indy' Macintosh executable for its fonts."
 msgstr ""
 "Ta gra wymaga pliku wykonywalnego \"Indy” Macintosh dla swoich czcionek."
 
-#: engines/scumm/scumm.cpp:1247
+#: engines/scumm/scumm.cpp:1249
 msgid ""
 "This game requires the 'Loom' Macintosh executable for its music and fonts."
 msgstr ""
 "Ta gra wymaga pliku wykonywalnego \"Loom” dla komputerów Macintosh dla "
 "muzyki i czcionek."
 
-#: engines/scumm/scumm.cpp:1267
+#: engines/scumm/scumm.cpp:1269
 msgid ""
 "Could not find the 'Monkey Island' Macintosh executable to read the\n"
 "instruments from. Music will be disabled."
@@ -11351,17 +11302,17 @@ msgstr ""
 "Macintosh,\n"
 "z którego można odczytać instrumenty. Muzyka zostanie wyłączona."
 
-#: engines/scumm/scumm.cpp:1275
+#: engines/scumm/scumm.cpp:1277
 #, c-format
 msgid "Could not open Macintosh resource file %s"
 msgstr "Nie można otworzyć pliku zasobów komputera Macintosh %s"
 
-#: engines/scumm/scumm.cpp:1278
+#: engines/scumm/scumm.cpp:1280
 #, c-format
 msgid "Could not find resource fork in Macintosh resource file %s"
 msgstr "Nie można otworzyć pliku zasobów komputera Macintosh %s"
 
-#: engines/scumm/scumm.cpp:1638
+#: engines/scumm/scumm.cpp:1640
 msgid ""
 "Audio files compressed with ScummVM Tools were detected; *.BUN/*.SOU\n"
 "compression is not supported anymore for this game, audio will be disabled.\n"
@@ -11372,7 +11323,7 @@ msgstr ""
 "wyłączony.\n"
 "Proszę skopiować grę z oryginalnego nośnika bez kompresji."
 
-#: engines/scumm/scumm.cpp:2127
+#: engines/scumm/scumm.cpp:2129
 #, c-format
 msgid ""
 "Native MIDI support requires the Roland Upgrade from LucasArts,\n"
@@ -11381,7 +11332,7 @@ msgstr ""
 "Natywne wsparcie MIDI wymaga aktualizacji Rolanda od LucasArts,\n"
 "ale brakuje %s. Przełączam na tryb AdLib."
 
-#: engines/scumm/scumm.cpp:2143
+#: engines/scumm/scumm.cpp:2145
 msgid ""
 "This particular version of Monkey Island 1 is known to miss some\n"
 "required resources for MT-32. Using AdLib instead."
@@ -11390,7 +11341,7 @@ msgstr ""
 "elementów\n"
 "zasobów dla MT-32. Zostanie użyty AdLib."
 
-#: engines/scumm/scumm.cpp:3923
+#: engines/scumm/scumm.cpp:3953
 msgid ""
 "Usually, Maniac Mansion would start now. But for that to work, the game "
 "files for Maniac Mansion have to be in the 'Maniac' directory inside the "
@@ -11400,7 +11351,7 @@ msgstr ""
 "zadziałało, pliki Maniac Mansion muszą znajdować się w podkatalogu \"Maniac"
 "\" w katalogu gry Day of the Tentacle, a gra musi być dodana do ScummVM."
 
-#: engines/scumm/scumm.cpp:4034
+#: engines/scumm/scumm.cpp:4064
 msgid "Would you like to host or join a network play session?"
 msgstr "Czy chcesz zorganizować sesję gry sieciowej lub dołączyć do niej?"
 
@@ -13465,6 +13416,21 @@ msgstr ""
 "wszystkie czcionki z wybranego pakietu czcionek, odpowiednio np. "
 "LiberationMono, LiberationSans i LiberationSerif lub FreeMono, FreeSans i "
 "FreeSerif."
+
+#, fuzzy
+#~| msgid ""
+#~| "Allow the game to use the in-engine graphical interface and the original "
+#~| "save/load menu. \t\tUse it together with the \"Ask for confirmation on "
+#~| "exit\" for a more complete experience."
+#~ msgid ""
+#~ "Allow the game to use the in-engine graphical interface and the original "
+#~ "save/load menu. \t\tUse it together with the \"Ask for confirmation on "
+#~ "exit\" for a more complete experience. \t\tAutosaving is disabled when "
+#~ "this mode is active."
+#~ msgstr ""
+#~ "Zezwól grze na korzystanie z wbudowanego interfejsu graficznego i "
+#~ "oryginalnego menu zapisywania oraz wczytywania. \t\tUżyj go razem z opcją "
+#~ "\"Pytaj o potwierdzenie przy wyjściu”, aby uzyskać pełniejsze wrażenia."
 
 #~ msgid "Enable audio CD"
 #~ msgstr "Włącz muzykę audio CD"

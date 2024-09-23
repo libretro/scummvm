@@ -37,8 +37,6 @@
 
 namespace QDEngine {
 
-qdScreenTransform qdScreenTransform::ID;
-
 bool qdScreenTransform::operator == (const qdScreenTransform &trans) const {
 	return fabs(_angle - trans._angle) < FLT_EPS &&
 	       fabs(_scale.x - trans._scale.x) < FLT_EPS && fabs(_scale.y - trans._scale.y) < FLT_EPS;
@@ -502,7 +500,10 @@ bool qdGameObjectState::save_script_body(Common::WriteStream &fh, int indent) co
 		fh.writeString("<sound");
 
 		if (_sound_info.flags()) {
-			fh.writeString(Common::String::format(" flags=\"%d\"", _sound_info.flags()));
+			if (debugChannelSet(-1, kDebugLog))
+				fh.writeString(Common::String::format(" flags=\"%s\"", qdSoundInfo::flag2str(_sound_info.flags()).c_str()));
+			else
+				fh.writeString(Common::String::format(" flags=\"%d\"", flags()));
 		}
 
 		fh.writeString(Common::String::format(">%s</sound>\r\n", qdscr_XML_string(_sound_info.name())));

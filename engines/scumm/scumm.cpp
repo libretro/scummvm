@@ -430,6 +430,8 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 	_isIndy4Jap = _game.id == GID_INDY4 &&
 				  (_game.platform == Common::kPlatformMacintosh || _game.platform == Common::kPlatformDOS) &&
 				  _language == Common::JA_JPN;
+
+	_enableHECompetitiveOnlineMods = ConfMan.getBool("enable_competitive_mods");
 }
 
 
@@ -1727,12 +1729,12 @@ void ScummEngine::resetScumm() {
 		|| (_game.platform == Common::kPlatformFMTowns)
 #endif
 		)
-		_16BitPalette = (uint16 *)calloc(512, sizeof(uint16));
+		_16BitPalette = (uint16 *)reallocateArray(_16BitPalette, 512, sizeof(uint16));
 #endif
 
 	// Indy4 Amiga needs another palette map for the verb area.
 	if (_game.platform == Common::kPlatformAmiga && _game.id == GID_INDY4 && !_verbPalette)
-		_verbPalette = (uint8 *)calloc(256, 1);
+		_verbPalette = (uint8 *)reallocateArray(_verbPalette, 256, 1);
 
 #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
 	if (_game.platform == Common::kPlatformFMTowns) {
@@ -2035,8 +2037,7 @@ void ScummEngine_v99he::resetScumm() {
 	ScummEngine_v90he::resetScumm();
 
 	_hePaletteSlot = (_game.features & GF_16BIT_COLOR) ? 1280 : 1024;
-	_hePalettes = (uint8 *)malloc((_numPalettes + 1) * _hePaletteSlot);
-	memset(_hePalettes, 0, (_numPalettes + 1) * _hePaletteSlot);
+	_hePalettes = (uint8 *)reallocateArray(_hePalettes, (_numPalettes + 1) * _hePaletteSlot, 1);
 	_isHE995 = (_game.features & GF_HE_995);
 
 	// Array 129 is set to base name
@@ -2428,6 +2429,34 @@ Common::Error ScummEngine::go() {
 	} else {
 		_loadFromLauncher = true; // The only purpose of this is triggering the IQ points update for INDY3/4
 		_saveLoadFlag = 0;
+	}
+
+	// In ScummVM 2.7.0, original GUI support was added.
+	// Unfortunately it came with an issue: in v4-7 games users could
+	// overwrite autosaves (slot 0). Why? Because I forgot about autosaves :-)
+	// 
+	// To amend this from 2.9.0 onwards we check for savegames which are on slot 0
+	// and are not autosaves (the heuristic is not optimal, but it will have to do),
+	// and performs a mass rename. Unless the user has used all 99 slots, in which case
+	// we just bail because there's no easy way to fix that...
+	if (_game.heversion == 0) {
+		SaveStateDescriptor desc = getMetaEngine()->querySaveMetaInfos(_targetName.c_str(), 0);
+		if (desc.isValid() && !desc.isAutosave()) {
+			SaveStateList list = getMetaEngine()->listSaves(_targetName.c_str());
+			SaveStateDescriptor lastSave = list.back();
+			int lastSaveSlot = lastSave.getSaveSlot();
+
+			if (lastSaveSlot < 99) {
+				debug("Save at slot 0 is not autosave, self correcting...");
+
+				for (int i = lastSaveSlot; i >= 0; i--) {
+					Common::String save1 = makeSavegameName(i, false);
+					Common::String save2 = makeSavegameName(i + 1, false);
+					debug("Renaming %s to %s", save1.c_str(), save2.c_str());
+					getSaveFileManager()->renameSavefile(save1, save2);
+				}
+			}
+		}
 	}
 
 	while (!shouldQuit()) {
@@ -3045,7 +3074,7 @@ void ScummEngine_v2::terminateSaveMenuScript() {
 			int obj[] = {182, 193};
 
 			for (int i = 0; i < ARRAYSIZE(obj); i++) {
-				putState(obj[i], getState(obj[i]) & ~kObjectState_08);
+				putState(obj[i], getState(obj[i]) & ~kObjectStateIntrinsic);
 				markObjectRectAsDirty(obj[i]);
 				clearDrawObjectQueue();
 			}

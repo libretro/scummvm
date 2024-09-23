@@ -560,6 +560,7 @@ public:
 	bool _isAmigaPALSystem = false;
 	bool _quitFromScriptCmd = false;
 	bool _isHE995 = false;
+	bool _enableHECompetitiveOnlineMods = false;
 
 	Common::Keymap *_insaneKeymap;
 
@@ -594,7 +595,6 @@ public:
 	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
 	Common::Error saveGameState(int slot, const Common::String &desc, bool isAutosave = false) override;
 	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
-	bool canSaveAutosaveCurrently() override;
 
 	void pauseEngineIntern(bool pause) override;
 

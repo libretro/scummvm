@@ -41,7 +41,8 @@ Common::SeekableReadStream *CastleEngine::decryptFile(const Common::Path &filena
 
 	int seed = 24;
 	for (int i = 0; i < size; i++) {
-		encryptedBuffer[i] ^= seed;
+		if (i > 1)
+			encryptedBuffer[i] ^= seed;
 		seed = (seed + 1) & 0xff;
 	}
 
@@ -175,7 +176,7 @@ void CastleEngine::loadAssetsDOSFullGame() {
 			_endGameBackgroundFrame = loadFrameFromPlanes(stream, 112, 108);
 			_endGameBackgroundFrame->convertToInPlace(_gfx->_texturePixelFormat, (byte *)&kEGADefaultPalette, 16);
 
-			_background = loadFrameFromPlanes(stream, 504, 42);
+			_background = loadFrameFromPlanes(stream, 504, 18);
 			_background->convertToInPlace(_gfx->_texturePixelFormat, (byte *)&kEGADefaultPalette, 16);
 			debug("%lx", stream->pos());
 			// Eye widget is next to 0x1f058
@@ -323,7 +324,7 @@ void CastleEngine::loadAssetsDOSDemo() {
 			_endGameBackgroundFrame = loadFrameFromPlanes(stream, 112, 108);
 			_endGameBackgroundFrame->convertToInPlace(_gfx->_texturePixelFormat, (byte *)&kEGADefaultPalette, 16);
 
-			_background = loadFrameFromPlanes(stream, 504, 42);
+			_background = loadFrameFromPlanes(stream, 504, 18);
 			_background->convertToInPlace(_gfx->_texturePixelFormat, (byte *)&kEGADefaultPalette, 16);
 
 			stream->seek(0x1f4e3 - 0x2a0);

@@ -325,17 +325,31 @@ public:
 	explicit t3dPLIGHT(Common::SeekableReadStream &stream);
 };
 
+struct PointXZ {
+	float x = 0.0f, z = 0.0f;
+	static PointXZ readFromStream(Common::SeekableReadStream &stream) {
+		PointXZ result;
+		result.x = stream.readFloatLE();
+		result.z = stream.readFloatLE();
+		return result;
+	}
+};
+
+// Struct for returning from "partial" functions mathematically
+struct PointResult {
+	PointXZ result;
+	bool isValid = false;
+};
+
 struct t3dPAN {
-	t3dF32 x1 = 0.0f, z1 = 0.0f;            // point A position
-	t3dF32 x2 = 0.0f, z2 = 0.0f;            // point B position
-	t3dF32 bx1 = 0.0f, bz1 = 0.0f;          // back to point A
-	t3dF32 bx2 = 0.0f, bz2 = 0.0f;          // back to point B
+	PointXZ a, b;                           // point A / B position
+	PointXZ backA, backB;                   // back to point A / B
 	uint16 near1 = 0;                       // panel near to A
 	uint16 near2 = 0;                       // panel near to B
 };
 
 struct t3dPATHNODE {
-	float x = 0.0f, z = 0.0f;                   // path node position
+	PointXZ pos;                                // path node position
 	float dist = 0.0f;                          // distance from start
 	short oldp = 0;                             // last panel hit
 	short curp = 0;                             // cur panel hit
@@ -357,8 +371,8 @@ struct t3dSTEPS {
 };
 
 struct t3dWALK {
-	t3dF32  LookX = 0.0f, LookZ = 0.0f;            // Point on the bounds
-	t3dF32  CurX = 0.0f, CurZ = 0.0f;              // Point perpendicular
+	PointXZ Look;                                  // Point on the bounds
+	PointXZ Cur;                                   // Point perpendicular
 	t3dPAN  *Panel = nullptr;                      // pointer to cur panel struct
 	t3dPATHNODE PathNode[T3D_MAX_PATHNODES] = {};  // path nodes list
 	t3dSTEPS    WalkSteps[T3D_MAX_WALKSTEPS] = {}; // walk steps list

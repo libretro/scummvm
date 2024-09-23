@@ -107,7 +107,7 @@ int16 Globals::getGlobal(uint16 num) {
 }
 
 int16 Globals::setGlobal(uint16 num, int16 val) {
-	debug("setGlobal %d -> %d", num, val);
+	//debug("setGlobal %d -> %d", num, val);
 	for (auto &global : _globals) {
 		if (global->getNum() == num)
 			return global->set(val);
@@ -191,9 +191,9 @@ private:
 ////////////////////////////////
 
 DragonGlobals::DragonGlobals(Clock &clock) : Globals(clock),
- _sceneOpcode100Var(0), _arcadeModeState(0), _opcode106EndMinutes(0) {
+ _sceneOpcode100Var(0), _arcadeState(0), _opcode106EndMinutes(0) {
 	_globals.push_back(new RWI16Global(0x20, &_sceneOpcode100Var));
-	_globals.push_back(new RWI16Global(0x21, &_arcadeModeState));
+	_globals.push_back(new RWI16Global(0x21, &_arcadeState));
 	_globals.push_back(new RWI16Global(0x22, &_opcode106EndMinutes));
 	_globals.push_back(new RWI16Global(0x23, &_table._row));
 	_globals.push_back(new RWI16Global(0x24, &_table._col));
@@ -205,7 +205,7 @@ DragonGlobals::DragonGlobals(Clock &clock) : Globals(clock),
 Common::Error DragonGlobals::syncState(Common::Serializer &s) {
 	Globals::syncState(s);
 	s.syncAsSint16LE(_sceneOpcode100Var);
-	s.syncAsSint16LE(_arcadeModeState);
+	s.syncAsSint16LE(_arcadeState);
 	s.syncAsSint16LE(_opcode106EndMinutes);
 
 	s.syncAsSint16LE(_table._row);

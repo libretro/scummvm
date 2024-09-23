@@ -1021,8 +1021,6 @@ void grDispatcher::putSprMask(int x, int y, int sx, int sy, const byte *p, uint3
 	} else
 		dy = 1;
 
-	x <<= 1;
-
 	px *= 3;
 	sx *= 3;
 
@@ -1137,7 +1135,6 @@ void grDispatcher::putSprMask_a(int x, int y, int sx, int sy, const byte *p, uin
 	} else
 		dy = 1;
 
-	x <<= 1;
 	sx <<= 2;
 	px <<= 2;
 
@@ -1146,7 +1143,6 @@ void grDispatcher::putSprMask_a(int x, int y, int sx, int sy, const byte *p, uin
 	byte mr, mg, mb;
 	split_rgb565u(mask_color, mr, mg, mb);
 
-	warning("STUB: grDispatcher::putSprMask_a");
 	for (int i = 0; i < psy; i++) {
 		uint16 *scr_buf = (uint16 *)(_screenBuf->getBasePtr(x, y));
 		const byte *data_line = data_ptr;

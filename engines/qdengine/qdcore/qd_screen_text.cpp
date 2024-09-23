@@ -162,8 +162,7 @@ void qdScreenText::redraw(const Vect2i &owner_pos) const {
 
 	uint32 col = _hover_mode ? _text_format.hover_color() : _text_format.color();
 
-	const grFont *font = qdGameDispatcher::get_dispatcher()->
-	                     find_font(_text_format.font_type());
+	const grFont *font = qdGameDispatcher::get_dispatcher()->find_font(_text_format.font_type());
 
 	grDispatcher::instance()->drawAlignedText(x, y, _size.x, _size.y, col, data(), grTextAlign(_text_format.alignment()), 0, 0, font);
 	if (g_engine->_debugDraw)
@@ -173,8 +172,7 @@ void qdScreenText::redraw(const Vect2i &owner_pos) const {
 void qdScreenText::set_data(const char *p) {
 	_data = p;
 
-	const grFont *font = qdGameDispatcher::get_dispatcher()->
-	                     find_font(_text_format.font_type());
+	const grFont *font = qdGameDispatcher::get_dispatcher()->find_font(_text_format.font_type());
 	_size.x = grDispatcher::instance()->textWidth(data(), 0, font);
 	_size.y = grDispatcher::instance()->textHeight(data(), 0, font);
 }
@@ -184,9 +182,9 @@ bool qdScreenText::is_owned_by(const qdNamedObject *p) const {
 }
 
 bool qdScreenText::format_text(int max_width) {
-	const grFont *font = qdGameDispatcher::get_dispatcher()->find_font(
-	                         text_format().font_type());
-	if (NULL == font) font = grDispatcher::get_default_font();
+	const grFont *font = qdGameDispatcher::get_dispatcher()->find_font(text_format().font_type());
+	if (NULL == font)
+		font = grDispatcher::get_default_font();
 
 	bool correct = true;
 	int safe_space = -1;
@@ -200,10 +198,10 @@ bool qdScreenText::format_text(int max_width) {
 			if (cur_wid > max_width) {
 				// Safe space is present, so it is safe to split it (e.g. everything fits max_width)
 				if (safe_space >= 0) {
-					_data.setChar(safe_space, '\n');
+					_data.setChar('\n', safe_space);
 					i = safe_space; // in for(...) we will move to safe_space + 1
 				} else { // it didn't fit (no safe space). But we split it anyway, it is at least something...
-					_data.setChar(i, '\n');
+					_data.setChar('\n', i);
 					correct = false;
 				}
 			}
@@ -211,7 +209,7 @@ bool qdScreenText::format_text(int max_width) {
 			safe_space = -1;
 			cur_wid = 0;
 		} else if (' ' != _data[i]) { // Not a space -- we accumulate width
-			cur_wid += font->find_char(_data[i]).size_x();
+			cur_wid += font->find_char((byte)_data[i]).size_x();
 		} else { // // Space - it is safe to split here (we remember this position or split here)
 			cur_wid += font->size_x() / 2;
 
@@ -221,10 +219,10 @@ bool qdScreenText::format_text(int max_width) {
 				continue;
 			} else { // The width is exceeded, and we saw a safe space -- have to split. (Everything fits max_width)
 				if (safe_space >= 0) {
-					_data.setChar(safe_space, '\n');
+					_data.setChar('\n', safe_space);
 					i = safe_space; // in for(...) we will move to safe_space + 1
 				} else { // it didn't fit (no safe space). But we split it anyway, it is at least something...
-					_data.setChar(i, '\n');
+					_data.setChar('\n', i);
 					correct = false;
 				}
 				safe_space = -1; // We have split -- no more safe space

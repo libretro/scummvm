@@ -62,10 +62,10 @@ public:
 		_startObj = _scene->object_interface("\x24\xe7\xe0\xef\xf3\xf1\xea"); // "$запуск"
 		_jumpSoundObj = _scene->object_interface("\xe7\xe2\xf3\xea\x20\xef\xe5\xf0\xe5\xf1\xea\xee\xea\xe0"); // "звук перескока"
 
-		_compartment = 0;
+		_direction = kDirNone;
 		_cursorTakenFlag = 0;
 		_someVar3 = 0;
-		_someFlag1 = false;
+		_needSnap = false;
 
 		if (_startObj->is_state_active("\xed\xe5\x20\xe1\xfb\xeb")) { // "не был"
 			resetStones();
@@ -75,17 +75,25 @@ public:
 		return true;
 	}
 
+	enum {
+		kDirNone,
+		kDirUp,
+		kDirRight,
+		kDirDown,
+		kDirLeft
+	};
+
 	bool quant(float dt) {
 		debugC(3, kDebugMinigames, "ShveikShkatulka::quant(%f)", dt);
 
 		if (checkSolution()) {
-			_doneObj->set_state("да");
+			_doneObj->set_state("\xe4\xe0");	// "да"
 			_cursorObj->set_state("nottaken");
 			_draggedStone = 0;
-			_compartment = 0;
+			_direction = kDirNone;
 			_cursorTakenFlag = 0;
 			_someVar3 = 0;
-			_someFlag1 = 0;
+			_needSnap = 0;
 
 			return true;
 		}
@@ -109,19 +117,18 @@ public:
 			_draggedStone = 0;
 			_cursorTakenFlag = 0;
 			_someVar3 = 0;
-			_someFlag1 = 0;
-			_compartment = 0;
+			_needSnap = false;
+			_direction = kDirNone;
 		}
 
-		char buf1[30];
 		mgVect2i curPos = _engine->mouse_cursor_position();
 
 		if (_cursorTakenFlag) {
-			if (!_someFlag1) {
+			if (!_needSnap) {
 				_mouseDelta.x = curPos.x - _mousePos.x;
 				_mouseDelta.y = curPos.y - _mousePos.y;
 
-				if (ABS(_mouseDelta.x) <= ABS(_mouseDelta.y)) {
+				if (ABS(_mouseDelta.x) <= ABS(_mouseDelta.y)) { // Going down
 					const char *state = _draggedStone->current_state_name();
 					int draggedStonePos;
 
@@ -139,36 +146,36 @@ public:
 						if (curPos.y <= _mousePos.y) {
 							if (draggedStonePos == 3)
 								delta = 186;
+							else
+								delta = 0;
 						} else {
 							if (draggedStonePos == 8)
 								delta = 196;
+							else
+								delta = 0;
 						}
 						off = delta + 150;
 					}
 
-					if (ABS(_mouseDelta.y) <= off)
-						goto LABEL_38;
+					if (ABS(_mouseDelta.y) > off) {
+						if (curPos.y <= _mousePos.y)
+							_direction = kDirUp;
+						else
+							_direction = kDirDown;
 
-					if (curPos.y <= _mousePos.y)
-						_compartment = 1;
-					else
-						_compartment = 3;
-
-					_someFlag1 = 1;
-				}
-
-				if (ABS(_mouseDelta.x) > 60) {
+						_needSnap = true;
+					}
+				} else if (ABS(_mouseDelta.x) > 60) {
 					if (curPos.x <= _mousePos.x)
-						_compartment = 4;
+						_direction = kDirLeft;
 					else
-						_compartment = 2;
+						_direction = kDirRight;
 
-					_someFlag1 = 1;
+					_needSnap = true;
 				}
 			}
 
-LABEL_38:
-			if (_cursorTakenFlag && _someFlag1) {
+			if (_cursorTakenFlag && _needSnap) {
 				const char *state = _draggedStone->current_state_name();
 				int draggedStonePos;
 
@@ -180,106 +187,99 @@ LABEL_38:
 					draggedStonePos = 11;
 
 				int side = state[0] - '0';
+				int pos = -1;
 
-				if (state[0] == '1') {
-					switch (_compartment) {
-					case 1:
+				if (side == 1) {
+					switch (_direction) {
+					case kDirUp:
 						if (draggedStonePos != 8 || checkStonePosition(3, 1) || checkStonePosition(8, 2))
-							goto LABEL_87;
-						snprintf(buf1, 29, "%d%d", side, 3);
+							break;
 
-						goto LABEL_86;
-					case 2:
+						pos = 3;
+						break;
+					case kDirRight:
 						if (draggedStonePos == 4
 								|| draggedStonePos == 11
 								|| checkStonePosition(draggedStonePos + 1, 1)
-								|| checkStonePosition(draggedStonePos, 2)) {
-							goto LABEL_87;
-						}
-						snprintf(buf1, 29, "%d%d", side, draggedStonePos + 1);
+								|| checkStonePosition(draggedStonePos, 2))
+							break;
 
-						goto LABEL_53;
-					case 3:
+						pos = draggedStonePos + 1;
+						break;
+					case kDirDown:
 						if (draggedStonePos != 3 || checkStonePosition(8, 1) || checkStonePosition(8, 2))
-							goto LABEL_87;
-						snprintf(buf1, 29, "%d%d", side, 8);
+							break;
 
-						goto LABEL_86;
-					case 4:
-						if (draggedStonePos == 1)
-							goto LABEL_87;
-						if (draggedStonePos == 5)
-							goto LABEL_87;
+						pos = 8;
+						break;
+					case kDirLeft:
+						if (draggedStonePos == 1
+								|| draggedStonePos == 5
+								|| checkStonePosition(draggedStonePos - 1, 1)
+								|| checkStonePosition(draggedStonePos - 1, 2))
+							break;
 
-						if (checkStonePosition(draggedStonePos - 1, 1) || checkStonePosition(draggedStonePos - 1, 2))
-							goto LABEL_87;
-
-						snprintf(buf1, 29, "%d%d", side, draggedStonePos - 1);
-
-LABEL_53:
-						_draggedStone->set_state(buf1);
-						_mousePos.x = curPos.x;
-						_jumpSoundObj->set_state("да");
-						goto LABEL_88;
+						pos = draggedStonePos - 1;
+						break;
 
 					default:
-						goto LABEL_89;
+						break;
+					}
+				} else {
+					switch (_direction) {
+					case kDirUp:
+						if (draggedStonePos != 8 || checkStonePosition(3, 1) || checkStonePosition(3, 2))
+							break;
+
+						pos = 3;
+						break;
+
+					case kDirRight:
+						if (draggedStonePos == 4
+								|| draggedStonePos == 11
+								|| checkStonePosition(draggedStonePos + 1, 1)
+								|| checkStonePosition(draggedStonePos + 1, 2))
+							break;
+
+						pos = draggedStonePos + 1;
+						break;
+
+					case kDirDown:
+						if (draggedStonePos != 3 || checkStonePosition(8, 2) || checkStonePosition(3, 1))
+							break;
+
+						pos = 8;
+						break;
+
+					case kDirLeft:
+						if (draggedStonePos == 1
+								|| draggedStonePos == 5
+								|| checkStonePosition(draggedStonePos, 1)
+								|| checkStonePosition(draggedStonePos - 1, 2))
+							break;
+
+						pos = draggedStonePos - 1;
+						break;
+
+					default:
+						break;
 					}
 				}
 
-				switch (_compartment) {
-				case 1:
-					if (draggedStonePos != 8 || checkStonePosition(3, 1) || checkStonePosition(3, 2))
-						goto LABEL_87;
-
-					snprintf(buf1, 29, "%d%d", side, 3);
-
-					goto LABEL_86;
-
-				case 2:
-					if (draggedStonePos != 4 && draggedStonePos != 11) {
-						if (!checkStonePosition(draggedStonePos + 1, 1) && !checkStonePosition(draggedStonePos + 1, 2))
-							goto LABEL_72;
-					}
-					goto LABEL_87;
-
-				case 3:
-					if (draggedStonePos != 3 || checkStonePosition(8, 2) || checkStonePosition(3, 1))
-						goto LABEL_87;
-					snprintf(buf1, 29, "%d%d", side, 8);
-
-LABEL_86:
-					_draggedStone->set_state(buf1);
-					_mousePos.y = curPos.y;
-					_jumpSoundObj->set_state("да");
-					goto LABEL_88;
-
-				case 4:
-					if (draggedStonePos == 1
-						|| draggedStonePos == 5
-						|| checkStonePosition(draggedStonePos, 1)
-						|| checkStonePosition(draggedStonePos - 1, 2)) {
-LABEL_87:
-						_cursorTakenFlag = 0;
-						_someVar3 = 0;
-					} else {
-LABEL_72:
-						snprintf(buf1, 29, "%d%d", side, draggedStonePos - 1);
-						_draggedStone->set_state(buf1);
-						_mousePos.x = curPos.x;
-						_jumpSoundObj->set_state("да");
-					}
-LABEL_88:
-					_compartment = 0;
-					_someFlag1 = 0;
-					break;
-				default:
-					break;
+				if (pos == -1) {
+					_cursorTakenFlag = 0;
+					_someVar3 = 0;
+				} else {
+					_draggedStone->set_state(Common::String::format("%d%d", side, pos).c_str());
+					_mousePos = curPos;
+					_jumpSoundObj->set_state("\xe4\xe0");	// "да"
 				}
+
+				_direction = kDirNone;
+				_needSnap = false;
 			}
 		}
 
-LABEL_89:
 		if (_cursorTakenFlag)
 			_cursorObj->set_state("taken");
 		else
@@ -355,7 +355,7 @@ private:
 	bool checkStonePosition(int targetPos, int leftStones) {
 		int n = leftStones == 1 ? 0 : 7;
 
-		for (int i = 0; i < 8; i++) {
+		for (int i = 0; i < 7; i++) {
 			const char *state = _stones[n + i]->current_state_name();
 			int pos;
 
@@ -377,13 +377,13 @@ private:
 	const qdEngineInterface *_engine = nullptr;
 	qdMinigameSceneInterface *_scene = nullptr;
 
-	int _compartment = 0;
+	int _direction = kDirNone;
 	bool _cursorTakenFlag = false;
 
 	mgVect2i _mousePos;
-	mgVect2f _mouseDelta;
+	mgVect2i _mouseDelta;
 	int _someVar3 = 0;
-	bool _someFlag1 = false;
+	bool _needSnap = false;
 
 	qdMinigameObjectInterface *_stones[14];
 	qdMinigameObjectInterface *_draggedStone = nullptr;
