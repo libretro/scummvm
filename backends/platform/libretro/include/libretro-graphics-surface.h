@@ -18,7 +18,6 @@
 #define BACKENDS_LIBRETRO_GRAPHICS_SURFACE_H
 
 #include "common/system.h"
-//#include "graphics/paletteman.h"
 #include "graphics/palette.h"
 #include "graphics/managed_surface.h"
 #include "backends/graphics/windowed.h"
@@ -34,8 +33,6 @@ public:
 	Graphics::Palette _gamePalette;
 
 private:
-	//bool _overlayInGUI;
-	bool _overlayVisible;
 	bool _mouseDontScale;
 	bool _mousePaletteEnabled;
 	bool _mouseVisible;
