@@ -32,12 +32,10 @@ LibretroGraphics::LibretroGraphics() : _mousePaletteEnabled(false),
 	_mouseDontScale(false),
 	_screenUpdatePending(false),
 	_gamePalette(256),
-	_mousePalette(256),
-	_screen(RES_W_OVERLAY,RES_H_OVERLAY,Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0)){
+	_mousePalette(256){
 		_overlay.create(RES_W_OVERLAY, RES_H_OVERLAY, Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0));
 		_overlayDrawRect = Common::Rect(RES_W_OVERLAY, RES_H_OVERLAY);
-		handleResize(RES_W_OVERLAY, RES_H_OVERLAY);
-		}
+	}
 
 LibretroGraphics::~LibretroGraphics() {
 	_gameScreen.free();
@@ -74,16 +72,13 @@ const OSystem::GraphicsMode *LibretroGraphics::getSupportedGraphicsModes() const
 }
 
 void LibretroGraphics::initSize(uint width, uint height, const Graphics::PixelFormat *format) {
-	if (_overlayInGUI) {
-		_overlay.create(width, height, format ? *format : Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0));
-		_overlayDrawRect = Common::Rect(width, height);
-	} else {
-		_gameScreen.create(width, height, format ? *format : Graphics::PixelFormat::createFormatCLUT8());
+	Graphics::PixelFormat actFormat = format ? *format : Graphics::PixelFormat::createFormatCLUT8();
+	if (! _overlayVisible && !(_gameScreen.w == width && _gameScreen.h == height && _gameScreen.format == actFormat)) {
+		_gameScreen.create(width, height, actFormat);
 		_gameDrawRect = Common::Rect(width, height);
 	}
-	handleResize(width, height);
-	recalculateDisplayAreas();
-	LIBRETRO_G_SYSTEM->refreshRetroSettings();
+	if (getWindowWidth() != width || getWindowHeight() != height)
+		handleResize(width, height);
 }
 
 int16 LibretroGraphics::getHeight() const {
@@ -216,8 +211,29 @@ void LibretroGraphics::setMousePosition(int x, int y){
 Common::Point LibretroGraphics::convertWindowToVirtual(int x, int y) const {
 
 //printf("convertWindowToVirtual %d,%d",_activeArea.drawRect.width(),_activeArea.drawRect.height());
-//	if (_activeArea.drawRect.width() && _activeArea.drawRect.height())
-		return WindowedGraphicsManager::convertWindowToVirtual(x, y);
-//	else
-//		return Common::Point(x, y);
+	//if (_activeArea.drawRect.width() && _activeArea.drawRect.height())
+	//	return WindowedGraphicsManager::convertWindowToVirtual(x, y);
+	//else
+		return Common::Point(x, y);
+}
+
+void LibretroGraphics::showOverlay(bool inGUI) {
+	bool reInitSize = (! _overlayInGUI && inGUI);
+	WindowedGraphicsManager::showOverlay(inGUI);
+	if (reInitSize)
+		initSize(_overlay.w, _overlay.h, &_overlay.format);
+}
+
+void LibretroGraphics::hideOverlay(void) {
+	bool reInitSize = _overlayInGUI;
+	WindowedGraphicsManager::hideOverlay();
+	if (reInitSize)
+		initSize(_gameScreen.w, _gameScreen.h, &_gameScreen.format);
+}
+
+void LibretroGraphics::handleResizeImpl(const int width, const int height){
+		_screen.create(width, height, Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0));
+		recalculateDisplayAreas();
+		retro_set_size(width, height);
+		LIBRETRO_G_SYSTEM->refreshRetroSettings();
 }

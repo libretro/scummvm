@@ -57,6 +57,8 @@ public:
 	void updateScreen(void) override;
 	void clearOverlay(void) override;
 	void grabOverlay(Graphics::Surface &surface) const override;
+	void showOverlay(bool inGUI) override;
+	void hideOverlay(void) override;
 	void copyRectToOverlay(const void *buf, int pitch, int x, int y, int w, int h) override;
 	int16 getOverlayHeight(void) const override;
 	int16 getOverlayWidth(void) const override;
@@ -90,7 +92,7 @@ public:
 	void realUpdateScreen(void);
 	
 	bool gameNeedsAspectRatioCorrection() const override { return false; }
-	void handleResizeImpl(const int width, const int height) override {}
+	void handleResizeImpl(const int width, const int height) override;
 	void setSystemMousePosition(const int x, const int y) override {}
 	void setMousePosition(int x, int y);
 	Common::Point convertWindowToVirtual(int x, int y) const;
