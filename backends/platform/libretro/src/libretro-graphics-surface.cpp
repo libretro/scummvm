@@ -109,9 +109,8 @@ void LibretroGraphics::realUpdateScreen(void) {
 	if (srcSurface.w && srcSurface.h)
 		_screen.blitFrom(srcSurface, Common::Rect(srcSurface.w,srcSurface.h),Common::Rect(_screen.w,_screen.h),&_gamePalette);
 
-	// Draw Mouse
 	if (_mouseVisible && _mouseImage.w && _mouseImage.h)
-		_screen.blitFrom(_mouseImage, convertWindowToVirtual(LIBRETRO_G_SYSTEM->_mouseX, LIBRETRO_G_SYSTEM->_mouseY) -  Common::Point(_mouseHotspotX, _mouseHotspotY), _mousePaletteEnabled ? &_mousePalette : &_gamePalette);
+		_screen.transBlitFrom(_mouseImage, convertWindowToVirtual(_cursorX, _cursorY) - Common::Point(_mouseHotspotX, _mouseHotspotY), _mouseKeyColor, false, 0, 0xff, _mousePaletteEnabled ? &_mousePalette : &_gamePalette);
 
 	_screenUpdatePending = false;
 }
