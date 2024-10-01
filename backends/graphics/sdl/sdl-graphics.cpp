@@ -40,7 +40,12 @@
 
 #if defined(USE_IMGUI) && SDL_VERSION_ATLEAST(2, 0, 0)
 #include "backends/imgui/backends/imgui_impl_sdl2.h"
+#ifdef USE_OPENGL
 #include "backends/imgui/backends/imgui_impl_opengl3.h"
+#endif
+#ifdef USE_IMGUI_SDLRENDERER2
+#include "backends/imgui/backends/imgui_impl_sdlrenderer2.h"
+#endif
 #endif
 
 SdlGraphicsManager::SdlGraphicsManager(SdlEventSource *source, SdlWindow *window)
@@ -83,6 +88,14 @@ SdlGraphicsManager::State SdlGraphicsManager::getState() const {
 	state.pixelFormat   = getScreenFormat();
 #endif
 	return state;
+}
+
+Common::RotationMode SdlGraphicsManager::getRotationMode() const {
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	return Common::parseRotationMode(ConfMan.getInt("rotation_mode"));
+#else
+	return Common::kRotationNormal;
+#endif
 }
 
 bool SdlGraphicsManager::setState(const State &state) {
@@ -218,8 +231,27 @@ bool SdlGraphicsManager::lockMouse(bool lock) {
 }
 
 bool SdlGraphicsManager::notifyMousePosition(Common::Point &mouse) {
-	mouse.x = CLIP<int16>(mouse.x, 0, _windowWidth - 1);
-	mouse.y = CLIP<int16>(mouse.y, 0, _windowHeight - 1);
+	switch (getRotationMode()) {
+	case Common::kRotationNormal:
+		break;
+	case Common::kRotation90: {
+		int x0 = mouse.x, y0 = mouse.y;
+		mouse.x = CLIP<int16>(y0, 0, _windowHeight - 1);
+		mouse.y = CLIP<int16>(_windowWidth - 1 - x0, 0, _windowWidth - 1);
+		break;
+	}
+	case Common::kRotation180: {
+		mouse.x = CLIP<int16>(_windowWidth - 1 - mouse.x, 0, _windowWidth - 1);
+		mouse.y = CLIP<int16>(_windowHeight - 1 - mouse.y, 0, _windowHeight - 1);
+		break;
+	}
+	case Common::kRotation270: {
+		int x0 = mouse.x, y0 = mouse.y;
+		mouse.x = CLIP<int16>(_windowHeight - 1 - y0, 0, _windowHeight - 1);
+		mouse.y = CLIP<int16>(x0, 0, _windowWidth - 1);
+		break;
+	}
+	}
 
 	bool showCursor = false;
 	// Currently on macOS we need to scale the events for HiDPI screen, but on
@@ -299,6 +331,13 @@ void SdlGraphicsManager::handleResizeImpl(const int width, const int height) {
 bool SdlGraphicsManager::createOrUpdateWindow(int width, int height, const Uint32 flags) {
 	if (!_window) {
 		return false;
+	}
+	Common::RotationMode rotation = getRotationMode();
+
+	if (rotation == Common::kRotation90 || rotation == Common::kRotation270) {
+		int w = width, h = height;
+		width = h;
+		height = w;
 	}
 
 	// width *=3;
@@ -509,13 +548,9 @@ Common::Keymap *SdlGraphicsManager::getKeymap() {
 }
 
 #if defined(USE_IMGUI) && SDL_VERSION_ATLEAST(2, 0, 0)
-void SdlGraphicsManager::initImGui(void *glContext) {
+void SdlGraphicsManager::initImGui(SDL_Renderer *renderer, void *glContext) {
 	assert(!_imGuiReady);
 	_imGuiInited = false;
-
-	if (!glContext) {
-		return;
-	}
 
 	IMGUI_CHECKVERSION();
 	if (!ImGui::CreateContext()) {
@@ -523,25 +558,54 @@ void SdlGraphicsManager::initImGui(void *glContext) {
 	}
 	ImGuiIO &io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
 	ImGui::StyleColorsDark();
 	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
 	ImGuiStyle& style = ImGui::GetStyle();
 	style.WindowRounding = 0.0f;
 	style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	io.IniFilename = nullptr;
-	if (!ImGui_ImplSDL2_InitForOpenGL(_window->getSDLWindow(), glContext)) {
+
+	_imGuiSDLRenderer = nullptr;
+#ifdef USE_OPENGL
+	if (!_imGuiReady && glContext) {
+		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
+
+		if (!ImGui_ImplSDL2_InitForOpenGL(_window->getSDLWindow(), glContext)) {
+			ImGui::DestroyContext();
+			return;
+		}
+
+		if (!ImGui_ImplOpenGL3_Init("#version 110")) {
+			ImGui_ImplSDL2_Shutdown();
+			ImGui::DestroyContext();
+			return;
+		}
+
+		_imGuiReady = true;
+	}
+#endif
+#ifdef USE_IMGUI_SDLRENDERER2
+	if (!_imGuiReady && renderer) {
+		if (!ImGui_ImplSDL2_InitForSDLRenderer(_window->getSDLWindow(), renderer)) {
+			ImGui::DestroyContext();
+			return;
+		}
+
+		if (!ImGui_ImplSDLRenderer2_Init(renderer)) {
+			ImGui_ImplSDL2_Shutdown();
+			ImGui::DestroyContext();
+			return;
+		}
+
+		_imGuiReady = true;
+		_imGuiSDLRenderer = renderer;
+	}
+#endif
+	if (!_imGuiReady) {
+		warning("No ImGui renderer has been found");
 		ImGui::DestroyContext();
 		return;
 	}
-
-	if (!ImGui_ImplOpenGL3_Init("#version 110")) {
-		ImGui_ImplSDL2_Shutdown();
-		ImGui::DestroyContext();
-		return;
-	}
-
-	_imGuiReady = true;
 
 	if (_imGuiCallbacks.init) {
 		_imGuiCallbacks.init();
@@ -561,19 +625,39 @@ void SdlGraphicsManager::renderImGui() {
 		_imGuiInited = true;
 	}
 
-	ImGui_ImplOpenGL3_NewFrame();
+#ifdef USE_IMGUI_SDLRENDERER2
+	if (_imGuiSDLRenderer) {
+		ImGui_ImplSDLRenderer2_NewFrame();
+	} else {
+#endif
+#ifdef USE_OPENGL
+		ImGui_ImplOpenGL3_NewFrame();
+#endif
+#ifdef USE_IMGUI_SDLRENDERER2
+	}
+#endif
 	ImGui_ImplSDL2_NewFrame();
 
 	ImGui::NewFrame();
 	_imGuiCallbacks.render();
 	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#ifdef USE_IMGUI_SDLRENDERER2
+	if (_imGuiSDLRenderer) {
+		ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), _imGuiSDLRenderer);
+	} else {
+#endif
+#ifdef USE_OPENGL
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-	SDL_Window* backup_current_window = SDL_GL_GetCurrentWindow();
-	SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
-	ImGui::UpdatePlatformWindows();
-	ImGui::RenderPlatformWindowsDefault();
-	SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+		SDL_Window* backup_current_window = SDL_GL_GetCurrentWindow();
+		SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+		SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+#endif
+#ifdef USE_IMGUI_SDLRENDERER2
+	}
+#endif
 }
 
 void SdlGraphicsManager::destroyImGui() {
@@ -588,7 +672,17 @@ void SdlGraphicsManager::destroyImGui() {
 	_imGuiInited = false;
 	_imGuiReady = false;
 
-	ImGui_ImplOpenGL3_Shutdown();
+#ifdef USE_IMGUI_SDLRENDERER2
+	if (_imGuiSDLRenderer) {
+		ImGui_ImplSDLRenderer2_Shutdown();
+	} else {
+#endif
+#ifdef USE_OPENGL
+		ImGui_ImplOpenGL3_Shutdown();
+#endif
+#ifdef USE_IMGUI_SDLRENDERER2
+	}
+#endif
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();
 }

@@ -213,6 +213,7 @@ Common::Error IllusionsEngine_Duckman::run() {
 	_resSys->unloadResourceById(0x120002);
 	_resSys->unloadResourceById(0x120003);
 	_resSys->unloadResourceById(0x000D0001);
+	_resSys->unloadAllResources();
 
 	delete _stack;
 	delete _scriptOpcodes;
@@ -446,6 +447,7 @@ void IllusionsEngine_Duckman::loadSpecialCode(uint32 resId) {
 
 void IllusionsEngine_Duckman::unloadSpecialCode(uint32 resId) {
 	delete _specialCode;
+	_specialCode = nullptr;
 }
 
 void IllusionsEngine_Duckman::notifyThreadId(uint32 &threadId) {

@@ -40,7 +40,7 @@ public:
 	/**
 	 * Set size of the render target.
 	 */
-	bool setSize(uint width, uint height) override;
+	bool setSize(uint width, uint height, Common::RotationMode rotation) override;
 
 protected:
 	void activateInternal() override;

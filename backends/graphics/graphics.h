@@ -25,6 +25,7 @@
 #include "common/system.h"
 #include "common/noncopyable.h"
 #include "common/keyboard.h"
+#include "common/rotationmode.h"
 
 #include "graphics/mode.h"
 #include "graphics/paletteman.h"
@@ -50,6 +51,8 @@ public:
 	virtual int getGraphicsMode() const { return 0; }
 #if defined(USE_IMGUI)
 	virtual void setImGuiCallbacks(const ImGuiCallbacks &callbacks) { }
+	virtual void *getImGuiTexture(const Graphics::Surface &image, const byte *palette, int palCount) { return nullptr; }
+	virtual void freeImGuiTexture(void *texture) { }
 #endif
 	virtual bool setShader(const Common::Path &fileName) { return false; }
 	virtual const OSystem::GraphicsMode *getSupportedStretchModes() const {
@@ -59,6 +62,7 @@ public:
 	virtual int getDefaultStretchMode() const { return 0; }
 	virtual bool setStretchMode(int mode) { return false; }
 	virtual int getStretchMode() const { return 0; }
+	virtual Common::RotationMode getRotationMode() const { return Common::kRotationNormal; }
 	virtual uint getDefaultScaler() const { return 0; }
 	virtual uint getDefaultScaleFactor() const { return 1; }
 	virtual bool setScaler(uint mode, int factor) { return false; }

@@ -229,6 +229,10 @@ Common::Error IllusionsEngine_BBDOU::run() {
 		updateEvents();
 	}
 
+	unloadSpecialCode(0);
+
+	_resSys->unloadAllResources();
+
 	delete _stack;
 	delete _scriptOpcodes;
 
@@ -248,6 +252,7 @@ Common::Error IllusionsEngine_BBDOU::run() {
 	delete _actorInstances;
 	delete _input;
 	delete _screenText;
+	delete _screenPalette;
 	delete _screen;
 	delete _resSys;
 	delete _resReader;

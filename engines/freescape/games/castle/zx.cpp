@@ -113,14 +113,14 @@ void CastleEngine::loadAssetsZXFullGame() {
 	loadMessagesVariableSize(&file, 0x4bd, 71);
 	switch (_language) {
 		case Common::ES_ESP:
-			loadRiddles(&file, 0x1470 - 4, 8);
+			loadRiddles(&file, 0x1470 - 4 - 2 - 9 * 2, 9);
 			loadMessagesVariableSize(&file, 0xf3d, 71);
 			load8bitBinary(&file, 0x6aab - 2, 16);
 			loadSpeakerFxZX(&file, 0xca0, 0xcdc);
 			loadFonts(&file, 0x1218 + 16, _font);
 			break;
 		case Common::EN_ANY:
-			loadRiddles(&file, 0x145c, 9);
+			loadRiddles(&file, 0x145c - 2 - 9 * 2, 9);
 			load8bitBinary(&file, 0x6a3b, 16);
 			loadSpeakerFxZX(&file, 0xc91, 0xccd);
 			loadFonts(&file, 0x1219, _font);
@@ -177,6 +177,15 @@ void CastleEngine::loadAssetsZXFullGame() {
 	_thunderFrame->create(thunderWidth * 8, thunderHeight, _gfx->_texturePixelFormat);
 	_thunderFrame->fillRect(Common::Rect(0, 0, thunderWidth * 8, thunderHeight), 0);
 	_thunderFrame = loadFrame(&file, _thunderFrame, thunderWidth, thunderHeight, front);
+
+	_riddleTopFrame = new Graphics::ManagedSurface(loadBundledImage("castle_riddle_top_frame"));
+	_riddleTopFrame->convertToInPlace(_gfx->_texturePixelFormat);
+
+	_riddleBackgroundFrame = new Graphics::ManagedSurface(loadBundledImage("castle_riddle_background_frame"));
+	_riddleBackgroundFrame->convertToInPlace(_gfx->_texturePixelFormat);
+
+	_riddleBottomFrame = new Graphics::ManagedSurface(loadBundledImage("castle_riddle_bottom_frame"));
+	_riddleBottomFrame->convertToInPlace(_gfx->_texturePixelFormat);
 
 	for (auto &it : _areaMap) {
 		it._value->addStructure(_areaMap[255]);
@@ -237,7 +246,7 @@ void CastleEngine::drawZXUI(Graphics::Surface *surface) {
 	} else
 		drawStringInSurface(_currentArea->_name, 120, 179, front, black, surface);
 
-	for (int k = 0; k < _numberKeys; k++) {
+	for (int k = 0; k < int(_keysCollected.size()); k++) {
 		surface->copyRectToSurface((const Graphics::Surface)*_keysBorderFrames[0], 99 - k * 4, 177, Common::Rect(0, 0, 6, 11));
 	}
 

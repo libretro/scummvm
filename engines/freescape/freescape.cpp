@@ -44,8 +44,13 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 		_renderMode = Common::parseRenderMode(ConfMan.get("render_mode"));
 
 	_binaryBits = 0;
-	_screenW = 320;
-	_screenH = 200;
+	if (_renderMode == Common::kRenderHercG) {
+		_screenW = 720;
+		_screenH = 348;
+	} else {
+		_screenW = 320;
+		_screenH = 200;
+	}
 
 	if (isAmiga()) {
 		_renderMode = Common::kRenderAmiga;
@@ -445,7 +450,9 @@ void FreescapeEngine::drawFrame() {
 	if (_underFireFrames > 0) {
 		for (auto &it : _sensors) {
 			Sensor *sensor = (Sensor *)it;
-			if (sensor->isShooting())
+			if (it->isDestroyed() || it->isInvisible())
+				continue;
+			if (isCastle() || sensor->isShooting())
 				drawSensorShoot(sensor);
 		}
 		_underFireFrames--;
@@ -677,8 +684,8 @@ Common::Error FreescapeEngine::run() {
 	_vsyncEnabled = g_system->getFeatureState(OSystem::kFeatureVSync);
 	_frameLimiter = new Graphics::FrameLimiter(g_system, ConfMan.getInt("engine_speed"));
 	// Initialize graphics
-	_screenW = g_system->getWidth();
-	_screenH = g_system->getHeight();
+	//_screenW = g_system->getWidth();
+	//_screenH = g_system->getHeight();
 	_gfx = createRenderer(_screenW, _screenH, _renderMode, ConfMan.getBool("authentic_graphics"));
 	_speaker = new SizedPCSpeaker();
 	_speaker->setVolume(50);

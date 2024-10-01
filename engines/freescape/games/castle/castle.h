@@ -21,6 +21,19 @@
 
 namespace Freescape {
 
+struct RiddleText {
+	int8 _dx;
+	int8 _dy;
+	Common::String _text;
+
+	RiddleText(int8 dx, int8 dy, const Common::String &text) : _dx(dx), _dy(dy), _text(text) {}
+};
+
+struct Riddle {
+	Common::Point _origin;
+	Common::Array<RiddleText> _lines;
+};
+
 class CastleEngine : public FreescapeEngine {
 public:
 	CastleEngine(OSystem *syst, const ADGameDescription *gd);
@@ -61,6 +74,7 @@ public:
 	void updateTimeVariables() override;
 
 	bool checkIfGameEnded() override;
+	void drawSensorShoot(Sensor *sensor) override;
 
 	void executePrint(FCLInstruction &instruction) override;
 	void executeMakeInvisible(FCLInstruction &instruction) override;
@@ -70,7 +84,7 @@ public:
 	Common::Error saveGameStreamExtended(Common::WriteStream *stream, bool isAutosave = false) override;
 	Common::Error loadGameStreamExtended(Common::SeekableReadStream *stream) override;
 
-	Common::StringArray _riddleList;
+	Common::Array<Riddle> _riddleList;
 	Common::BitArray _fontPlane1;
 	Common::BitArray _fontPlane2;
 	Common::BitArray _fontPlane3;
@@ -105,7 +119,7 @@ public:
 	Graphics::ManagedSurface *_endGameThroneFrame;
 	Graphics::ManagedSurface *_endGameBackgroundFrame;
 
-	int _numberKeys;
+	Common::Array<int> _keysCollected;
 	bool _useRockTravel;
 	int _spiritsDestroyed;
 	int _spiritsMeter;
