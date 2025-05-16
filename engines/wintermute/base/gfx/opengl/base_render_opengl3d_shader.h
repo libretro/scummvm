@@ -62,6 +62,11 @@ public:
 
 	bool invalidateTexture(BaseSurfaceOpenGL3D *texture) override;
 
+	bool invalidateDeviceObjects() override;
+	bool restoreDeviceObjects() override;
+
+	bool resetDevice() override;
+
 	void setSpriteBlendMode(Graphics::TSpriteBlendMode blendMode, bool forceChange = false) override;
 
 	void setAmbientLightRenderState() override;
@@ -75,10 +80,8 @@ public:
 
 	bool enableShadows() override;
 	bool disableShadows() override;
-	void displayShadow(BaseObject *object, const DXVector3 *lightPos, bool lightPosRelative) override;
 	bool stencilSupported() override;
 
-	void dumpData(const char *filename) override {}
 	BaseImage *takeScreenshot() override;
 	void fadeToColor(byte r, byte g, byte b, byte a) override;
 	bool flip() override;
@@ -143,7 +146,7 @@ public:
 	OpenGL::Shader *_shadowMaskShader;
 
 private:
-	void renderSimpleShadow(BaseObject *object);
+	void displaySimpleShadow(BaseObject *object) override;
 
 	DXMatrix _glProjectionMatrix;
 	float _alphaRef;

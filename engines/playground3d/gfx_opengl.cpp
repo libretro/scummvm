@@ -159,6 +159,19 @@ void OpenGLRenderer::enableFog(const Math::Vector4d &fogColor) {
 	glEnable(GL_FOG);
 }
 
+void OpenGLRenderer::disableFog() {
+	glDisable(GL_FOG);
+}
+
+void OpenGLRenderer::enableScissor(int x, int y, int width, int height) {
+	glScissor(x, y, width, height);
+	glEnable(GL_SCISSOR_TEST);
+}
+
+void OpenGLRenderer::disableScissor() {
+	glDisable(GL_SCISSOR_TEST);
+}
+
 void OpenGLRenderer::drawFace(uint face) {
 	glBegin(GL_TRIANGLE_STRIP);
 	for (uint i = 0; i < 4; i++) {
@@ -176,6 +189,12 @@ void OpenGLRenderer::drawCube(const Math::Vector3d &pos, const Math::Vector3d &r
 	glMatrixMode(GL_MODELVIEW);
 	glLoadMatrixf(_modelViewMatrix.getData());
 
+	glDisable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ZERO);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDisable(GL_TEXTURE_2D);
+
 	glTranslatef(pos.x(), pos.y(), pos.z());
 	glRotatef(roll.x(), 1.0f, 0.0f, 0.0f);
 	glRotatef(roll.y(), 0.0f, 1.0f, 0.0f);
@@ -192,6 +211,12 @@ void OpenGLRenderer::drawPolyOffsetTest(const Math::Vector3d &pos, const Math::V
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadMatrixf(_modelViewMatrix.getData());
+
+	glDisable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ZERO);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDisable(GL_TEXTURE_2D);
 
 	glTranslatef(pos.x(), pos.y(), pos.z());
 	glRotatef(roll.y(), 0.0f, 1.0f, 0.0f);
@@ -271,9 +296,9 @@ void OpenGLRenderer::drawInViewport() {
 	glPushMatrix();
 	_pos.x() += 0.01f;
 	_pos.y() += 0.01f;
-	if (_pos.x() >= 1.0f) {
-		_pos.x() = -1.0f;
-		_pos.y() = -1.0f;
+	if (_pos.x() >= 1.1f) {
+		_pos.x() = -1.1f;
+		_pos.y() = -1.1f;
 	}
 	glTranslatef(_pos.x(), _pos.y(), 0);
 

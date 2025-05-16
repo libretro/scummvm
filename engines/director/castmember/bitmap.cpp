@@ -34,6 +34,7 @@
 #include "director/movie.h"
 #include "director/picture.h"
 #include "director/score.h"
+#include "director/types.h"
 #include "director/window.h"
 #include "director/castmember/bitmap.h"
 #include "director/lingo/lingo-the.h"
@@ -194,7 +195,8 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, BitmapCastMember &
 
 	_initialRect = source._initialRect;
 	_boundingRect = source._boundingRect;
-	_children = source._children;
+	if (cast == source._cast)
+		_children = source._children;
 
 	_picture = source._picture ? new Picture(*source._picture) : nullptr;
 	_ditheredImg = nullptr;
@@ -302,14 +304,21 @@ Graphics::MacWidget *BitmapCastMember::createWidget(Common::Rect &bbox, Channel 
 
 	Graphics::MacWidget *widget = new Graphics::MacWidget(g_director->getCurrentWindow(), bbox.left, bbox.top, bbox.width(), bbox.height(), g_director->_wm, false);
 
-	// scale for drawing a different size sprite
-	copyStretchImg(
-		_ditheredImg ? _ditheredImg : &_picture->_surface,
-		widget->getSurface()->surfacePtr(),
-		_initialRect,
-		bbox,
-		pal
-	);
+	Graphics::Surface *srcSurface = _ditheredImg ? _ditheredImg : &_picture->_surface;
+	if ((srcSurface->w <= 0) || (srcSurface->h <= 0)) {
+		// We're copying from a zero-sized surface; fill widget with white so transparent ink works
+		Common::Rect dims = widget->getDimensions();
+		widget->getSurface()->fillRect(Common::Rect(dims.width(), dims.height()), g_director->_wm->_colorWhite);
+	} else {
+		// scale for drawing a different size sprite
+		copyStretchImg(
+			srcSurface,
+			widget->getSurface()->surfacePtr(),
+			_initialRect,
+			bbox,
+			pal
+		);
+	}
 
 	return widget;
 }
@@ -446,7 +455,7 @@ bool BitmapCastMember::isModified() {
 	return false;
 }
 
-void BitmapCastMember::createMatte(Common::Rect &bbox) {
+void BitmapCastMember::createMatte(const Common::Rect &bbox) {
 	// Like background trans, but all white pixels NOT ENCLOSED by coloured pixels
 	// are transparent
 	Graphics::Surface tmp;
@@ -521,7 +530,7 @@ void BitmapCastMember::createMatte(Common::Rect &bbox) {
 	tmp.free();
 }
 
-Graphics::Surface *BitmapCastMember::getMatte(Common::Rect &bbox) {
+Graphics::Surface *BitmapCastMember::getMatte(const Common::Rect &bbox) {
 	// Lazy loading of mattes
 	if (!_matte && !_noMatte) {
 		createMatte(bbox);
@@ -619,7 +628,7 @@ void BitmapCastMember::load() {
 						Common::DumpFile bitmapFile;
 
 						bitmapFile.open(Common::Path(filename), true);
-						Image::writePNG(bitmapFile, *decoder->getSurface(), decoder->getPalette());
+						Image::writePNG(bitmapFile, *decoder->getSurface(), decoder->getPalette().data());
 
 						bitmapFile.close();
 					}
@@ -664,8 +673,10 @@ void BitmapCastMember::load() {
 			} else {
 				img = new Image::BitmapDecoder();
 			}
+		} else if (pic->size() == 0) {
+			// zero-length bitmap
 		} else {
-			warning("BitmapCastMember::load(): Bitmap image %d not found", imgId);
+			warning("BitmapCastMember::load(): Bitmap image %d has invalid size", imgId);
 		}
 
 		break;
@@ -691,7 +702,7 @@ void BitmapCastMember::load() {
 		Common::DumpFile bitmapFile;
 
 		bitmapFile.open(Common::Path(filename), true);
-		Image::writePNG(bitmapFile, *img->getSurface(), img->getPalette());
+		Image::writePNG(bitmapFile, *img->getSurface(), img->getPalette().data());
 
 		bitmapFile.close();
 	}
@@ -759,6 +770,18 @@ Common::Point BitmapCastMember::getRegistrationOffset() {
 Common::Point BitmapCastMember::getRegistrationOffset(int16 width, int16 height) {
 	Common::Point offset = getRegistrationOffset();
 	return Common::Point(offset.x * width / MAX((int16)1, _initialRect.width()), offset.y * height / MAX((int16)1, _initialRect.height()));
+}
+
+
+CollisionTest BitmapCastMember::isWithin(const Common::Rect &bbox, const Common::Point &pos, InkType ink) {
+	if (!bbox.contains(pos))
+		return kCollisionNo;
+
+	if (ink == kInkTypeMatte) {
+		Graphics::Surface *matte = getMatte(bbox);
+		return (matte ? *(byte *)(matte->getBasePtr(pos.x - bbox.left, pos.y - bbox.top)) : true) ? kCollisionYes : kCollisionNo;
+	}
+	return kCollisionYes;
 }
 
 bool BitmapCastMember::hasField(int field) {

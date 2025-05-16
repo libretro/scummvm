@@ -107,6 +107,7 @@ public:
 	void clearSharedCast();
 	void loadSharedCastsFrom(Common::Path &filename);
 	Archive *loadExternalCastFrom(Common::Path &filename);
+	bool loadCastLibFrom(uint16 libId, Common::Path &filename);
 
 	CastMember *getCastMember(CastMemberID memberID);
 	CastMember *createOrReplaceCastMember(CastMemberID memberID, CastMember *cast);
@@ -114,11 +115,13 @@ public:
 	bool duplicateCastMember(CastMemberID source, CastMemberID target);
 	CastMemberID getCastMemberIDByMember(int memberID);
 	int getCastLibIDByName(const Common::String &name);
+	void setCastLibName(const Common::String &name, int castLib);
 	CastMemberID getCastMemberIDByName(const Common::String &name);
 	CastMemberID getCastMemberIDByNameAndType(const Common::String &name, int castLib, CastType type);
 	CastMemberInfo *getCastMemberInfo(CastMemberID memberID);
 	bool isValidCastMember(CastMemberID memberID, CastType type);
 	const Stxt *getStxt(CastMemberID memberID);
+
 
 	LingoArchive *getMainLingoArch();
 	LingoArchive *getSharedLingoArch();
@@ -170,7 +173,7 @@ public:
 	int _nextEventId;
 	Common::Queue<LingoEvent> _inputEventQueue;
 
-	unsigned char _key;
+	uint16 _key;
 	int _keyCode;
 	byte _keyFlags;
 
@@ -191,6 +194,11 @@ public:
 	bool _isBeepOn;
 
 	Common::String _script;
+
+	// A flag to disable the event processing in the Movie
+	// This flag will be set when the user's interaction (mouse and key events like mouseUp, keyUp)  
+	// shouldn't be recorded as movie event, which may cause undesirable change in the lingo script
+	bool _inGuiMessageBox = false;
 
 private:
 	Window *_window;

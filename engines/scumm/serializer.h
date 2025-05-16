@@ -19,50 +19,39 @@
  *
  */
 
-#ifndef MEDIASTATION_MEDIASCRIPT_VARIABLE_DECLARATION_H
-#define MEDIASTATION_MEDIASCRIPT_VARIABLE_DECLARATION_H
 
-#include "common/ptr.h"
-#include "common/str.h"
-#include "common/array.h"
 
-#include "mediastation/datafile.h"
-#include "mediastation/datum.h"
-#include "mediastation/mediascript/scriptconstants.h"
+#ifndef SCUMM_SERIALIZER_H
+#define SCUMM_SERIALIZER_H
 
-namespace MediaStation {
 
-class Operand;
+#include "common/serializer.h"
 
-class Collection : public Common::Array<Operand> {
+
+namespace Scumm {
+
+class Serializer : public Common::Serializer {
 public:
-	Operand callMethod(BuiltInMethod method, Common::Array<Operand> &args);
-};
-
-class Variable {
-public:
-	uint32 _id = 0;
-	VariableType _type = kVariableTypeEmpty;
-	union {
-		Common::String *string;
-		uint functionId;
-		int i;
-		double d;
-		uint assetId;
-	} _value;
-	Common::SharedPtr<Collection> _c;
-
-	Variable();
-	Variable(Chunk &chunk, bool readId = true);
-	~Variable();
-
-	Operand getValue();
-	void putValue(Operand value);
+	Serializer(Common::SeekableReadStream *stream, Common::SeekableWriteStream *writeStream)
+		: Common::Serializer(stream, writeStream), _seekableSaveStr(writeStream) {
+	}
+	~Serializer() override {
+	}
+	int64 pos() const {
+		return _loadStream ? _loadStream->pos() : (_saveStream ? _saveStream->pos() : 0);
+	}
+	int seek(int64 offset, int whence = 0) {
+		return _loadStream ? _loadStream->seek(offset, whence) : (_seekableSaveStr ? _seekableSaveStr->seek(offset, whence) : -1);
+	}
+	int64 size() const {
+		return _loadStream ? _loadStream->size() : (_seekableSaveStr ? _seekableSaveStr->size() : 0);
+	}
 
 private:
-	void clear();
+	Common::SeekableWriteStream *_seekableSaveStr;
 };
 
-} // End of namespace MediaStation
 
-#endif
+} // End of namespace Audio
+
+#endif // #ifndef SCUMM_CDDA_H

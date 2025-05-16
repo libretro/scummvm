@@ -473,7 +473,7 @@ int32 HolomapV1::searchPrevArrow(int32 num) const {
 
 void HolomapV1::drawListPos(int calpha, int cbeta, int cgamma, bool pos) {
 	int nbobjets = 0;
-	DrawListStruct listTri[MAX_HOLO_POS_2];
+	DrawListStruct listTri[MAX_HOLO_POS];
 	const int numCube = _engine->_scene->_numCube;
 	const int maxHoloPos = _engine->numHoloPos();
 	for (int n = 0; n < maxHoloPos; ++n) {
@@ -690,8 +690,22 @@ void HolomapV1::holoMap() {
 		}
 
 		if (_dialstat) {
-			_engine->_text->drawHolomapLocation(_listHoloPos[_current].mess);
+			_engine->_text->normalWinDial();
+			_engine->_text->setFontCrossColor(COLOR_WHITE);
+			_engine->_interface->box(_engine->_text->_dialTextBox, COLOR_BLACK);
+			_engine->saveFrontBuffer();
+			_engine->_text->commonOpenDial(_listHoloPos[_current].mess);
+			_engine->_text->initDialWindow();
+			_textState = ProgressiveTextState::ContinueRunning;
 			_dialstat = false;
+		}
+
+		if (_textState == ProgressiveTextState::ContinueRunning) {
+			_textState = _engine->_text->nextDialChar();
+			if (_textState != ProgressiveTextState::ContinueRunning) {
+				_engine->_text->fadeInRemainingChars();
+				_engine->_text->closeDial();
+			}
 		}
 
 		++_engine->timerRef;

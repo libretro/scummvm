@@ -7,9 +7,7 @@
 
 namespace Image {
 
-DoodleDecoder::DoodleDecoder(const byte *palette) : _surface(nullptr), _palette(nullptr) {
-	// Copy the pointer to the provided palette
-	_palette = palette;
+DoodleDecoder::DoodleDecoder(const byte *palette) : _surface(nullptr), _palette(palette, 16) {
 }
 
 DoodleDecoder::~DoodleDecoder() {
@@ -36,12 +34,12 @@ bool DoodleDecoder::loadStreams(Common::SeekableReadStream &highresStream,
 	destroy();
 
 	// Check stream sizes
-	if (highresStream.size() != 8192) {
+	if (highresStream.size() < 8002) {
 		error("DoodleDecoder: Invalid high-resolution data size");
 		return false;
 	}
 
-	if (colorStream1.size() != 1026 || colorStream2.size() != 1026) {
+	if (colorStream1.size() < 1003 || colorStream2.size() < 1003) {
 		error("DoodleDecoder: Invalid color data size");
 		return false;
 	}

@@ -1255,7 +1255,7 @@ void display_switch_in_resume() {
 }
 
 void replace_tokens(const char *srcmes, char *destm, size_t maxlen) {
-	int indxdest = 0, indxsrc = 0;
+	size_t indxdest = 0, indxsrc = 0;
 	const char *srcp;
 	char *destp;
 	while (srcmes[indxsrc] != 0) {
@@ -1290,7 +1290,7 @@ void replace_tokens(const char *srcmes, char *destm, size_t maxlen) {
 			indxdest++;
 			indxsrc++;
 		}
-		if (indxdest >= (int)maxlen - 3)
+		if (indxdest >= maxlen - 3)
 			break;
 	}
 	destm[indxdest] = 0;
@@ -1335,6 +1335,8 @@ void game_sprite_updated(int sprnum, bool deleted) {
 
 	// GUI still have a special draw route, so cannot rely on object caches;
 	// will have to do a per-GUI and per-control check.
+	// TODO: devise a way to speed this iteration up, perhaps link GUI objects
+	// to the sprite notification block somehow, etc...?
 	//
 	// gui backgrounds
 	for (auto &gui : _GP(guis)) {

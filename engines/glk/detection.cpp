@@ -19,6 +19,8 @@
  *
  */
 
+#define FORBIDDEN_SYMBOL_EXCEPTION_printf
+
 #include "base/plugins.h"
 #include "common/md5.h"
 #include "common/memstream.h"
@@ -59,6 +61,14 @@
 #include "graphics/surface.h"
 #include "common/config-manager.h"
 #include "common/file.h"
+
+#include "engines/metaengine.h"
+#include "engines/engine.h"
+
+#include "common/hash-str.h"
+
+#include "common/gui_options.h"
+
 
 static const DebugChannelDef debugFlagList[] = {
 	{Glk::kDebugCore, "core", "Core engine debug level"},
@@ -305,5 +315,76 @@ void GlkMetaEngineDetection::detectClashes() const {
 uint GlkMetaEngineDetection::getMD5Bytes() const {
 	return 5000;
 }
+
+void GlkMetaEngineDetection::dumpDetectionEntries() const {
+#if 0
+	enum class EngineName : uint8 {
+    	COMPREHEND,
+    	LEVEL9,
+    	OTHER
+	};
+
+	struct Detection {
+		const Glk::GlkDetectionEntry *entries;
+		EngineName engineName;
+	};
+
+	const Detection detectionEntries[] = {
+    	{ Glk::Adrift::AdriftMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::AdvSys::AdvSysMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::AGT::AGTMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::Alan2::Alan2MetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::Alan3::Alan3MetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::Archetype::ArchetypeMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::Comprehend::ComprehendMetaEngine::getDetectionEntries(), EngineName::COMPREHEND },
+        { Glk::Glulx::GlulxMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::Hugo::HugoMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::JACL::JACLMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::Level9::Level9MetaEngine::getDetectionEntries(), EngineName::LEVEL9 },
+        { Glk::Magnetic::MagneticMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::Quest::QuestMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::Scott::ScottMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::ZCode::ZCodeMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { Glk::TADS::TADSMetaEngine::getDetectionEntries(), EngineName::OTHER },
+        { nullptr, EngineName::OTHER }
+    };
+   
+	for (const Detection *detection = detectionEntries; detection->entries; ++detection) {
+		EngineName engineName =	detection->engineName;
+
+		for (const Glk::GlkDetectionEntry *entry = detection->entries; entry->_gameId; ++entry) {
+			PlainGameDescriptor pd = findGame(entry->_gameId);
+			const char *title = pd.description;
+			const char *extra = engineName == EngineName::COMPREHEND ? "" : entry->_extra;
+
+			printf("game (\n");
+			printf("\tname \"%s\"\n", escapeString(entry->_gameId).c_str());
+			printf("\ttitle \"%s\"\n", escapeString(title).c_str());
+			printf("\textra \"%s\"\n", escapeString(extra).c_str());
+			printf("\tlanguage \"%s\"\n", escapeString(getLanguageLocale(entry->_language)).c_str());
+			printf("\tplatform \"%s\"\n", escapeString(getPlatformCode(entry->_platform)).c_str());
+			printf("\tsourcefile \"%s\"\n", escapeString(getName()).c_str());
+			printf("\tengine \"%s\"\n", escapeString(getEngineName()).c_str());
+
+			Common::String checksum = entry->_md5;
+
+			// Filename for Comprehend Engine's md5 is stored in the extra field. 
+			// For other engines, filename is not available, so it has been kept as the gameId
+			const char *fname = engineName == EngineName::COMPREHEND ? entry->_extra : entry->_gameId;
+
+			// Level9 engine does not use md5 checksums, so checksums are not printed. 
+			if (engineName == EngineName::LEVEL9) {
+				printf("\trom ( name \"%s\" size %lld )\n", escapeString(fname).c_str(), static_cast<long long int>(entry->_filesize));
+			} else {
+				printf("\trom ( name \"%s\" size %lld md5-%d %s )\n", escapeString(fname).c_str(), static_cast<long long int>(entry->_filesize), getMD5Bytes(), checksum.c_str());
+			}
+			
+			printf(")\n\n");
+		}
+	}
+#endif
+}
+
+
 
 REGISTER_PLUGIN_STATIC(GLK_DETECTION, PLUGIN_TYPE_ENGINE_DETECTION, GlkMetaEngineDetection);

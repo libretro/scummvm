@@ -25,6 +25,7 @@
 #include "common/macresman.h"
 #include "common/md5.h"
 #include "common/events.h"
+#include "common/str.h"
 #include "common/system.h"
 #include "common/translation.h"
 
@@ -161,6 +162,7 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 		tmpStr[1] = dr.md5[2*i+1];
 		int res = sscanf(tmpStr, "%x", &tmpVal);
 		assert(res == 1);
+		(void)res;
 		_gameMD5[i] = (byte)tmpVal;
 	}
 
@@ -1293,7 +1295,7 @@ Common::Error ScummEngine::init() {
 			if (_game.id == macFileNames[i]._id) {
 				macScumm = true;
 
-				strncpy(filename, macFileNames[i]._name, sizeof(filename));
+				Common::strlcpy(filename, macFileNames[i]._name, sizeof(filename));
 
 				if (resource.exists(filename)) {
 					macResourceFile = filename;

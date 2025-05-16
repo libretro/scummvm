@@ -219,7 +219,7 @@ void GraphicsManager::loadSurfacePalette(Graphics::ManagedSurface &inSurf, const
 	if (f.open(paletteFilename.append(".bmp"))) {
 		Image::BitmapDecoder dec;
 		if (dec.loadStream(f)) {
-			inSurf.setPalette(dec.getPalette(), paletteStart, paletteSize);
+			inSurf.setPalette(dec.getPalette().data(), paletteStart, paletteSize);
 		}
 	}
 }
@@ -382,7 +382,7 @@ void GraphicsManager::rotateBlit(const Graphics::ManagedSurface &src, Graphics::
 	}
 }
 
-void GraphicsManager::crossDissolve(const Graphics::ManagedSurface &from, const Graphics::ManagedSurface &to, byte alpha, const Common::Rect rect, Graphics::ManagedSurface &inResult) {
+void GraphicsManager::crossDissolve(const Graphics::ManagedSurface &from, const Graphics::ManagedSurface &to, byte alpha, const Common::Rect &rect, Graphics::ManagedSurface &inResult) {
 	assert(from.getBounds() == to.getBounds());
 	inResult.blitFrom(from, rect, Common::Point());
 	inResult.transBlitFrom(to, rect, Common::Point(), (uint32)-1, false, alpha);

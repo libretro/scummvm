@@ -609,8 +609,11 @@ Datum Lingo::getTheEntity(int entity, Datum &id, int field) {
 		}
 		break;
 	case kTheKey:
-		d.type = STRING;
-		d.u.s = new Common::String(movie->_key);
+		if (movie->_key < 0x80) {
+			d = Common::String::format("%c", (char)movie->_key);
+		} else {
+			d = Common::String();
+		}
 		break;
 	case kTheKeyCode:
 		d = movie->_keyCode;
@@ -621,6 +624,13 @@ Datum Lingo::getTheEntity(int entity, Datum &id, int field) {
 			d.u.s = new Common::String(mainArchive->primaryEventHandlers[kEventKeyDown]);
 		else
 			d.u.s = new Common::String();
+		break;
+	case kTheKeyPressed:
+		{
+			Common::U32String buf;
+			buf.insertChar(movie->_key, 0);
+			d = buf.encode();
+		}
 		break;
 	case kTheKeyUpScript:
 		d.type = STRING;
@@ -1804,12 +1814,12 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheLocH:
 		if (d.asInt() != channel->getPosition().x) {
-			// adding the dirtyRect only when the trails is false. Other changes which will add dirtyRect may also apply this patch
-			// this is for fixing the bug in jman-win. Currently, i've only patched the LocH, LocV and castNum since those are the only ones used in jman
+			// Only add a dirty rectangle for the original position if we're not rendering in trails mode.
+			// Otherwise, it will erase the trail.
 			if (!channel->_sprite->_trails) {
 				movie->getWindow()->addDirtyRect(channel->getBbox());
-				channel->_dirty = true;
 			}
+			channel->_dirty = true;
 			channel->setPosition(d.asInt(), channel->getPosition().y);
 		}
 
@@ -1821,8 +1831,8 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		if (d.asInt() != channel->getPosition().y) {
 			if (!channel->_sprite->_trails) {
 				movie->getWindow()->addDirtyRect(channel->getBbox());
-				channel->_dirty = true;
 			}
+			channel->_dirty = true;
 			channel->setPosition(channel->getPosition().x, d.asInt());
 		}
 
@@ -1962,6 +1972,13 @@ Datum Lingo::getTheCast(Datum &id1, int field) {
 		return d;
 	}
 
+	if (field == kTheMedia) {
+		// every time "the media" is invoked, a new copy is made.
+		member->load();
+		d = Datum(member->duplicate(nullptr, 0));
+		return d;
+	}
+
 	if (!member->hasField(field)) {
 		warning("Lingo::getTheCast(): %s has no property '%s'", id.asString().c_str(), field2str(field));
 		return d;
@@ -1984,6 +2001,17 @@ void Lingo::setTheCast(Datum &id1, int field, Datum &d) {
 	CastMember *member = movie->getCastMember(id);
 	if (!member) {
 		g_lingo->lingoError("Lingo::setTheCast(): %s not found", id.asString().c_str());
+		return;
+	}
+
+	if (field == kTheMedia) {
+		if (d.type != MEDIA) {
+			warning("Lingo::setTheCast(): setting the media with a non-MEDIA object, ignoring");
+			return;
+		}
+		CastMember *replacement = (CastMember *)d.u.obj;
+		Cast *cast = movie->getCast(id);
+		cast->duplicateCastMember(replacement, nullptr, id.member);
 		return;
 	}
 
@@ -2058,10 +2086,13 @@ void Lingo::setTheCastLib(Datum &id1, int field, Datum &d) {
 
 	switch (field) {
 	case kTheFileName:
-		warning("STUB: Lingo::setTheCastLib(): fileName not implemented");
+		{
+			Common::Path castPath = findMoviePath(d.asString());
+			movie->loadCastLibFrom(id1.u.i, castPath);
+		}
 		break;
 	case kTheName:
-		warning("STUB: Lingo::setTheCastLib(): name not implemented");
+		movie->setCastLibName(d.asString(), id1.u.i);
 		break;
 	case kTheNumber:
 		warning("Lingo::setTheCastLib(): number is read-only");
@@ -2327,7 +2358,7 @@ void Lingo::getObjectProp(Datum &obj, Common::String &propName) {
 					break;
 				case kTheRect:
 					d = Datum(Common::Rect(0, 0, 0, 0));
-break;
+					break;
 				case kTheRegPoint:
 					d = Datum(Common::Point(0, 0));
 					break;
@@ -2354,6 +2385,14 @@ break;
 				g_lingo->lingoError("Lingo::getObjectProp(): %s not found and out of cast ID range", id.asString().c_str());
 			}
 
+			g_lingo->push(d);
+			return;
+		}
+
+		if (propName.equals("media")) {
+			// every time "the media" is invoked, a new copy is made.
+			member->load();
+			d = Datum(member->duplicate(nullptr, 0));
 			g_lingo->push(d);
 			return;
 		}
@@ -2467,6 +2506,17 @@ void Lingo::setObjectProp(Datum &obj, Common::String &propName, Datum &val) {
 				return;
 			}
 			g_lingo->lingoError("Lingo::setObjectProp(): %s not found", id.asString().c_str());
+			return;
+		}
+
+		if (propName.equals("media")) {
+			if (val.type != MEDIA) {
+				warning("Lingo::setObjectProp(): setting the media with a non-MEDIA object, ignoring");
+				return;
+			}
+			CastMember *replacement = (CastMember *)val.u.obj;
+			Cast *cast = movie->getCast(id);
+			cast->duplicateCastMember(replacement, nullptr, id.member);
 			return;
 		}
 

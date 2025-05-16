@@ -71,6 +71,7 @@ DrillerEngine::DrillerEngine(OSystem *syst, const ADGameDescription *gd) : Frees
 	_playerWidth = 12;
 	_playerDepth = 32;
 	_stepUpDistance = 64;
+	_roll = 0;
 
 	_initialTankEnergy = 48;
 	_initialTankShield = 50;
@@ -110,9 +111,11 @@ DrillerEngine::DrillerEngine(OSystem *syst, const ADGameDescription *gd) : Frees
 
 	_borderExtra = nullptr;
 	_borderExtraTexture = nullptr;
+	_playerSid = nullptr;
 }
 
 DrillerEngine::~DrillerEngine() {
+	delete _playerSid;
 	delete _drillBase;
 
 	if (_borderExtra) {
@@ -163,6 +166,17 @@ void DrillerEngine::initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *in
 	act->addDefaultInputMapping("w");
 	engineKeyMap->addAction(act);
 
+	// I18N: Illustrates the angle at which you turn left or right.
+	act = new Common::Action("INCANGLE", _("Increase Turn Angle"));
+	act->setCustomEngineActionEvent(kActionIncreaseAngle);
+	act->addDefaultInputMapping("a");
+	engineKeyMap->addAction(act);
+
+	act = new Common::Action("DECANGLE", _("Decrease Turn Angle"));
+	act->setCustomEngineActionEvent(kActionDecreaseAngle);
+	act->addDefaultInputMapping("z");
+	engineKeyMap->addAction(act);
+
 	// I18N: STEP SIZE: Measures the size of one movement in the direction you are facing (1-250 standard distance units (SDUs))
 	act = new Common::Action("INCSTEPSIZE", _("Increase Step Size"));
 	act->setCustomEngineActionEvent(kActionIncreaseStepSize);
@@ -179,6 +193,16 @@ void DrillerEngine::initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *in
 	act->setCustomEngineActionEvent(kActionRiseOrFlyUp);
 	act->addDefaultInputMapping("JOY_B");
 	act->addDefaultInputMapping("r");
+	engineKeyMap->addAction(act);
+
+	act = new Common::Action("ROLL_LEFT", _("Roll left"));
+	act->setCustomEngineActionEvent(kActionRollLeft);
+	act->addDefaultInputMapping("n");
+	engineKeyMap->addAction(act);
+
+	act = new Common::Action("ROLL_RIGHT", _("Roll right"));
+	act->setCustomEngineActionEvent(kActionRollRight);
+	act->addDefaultInputMapping("m");
 	engineKeyMap->addAction(act);
 
 	act = new Common::Action("LOWER", _("Lower/Fly down"));
@@ -253,7 +277,14 @@ void DrillerEngine::gotoArea(uint16 areaID, int entranceID) {
 	_gameStateVars[0x1f] = 0;
 
 	if (areaID == _startArea && entranceID == _startEntrance) {
-		playSound(_soundIndexStart, true);
+		/*if (isC64())
+			_playerSid->startMusic();
+		else {*/
+			playSound(_soundIndexStart, true);
+			// Start playing music, if any, in any supported format
+			playMusic("Matt Gray - The Best Of Reformation - 07 Driller Theme");
+		//}
+
 	} else if (areaID == 127) {
 		assert(entranceID == 0);
 		_pitch = 335;
@@ -482,11 +513,7 @@ Math::Vector3d getProjectionToPlane(const Math::Vector3d &vect, const Math::Vect
 }
 
 void DrillerEngine::pressedKey(const int keycode) {
-	if (keycode == kActionRotateLeft) {
-		rotate(-_angleRotations[_angleRotationIndex], 0);
-	} else if (keycode == kActionRotateRight) {
-		rotate(_angleRotations[_angleRotationIndex], 0);
-	} else if (keycode == kActionIncreaseStepSize) {
+	if (keycode == kActionIncreaseStepSize) {
 		increaseStepSize();
 	} else if (keycode == kActionDecreaseStepSize) {
 		decreaseStepSize();
@@ -494,9 +521,15 @@ void DrillerEngine::pressedKey(const int keycode) {
 		rise();
 	} else if (keycode == kActionLowerOrFlyDown) {
 		lower();
+	} else if (keycode == kActionIncreaseAngle) {
+		changeAngle(1, false);
+	} else if (keycode == kActionDecreaseAngle) {
+		changeAngle(-1, false);
+	} else if (keycode == kActionRollRight) {
+		rotate(0, 0, -_angleRotations[_angleRotationIndex]);
+	} else if (keycode == kActionRollLeft) {
+		rotate(0, 0, _angleRotations[_angleRotationIndex]);
 	} else if (keycode == kActionDeployDrillingRig) {
-		if (isDOS() && isDemo()) // No support for drilling here yet
-			return;
 		clearTemporalMessages();
 		Common::Point gasPocket = _currentArea->_gasPocketPosition;
 		uint32 gasPocketRadius = _currentArea->_gasPocketRadius;
@@ -533,6 +566,9 @@ void DrillerEngine::pressedKey(const int keycode) {
 		_gameStateVars[k8bitVariableEnergy] = _gameStateVars[k8bitVariableEnergy] - 5;
 		const Math::Vector3d gasPocket3D(gasPocket.x, drill.y(), gasPocket.y);
 		float distanceToPocket = (gasPocket3D - drill).length();
+		debugC(1, kFreescapeDebugMove, "Gas pocket position: %f %f %f", gasPocket3D.x(), gasPocket3D.y(), gasPocket3D.z());
+		debugC(1, kFreescapeDebugMove, "Distance to gas pocket: %f", distanceToPocket);
+
 		float success = _useAutomaticDrilling ? 100.0 : 100.0 * (1.0 - distanceToPocket / _currentArea->_gasPocketRadius);
 		insertTemporaryMessage(_messagesList[3], _countdown - 2);
 		addDrill(drill, success > 0);
@@ -610,7 +646,6 @@ Math::Vector3d DrillerEngine::drillPosition() {
 
 	Object *obj = (GeometricObject *)_areaMap[255]->objectWithID(255); // Drill base
 	assert(obj);
-	position.setValue(0, position.x() - 128);
 	position.setValue(2, position.z() - 128);
 	return position;
 }
@@ -739,6 +774,7 @@ void DrillerEngine::addDrill(const Math::Vector3d position, bool gasFound) {
 	// int drillObjectIDs[8] = {255, 254, 253, 252, 251, 250, 248, 247};
 	GeometricObject *obj = nullptr;
 	Math::Vector3d origin = position;
+	origin.setValue(0, origin.x() - 128);
 
 	int16 id;
 	int heightLastObject;
@@ -855,11 +891,11 @@ void DrillerEngine::initGameState() {
 	_gameStateVars[k8bitVariableShieldDrillerJet] = _initialJetShield;
 
 	_playerHeightNumber = 1;
+	_angleRotationIndex = 0;
+	_playerStepIndex = 6;
 	_demoIndex = 0;
 	_demoEvents.clear();
 
-	// Start playing music, if any, in any supported format
-	playMusic("Matt Gray - The Best Of Reformation - 07 Driller Theme");
 }
 
 bool DrillerEngine::checkIfGameEnded() {
@@ -980,7 +1016,8 @@ void DrillerEngine::drawCompass(Graphics::Surface *surface, int x, int y, double
 	double h = magnitude * sin(-degrees * degtorad);
 
 	surface->drawLine(x, y, x+(int)w, y+(int)h, color);
-
+	if (isC64())
+		surface->drawLine(x+1, y, x+1+(int)w, y+(int)h, color);
 
 	degrees = degrees - fov;
 	if (degrees < 0)
@@ -990,7 +1027,8 @@ void DrillerEngine::drawCompass(Graphics::Surface *surface, int x, int y, double
 	h = magnitude * sin(-degrees * degtorad);
 
 	surface->drawLine(x, y, x+(int)w, y+(int)h, color);
-	//surface->drawLine(x, y, x+(int)-w, y+(int)h, color);
+	if (isC64())
+		surface->drawLine(x+1, y, x+1+(int)w, y+(int)h, color);
 }
 
 

@@ -311,7 +311,7 @@ void Movies::prepareGIF(int index) {
 		return;
 	}
 	const Graphics::Surface *surface = decoder.getSurface();
-	_engine->setPalette(0, decoder.getPaletteColorCount(), decoder.getPalette());
+	_engine->setPalette(0, decoder.getPalette().size(), decoder.getPalette().data());
 	Graphics::ManagedSurface& target = _engine->_frontVideoBuffer;
 	const Common::Rect surfaceBounds(0, 0, surface->w, surface->h);
 	target.blitFrom(*surface, surfaceBounds, target.getBounds());
@@ -464,7 +464,10 @@ bool Movies::playMovie(const char *name) { // PlayAnimFla
 		warning("Unsupported fla version: %u, %s", version, fileNamePath.c_str());
 	}
 
-	_engine->_screens->fadeToBlack(_paletteOrg);
+	// this might happen if the movie was interrupted before it even started to load the palette.
+	if (!_paletteOrg.empty()) {
+		_engine->_screens->fadeToBlack(_paletteOrg);
+	}
 
 	_engine->_sound->stopSamples();
 	_engine->_screens->setBlackPal();

@@ -89,6 +89,9 @@ void CMakeProvider::createWorkspace(const BuildSetup &setup) {
 
 	workspace << R"(set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 11) # Globally enable C++11
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+	add_definitions(-DRELEASE_BUILD)
+endif()
 
 find_package(PkgConfig QUIET)
 include(CMakeParseArguments)
@@ -165,8 +168,10 @@ endfunction()
 	for (const std::string &includeDir : setup.includeDirs)
 		includeDirsList += includeDir + ' ';
 
-	workspace << "include_directories(${" << setup.projectDescription << "_SOURCE_DIR}/" <<  setup.filePrefix << " ${" << setup.projectDescription << "_SOURCE_DIR}/" <<  setup.filePrefix << "/engines "
-			  << includeDirsList << "$ENV{"<<LIBS_DEFINE<<"}/include .)\n\n";
+	workspace << "include_directories(. ${"
+			  << setup.projectDescription << "_SOURCE_DIR}/" <<  setup.filePrefix
+			  << " ${" << setup.projectDescription << "_SOURCE_DIR}/" <<  setup.filePrefix << "/engines "
+			  << includeDirsList << "$ENV{"<<LIBS_DEFINE<<"}/include)\n\n";
 
 	workspace << "# Libraries and features\n\n";
 	writeFeatureLibSearch(setup, workspace, "sdl");

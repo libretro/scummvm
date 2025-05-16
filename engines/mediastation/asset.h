@@ -27,7 +27,7 @@
 #include "mediastation/mediastation.h"
 #include "mediastation/datafile.h"
 #include "mediastation/mediascript/scriptconstants.h"
-#include "mediastation/mediascript/operand.h"
+#include "mediastation/mediascript/scriptvalue.h"
 #include "mediastation/assetheader.h"
 
 namespace MediaStation {
@@ -50,7 +50,7 @@ public:
 	}
 
 	// Runs built-in bytecode methods.
-	virtual Operand callMethod(BuiltInMethod methodId, Common::Array<Operand> &args) = 0;
+	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) = 0;
 	// Called to have the asset do any processing, like drawing new frames,
 	// handling time-based event handlers, and such. Some assets don't have any
 	// processing to do.
@@ -66,15 +66,15 @@ public:
 	void setInactive();
 	void setActive();
 	void processTimeEventHandlers();
+	void runEventHandlerIfExists(EventType eventType, const ScriptValue &arg);
 	void runEventHandlerIfExists(EventType eventType);
-	void runKeyDownEventHandlerIfExists(Common::KeyState keyState);
 
 	AssetType type() const;
 	int zIndex() const;
+	Common::Rect getBbox() const;
 	AssetHeader *getHeader() const {
 		return _header;
 	}
-	Common::Rect *getBbox();
 
 protected:
 	AssetHeader *_header = nullptr;

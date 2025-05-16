@@ -24,9 +24,12 @@
 
 #include "common/bitarray.h"
 #include "common/events.h"
+#include "common/file.h"
+#include "common/memstream.h"
 #include "engines/advancedDetector.h"
 #include "graphics/managed_surface.h"
 #include "graphics/surface.h"
+
 
 #include "audio/decoders/wave.h"
 #include "audio/mixer.h"
@@ -69,7 +72,8 @@ enum FreescapeAction {
 	kActionMoveLeft,
 	kActionMoveRight,
 	kActionShoot,
-	kActionChangeAngle,
+	kActionIncreaseAngle,
+	kActionDecreaseAngle,
 	kActionChangeStepSize,
 	kActionToggleRiseLower,
 	kActionRiseOrFlyUp,
@@ -90,6 +94,8 @@ enum FreescapeAction {
 	// Driller
 	kActionDeployDrillingRig,
 	kActionCollectDrillingRig,
+	kActionRollLeft,
+	kActionRollRight,
 	// Total Eclipse
 	kActionRest,
 	// Castle
@@ -98,6 +104,7 @@ enum FreescapeAction {
 	kActionCrawlMode,
 	kActionSelectPrince,
 	kActionSelectPrincess,
+	kActionQuit,
 };
 
 typedef Common::HashMap<uint16, Area *> AreaMap;
@@ -340,7 +347,7 @@ public:
 	void decreaseStepSize();
 	void changeStepSize();
 
-	void changeAngle();
+	void changeAngle(int offset, bool wrapAround);
 	bool rise();
 	void lower();
 	bool checkFloor(Math::Vector3d currentPosition);
@@ -351,7 +358,7 @@ public:
 	int _maxShield;
 	int _maxEnergy;
 
-	void rotate(float xoffset, float yoffset);
+	void rotate(float xoffset, float yoffset, float zoffset);
 	// Input state
 	float _lastFrame;
 
@@ -363,6 +370,7 @@ public:
 	// Euler Angles
 	float _yaw;
 	float _pitch;
+	int _roll;
 	int _angleRotationIndex;
 	Common::Array<float> _angleRotations;
 
@@ -387,8 +395,8 @@ public:
 	int _playerStepIndex;
 	Common::Array<int> _playerSteps;
 
-	Common::Point crossairPosToMousePos(const Common::Point crossairPos);
-	Common::Point mousePosToCrossairPos(const Common::Point mousePos);
+	Common::Point crossairPosToMousePos(const Common::Point &crossairPos);
+	Common::Point mousePosToCrossairPos(const Common::Point &mousePos);
 	void warpMouseToCrossair(void);
 
 	// Effects
@@ -498,7 +506,7 @@ public:
 	float _farClipPlane;
 
 	// Text messages and Fonts
-	void insertTemporaryMessage(const Common::String message, int deadline);
+	void insertTemporaryMessage(const Common::String &message, int deadline);
 	void getLatestMessages(Common::String &message, int &deadline);
 	void clearTemporalMessages();
 	Common::StringArray _temporaryMessages;
@@ -588,6 +596,10 @@ public:
 
 	// Random
 	Common::RandomSource *_rnd;
+
+	// C64 specifics
+	byte *decompressC64RLE(byte *buffer, int *size, byte marker);
+	byte *_extraBuffer;
 };
 
 enum GameReleaseFlags {
@@ -602,8 +614,8 @@ enum GameReleaseFlags {
 	GF_CPC_VIRTUALWORLDS = (1 << 8),
 	GF_ATARI_RETAIL = (1 << 9),
 	GF_ATARI_BUDGET = (1 << 10),
-	GF_C64_RETAIL = (1 << 11),
-	GF_C64_BUDGET = (1 << 12),
+	GF_C64_TAPE = (1 << 11),
+	GF_C64_DISC = (1 << 12),
 };
 
 extern FreescapeEngine *g_freescape;

@@ -105,6 +105,7 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_cameraRight = Math::Vector3d(0, 0, 0);
 	_yaw = 0;
 	_pitch = 0;
+	_roll = 0;
 	_upVector = Math::Vector3d(0, 1, 0);
 	_mouseSensitivity = 0.25f;
 	_demoMode = false;
@@ -142,6 +143,7 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_uiTexture = nullptr;
 	_fontLoaded = false;
 	_dataBundle = nullptr;
+	_extraBuffer = nullptr;
 
 	_lastFrame = 0;
 	_nearClipPlane = 2;
@@ -263,6 +265,10 @@ FreescapeEngine::~FreescapeEngine() {
 		_savedScreen->free();
 		delete _savedScreen;
 	}
+
+	if (_extraBuffer)
+		free(_extraBuffer);
+	_extraBuffer = nullptr;
 }
 
 void FreescapeEngine::drawBorder() {
@@ -390,7 +396,8 @@ void FreescapeEngine::flashScreen(int backgroundColor) {
 }
 
 void FreescapeEngine::takeDamageFromSensor() {
-	_gameStateVars[k8bitVariableShield]--;
+	if (_gameStateVars[k8bitVariableShield] > 0)
+		_gameStateVars[k8bitVariableShield]--;
 }
 
 void FreescapeEngine::clearBackground() {
@@ -418,7 +425,7 @@ void FreescapeEngine::drawFrame() {
 
 	float aspectRatio = isCastle() ? 1.6 : 2.18;
 	_gfx->updateProjectionMatrix(75.0, aspectRatio, _nearClipPlane, farClipPlane);
-	_gfx->positionCamera(_position, _position + _cameraFront);
+	_gfx->positionCamera(_position, _position + _cameraFront, _roll);
 
 	if (_underFireFrames > 0) {
 		int underFireColor = _currentArea->_underFireBackgroundColor;
@@ -455,10 +462,6 @@ void FreescapeEngine::drawFrame() {
 				drawSensorShoot(sensor);
 		}
 		_underFireFrames--;
-		if (_underFireFrames == 0) {
-			_currentArea->unremapColor(_currentArea->_usualBackgroundColor);
-			_currentArea->unremapColor(_currentArea->_skyColor);
-		}
 	}
 
 	if (_shootingFrames > 0) {
@@ -474,6 +477,11 @@ void FreescapeEngine::drawFrame() {
 
 	drawBorder();
 	drawUI();
+
+	if (_underFireFrames == 0) {
+		_currentArea->unremapColor(_currentArea->_usualBackgroundColor);
+		_currentArea->unremapColor(_currentArea->_skyColor);
+	}
 }
 
 void FreescapeEngine::pressedKey(const int keycode) {}
@@ -486,17 +494,17 @@ void FreescapeEngine::resetInput() {
 	warpMouseToCrossair();
 	_eventManager->purgeMouseEvents();
 	_eventManager->purgeKeyboardEvents();
-	rotate(0, 0);
+	rotate(0, 0, 0);
 }
 
-Common::Point FreescapeEngine::crossairPosToMousePos(const Common::Point crossairPos) {
+Common::Point FreescapeEngine::crossairPosToMousePos(const Common::Point &crossairPos) {
 	Common::Point mousePos;
 	mousePos.x = g_system->getWidth() * crossairPos.x / _screenW;
 	mousePos.y = g_system->getHeight() * crossairPos.y / _screenH;
 	return mousePos;
 }
 
-Common::Point FreescapeEngine::mousePosToCrossairPos(const Common::Point mousePos) {
+Common::Point FreescapeEngine::mousePosToCrossairPos(const Common::Point &mousePos) {
 	Common::Point crossairPos;
 	crossairPos.x = _screenW * mousePos.x / g_system->getWidth();
 	crossairPos.y = _screenH * mousePos.y / g_system->getHeight();
@@ -527,6 +535,7 @@ void FreescapeEngine::processInput() {
 			if (event.type == Common::EVENT_SCREEN_CHANGED)
 				; // Allow event
 			else if (_gameStateControl == kFreescapeGameStateEnd
+				     && _endGamePlayerEndArea
 			         && (event.type == Common::EVENT_KEYDOWN || event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START)) {
 				_endGameKeyPressed = true;
 				continue;
@@ -557,13 +566,19 @@ void FreescapeEngine::processInput() {
 				shoot();
 				break;
 			case kActionRotateUp:
-				rotate(0, 5);
+				rotate(0, _angleRotations[_angleRotationIndex], 0);
 				break;
 			case kActionRotateDown:
-				rotate(0, -5);
+				rotate(0, -_angleRotations[_angleRotationIndex], 0);
+				break;
+			case kActionRotateLeft:
+				rotate(-_angleRotations[_angleRotationIndex], 0, 0);
+				break;
+			case kActionRotateRight:
+				rotate(_angleRotations[_angleRotationIndex], 0, 0);
 				break;
 			case kActionTurnBack:
-				rotate(180, 0);
+				rotate(180, 0, 0);
 				break;
 			case kActionToggleClipMode:
 				_noClipMode = !_noClipMode;
@@ -641,7 +656,7 @@ void FreescapeEngine::processInput() {
 					event.relMouse.y = -event.relMouse.y;
 
 				_eventManager->purgeMouseEvents();
-				rotate(event.relMouse.x * _mouseSensitivity, event.relMouse.y * _mouseSensitivity);
+				rotate(event.relMouse.x * _mouseSensitivity, event.relMouse.y * _mouseSensitivity, 0);
 			}
 			break;
 
@@ -953,6 +968,7 @@ void FreescapeEngine::initGameState() {
 	_avoidRenderingFrames = 0;
 	_yaw = 0;
 	_pitch = 0;
+	_roll = 0;
 	_endGameKeyPressed = false;
 	_endGamePlayerEndArea = false;
 
@@ -968,9 +984,10 @@ void FreescapeEngine::initGameState() {
 	_exploredAreas.clear();
 }
 
-void FreescapeEngine::rotate(float xoffset, float yoffset) {
+void FreescapeEngine::rotate(float xoffset, float yoffset, float zoffset) {
 	_yaw -= xoffset;
 	_pitch += yoffset;
+	_roll += zoffset;
 
 	// Make sure that when pitch is out of bounds, screen doesn't get flipped
 	if (_pitch > 360.0f)
@@ -982,6 +999,11 @@ void FreescapeEngine::rotate(float xoffset, float yoffset) {
 		_yaw -= 360.0f;
 	if (_yaw < 0.0f)
 		_yaw += 360.0f;
+
+	if (_roll > 360.0f)
+		_roll -= 360.0f;
+	if (_roll < 0.0f)
+		_roll += 360.0f;
 
 	updateCamera();
 }
@@ -1088,7 +1110,7 @@ Common::Error FreescapeEngine::loadGameStreamExtended(Common::SeekableReadStream
 	return Common::kNoError;
 }
 
-void FreescapeEngine::insertTemporaryMessage(const Common::String message, int deadline) {
+void FreescapeEngine::insertTemporaryMessage(const Common::String &message, int deadline) {
 	_temporaryMessages.insert_at(0, message);
 	_temporaryMessageDeadlines.insert_at(0, deadline);
 }
@@ -1114,7 +1136,7 @@ byte *FreescapeEngine::getPaletteFromNeoImage(Common::SeekableReadStream *stream
 	Image::NeoDecoder decoder;
 	decoder.loadStream(*stream);
 	byte *palette = (byte *)malloc(16 * 3 * sizeof(byte));
-	memcpy(palette, decoder.getPalette(), 16 * 3 * sizeof(byte));
+	decoder.getPalette().grab(palette, 0, 16);
 	return palette;
 }
 
@@ -1124,7 +1146,7 @@ Graphics::ManagedSurface *FreescapeEngine::loadAndConvertNeoImage(Common::Seekab
 	decoder.loadStream(*stream);
 	Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
 	surface->copyFrom(*decoder.getSurface());
-	surface->convertToInPlace(_gfx->_currentPixelFormat, decoder.getPalette(), decoder.getPaletteColorCount());
+	surface->convertToInPlace(_gfx->_currentPixelFormat, decoder.getPalette().data(), decoder.getPalette().size());
 	return surface;
 }
 
@@ -1133,7 +1155,7 @@ Graphics::ManagedSurface *FreescapeEngine::loadAndConvertDoodleImage(Common::See
 	decoder.loadStreams(*bitmap, *color1, *color2);
 	Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
 	surface->copyFrom(*decoder.getSurface());
-	surface->convertToInPlace(_gfx->_currentPixelFormat, decoder.getPalette(), decoder.getPaletteColorCount());
+	surface->convertToInPlace(_gfx->_currentPixelFormat, decoder.getPalette().data(), decoder.getPalette().size());
 	return surface;
 }
 

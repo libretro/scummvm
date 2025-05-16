@@ -72,7 +72,8 @@ static void qd_show_load_progress(int percents_loaded, void *p);
 QDEngineEngine::QDEngineEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("QDEngine") {
 	g_engine = this;
-	_pixelformat = Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0);
+
+	_pixelformat = Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0);
 
 	_screenW = 640;
 	_screenH = 480;
@@ -87,6 +88,7 @@ QDEngineEngine::QDEngineEngine(OSystem *syst, const ADGameDescription *gameDesc)
 	ConfMan.registerDefault("sound_volume", 255);
 	ConfMan.registerDefault("splash_enabled", true);
 	ConfMan.registerDefault("splash_time", 3000);
+	ConfMan.registerDefault("16bpp", false);
 
 	memset(_tagMap, 0, sizeof(_tagMap));
 }
@@ -190,6 +192,10 @@ Common::Error QDEngineEngine::run() {
 	if (ConfMan.getBool("splash_enabled")) {
 		sp.wait(ConfMan.getInt("splash_time"));
 		sp.destroy();
+	}
+
+	if (debugChannelSet(-1, kDebug16BppMode) || ConfMan.getBool("16bpp")) {
+		_pixelformat = Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0);
 	}
 
 	init_graphics();
@@ -467,7 +473,10 @@ void QDEngineEngine::init_graphics() {
 
 	grDispatcher::set_instance(_grD);
 
-	grDispatcher::instance()->init(g_engine->_screenW, g_engine->_screenH, GR_RGB565);
+	if (g_engine->_pixelformat.bytesPerPixel == 4)
+		grDispatcher::instance()->init(g_engine->_screenW, g_engine->_screenH, GR_RGBA8888);
+	else
+		grDispatcher::instance()->init(g_engine->_screenW, g_engine->_screenH, GR_RGB565);
 
 	grDispatcher::instance()->setClip();
 	grDispatcher::instance()->setClipMode(1);

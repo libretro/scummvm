@@ -52,12 +52,13 @@ public:
 	inline Common::Point getPosition() { return _sprite->getPosition(); };
 	// Return the area of screen to be used for drawing content.
 	inline Common::Rect getBbox(bool unstretched = false) { return _sprite->getBbox(unstretched); };
+	Common::Rect getRollOverBbox();
 
 	bool isStretched();
 	bool isDirty(Sprite *nextSprite = nullptr);
 	bool isEmpty();
 	bool isActiveText();
-	bool isMouseIn(const Common::Point &pos);
+	CollisionTest isMouseIn(const Common::Point &pos);
 	bool isMatteIntersect(Channel *channel);
 	bool isMatteWithin(Channel *channel);
 	bool isActiveVideo();
@@ -115,6 +116,8 @@ public:
 
 	// Used in film loops
 	uint _filmLoopFrame;
+
+	Common::Rect _rollOverBbox;
 
 private:
 	Graphics::ManagedSurface *getSurface();

@@ -375,6 +375,7 @@ enum DatumType {
 	GLOBALREF,
 	INT,
 	LOCALREF,
+	MEDIA,
 	MENUREF,
 	OBJECT,
 	PARRAY,
@@ -440,10 +441,12 @@ struct CastMemberID {
 };
 
 enum CompareResult {
-	kCompareLess	= 1 << 0,
-	kCompareEqual	= 1 << 1,
-	kCompareGreater = 1 << 2,
-	kCompareError	= 1 << 3,
+	kCompareLess	        = 1 << 0,
+	kCompareEqual           = 1 << 1,
+	kCompareGreater         = 1 << 2,
+	kCompareLessEqual       = 1 << 3,
+	kCompareGreaterEqual    = 1 << 4,
+	kCompareError			= 1 << 5,
 };
 
 enum DebugDrawModes {
@@ -462,6 +465,12 @@ const char *spriteType2str(SpriteType type);
 const char *inkType2str(InkType type);
 const char *symbolType2str(SymbolType type);
 Common::String objectType2str(int fl);
+
+enum CollisionTest {
+	kCollisionNo = 0,
+	kCollisionYes,
+	kCollisionHole,
+};
 
 } // End of namespace Director
 

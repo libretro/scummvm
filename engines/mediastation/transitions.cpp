@@ -37,8 +37,8 @@ enum TransitionType {
 	kTransitionCircleOut = 328
 };
 
-void MediaStationEngine::effectTransition(Common::Array<Operand> &args) {
-	TransitionType transitionType = static_cast<TransitionType>(args[0].getInteger());
+void MediaStationEngine::effectTransition(Common::Array<ScriptValue> &args) {
+	TransitionType transitionType = static_cast<TransitionType>(args[0].asParamToken());
 	switch (transitionType) {
 	case kTransitionFadeToBlack:
 	case kTransitionSetToBlack: {
@@ -64,23 +64,23 @@ void MediaStationEngine::effectTransition(Common::Array<Operand> &args) {
 	case kTransitionFadeToPaletteObject: {
 		// TODO: Implement transition.
 		warning("MediaStationEngine::effectTransition(): Fading to palette object not implemented, changing palette immediately");
-		Asset *asset = args[1].getAsset();
+		Asset *asset = g_engine->getAssetById(args[1].asAssetId());
 		g_engine->setPalette(asset);
 		break;
 	}
 
 	case kTransitionSetToPaletteObject: {
-		Asset *asset = args[1].getAsset();
+		Asset *asset = g_engine->getAssetById(args[1].asAssetId());
 		g_engine->setPalette(asset);
 		break;
 	}
 
 	case kTransitionSetToPercentOfPaletteObject: {
-		double percentComplete = args[1].getDouble();
+		double percentComplete = args[1].asFloat();
 
 		// TODO: Implement percent of palette transition.
 		warning("MediaStationEngine::effectTransition(): Setting to %f%% of palette not implemented, changing palette immediately", percentComplete);
-		Asset *asset = args[2].getAsset();
+		Asset *asset = g_engine->getAssetById(args[2].asAssetId());
 		g_engine->setPalette(asset);
 		break;
 	}

@@ -285,6 +285,10 @@ struct GLContext {
 	FrameBuffer *fb;
 	Common::Rect renderRect;
 
+	// scissor
+	bool scissor_test_enabled;
+	int scissor[4];
+
 	// blending
 	bool blending_enabled;
 	int source_blending_factor;
@@ -447,8 +451,6 @@ struct GLContext {
 	float fog_density;
 	float fog_start;
 	float fog_end;
-
-	Common::Rect _scissorRect;
 
 	bool _enableDirtyRectangles;
 

@@ -26,15 +26,6 @@
 
 namespace Efh {
 
-void EfhEngine::setDefaultNoteDuration() {
-	// Original implementation is based on the int1C, which is triggered at 18.2065Hz.
-	// Every 4 times, it sets a flag (thus, approx every 220ms)
-	// The function was checking the keyboard in a loop, incrementing a counter and setting the last character read
-	// The "_defaultNoteDuration" was then set to 7 times this counter
-	//
-	// No implementation required in ScummVM
-}
-
 void EfhEngine::decryptImpFile(bool techMapFl) {
 	debugC(1, kDebugUtils, "decryptImpFile %s", techMapFl ? "True" : "False");
 	uint16 counter = 0;
@@ -59,7 +50,7 @@ void EfhEngine::decryptImpFile(bool techMapFl) {
 				_imp1PtrArray[counter++] = curPtr;
 		} else
 			++curPtr;
-	} while (*curPtr != 0x60 && counter <= target && !shouldQuitGame());
+	} while (*curPtr != 0x60 && counter <= target && !shouldQuit());
 
 	if (ConfMan.getBool("dump_scripts")) {
 		// Dump the decompressed IMP file
@@ -149,9 +140,10 @@ Common::KeyCode EfhEngine::getLastCharAfterAnimCount(int16 delay) {
 		return Common::KEYCODE_INVALID;
 
 	Common::KeyCode lastChar = Common::KEYCODE_INVALID;
+	_customAction = kActionNone;
 
 	uint32 lastMs = _system->getMillis();
-	while (delay > 0 && lastChar == Common::KEYCODE_INVALID && !shouldQuitGame()) {
+	while (delay > 0 && lastChar == Common::KEYCODE_INVALID && _customAction == kActionNone && !shouldQuit()) {
 		_system->delayMillis(20);
 		uint32 newMs = _system->getMillis();
 
@@ -176,7 +168,7 @@ Common::KeyCode EfhEngine::getInput(int16 delay) {
 	Common::KeyCode retVal = Common::KEYCODE_INVALID;
 
 	uint32 lastMs = _system->getMillis();
-	while (delay > 0 && !shouldQuitGame()) {
+	while (delay > 0 && !shouldQuit()) {
 		_system->delayMillis(20);
 		uint32 newMs = _system->getMillis();
 
@@ -194,40 +186,13 @@ Common::KeyCode EfhEngine::getInput(int16 delay) {
 	return retVal;
 }
 
-Common::KeyCode EfhEngine::getKeyCode(const Common::Event &event) {
-	Common::KeyCode retVal = event.kbd.keycode;
-	if (retVal == Common::KEYCODE_LCTRL || retVal == Common::KEYCODE_RCTRL || retVal == Common::KEYCODE_RALT || retVal == Common::KEYCODE_LALT)
-		retVal = Common::KEYCODE_INVALID;
-	else  if (event.kbd.flags & Common::KBD_CTRL) {
-		switch (retVal) {
-		case Common::KEYCODE_l:
-			retVal = Common::KEYCODE_F7;
-			break;
-		case Common::KEYCODE_s:
-			retVal = Common::KEYCODE_F5;
-			break;
-		case Common::KEYCODE_x:
-		case Common::KEYCODE_q:
-			_shouldQuit = true;
-			retVal = Common::KEYCODE_INVALID;
-			break;
-		default:
-			break;
-		}
-	} else if (event.kbd.flags & Common::KBD_ALT && retVal == Common::KEYCODE_F4) {
-		_shouldQuit = true;
-	}
-
-	return retVal;
-}
-
 Common::KeyCode EfhEngine::waitForKey() {
 	debugC(1, kDebugUtils, "waitForKey");
 	Common::KeyCode retVal = Common::KEYCODE_INVALID;
 	Common::Event event;
 
 	uint32 lastMs = _system->getMillis();
-	while (retVal == Common::KEYCODE_INVALID && !shouldQuitGame()) {
+	while (retVal == Common::KEYCODE_INVALID && !shouldQuit()) {
 		_system->delayMillis(20);
 		uint32 newMs = _system->getMillis();
 
@@ -237,21 +202,15 @@ Common::KeyCode EfhEngine::waitForKey() {
 		}
 
 		_system->getEventManager()->pollEvent(event);
-		if (event.type == Common::EVENT_KEYUP)
-			retVal = getKeyCode(event);
+		if (event.type == Common::EVENT_KEYUP) {
+			if ((event.kbd.flags & Common::KBD_CTRL) && event.kbd.keycode == Common::KEYCODE_q)
+				quitGame();
+			if (!event.kbd.flags)
+				retVal = event.kbd.keycode;
+		}
 	}
 
 	return retVal;
-}
-
-Common::KeyCode EfhEngine::mapInputCode(Common::KeyCode input) {
-	// Original is doing:
-	// if input < a or > z : return input
-	// else return (input + 0xE0)
-	// ex: 'a' = 0x61 + 0xE0 = 0x0141, but it's a uint8 so it's 0x41 which is 'A'.
-	// So basically the original works with uppercase letters and do not alter the other inputs.
-	// => no implementation needed.
-	return input;
 }
 
 Common::KeyCode EfhEngine::handleAndMapInput(bool animFl) {
@@ -260,13 +219,21 @@ Common::KeyCode EfhEngine::handleAndMapInput(bool animFl) {
 	Common::Event event;
 	_system->getEventManager()->pollEvent(event);
 	Common::KeyCode retVal = Common::KEYCODE_INVALID;
+	_customAction = kActionNone;
 
 	uint32 lastMs = _system->getMillis();
-	while (retVal == Common::KEYCODE_INVALID && !shouldQuitGame()) {
+	while (retVal == Common::KEYCODE_INVALID && _customAction == kActionNone && !shouldQuit()) {
 		_system->getEventManager()->pollEvent(event);
 
-		if (event.type == Common::EVENT_KEYUP)
-			retVal = getKeyCode(event);
+		if (event.type == Common::EVENT_KEYUP) {
+			if ((event.kbd.flags & Common::KBD_CTRL) && event.kbd.keycode == Common::KEYCODE_q)
+				quitGame();
+			if (!event.kbd.flags)
+				retVal = event.kbd.keycode;
+		}
+
+		if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START)
+			_customAction = event.customType;
 
 		if (animFl) {
 			_system->delayMillis(20);
@@ -280,35 +247,6 @@ Common::KeyCode EfhEngine::handleAndMapInput(bool animFl) {
 			break;
 	}
 	return retVal;
-}
-
-Common::KeyCode EfhEngine::getInputBlocking() {
-	debugC(1, kDebugUtils, "getInputBlocking");
-	// The original checks for the joystick input
-	Common::Event event;
-	_system->getEventManager()->pollEvent(event);
-	Common::KeyCode retVal = Common::KEYCODE_INVALID;
-
-	uint32 lastMs = _system->getMillis();
-	while (retVal == Common::KEYCODE_INVALID && !shouldQuitGame()) {
-		_system->getEventManager()->pollEvent(event);
-
-		if (event.type == Common::EVENT_KEYUP)
-			retVal = getKeyCode(event);
-
-		_system->delayMillis(20);
-		uint32 newMs = _system->getMillis();
-
-		if (newMs - lastMs >= 220) {
-			lastMs = newMs;
-			handleAnimations();
-		}
-	}
-	return retVal;
-}
-
-void EfhEngine::setNumLock() {
-	// No implementation in ScummVM
 }
 
 bool EfhEngine::getValidationFromUser() {

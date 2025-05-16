@@ -67,7 +67,7 @@ void Room806::init() {
 		hotspot_set_active(_G(currentSceneDef).hotspots, "CRANK", false);
 	}
 
-	if (_G(flags)[V270] == 806) {
+	if (_G(flags)[V270] != 806) {
 		hotspot_set_active(_G(currentSceneDef).hotspots, "CHARIOT", false);
 	} else {
 		digi_stop(2);
@@ -1112,6 +1112,7 @@ void Room806::parser() {
 }
 
 void Room806::daemon() {
+	warning("Trigger %d", _G(kernel).trigger);
 	switch (_G(kernel).trigger) {
 	case 101:
 		ws_hide_walker(_mcTrekMach);
@@ -1169,7 +1170,7 @@ void Room806::daemon() {
 
 	case 113:
 		terminateMachine(_candlemanShadow3Mach);
-		ws_unhide_walker(_G(my_walker));
+		ws_unhide_walker(_mcTrekMach);
 
 		break;
 
@@ -1529,7 +1530,7 @@ void Room806::daemon() {
 
 	case 701:
 		if (!_unkVar2 && !_unkVar1) {
-			setGlobals1(_unkSeries1, 1, 22, 22, 22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+			setGlobals1(_meiTrekHandsOnHipsPos3Series, 1, 22, 22, 22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 			sendWSMessage_110000(_mcTrekMach, 703);
 			_unkVar2 = 1;
 		}

@@ -68,6 +68,7 @@ protected:
 	void printPatchedMI1CannibalString(int textSlot, const byte *ptr);
 
 	void saveLoadWithSerializer(Common::Serializer &s) override;
+	int checkSoundEngineSaveDataSize(Serializer &s) override;
 
 	void readMAXS(int blockSize) override;
 
@@ -93,6 +94,7 @@ protected:
 	void injectMISESpeech();
 
 	void workaroundLoomHetchelDoubleHead(Actor *a, int act);
+	bool workaroundMonkey1JollyRoger(byte callerOpcode, int arg);
 
 	/**
 	 * Fetch the next script word, then if cond is *false*, perform a relative jump.
@@ -163,6 +165,7 @@ protected:
 	void o5_loadRoomWithEgo();
 	void o5_matrixOps();
 	void o5_move();
+	void o5_move_segafix();
 	void o5_multiply();
 	void o5_notEqualZero();
 	void o5_or();

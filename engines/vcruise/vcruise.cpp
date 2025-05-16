@@ -125,11 +125,24 @@ Common::Error VCruiseEngine::run() {
 		if (!f->open(_gameDescription->desc.filesDescriptions[0].fileName))
 			error("Couldn't open installer package '%s'", _gameDescription->desc.filesDescriptions[0].fileName);
 
-		Common::Archive *installerPackageArchive = Common::createGenteeInstallerArchive(f, "#setuppath#\\", true);
+		Common::Archive *installerPackageArchive = Common::createGenteeInstallerArchive(f, "#setuppath#/", false, true);
 		if (!installerPackageArchive)
 			error("Couldn't load installer package '%s'", _gameDescription->desc.filesDescriptions[0].fileName);
 
 		SearchMan.add("VCruiseInstallerPackage", installerPackageArchive);
+	}
+
+	if (_gameDescription->desc.flags & VCRUISE_GF_USE_SETUP_EXE) {
+		Common::File *f = new Common::File();
+
+		if (!f->open(_gameDescription->desc.filesDescriptions[1].fileName))
+			error("Couldn't open installer package '%s'", _gameDescription->desc.filesDescriptions[1].fileName);
+
+		Common::Archive *setupPackageArchive = Common::createGenteeInstallerArchive(f, "#setuppath#/", true, true);
+		if (!setupPackageArchive)
+			error("Couldn't load installer package '%s'", _gameDescription->desc.filesDescriptions[1].fileName);
+
+		SearchMan.add("VCruiseSetupPackage", setupPackageArchive);
 	}
 
 	syncSoundSettings();

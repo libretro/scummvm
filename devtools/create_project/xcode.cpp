@@ -1121,6 +1121,10 @@ XcodeProvider::ValueList& XcodeProvider::getResourceFiles(const BuildSetup &setu
 			files.push_back("engines/playground3d/shaders/playground3d_cube.vertex");
 			files.push_back("engines/playground3d/shaders/playground3d_fade.fragment");
 			files.push_back("engines/playground3d/shaders/playground3d_fade.vertex");
+			files.push_back("engines/playground3d/shaders/playground3d_offset.fragment");
+			files.push_back("engines/playground3d/shaders/playground3d_offset.vertex");
+			files.push_back("engines/playground3d/shaders/playground3d_viewport.fragment");
+			files.push_back("engines/playground3d/shaders/playground3d_viewport.vertex");
 		}
 		if (CONTAINS_DEFINE(setup.defines, "ENABLE_STARK")) {
 			files.push_back("engines/stark/shaders/stark_actor.fragment");
@@ -1338,6 +1342,7 @@ void XcodeProvider::setupBuildConfiguration(const BuildSetup &setup) {
 	scummvm_WarningCFlags.push_back("-Wno-undefined-var-template");
 	scummvm_WarningCFlags.push_back("-Wno-pragma-pack");
 	scummvm_WarningCFlags.push_back("-Wc++11-extensions");
+	scummvm_WarningCFlags.push_back("-Werror=return-type");
 	ADD_SETTING_LIST(scummvm_Debug, "WARNING_CFLAGS", scummvm_WarningCFlags, kSettingsQuoteVariable | kSettingsAsList, 5);
 	ValueList scummvm_defines(_defines);
 	REMOVE_DEFINE(scummvm_defines, "MACOSX");

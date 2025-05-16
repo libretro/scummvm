@@ -83,10 +83,12 @@ public:
 	// QTVR stuff
 	////////////////
 	void setTargetSize(uint16 w, uint16 h);
+	void setOrigin(int left, int top) { _origin = Common::Point(left, top); }
 
 	void handleMouseMove(int16 x, int16 y);
 	void handleMouseButton(bool isDown, int16 x = -1, int16 y = -1, bool repeat = false);
 	void handleKey(Common::KeyState &state, bool down, bool repeat = false);
+	void handleQuit();
 
 	Common::Point getLastClick() { return _mouseDrag; }
 
@@ -95,6 +97,7 @@ public:
 	float getTiltAngle() const { return _tiltAngle; }
 	void setTiltAngle(float tiltAngle);
 	float getFOV() const { return _fov; }
+	float getHFOV() const { return _hfov; }
 	bool setFOV(float fov);
 	int getCurrentNodeID() { return _currentSample == -1 ? 0 : _panoTrack->panoSamples[_currentSample].hdr.nodeID; }
 	Common::String getCurrentNodeName();
@@ -181,6 +184,11 @@ private:
 	void computeInteractivityZones();
 
 	uint16 _width, _height;
+	// _origin is the top left corner point of the panorama video being played
+	// by director engine or whichever engine is using QTVR decoder currently
+	// decoder handles swing transitions (in QTVR xtra) internally
+	// Hence, it needs to know where to blit the projected panorama during transition
+	Common::Point _origin;
 
 public:
 	int _currentSample = -1;
@@ -337,7 +345,7 @@ private:
 		const Graphics::Surface *decodeNextFrame();
 		Audio::Timestamp getFrameTime(uint frame) const;
 		const byte *getPalette() const;
-		bool hasDirtyPalette() const { return _curPalette; }
+		bool hasDirtyPalette() const { return _dirtyPalette; }
 		bool setReverse(bool reverse);
 		bool isReversed() const { return _reversed; }
 		bool canDither() const;
@@ -360,12 +368,6 @@ private:
 		const byte *_curPalette;
 		mutable bool _dirtyPalette;
 		bool _reversed;
-
-		// Forced dithering of frames
-		Graphics::Palette _forcedDitherPalette;
-		byte *_ditherTable;
-		Graphics::Surface *_ditherFrame;
-		const Graphics::Surface *forceDither(const Graphics::Surface &frame);
 
 		Common::SeekableReadStream *getNextFramePacket(uint32 &descId);
 		uint32 getCurFrameDuration();            // media time
@@ -408,19 +410,36 @@ private:
 		QuickTimeDecoder *_decoder;
 		Common::QuickTimeParser::Track *_parent;
 
-		void projectPanorama();
+		void projectPanorama(uint8 scaleFactor, float fov, float hfov, float panAngle, float tiltAngle);
+		void swingTransitionHandler();
+		void boxAverage(Graphics::Surface *sourceSurface, uint8 scaleFactor);
+		Graphics::Surface* upscalePanorama(Graphics::Surface *sourceSurface, int8 level);
 
 		const Graphics::Surface *bufferNextFrame();
 
 	public:
 		Graphics::Surface *_constructedPano;
+		Graphics::Surface *_upscaledConstructedPano;
 		Graphics::Surface *_constructedHotspots;
 		Graphics::Surface *_projectedPano;
 		Graphics::Surface *_planarProjection;
 
+		// Current upscale level (0 or 1 or 2) of _upscaledConstructedPanorama compared to _constructedPano
+		// level 0 means that constructedPano was just contructed and hasn't been upscaled yet
+		// level 1 means only upscaled height (2x pixels) 
+		// level 2 means upscaled height and width (4x pixels)
+		uint8 _upscaleLevel = 0;
+
+		// Defining these to make the swing transition happen
+		// which requires storing the previous point during every change in FOV, Pan Angle and Tilt Angle
+		// If swing transition is called, this will be the start point of the transition
+		float _currentFOV = 0;
+		float _currentHFOV = 0;
+		float _currentPanAngle = 0;
+		float _currentTiltAngle = 0;
+
 	private:
 		bool _isPanoConstructed;
-
 		bool _dirty;
 	};
 };

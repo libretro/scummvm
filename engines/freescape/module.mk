@@ -23,11 +23,13 @@ MODULE_OBJS := \
 	games/driller/amiga.o \
 	games/driller/atari.o \
 	games/driller/c64.o \
+	games/driller/c64.music.o \
 	games/driller/cpc.o \
 	games/driller/dos.o \
 	games/driller/driller.o \
 	games/driller/zx.o \
 	games/eclipse/atari.o \
+	games/eclipse/c64.o \
 	games/eclipse/dos.o \
 	games/eclipse/eclipse.o \
 	games/eclipse/cpc.o \
@@ -36,6 +38,7 @@ MODULE_OBJS := \
 	gfx.o \
 	loaders/8bitImage.o \
 	loaders/8bitBinaryLoader.o \
+	loaders/c64.o \
 	language/8bitDetokeniser.o \
 	language/instruction.o \
 	metaengine.o \

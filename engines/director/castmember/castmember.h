@@ -22,6 +22,8 @@
 #ifndef DIRECTOR_CASTMEMBER_CASTMEMBER_H
 #define DIRECTOR_CASTMEMBER_CASTMEMBER_H
 
+#include "common/rect.h"
+
 #include "director/archive.h"
 #include "director/stxt.h"
 
@@ -48,6 +50,8 @@ public:
 	CastMember(Cast *cast, uint16 castId);
 	virtual ~CastMember() {}
 
+	virtual CastMember *duplicate(Cast *cast, uint16 castId);
+
 	Cast *getCast() { return _cast; }
 	uint16 getID() { return _castId; }
 	CastMemberInfo *getInfo();
@@ -62,7 +66,7 @@ public:
 	void setModified(bool modified);
 	virtual Graphics::MacWidget *createWidget(Common::Rect &bbox, Channel *channel, SpriteType spriteType) { return nullptr; }
 	virtual void updateWidget(Graphics::MacWidget *widget, Channel *channel) {}
-	virtual void updateFromWidget(Graphics::MacWidget *widget) {}
+	virtual void updateFromWidget(Graphics::MacWidget *widget, bool spriteEditable) {}
 	virtual Common::Rect getInitialRect() { return _initialRect; }
 
 	virtual void setColors(uint32 *fgcolor, uint32 *bgcolor) { return; }
@@ -93,6 +97,8 @@ public:
 	// Return the registration offset, assuming a stretched width and height value.
 	// Offset is relative to the top-left corner of the widget.
 	virtual Common::Point getRegistrationOffset(int16 currentWidth, int16 currentHeight) { return Common::Point(0, 0); }
+
+	virtual CollisionTest isWithin(const Common::Rect &bbox, const Common::Point &pos, InkType ink) { return bbox.contains(pos) ? kCollisionYes : kCollisionNo; }
 
 	CastType _type;
 	Common::Rect _initialRect;

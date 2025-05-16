@@ -176,7 +176,7 @@ void ControlStatus::setToText(const char *newText) {
 		_statusText->flushForRedraw();
 		free(_textData);
 	}
-	DisplayedText disText = _skyText->displayText(tmpLine, sizeof(tmpLine), NULL, true, STATUS_WIDTH, 255);
+	DisplayedText disText = _skyText->displayText(tmpLine, sizeof(tmpLine), NULL, Graphics::kTextAlignCenter, STATUS_WIDTH, 255);
 	_textData = (DataFileHeader *)disText.textData;
 	_statusText->setSprite(_textData);
 	_statusText->drawToScreen(WITH_MASK);
@@ -184,7 +184,7 @@ void ControlStatus::setToText(const char *newText) {
 
 void ControlStatus::setToText(uint16 textNum) {
 	free(_textData);
-	DisplayedText disText = _skyText->displayText(textNum, NULL, true, STATUS_WIDTH, 255);
+	DisplayedText disText = _skyText->displayText(textNum, NULL, Graphics::kTextAlignCenter, STATUS_WIDTH, 255);
 	_textData = (DataFileHeader *)disText.textData;
 	_statusText->setSprite(_textData);
 	_statusText->drawToScreen(WITH_MASK);
@@ -359,6 +359,9 @@ void Control::buttonControl(ConResource *pButton) {
 	if (Common::parseLanguage(ConfMan.get("language")) == Common::RU_RUS)
 		strncpy(autoSave, "Zarpyzit/ abtocoxpahehie", 50);
 
+	if (Common::parseLanguage(ConfMan.get("language")) == Common::HE_ISR)
+		strncpy(autoSave, "\x99\x87\x86\x85\x98 \x99\x8e\x89\x98\x84 \x80\x85\x88\x85\x8e\x88\x89\x9a", 50);
+
 	if (pButton == NULL) {
 		free(_textSprite);
 		_textSprite = NULL;
@@ -373,9 +376,9 @@ void Control::buttonControl(ConResource *pButton) {
 		if (pButton->_text) {
 			DisplayedText textRes;
 			if (pButton->_text == 0xFFFF) // text for autosave button
-				textRes = _skyText->displayText(autoSave, sizeof(autoSave), NULL, false, PAN_LINE_WIDTH, 255);
+				textRes = _skyText->displayText(autoSave, sizeof(autoSave), NULL, Graphics::kTextAlignLeft, PAN_LINE_WIDTH, 255);
 			else
-				textRes = _skyText->displayText(pButton->_text, NULL, false, PAN_LINE_WIDTH, 255);
+				textRes = _skyText->displayText(pButton->_text, NULL, Graphics::kTextAlignLeft, PAN_LINE_WIDTH, 255);
 			_textSprite = (DataFileHeader *)textRes.textData;
 			_text->setSprite(_textSprite);
 		} else
@@ -568,6 +571,11 @@ uint16 Control::handleClick(ConResource *pButton) {
 		strncpy(restart, "Hobaq irpa?", 50);
 	}
 
+	if (Common::parseLanguage(ConfMan.get("language")) == Common::HE_ISR) {
+		strncpy(quitDos, "\x89\x96\x89\x80\x84 \x80\x8c SOD?", 50);
+		strncpy(restart, "\x84\x9a\x87\x8c\x84 \x8e\x87\x83\x99?", 50);
+	}
+
 	switch (pButton->_onClick) {
 	case DO_NOTHING:
 		return 0;
@@ -650,7 +658,7 @@ bool Control::getYesNo(char *text, uint bufSize) {
 
 	_yesNo->drawToScreen(WITH_MASK);
 	if (text) {
-		DisplayedText dlgLtm = _skyText->displayText(text, bufSize, NULL, true, _yesNo->_spriteData->s_width - 8, 37);
+		DisplayedText dlgLtm = _skyText->displayText(text, bufSize, NULL, Graphics::kTextAlignCenter, _yesNo->_spriteData->s_width - 8, 37);
 		dlgTextDat = (DataFileHeader *)dlgLtm.textData;
 		textY = MPNL_Y + 44 + (28 - dlgTextDat->s_height) / 2;
 	} else
@@ -1067,7 +1075,7 @@ void Control::setUpGameSprites(const Common::StringArray &saveGameNames, DataFil
 	char cursorChar[2] = "-";
 	DisplayedText textSpr;
 	if (!nameSprites[MAX_ON_SCREEN]) {
-		textSpr = _skyText->displayText(cursorChar, sizeof(cursorChar), NULL, false, 15, 0);
+		textSpr = _skyText->displayText(cursorChar, sizeof(cursorChar), NULL, Graphics::kTextAlignLeft, 15, 0);
 		nameSprites[MAX_ON_SCREEN] = (DataFileHeader *)textSpr.textData;
 	}
 	for (uint16 cnt = 0; cnt < MAX_ON_SCREEN; cnt++) {
@@ -1075,10 +1083,10 @@ void Control::setUpGameSprites(const Common::StringArray &saveGameNames, DataFil
 
 		if (firstNum + cnt == selectedGame) {
 			Common::sprintf_s(nameBuf, "%3d: %s", firstNum + cnt + 1, dirtyString.c_str());
-			textSpr = _skyText->displayText(nameBuf, sizeof(nameBuf), NULL, false, PAN_LINE_WIDTH, 0);
+			textSpr = _skyText->displayText(nameBuf, sizeof(nameBuf), NULL, Graphics::kTextAlignStart, PAN_LINE_WIDTH, 0);
 		} else {
 			Common::sprintf_s(nameBuf, "%3d: %s", firstNum + cnt + 1, saveGameNames[firstNum + cnt].c_str());
-			textSpr = _skyText->displayText(nameBuf, sizeof(nameBuf), NULL, false, PAN_LINE_WIDTH, 37);
+			textSpr = _skyText->displayText(nameBuf, sizeof(nameBuf), NULL, Graphics::kTextAlignStart, PAN_LINE_WIDTH, 37);
 		}
 		nameSprites[cnt] = (DataFileHeader *)textSpr.textData;
 		if (firstNum + cnt == selectedGame) {
@@ -1619,14 +1627,17 @@ void Control::showGameQuitMsg() {
 	screenData = _skyScreen->giveCurrent();
 
 	if (Common::parseLanguage(ConfMan.get("language")) == Common::RU_RUS) {
-		_skyText->displayText(_quitTexts[8 * 2 + 0], sizeof(_quitTexts[8 * 2 + 0]), textBuf1, true, 320, 255);
-		_skyText->displayText(_quitTexts[8 * 2 + 1], sizeof(_quitTexts[8 * 2 + 1]), textBuf2, true, 320, 255);
+		_skyText->displayText(_quitTexts[8 * 2 + 0], sizeof(_quitTexts[8 * 2 + 0]), textBuf1, Graphics::kTextAlignCenter, 320, 255);
+		_skyText->displayText(_quitTexts[8 * 2 + 1], sizeof(_quitTexts[8 * 2 + 1]), textBuf2, Graphics::kTextAlignCenter, 320, 255);
 	} else if (SkyEngine::_systemVars->language == SKY_CHINESE_TRADITIONAL) { // Not translated in original
-		_skyText->displayText(_quitTexts[0], sizeof(_quitTexts[0]), textBuf1, true, 320, 255);
-		_skyText->displayText(_quitTexts[1], sizeof(_quitTexts[1]), textBuf2, true, 320, 255);
+		_skyText->displayText(_quitTexts[0], sizeof(_quitTexts[0]), textBuf1, Graphics::kTextAlignCenter, 320, 255);
+		_skyText->displayText(_quitTexts[1], sizeof(_quitTexts[1]), textBuf2, Graphics::kTextAlignCenter, 320, 255);
+	} else if (Common::parseLanguage(ConfMan.get("language")) == Common::HE_ISR) {
+		_skyText->displayText(_quitTexts[SKY_HEBREW * 2 + 0], sizeof(_quitTexts[SKY_HEBREW * 2 + 0]), textBuf1, Graphics::kTextAlignCenter, 320, 255);
+		_skyText->displayText(_quitTexts[SKY_HEBREW * 2 + 1], sizeof(_quitTexts[SKY_HEBREW * 2 + 1]), textBuf2, Graphics::kTextAlignCenter, 320, 255);
 	} else {
-		_skyText->displayText(_quitTexts[SkyEngine::_systemVars->language * 2 + 0], sizeof(_quitTexts[SkyEngine::_systemVars->language * 2 + 0]), textBuf1, true, 320, 255);
-		_skyText->displayText(_quitTexts[SkyEngine::_systemVars->language * 2 + 1], sizeof(_quitTexts[SkyEngine::_systemVars->language * 2 + 1]), textBuf2, true, 320, 255);
+		_skyText->displayText(_quitTexts[SkyEngine::_systemVars->language * 2 + 0], sizeof(_quitTexts[SkyEngine::_systemVars->language * 2 + 0]), textBuf1, Graphics::kTextAlignCenter, 320, 255);
+		_skyText->displayText(_quitTexts[SkyEngine::_systemVars->language * 2 + 1], sizeof(_quitTexts[SkyEngine::_systemVars->language * 2 + 1]), textBuf2, Graphics::kTextAlignCenter, 320, 255);
 	}
 	uint8 *curLine1 = textBuf1 + sizeof(DataFileHeader);
 	uint8 *curLine2 = textBuf2 + sizeof(DataFileHeader);
@@ -1648,7 +1659,7 @@ void Control::showGameQuitMsg() {
 	free(textBuf2);
 }
 
-char Control::_quitTexts[18][35] = {
+char Control::_quitTexts[20][45] = {
 	"Game over player one",
 	"BE VIGILANT",
 	"Das Spiel ist aus.",
@@ -1666,7 +1677,9 @@ char Control::_quitTexts[18][35] = {
 	"Game over player one",
 	"BE VIGILANT",
 	"Irpa okohseha, irpok 1",
-	"JYD\x96 JDITELEH"
+	"JYD\x96 JDITELEH",
+	"\x84\x8E\x99\x87\x97 \x90\x82\x8e\x98 \x99\x87\x97\x8F \x8E\x91\x94\x98 \x80\x87\x9A",
+	"\x84\x89\x85 \x92\x98\x90\x89\x89\x8D"
 };
 
 uint8 Control::_crossImg[594] = {

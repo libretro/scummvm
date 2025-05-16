@@ -168,14 +168,14 @@ public:
 	};
 
 	struct PanoramaNode {
-		uint32 nodeID;
-		uint32 timestamp;
+		uint32 nodeID = 0;
+		uint32 timestamp = 0;
 	};
 
 	struct PanoramaInformation {
 		String name;
-		uint32 defNodeID;
-		float defZoom;
+		uint32 defNodeID = 0;
+		float defZoom = 0.0f;
 		Array<PanoramaNode> nodes;
 	};
 
@@ -192,6 +192,7 @@ public:
 		float maxHPan;
 		float maxVPan;
 		float minZoom;
+		float maxZoom;
 
 		int32 nameStrOffset;
 		int32 commentStrOffset;
@@ -233,6 +234,7 @@ public:
 		String strings;
 
 		String getString(int32 offset) const;
+		void debugPrint(int level, uint32 debugChannel, String prefix) const;
 	};
 
 	struct PanoLink {

@@ -31,24 +31,24 @@
 #include "common/textconsole.h"	// error
 
 // bits 26:0
-#define SV_BLITTER_SRC1           ((volatile long*)0x80010058)
-#define SV_BLITTER_SRC2           ((volatile long*)0x8001005C)
-#define SV_BLITTER_DST            ((volatile long*)0x80010060)
+#define SV_BLITTER_SRC1           ((volatile long *)0x80010058)
+#define SV_BLITTER_SRC2           ((volatile long *)0x8001005C)
+#define SV_BLITTER_DST            ((volatile long *)0x80010060)
 // The amount of bytes that are to be copied in a horizontal line, minus 1
-#define SV_BLITTER_COUNT          ((volatile long*)0x80010064)
+#define SV_BLITTER_COUNT          ((volatile long *)0x80010064)
 // The amount of bytes that are to be added to the line start address after a line has been copied, in order to reach the next one
-#define SV_BLITTER_SRC1_OFFSET    ((volatile long*)0x80010068)
-#define SV_BLITTER_SRC2_OFFSET    ((volatile long*)0x8001006C)
-#define SV_BLITTER_DST_OFFSET     ((volatile long*)0x80010070)
+#define SV_BLITTER_SRC1_OFFSET    ((volatile long *)0x80010068)
+#define SV_BLITTER_SRC2_OFFSET    ((volatile long *)0x8001006C)
+#define SV_BLITTER_DST_OFFSET     ((volatile long *)0x80010070)
 // bits 11:0 - The amount of horizontal lines to do
-#define SV_BLITTER_MASK_AND_LINES ((volatile long*)0x80010074)
+#define SV_BLITTER_MASK_AND_LINES ((volatile long *)0x80010074)
 // bit    0 - busy / start
 // bits 4:1 - blit mode
-#define SV_BLITTER_CONTROL        ((volatile long*)0x80010078)
+#define SV_BLITTER_CONTROL        ((volatile long *)0x80010078)
 // bit 0 - empty (read only)
 // bit 1 - full (read only)
 // bits 31:0 - data (write only)
-#define SV_BLITTER_FIFO           ((volatile long*)0x80010080)
+#define SV_BLITTER_FIFO           ((volatile long *)0x80010080)
 
 #ifdef USE_SV_BLITTER
 static bool isSuperBlitterLocked;
@@ -63,6 +63,14 @@ static void syncSuperBlitter() {
 		while (!(*SV_BLITTER_FIFO & 1));
 	// while busy blitting...
 	while (*SV_BLITTER_CONTROL & 1);
+}
+#endif
+
+#ifdef USE_MOVE16
+static inline bool hasMove16() {
+	long val;
+	static bool hasMove16 = Getcookie(C__CPU, &val) == C_FOUND && val >= 40;
+	return hasMove16;
 }
 #endif
 
@@ -84,8 +92,9 @@ void unlockSuperBlitter() {
 #endif
 }
 
-// see atari-graphics.cpp
+// see osystem-atari.cpp
 extern bool g_unalignedPitch;
+// see atari-graphics.cpp
 extern mspace g_mspace;
 
 namespace Graphics {
@@ -113,8 +122,8 @@ void Surface::create(int16 width, int16 height, const PixelFormat &f) {
 
 			if (!pixels)
 				error("Not enough memory to allocate a surface");
-			else if (pixels <= (void *)0xA0000000)
-				warning("SuperVidel surface allocated in regular memory");
+
+			assert(pixels >= (void *)0xA0000000);
 		} else {
 #else
 		{
@@ -122,8 +131,8 @@ void Surface::create(int16 width, int16 height, const PixelFormat &f) {
 			pixels = ::calloc(height * pitch, f.bytesPerPixel);
 			if (!pixels)
 				error("Not enough memory to allocate a surface");
-			else
-				assert(((uintptr)pixels & (ALIGN - 1)) == 0);
+
+			assert(((uintptr)pixels & (ALIGN - 1)) == 0);
 		}
 	}
 }
@@ -181,12 +190,152 @@ void copyBlit(byte *dst, const byte *src,
 	} else
 #endif
 	if (dstPitch == srcPitch && dstPitch == (w * bytesPerPixel)) {
-		memcpy(dst, src, dstPitch * h);
+#ifdef USE_MOVE16
+		if (hasMove16() && ((uintptr)src & (ALIGN - 1)) == 0 && ((uintptr)dst & (ALIGN - 1)) == 0) {
+			__asm__ volatile(
+			"	move.l	%2,%%d0\n"
+			"	lsr.l	#4,%%d0\n"
+			"	beq.b	3f\n"
+
+			"	moveq	#0x0f,%%d1\n"
+			"	and.l	%%d0,%%d1\n"
+			"	neg.l	%%d1\n"
+			"	lsr.l	#4,%%d0\n"
+			"	jmp		(2f,%%pc,%%d1.l*4)\n"
+			"1:\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"2:\n"
+			"	dbra	%%d0,1b\n"
+			// handle also the unlikely case when 'dstPitch'
+			// is not divisible by 16 but 'src' and 'dst' are
+			"3:\n"
+			"	moveq	#0x0f,%%d0\n"
+			"	and.l	%2,%%d0\n"
+			"	neg.l	%%d0\n"
+			"	jmp		(4f,%%pc,%%d0.l*2)\n"
+			// only 15x move.b as 16 would be handled above
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"4:\n"
+				: // outputs
+				: "a"(src), "a"(dst), "g"(dstPitch * h) // inputs
+				: "d0", "d1", "cc" AND_MEMORY
+			);
+		} else {
+#else
+		{
+#endif
+			memcpy(dst, src, dstPitch * h);
+		}
 	} else {
-		for (uint i = 0; i < h; ++i) {
-			memcpy(dst, src, w * bytesPerPixel);
-			dst += dstPitch;
-			src += srcPitch;
+#ifdef USE_MOVE16
+		if (hasMove16() && ((uintptr)src & (ALIGN - 1)) == 0 && ((uintptr)dst & (ALIGN - 1)) == 0
+				&& (srcPitch & (ALIGN - 1)) == 0 && (dstPitch & (ALIGN - 1)) == 0) {
+			__asm__ volatile(
+			"	move.l	%2,%%d0\n"
+
+			"	moveq	#0x0f,%%d1\n"
+			"	and.l	%%d0,%%d1\n"
+			"	neg.l	%%d1\n"
+			"	lea		(4f,%%pc,%%d1.l*2),%%a0\n"
+			"	move.l	%%a0,%%a1\n"
+
+			"	lsr.l	#4,%%d0\n"
+			"	beq.b	3f\n"
+
+			"	moveq	#0x0f,%%d1\n"
+			"	and.l	%%d0,%%d1\n"
+			"	neg.l	%%d1\n"
+			"	lea		(2f,%%pc,%%d1.l*4),%%a0\n"
+			"	lsr.l	#4,%%d0\n"
+			"	move.l	%%d0,%%d1\n"
+			"0:\n"
+			"	move.l	%%d1,%%d0\n"
+			"	jmp		(%%a0)\n"
+			"1:\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"	move16	(%0)+,(%1)+\n"
+			"2:\n"
+			"	dbra	%%d0,1b\n"
+			// handle (w * bytesPerPixel) % 16
+			"3:\n"
+			"	jmp		(%%a1)\n"
+			// only 15x move.b as 16 would be handled above
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"	move.b	(%0)+,(%1)+\n"
+			"4:\n"
+			"	add.l	%4,%1\n"
+			"	add.l	%5,%0\n"
+			"	dbra	%3,0b\n"
+				: // outputs
+				: "a"(src), "a"(dst), "g"(w * bytesPerPixel), "d"(h - 1),
+				  "g"(dstPitch - w * bytesPerPixel), "g"(srcPitch - w * bytesPerPixel) // inputs
+				: "d0", "d1", "a0", "a1", "cc" AND_MEMORY
+			);
+		} else {
+#else
+		{
+#endif
+			for (uint i = 0; i < h; ++i) {
+				memcpy(dst, src, w * bytesPerPixel);
+				dst += dstPitch;
+				src += srcPitch;
+			}
 		}
 	}
 }

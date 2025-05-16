@@ -84,7 +84,7 @@ Common::Error EfhEngine::run() {
 		return Common::kNoError;
 
 	uint32 lastMs = _system->getMillis();
-	while (!shouldQuitGame()) {
+	while (!shouldQuit()) {
 		_system->delayMillis(20);
 		uint32 newMs = _system->getMillis();
 
@@ -93,155 +93,9 @@ Common::Error EfhEngine::run() {
 			handleAnimations();
 		}
 
-		Common::Event event;
-		Common::KeyCode retVal = getLastCharAfterAnimCount(4);
+		handleEvents();
 
-		switch (retVal) {
-		case Common::KEYCODE_DOWN:
-		case Common::KEYCODE_KP2:
-			goSouth();
-			_imageSetSubFilesIdx = 144;
-			break;
-		case Common::KEYCODE_UP:
-		case Common::KEYCODE_KP8:
-			goNorth();
-			_imageSetSubFilesIdx = 145;
-			break;
-		case Common::KEYCODE_RIGHT:
-		case Common::KEYCODE_KP6:
-			goEast();
-			_imageSetSubFilesIdx = 146;
-			break;
-		case Common::KEYCODE_LEFT:
-		case Common::KEYCODE_KP4:
-			goWest();
-			_imageSetSubFilesIdx = 147;
-			break;
-		case Common::KEYCODE_PAGEUP:
-		case Common::KEYCODE_KP9:
-			goNorthEast();
-			_imageSetSubFilesIdx = 146;
-			break;
-		case Common::KEYCODE_PAGEDOWN:
-		case Common::KEYCODE_KP3:
-			goSouthEast();
-			_imageSetSubFilesIdx = 146;
-			break;
-		case Common::KEYCODE_END:
-		case Common::KEYCODE_KP1:
-			goSouthWest();
-			_imageSetSubFilesIdx = 147;
-			break;
-		case Common::KEYCODE_HOME:
-		case Common::KEYCODE_KP7:
-			goNorthWest();
-			_imageSetSubFilesIdx = 147;
-			break;
-		case Common::KEYCODE_1:
-		case Common::KEYCODE_F1:
-			if (_teamChar[0]._id != -1) {
-				handleStatusMenu(1, _teamChar[0]._id);
-				_tempTextPtr = nullptr;
-				drawGameScreenAndTempText(true);
-				_redrawNeededFl = true;
-			}
-			break;
-		case Common::KEYCODE_2:
-		case Common::KEYCODE_F2:
-			if (_teamChar[1]._id != -1) {
-				handleStatusMenu(1, _teamChar[1]._id);
-				_tempTextPtr = nullptr;
-				drawGameScreenAndTempText(true);
-				_redrawNeededFl = true;
-			}
-			break;
-		case Common::KEYCODE_3:
-		case Common::KEYCODE_F3:
-			if (_teamChar[2]._id != -1) {
-				handleStatusMenu(1, _teamChar[2]._id);
-				_tempTextPtr = nullptr;
-				drawGameScreenAndTempText(true);
-				_redrawNeededFl = true;
-			}
-			break;
-		case Common::KEYCODE_F5: { // Original is using CTRL-S, which is mapped to F5 in utils
-			for (uint counter = 0; counter < 2; ++counter) {
-				clearBottomTextZone(0);
-				displayCenteredString("Are You Sure You Want To Save?", 24, 296, 160);
-				if (counter == 0)
-					displayFctFullScreen();
-			}
-			Common::KeyCode input = waitForKey();
-			if (input == Common::KEYCODE_y) {
-				displayMenuAnswerString("-> Yes <-", 24, 296, 169);
-				getInput(2);
-				saveGameDialog();
-			} else {
-				displayMenuAnswerString("-> No!!! <-", 24, 296, 169);
-				getInput(2);
-			}
-			clearBottomTextZone_2(0);
-			displayLowStatusScreen(true);
-
-			}
-			break;
-		case Common::KEYCODE_F7: { // Original is using CTRL-L, which is mapped to F7 in utils
-			for (uint counter = 0; counter < 2; ++counter) {
-				clearBottomTextZone(0);
-				displayCenteredString("Are You Sure You Want To Load?", 24, 296, 160);
-				if (counter == 0)
-					displayFctFullScreen();
-			}
-			Common::KeyCode input = waitForKey();
-			if (input == Common::KEYCODE_y) {
-				displayMenuAnswerString("-> Yes <-", 24, 296, 169);
-				getInput(2);
-				loadGameDialog();
-			} else {
-				displayMenuAnswerString("-> No!!! <-", 24, 296, 169);
-				getInput(2);
-			}
-			clearBottomTextZone_2(0);
-			displayLowStatusScreen(true);
-
-		} break;
-
-		// debug cases to test sound
-		case Common::KEYCODE_4:
-			if (ConfMan.getBool("dump_scripts"))
-				generateSound(13);
-			break;
-		case Common::KEYCODE_5:
-			if (ConfMan.getBool("dump_scripts"))
-				generateSound(14);
-			break;
-		case Common::KEYCODE_6:
-			if (ConfMan.getBool("dump_scripts"))
-				generateSound(15);
-			break;
-		case Common::KEYCODE_7:
-			if (ConfMan.getBool("dump_scripts"))
-				generateSound(5);
-			break;
-		case Common::KEYCODE_8:
-			if (ConfMan.getBool("dump_scripts"))
-				generateSound(10);
-			break;
-		case Common::KEYCODE_9:
-			if (ConfMan.getBool("dump_scripts"))
-				generateSound(9);
-			break;
-		case Common::KEYCODE_0:
-			if (ConfMan.getBool("dump_scripts"))
-				generateSound(16);
-			break;
-		default:
-			if (retVal != Common::KEYCODE_INVALID)
-				warning("Main Loop: Unhandled input %d", retVal);
-			break;
-		}
-
-		if ((_mapPosX != _oldMapPosX || _mapPosY != _oldMapPosY) && !shouldQuitGame()) {
+		if ((_mapPosX != _oldMapPosX || _mapPosY != _oldMapPosY) && !shouldQuit()) {
 			bool collisionFl = checkMonsterCollision();
 			if (collisionFl) {
 				_oldMapPosX = _mapPosX;
@@ -262,16 +116,16 @@ Common::Error EfhEngine::run() {
 			}
 		}
 
-		if (!shouldQuitGame()) {
+		if (!shouldQuit()) {
 			handleMapMonsterMoves();
 		}
 
-		if (_redrawNeededFl && !shouldQuitGame()) {
+		if (_redrawNeededFl && !shouldQuit()) {
 			drawScreen();
 			displayLowStatusScreen(true);
 		}
 
-		if (!shouldQuitGame()) {
+		if (!shouldQuit()) {
 			handleNewRoundEffects();
 
 			if (_tempTextDelay > 0) {
@@ -286,7 +140,7 @@ Common::Error EfhEngine::run() {
 
 		if (isTPK()) {
 			if (handleDeathMenu())
-				_shouldQuit = true;
+				quitGame();
 		}
 
 		displayFctFullScreen();
@@ -294,10 +148,126 @@ Common::Error EfhEngine::run() {
 	return Common::kNoError;
 }
 
+void EfhEngine::handleEvents() {
+	Common::KeyCode retVal = getLastCharAfterAnimCount(4);
+
+	switch (_customAction) {
+	case kActionSave:
+		handleActionSave();
+		break;
+	case kActionLoad:
+		handleActionLoad();
+		break;
+	case kActionMoveDown:
+		goSouth();
+		break;
+	case kActionMoveUp:
+		goNorth();
+		break;
+	case kActionMoveRight:
+		goEast();
+		break;
+	case kActionMoveLeft:
+		goWest();
+		break;
+	case kActionMoveUpRight:
+		goNorthEast();
+		break;
+	case kActionMoveDownRight:
+		goSouthEast();
+		break;
+	case kActionMoveDownLeft:
+		goSouthWest();
+		break;
+	case kActionMoveUpLeft:
+		goNorthWest();
+		break;
+	case kActionCharacter1Status:
+		showCharacterStatus(0);
+		break;
+	case kActionCharacter2Status:
+		showCharacterStatus(1);
+		break;
+	case kActionCharacter3Status:
+		showCharacterStatus(2);
+		break;
+	default:
+		break;
+	}
+
+	// debug cases to test sound
+	if (ConfMan.getBool("dump_scripts")) {
+		switch (retVal) {
+		case Common::KEYCODE_4:
+			generateSound(13);
+			break;
+		case Common::KEYCODE_5:
+			generateSound(14);
+			break;
+		case Common::KEYCODE_6:
+			generateSound(15);
+			break;
+		case Common::KEYCODE_7:
+			generateSound(5);
+			break;
+		case Common::KEYCODE_8:
+			generateSound(10);
+			break;
+		case Common::KEYCODE_9:
+			generateSound(9);
+			break;
+		case Common::KEYCODE_0:
+			generateSound(16);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+void EfhEngine::handleActionSave() {
+	for (uint counter = 0; counter < 2; ++counter) {
+		clearBottomTextZone(0);
+		displayCenteredString("Are You Sure You Want To Save?", 24, 296, 160);
+		if (counter == 0)
+			displayFctFullScreen();
+	}
+	Common::KeyCode input = waitForKey();
+	if (input == Common::KEYCODE_y) {
+		displayMenuAnswerString("-> Yes <-", 24, 296, 169);
+		getInput(2);
+		saveGameDialog();
+	} else {
+		displayMenuAnswerString("-> No!!! <-", 24, 296, 169);
+		getInput(2);
+	}
+	clearBottomTextZone_2(0);
+	displayLowStatusScreen(true);
+}
+
+void EfhEngine::handleActionLoad() {
+	for (uint counter = 0; counter < 2; ++counter) {
+		clearBottomTextZone(0);
+		displayCenteredString("Are You Sure You Want To Load?", 24, 296, 160);
+		if (counter == 0)
+			displayFctFullScreen();
+	}
+	Common::KeyCode input = waitForKey();
+	if (input == Common::KEYCODE_y) {
+		displayMenuAnswerString("-> Yes <-", 24, 296, 169);
+		getInput(2);
+		loadGameDialog();
+	} else {
+		displayMenuAnswerString("-> No!!! <-", 24, 296, 169);
+		getInput(2);
+	}
+	clearBottomTextZone_2(0);
+	displayLowStatusScreen(true);
+}
+
 void EfhEngine::initialize() {
 	_rnd = new Common::RandomSource("Hell");
 	_rnd->setSeed(g_system->getMillis());   // Kick random number generator
-	_shouldQuit = false;
 }
 
 void EfhEngine::playIntro() {
@@ -439,7 +409,6 @@ void EfhEngine::initEngine() {
 	loadImageSet(62, _circleImageBuf, _circleImageSubFileArray, _decompBuf);
 	fileName = "titlsong";
 	readFileToBuffer(fileName, _titleSong);
-	setDefaultNoteDuration();
 	Common::KeyCode lastInput = Common::KEYCODE_INVALID;
 
 	if (_loadSaveSlot == -1)
@@ -499,10 +468,6 @@ void EfhEngine::initMapMonsters() {
 	}
 }
 
-void EfhEngine::loadMapArrays(int idx) {
-	// No longer required as everything is in memory.
-}
-
 void EfhEngine::saveAnimImageSetId() {
 	debugC(6, kDebugEngine, "saveAnimImageSetId");
 
@@ -560,14 +525,6 @@ uint16 EfhEngine::getEquippedExclusiveType(int16 charId, int16 exclusiveType, bo
 
 void EfhEngine::drawGameScreenAndTempText(bool flag) {
 	debugC(2, kDebugEngine, "drawGameScreenAndTempText %s", flag ? "True" : "False");
-
-#if 0
-	// This code is present in the original, but looks strictly useless.
-	uint8 mapTileInfo = getMapTileInfo(_mapPosX, _mapPosY);
-	int16 imageSetId = _currentTileBankImageSetId[mapTileInfo / 72];
-
-	int16 mapImageSetId = (imageSetId * 72) + (mapTileInfo % 72);
-#endif
 
 	for (int counter = 0; counter < 2; ++counter) {
 		if (counter == 0 || flag) {
@@ -871,7 +828,7 @@ void EfhEngine::handleWinSequence() {
 
 	Common::KeyCode input = Common::KEYCODE_INVALID;
 
-	while (input != Common::KEYCODE_ESCAPE && !shouldQuitGame()) {
+	while (input != Common::KEYCODE_ESCAPE && !shouldQuit()) {
 		displayRawDataAtPos(winSeqSubFilesArray1[0], 0, 0);
 		displayFctFullScreen();
 		displayRawDataAtPos(winSeqSubFilesArray1[0], 0, 0);
@@ -1128,6 +1085,8 @@ bool EfhEngine::isPosOutOfMap(int16 mapPosX, int16 mapPosY) {
 void EfhEngine::goSouth() {
 	debugC(6,kDebugEngine, "goSouth");
 
+	_imageSetSubFilesIdx = 144;
+
 	int16 maxMapBlocks = _largeMapFlag ? 63 : 23;
 
 	if (++_mapPosY > maxMapBlocks)
@@ -1142,6 +1101,8 @@ void EfhEngine::goSouth() {
 void EfhEngine::goNorth() {
 	debugC(6,kDebugEngine, "goNorth");
 
+	_imageSetSubFilesIdx = 145;
+
 	if (--_mapPosY < 0)
 		_mapPosY = 0;
 
@@ -1153,6 +1114,8 @@ void EfhEngine::goNorth() {
 
 void EfhEngine::goEast() {
 	debugC(6, kDebugEngine, "goEast");
+
+	_imageSetSubFilesIdx = 146;
 
 	int16 maxMapBlocks = _largeMapFlag ? 63 : 23;
 
@@ -1168,6 +1131,8 @@ void EfhEngine::goEast() {
 void EfhEngine::goWest() {
 	debugC(6, kDebugEngine, "goWest");
 
+	_imageSetSubFilesIdx = 147;
+
 	if (--_mapPosX < 0)
 		_mapPosX = 0;
 
@@ -1179,6 +1144,8 @@ void EfhEngine::goWest() {
 
 void EfhEngine::goNorthEast() {
 	debugC(6, kDebugEngine, "goNorthEast");
+
+	_imageSetSubFilesIdx = 146;
 
 	if (--_mapPosY < 0)
 		_mapPosY = 0;
@@ -1200,6 +1167,8 @@ void EfhEngine::goNorthEast() {
 void EfhEngine::goSouthEast() {
 	debugC(6, kDebugEngine, "goSouthEast");
 
+	_imageSetSubFilesIdx = 146;
+
 	int16 maxMapBlocks = _largeMapFlag ? 63 : 23;
 
 	if (++_mapPosX > maxMapBlocks)
@@ -1217,6 +1186,8 @@ void EfhEngine::goSouthEast() {
 void EfhEngine::goNorthWest() {
 	debugC(6, kDebugEngine,"goNorthWest");
 
+	_imageSetSubFilesIdx = 147;
+
 	if (--_mapPosY < 0)
 		_mapPosY = 0;
 
@@ -1232,6 +1203,8 @@ void EfhEngine::goNorthWest() {
 void EfhEngine::goSouthWest() {
 	debugC(6, kDebugEngine, "goSouthWest");
 
+	_imageSetSubFilesIdx = 147;
+
 	if (--_mapPosX < 0)
 		_mapPosX = 0;
 
@@ -1243,6 +1216,15 @@ void EfhEngine::goSouthWest() {
 	if (isPosOutOfMap(_mapPosX, _mapPosY)) {
 		_mapPosX = _oldMapPosX;
 		_mapPosY = _oldMapPosY;
+	}
+}
+
+void EfhEngine::showCharacterStatus(uint8 character) {
+	if (_teamChar[character]._id != -1) {
+		handleStatusMenu(1, _teamChar[character]._id);
+		_tempTextPtr = nullptr;
+		drawGameScreenAndTempText(true);
+		_redrawNeededFl = true;
 	}
 }
 
@@ -1307,8 +1289,6 @@ void EfhEngine::computeMapAnimation() {
 }
 
 void EfhEngine::handleAnimations() {
-	setNumLock();
-
 	if (_engineInitPending)
 		return;
 
@@ -1721,7 +1701,7 @@ void EfhEngine::handleMapMonsterMoves() {
 
 				break;
 			}
-		} while (!monsterMovedFl && retryCounter > 0 && !shouldQuitGame());
+		} while (!monsterMovedFl && retryCounter > 0 && !shouldQuit());
 	}
 
 	if (attackMonsterId != -1)
@@ -1900,7 +1880,7 @@ bool EfhEngine::handleTalk(int16 monsterId, int16 arg2, int16 itemId) {
 						displayFctFullScreen();
 				}
 				setTextColorRed();
-				Common::KeyCode input = mapInputCode(waitForKey());
+				Common::KeyCode input = waitForKey();
 				if (input == Common::KEYCODE_y) {
 					removeCharacterFromTeam(charId);
 					displayImp1Text(_npcBuf[npcId].field14_textId);
@@ -2051,14 +2031,14 @@ void EfhEngine::displayImp1Text(int16 textId) {
 								if (counter == 0)
 									displayFctFullScreen();
 							}
-							getInputBlocking();
+							waitForKey();
 						}
 					}
 					if (nextTextId != 0xFF)
 						curTextId = nextTextId;
 				}
 
-			} while (!textComplete && curTextId != -1 && !shouldQuitGame());
+			} while (!textComplete && curTextId != -1 && !shouldQuit());
 
 			textComplete = false;
 			if (curTextId == 0xFF || curTextId == -1)
@@ -2421,7 +2401,7 @@ bool EfhEngine::checkMonsterCollision() {
 					displayFctFullScreen();
 			}
 
-			Common::KeyCode input = mapInputCode(waitForKey());
+			Common::KeyCode input = waitForKey();
 
 			switch (input) {
 			case Common::KEYCODE_a: // Attack
@@ -2445,7 +2425,7 @@ bool EfhEngine::checkMonsterCollision() {
 			default:
 				break;
 			}
-		} while (!endLoop && !shouldQuitGame());
+		} while (!endLoop && !shouldQuit());
 		return false;
 	}
 
@@ -2549,12 +2529,6 @@ uint8 EfhEngine::getMapTileInfo(int16 mapPosX, int16 mapPosY) {
 		return _mapGameMaps[_techId][mapPosX][mapPosY];
 
 	return _curPlace[mapPosX][mapPosY];
-}
-
-void EfhEngine::writeTechAndMapFiles() {
-	// The original game overwrite game data files when switching map, keeping track of modified data.
-	// In our implementation, we have everything in memory and save it in savegames only.
-	// This function is therefore not useful and is not implemented.
 }
 
 uint16 EfhEngine::getStringWidth(const Common::String &str) const {

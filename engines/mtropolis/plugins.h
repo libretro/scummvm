@@ -51,6 +51,7 @@ Common::SharedPtr<PlugIn> createAXLogic();
 Common::SharedPtr<PlugIn> createHoologic();
 Common::SharedPtr<PlugIn> createMLine();
 Common::SharedPtr<PlugIn> createThereware();
+Common::SharedPtr<PlugIn> createPierian();
 
 } // End of namespace PlugIns
 

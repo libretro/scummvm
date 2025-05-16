@@ -23,6 +23,7 @@
 #include "common/keyboard.h"
 #include "common/file.h"
 #include "common/config-manager.h"
+#include "common/text-to-speech.h"
 #include "common/textconsole.h"
 #include "common/translation.h"
 
@@ -247,6 +248,18 @@ Common::Error DrasculaEngine::run() {
 	default:
 		warning("Unknown game language. Falling back to English");
 		_lang = kEnglish;
+	}
+
+	Common::TextToSpeechManager *ttsMan = g_system->getTextToSpeechManager();
+	if (ttsMan != nullptr) {
+		ttsMan->setLanguage(ConfMan.get("language"));
+		ttsMan->enable(ConfMan.getBool("tts_enabled"));
+
+		if (_lang == kRussian) {
+			_ttsTextEncoding = Common::CodePage::kWindows1251;
+		} else {
+			_ttsTextEncoding = Common::CodePage::kDos850;
+		}
 	}
 
 	setDebugger(new Console(this));
@@ -688,6 +701,9 @@ bool DrasculaEngine::runCurrentChapter() {
 			ConfMan.setBool("subtitles", !_subtitlesDisabled);
 
 			print_abc(_textsys[2], 96, 86);
+
+			sayText(_textsys[2], Common::TextToSpeechManager::INTERRUPT);
+
 			updateScreen();
 			delay(1410);
 		} else if (key == Common::KEYCODE_t) {
@@ -695,6 +711,9 @@ bool DrasculaEngine::runCurrentChapter() {
 			ConfMan.setBool("subtitles", !_subtitlesDisabled);
 
 			print_abc(_textsys[3], 94, 86);
+
+			sayText(_textsys[3], Common::TextToSpeechManager::INTERRUPT);
+
 			updateScreen();
 			delay(1460);
 		} else if (key == Common::KEYCODE_ESCAPE) {
@@ -972,12 +991,40 @@ bool DrasculaEngine::loadDrasculaDat() {
 		return false;
 	}
 
-	_charMapSize = in.readUint16BE();
+	uint16 charMapLettersSize = in.readUint16BE();
+	uint16 charMapSignsSize = in.readUint16BE();
+	uint16 charMapCyrillicSize = in.readUint16BE();
+	uint16 charMapAccentedSize = in.readUint16BE();
+	_charMapSize = charMapLettersSize + charMapSignsSize;
+	if (_lang == kRussian)
+		_charMapSize += charMapCyrillicSize;
+	else
+		_charMapSize += charMapAccentedSize;
 	_charMap = (CharInfo *)malloc(sizeof(CharInfo) * _charMapSize);
-	for (i = 0; i < _charMapSize; i++) {
-		_charMap[i].inChar = in.readByte();
-		_charMap[i].mappedChar = in.readSint16BE();
-		_charMap[i].charType = in.readByte();
+	int map_i = 0;
+	for (i = 0; i < charMapLettersSize + charMapSignsSize; i++, map_i++) {
+		_charMap[map_i].inChar = in.readByte();
+		_charMap[map_i].mappedChar = in.readSint16BE();
+		_charMap[map_i].charType = in.readByte();
+	}
+	if (_lang == kRussian) {
+		// load cyrillic characters
+		for (i = 0; i < charMapCyrillicSize; i++, map_i++) {
+			_charMap[map_i].inChar = in.readByte();
+			_charMap[map_i].mappedChar = in.readSint16BE();
+			_charMap[map_i].charType = in.readByte();
+		}
+		// skip accented characters
+		in.skip(4 * charMapAccentedSize);
+	} else {
+		// skeep cyrillic characters
+		in.skip(4 * charMapCyrillicSize);
+		// load accented characters
+		for (i = 0; i < charMapAccentedSize; i++, map_i++) {
+			_charMap[map_i].inChar = in.readByte();
+			_charMap[map_i].mappedChar = in.readSint16BE();
+			_charMap[map_i].charType = in.readByte();
+		}
 	}
 
 	_itemLocationsSize = in.readUint16BE();
@@ -1141,6 +1188,19 @@ void DrasculaEngine::freeTexts(char **ptr) {
 
 	free(*ptr);
 	free(ptr);
+}
+
+void DrasculaEngine::sayText(const Common::String &text, Common::TextToSpeechManager::Action action) {
+	Common::TextToSpeechManager *ttsMan = g_system->getTextToSpeechManager();
+
+	// _previousSaid is used to prevent the TTS from looping when sayText is called inside a loop,
+	// for example when the cursor stays on a verb icon. Without it when the text ends it would speak
+	// the same text again.
+	// _previousSaid is cleared when appropriate to allow for repeat requests
+	if (ttsMan && ConfMan.getBool("tts_enabled") && _previousSaid != text) {
+		_previousSaid = text;
+		ttsMan->say(text, action, _ttsTextEncoding);
+	}
 }
 
 } // End of namespace Drascula

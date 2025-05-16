@@ -143,9 +143,9 @@ bool BaseRenderOpenGL3DShader::flip() {
 	// Disable blend mode and cull face to prevent interfere with backend renderer
 	glDisable(GL_BLEND);
 	glDisable(GL_CULL_FACE);
-	
+
 	g_system->updateScreen();
-	
+
 	_state = RSTATE_NONE;
 	return true;
 }
@@ -325,19 +325,13 @@ bool BaseRenderOpenGL3DShader::setupLines() {
 }
 
 bool BaseRenderOpenGL3DShader::drawSpriteEx(BaseSurface *tex, const Wintermute::Rect32 &rect,
-										const Wintermute::Vector2 &pos, const Wintermute::Vector2 &rot,
-										const Wintermute::Vector2 &scale, float angle, uint32 color,
-										bool alphaDisable, Graphics::TSpriteBlendMode blendMode,
-										bool mirrorX, bool mirrorY) {
+	                                    const Wintermute::Vector2 &pos, const Wintermute::Vector2 &rot,
+	                                    const Wintermute::Vector2 &scale, float angle, uint32 color,
+	                                    bool alphaDisable, Graphics::TSpriteBlendMode blendMode,
+	                                    bool mirrorX, bool mirrorY) {
 	BaseSurfaceOpenGL3D *texture = dynamic_cast<BaseSurfaceOpenGL3D *>(tex);
 	if (!texture)
 		return false;
-
-	if (_spriteBatchMode) {
-		_batchTexture = texture;
-		_batchAlphaDisable = alphaDisable;
-		_batchBlendMode = blendMode;
-	}
 
 	if (_forceAlphaColor != 0) {
 		color = _forceAlphaColor;
@@ -363,12 +357,6 @@ bool BaseRenderOpenGL3DShader::drawSpriteEx(BaseSurface *tex, const Wintermute::
 	}
 
 	SpriteVertex vertices[4] = {};
-
-	// batch mode
-	if (_spriteBatchMode) {
-		// TODO
-		commitSpriteBatch();
-	}
 
 	// Convert to OpenGL origin space
 	SWAP(texTop, texBottom);
@@ -425,58 +413,31 @@ bool BaseRenderOpenGL3DShader::drawSpriteEx(BaseSurface *tex, const Wintermute::
 		transformVertices(vertices, &rotation, &sc, degToRad(-angle));
 	}
 
-	if (_spriteBatchMode) {
-		// TODO
-	} else {
-		setSpriteBlendMode(blendMode);
-		if (alphaDisable) {
-			_spriteShader->setUniform("alphaTest", false);
-			glDisable(GL_BLEND);
-		}
-
-		if (_lastTexture != texture) {
-			_lastTexture = texture;
-			glBindTexture(GL_TEXTURE_2D, texture->getTextureName());
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			// for sprites we clamp to the edge, to avoid line fragments at the edges
-			// this is not done by wme, though
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glEnable(GL_TEXTURE_2D);
-		}
-
-		glBindBuffer(GL_ARRAY_BUFFER, _spriteVBO);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(SpriteVertex), vertices);
-
-		setProjection2D(_spriteShader);
-
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-		if (alphaDisable) {
-			_spriteShader->setUniform("alphaTest", true);
-			glEnable(GL_BLEND);
-		}
-	}
-
-	return true;
-}
-
-bool BaseRenderOpenGL3DShader::commitSpriteBatch() {
-	// render
-	setSpriteBlendMode(_batchBlendMode);
-	if (_batchAlphaDisable) {
+	setSpriteBlendMode(blendMode);
+	if (alphaDisable) {
 		_spriteShader->setUniform("alphaTest", false);
 		glDisable(GL_BLEND);
 	}
 
-	if (_lastTexture != _batchTexture) {
-		_lastTexture = _batchTexture;
-		glBindTexture(GL_TEXTURE_2D, _batchTexture->getTextureName());
+	if (_lastTexture != texture) {
+		_lastTexture = texture;
+		glBindTexture(GL_TEXTURE_2D, texture->getTextureName());
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		// for sprites we clamp to the edge, to avoid line fragments at the edges
+		// this is not done by wme, though
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glEnable(GL_TEXTURE_2D);
 	}
 
-	// TODO
+	glBindBuffer(GL_ARRAY_BUFFER, _spriteVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(SpriteVertex), vertices);
 
-	if (_batchAlphaDisable) {
+	setProjection2D(_spriteShader);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	if (alphaDisable) {
 		_spriteShader->setUniform("alphaTest", true);
 		glEnable(GL_BLEND);
 	}
@@ -484,17 +445,19 @@ bool BaseRenderOpenGL3DShader::commitSpriteBatch() {
 	return true;
 }
 
+bool BaseRenderOpenGL3DShader::commitSpriteBatch() {
+	// nothing to implement
+	return true;
+}
+
 bool BaseRenderOpenGL3DShader::startSpriteBatch() {
-	//_spriteBatchMode = true;
+	// nothing to implement
 	return true;
 }
 
 bool BaseRenderOpenGL3DShader::endSpriteBatch() {
-	if (!_spriteBatchMode)
-		return false;
-
-	_spriteBatchMode = false;
-	return commitSpriteBatch();
+	// nothing to implement
+	return true;
 }
 
 DXMatrix *BaseRenderOpenGL3DShader::buildMatrix(DXMatrix* out, const DXVector2 *centre, const DXVector2 *scaling, float angle) {
@@ -645,8 +608,9 @@ BaseImage *BaseRenderOpenGL3DShader::takeScreenshot() {
 #endif
 	surface->create(_viewportRect.width(), _viewportRect.height(), format);
 
-	glReadPixels(_viewportRect.left, _viewportRect.height() - _viewportRect.bottom, _viewportRect.width(), _viewportRect.height(),
-				 GL_RGBA, GL_UNSIGNED_BYTE, surface->getPixels());
+	glReadPixels(_viewportRect.left, _viewportRect.height() - _viewportRect.bottom,
+	             _viewportRect.width(), _viewportRect.height(),
+	             GL_RGBA, GL_UNSIGNED_BYTE, surface->getPixels());
 	flipVertical(surface);
 	Graphics::Surface *converted = surface->convertTo(getPixelFormat());
 	screenshot->copyFrom(converted);
@@ -664,22 +628,10 @@ bool BaseRenderOpenGL3DShader::disableShadows() {
 	return true;
 }
 
-void BaseRenderOpenGL3DShader::displayShadow(BaseObject *object, const DXVector3 *lightPos, bool lightPosRelative) {
-	if (!_ready || !object || !lightPos)
+void BaseRenderOpenGL3DShader::displaySimpleShadow(BaseObject *object) {
+	if (!_ready || !object)
 		return;
 
-	// redirect simple shadow if needed
-	bool simpleShadow = _gameRef->getMaxShadowType(object) <= SHADOW_SIMPLE;
-	if (!_gameRef->_supportsRealTimeShadows)
-		simpleShadow = true;
-	if (simpleShadow)
-		return renderSimpleShadow(object);
-
-	// TODO: to be implemented
-	return;
-}
-
-void BaseRenderOpenGL3DShader::renderSimpleShadow(BaseObject *object) {
 	// TODO: to be implemented
 }
 
@@ -719,10 +671,20 @@ int BaseRenderOpenGL3DShader::getMaxActiveLights() {
 bool BaseRenderOpenGL3DShader::invalidateTexture(BaseSurfaceOpenGL3D *texture) {
 	if (_lastTexture == texture)
 		_lastTexture = nullptr;
-	if (_batchTexture == texture)
-		_batchTexture = nullptr;
 
 	return true;
+}
+
+bool BaseRenderOpenGL3DShader::invalidateDeviceObjects() {
+	return STATUS_OK;
+}
+
+bool BaseRenderOpenGL3DShader::restoreDeviceObjects() {
+	return STATUS_OK;
+}
+
+bool BaseRenderOpenGL3DShader::resetDevice() {
+	return STATUS_OK;
 }
 
 // implements D3D LightEnable()
@@ -737,8 +699,8 @@ void BaseRenderOpenGL3DShader::lightEnable(int index, bool enable) {
 
 // backend layer 3DLight::SetLight
 void BaseRenderOpenGL3DShader::setLightParameters(int index, const DXVector3 &position,
-												  const DXVector3 &direction,
-												  const DXVector4 &diffuse, bool spotlight) {
+	                                          const DXVector3 &direction,
+	                                          const DXVector4 &diffuse, bool spotlight) {
 	Math::Vector4d position4d;
 	position4d.x() = position._x;
 	position4d.y() = position._y;
@@ -776,13 +738,13 @@ void BaseRenderOpenGL3DShader::setLightParameters(int index, const DXVector3 &po
 
 // backend layer AdSceneGeometry::Render
 void BaseRenderOpenGL3DShader::renderSceneGeometry(const BaseArray<AdWalkplane *> &planes, const BaseArray<AdBlock *> &blocks,
-											   const BaseArray<AdGeneric *> &generics, const BaseArray<Light3D *> &lights, Camera3D *camera) {
+	                                           const BaseArray<AdGeneric *> &generics, const BaseArray<Light3D *> &lights, Camera3D *camera) {
 	// don't render scene geometry, as OpenGL ES 2 has no wireframe rendering and we don't have a shader alternative yet
 }
 
 // backend layer 3DShadowVolume::Render()
 void BaseRenderOpenGL3DShader::renderShadowGeometry(const BaseArray<AdWalkplane *> &planes, const BaseArray<AdBlock *> &blocks,
-													const BaseArray<AdGeneric *> &generics, Camera3D *camera) {
+	                                           const BaseArray<AdGeneric *> &generics, Camera3D *camera) {
 	DXMatrix matIdentity;
 	DXMatrixIdentity(&matIdentity);
 

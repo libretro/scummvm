@@ -55,18 +55,20 @@ void Sound::process() {
 	}
 }
 
-Operand Sound::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args) {
+ScriptValue Sound::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) {
+	ScriptValue returnValue;
+
 	switch (methodId) {
 	case kTimePlayMethod: {
 		assert(args.empty());
 		timePlay();
-		return Operand();
+		return returnValue;
 	}
 
 	case kTimeStopMethod: {
 		assert(args.empty());
 		timeStop();
-		return Operand();
+		return returnValue;
 	}
 
 	default:

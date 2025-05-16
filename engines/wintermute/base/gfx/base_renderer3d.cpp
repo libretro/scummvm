@@ -37,13 +37,6 @@ BaseRenderer3D::BaseRenderer3D(Wintermute::BaseGame *inGame) : BaseRenderer(inGa
 
 	_lastTexture = nullptr;
 
-	_blendMode = Graphics::BLEND_UNKNOWN;
-
-	_spriteBatchMode = false;
-	_batchBlendMode = Graphics::BLEND_UNKNOWN;
-	_batchAlphaDisable = false;
-	_batchTexture = nullptr;
-
 	_ambientLightColor = 0x00000000;
 	_ambientLightOverride = false;
 
@@ -62,15 +55,15 @@ void BaseRenderer3D::initLoop() {
 }
 
 bool BaseRenderer3D::drawSprite(BaseSurface *texture, const Wintermute::Rect32 &rect,
-							float zoomX, float zoomY, const Wintermute::Vector2 &pos,
-							uint32 color, bool alphaDisable, Graphics::TSpriteBlendMode blendMode,
-							bool mirrorX, bool mirrorY) {
+	                        float zoomX, float zoomY, const Wintermute::Vector2 &pos,
+	                        uint32 color, bool alphaDisable, Graphics::TSpriteBlendMode blendMode,
+	                        bool mirrorX, bool mirrorY) {
 	Vector2 scale(zoomX / 100.0f, zoomY / 100.0f);
 	return drawSpriteEx(texture, rect, pos, Vector2(0.0f, 0.0f), scale, 0.0f, color, alphaDisable, blendMode, mirrorX, mirrorY);
 }
 
 bool BaseRenderer3D::getProjectionParams(float *resWidth, float *resHeight, float *layerWidth, float *layerHeight,
-										 float *modWidth, float *modHeight, bool *customViewport) {
+	                                 float *modWidth, float *modHeight, bool *customViewport) {
 	*resWidth = _width;
 	*resHeight = _height;
 
@@ -120,6 +113,17 @@ bool BaseRenderer3D::setDefaultAmbientLightColor() {
 	_ambientLightOverride = false;
 
 	setAmbientLightRenderState();
+	return true;
+}
+
+bool BaseRenderer3D::setup3DCustom(DXMatrix &viewMat, DXMatrix &projMat) {
+	setup3D();
+	_state = RSTATE_3D;
+	if (viewMat)
+		setViewTransform(viewMat);
+	if (projMat)
+		setProjectionTransform(projMat);
+
 	return true;
 }
 

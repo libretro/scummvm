@@ -19,78 +19,36 @@
  *
  */
 
-#include "mediastation/datum.h"
 #include "mediastation/assetheader.h"
 #include "mediastation/debugchannels.h"
 
 namespace MediaStation {
 
 AssetHeader::AssetHeader(Chunk &chunk) {
-	// I arbitrarily chose the bitmap as the default union member,
-	// but they are all pointers so it doesn't matter.
-	_fileNumber = Datum(chunk).u.i;
-	// TODO: Cast to an asset type.
-	_type = static_cast<AssetType>(Datum(chunk).u.i);
-	_id = Datum(chunk).u.i;
+	_fileNumber = chunk.readTypedUint16();
+	_type = static_cast<AssetType>(chunk.readTypedUint16());
+	_id = chunk.readTypedUint16();
 	debugC(4, kDebugLoading, "AssetHeader::AssetHeader(): _type = 0x%x, _id = 0x%x (@0x%llx)", static_cast<uint>(_type), _id, static_cast<long long int>(chunk.pos()));
 
-	AssetHeaderSectionType sectionType = getSectionType(chunk);
+	AssetHeaderSectionType sectionType = static_cast<AssetHeaderSectionType>(chunk.readTypedUint16());
 	bool moreSectionsToRead = (kAssetHeaderEmptySection != sectionType);
 	while (moreSectionsToRead) {
 		readSection(sectionType, chunk);
-		sectionType = getSectionType(chunk);
+		sectionType = static_cast<AssetHeaderSectionType>(chunk.readTypedUint16());
 		moreSectionsToRead = (kAssetHeaderEmptySection != sectionType);
 	}
 }
 
 AssetHeader::~AssetHeader() {
-	delete _boundingBox;
-	_boundingBox = nullptr;
-
-	for (Common::Point *point : _mouseActiveArea) {
-		delete point;
-	}
-	_mouseActiveArea.clear();
-
 	for (auto it = _eventHandlers.begin(); it != _eventHandlers.end(); ++it) {
-		delete it->_value;
+		for (EventHandler *eventHandler : it->_value) {
+			delete eventHandler;
+		}
 	}
 	_eventHandlers.clear();
 
-	for (EventHandler *timeHandler : _timeHandlers) {
-		delete timeHandler;
-	}
-	_timeHandlers.clear();
-
-	for (auto it = _keyDownHandlers.begin(); it != _keyDownHandlers.end(); ++it) {
-		delete it->_value;
-	}
-	_keyDownHandlers.clear();
-
-	for (EventHandler *inputHandler : _inputHandlers) {
-		delete inputHandler;
-	}
-	_inputHandlers.clear();
-
-	for (EventHandler *loadCompleteHandler : _loadCompleteHandlers) {
-		delete loadCompleteHandler;
-	}
-	_loadCompleteHandlers.clear();
-
 	delete _palette;
 	_palette = nullptr;
-
-	delete _name;
-	_name = nullptr;
-
-	delete _startPoint;
-	_startPoint = nullptr;
-
-	delete _endPoint;
-	_endPoint = nullptr;
-
-	delete _text;
-	_text = nullptr;
 }
 
 void AssetHeader::readSection(AssetHeaderSectionType sectionType, Chunk& chunk) {
@@ -102,61 +60,28 @@ void AssetHeader::readSection(AssetHeaderSectionType sectionType, Chunk& chunk) 
 
 	case kAssetHeaderEventHandler: {
 		EventHandler *eventHandler = new EventHandler(chunk);
-		switch (eventHandler->_type) {
-		case kTimerEvent: {
-			_timeHandlers.push_back(eventHandler);
-			break;
-		}
+		Common::Array<EventHandler *> &eventHandlersForType = _eventHandlers.getOrCreateVal(eventHandler->_type);
 
-		case kKeyDownEvent: {
-			if (eventHandler->_argumentType != kAsciiCodeEventHandlerArgument) {
-				error("Keydown event handler doesn't have correct argument type");
+		// This is not a hashmap because we don't want to have to hash ScriptValues.
+		for (EventHandler *existingEventHandler : eventHandlersForType) {
+			if (existingEventHandler->_argumentValue == eventHandler->_argumentValue) {
+				error("AssetHeader::readSection(): Event handler for %s (%s) already exists",
+					eventTypeToStr(eventHandler->_type), eventHandler->getDebugHeader().c_str());
 			}
-			if (eventHandler->_argumentValue.t != kDatumTypeFloat64_2) {
-				error("Keydown event handler doesn't have correct argument value type");
-			}
-			uint asciiCode = static_cast<uint>(eventHandler->_argumentValue.u.f);
-			_keyDownHandlers.setVal(asciiCode, eventHandler);
-			break;
 		}
-
-		case kInputEvent: {
-			_inputHandlers.push_back(eventHandler);
-			break;
-		}
-
-		case kLoadCompleteEvent: {
-			_loadCompleteHandlers.push_back(eventHandler);
-			break;
-		}
-
-		default: {
-			if (eventHandler->_argumentType != kNullEventHandlerArgument && \
-				eventHandler->_argumentType != kUnk1EventHandlerArgument) {
-				error("AssetHeader::readSection(): Event handler of type %s has a non-null argument type %s",
-					eventTypeToStr(eventHandler->_type), eventHandlerArgumentTypeToStr(eventHandler->_argumentType));
-			}
-
-			if (_eventHandlers.contains(eventHandler->_type)) {
-				error("AssetHeader::readSection(): Event handler type %s already exists", eventTypeToStr(eventHandler->_type));
-			} else {
-				_eventHandlers.setVal(eventHandler->_type, eventHandler);
-			}
-			break;
-		}
-		}
+		eventHandlersForType.push_back(eventHandler);
 		break;
 	}
 
 	case kAssetHeaderStageId: {
-		_stageId = Datum(chunk).u.i;
+		_stageId = chunk.readTypedUint16();
 		break;
 	}
 
 	case kAssetHeaderAssetId: {
 		// We already have this asset's ID, so we will just verify it is the same
 		// as the ID we have already read.
-		uint32 duplicateAssetId = Datum(chunk).u.i;
+		uint32 duplicateAssetId = chunk.readTypedUint16();
 		if (duplicateAssetId != _id) {
 			warning("AssetHeader::readSection(): AssetHeader ID %d does not match original asset ID %d", duplicateAssetId, _id);
 		}
@@ -170,87 +95,87 @@ void AssetHeader::readSection(AssetHeaderSectionType sectionType, Chunk& chunk) 
 		//  - They might be in the same RIFF subfile as this header,
 		//  - They might be in a different RIFF subfile in the same CXT file,
 		//  - They might be in a different CXT file entirely.
-		_chunkReference = Datum(chunk, kDatumTypeReference).u.i;
+		_chunkReference = chunk.readTypedChunkReference();
 		break;
 	}
 
 	case kAssetHeaderMovieAudioChunkReference: {
-		_audioChunkReference = Datum(chunk, kDatumTypeReference).u.i;
+		_audioChunkReference = chunk.readTypedChunkReference();
 		break;
 	}
 
 	case kAssetHeaderMovieAnimationChunkReference: {
-		_animationChunkReference = Datum(chunk, kDatumTypeReference).u.i;
+		_animationChunkReference = chunk.readTypedChunkReference();
 		break;
 	}
 
 	case kAssetHeaderBoundingBox: {
-		_boundingBox = Datum(chunk, kDatumTypeBoundingBox).u.bbox;
+		_boundingBox = chunk.readTypedRect();
 		break;
 	}
 
 	case kAssetHeaderMouseActiveArea: {
-		uint16 total_points = Datum(chunk, kDatumTypeUint16_1).u.i;
+		uint16 total_points = chunk.readTypedUint16();
 		for (int i = 0; i < total_points; i++) {
-			Common::Point *point = Datum(chunk, kDatumTypePoint2).u.point;
+			Common::Point point = chunk.readTypedPoint();
 			_mouseActiveArea.push_back(point);
 		}
 		break;
 	}
 
 	case kAssetHeaderZIndex: {
-		_zIndex = Datum(chunk).u.i;
+		_zIndex = chunk.readTypedGraphicUnit();
 		break;
 	}
 
 	case kAssetHeaderAssetReference: {
-		_assetReference = Datum(chunk).u.i;
+		_assetReference = chunk.readTypedUint16();
 		break;
 	}
 
 	case kAssetHeaderStartup: {
-		_startup = Datum(chunk).u.i;
+		_startup = chunk.readTypedByte();
 		break;
 	}
 
 	case kAssetHeaderTransparency: {
-		_transparency = Datum(chunk).u.i;
+		_transparency = chunk.readTypedByte();
 		break;
 	}
 
 	case kAssetHeaderHasOwnSubfile: {
-		_hasOwnSubfile = Datum(chunk).u.i;
+		_hasOwnSubfile = chunk.readTypedByte();
 		break;
 	}
 
 	case kAssetHeaderCursorResourceId: {
-		_cursorResourceId = Datum(chunk).u.i;
+		_cursorResourceId = chunk.readTypedUint16();
 		break;
 	}
 
 	case kAssetHeaderFrameRate: {
-		_frameRate = static_cast<uint32>(Datum(chunk, kDatumTypeFloat64_2).u.f);
+		_frameRate = static_cast<uint32>(chunk.readTypedDouble());
 		break;
 	}
 
 	case kAssetHeaderLoadType: {
-		_loadType = Datum(chunk).u.i;
+		_loadType = chunk.readTypedByte();
 		break;
 	}
 
 	case kAssetHeaderSoundInfo: {
-		_chunkCount = Datum(chunk).u.i;
-		_rate = Datum(chunk).u.i;
+		_chunkCount = chunk.readTypedUint16();
+		_rate = chunk.readTypedUint32();
 		break;
 	}
 
 	case kAssetHeaderMovieLoadType: {
-		_loadType = Datum(chunk).u.i;
+		_loadType = chunk.readTypedByte();
 		break;
 	}
 
 	case kAssetHeaderGetOffstageEvents: {
-		_getOffstageEvents = Datum(chunk).u.i;
+		_getOffstageEvents = chunk.readTypedByte();
 		break;
 	}
 
@@ -266,33 +191,33 @@ void AssetHeader::readSection(AssetHeaderSectionType sectionType, Chunk& chunk) 
 	}
 
 	case kAssetHeaderDissolveFactor: {
-		_dissolveFactor = Datum(chunk).u.i;
+		_dissolveFactor = chunk.readTypedDouble();
 		break;
 	}
 
 	case kAssetHeaderSoundEncoding1:
 	case kAssetHeaderSoundEncoding2: {
-		_soundEncoding = static_cast<SoundEncoding>(Datum(chunk).u.i);
+		_soundEncoding = static_cast<SoundEncoding>(chunk.readTypedUint16());
 		break;
 	}
 
 	case kAssetHeaderSpriteChunkCount: {
-		_chunkCount = Datum(chunk).u.i;
+		_chunkCount = chunk.readTypedUint16();
 		break;
 	}
 
 	case kAssetHeaderStartPoint: {
-		_startPoint = Datum(chunk, kDatumTypePoint2).u.point;
+		_startPoint = chunk.readTypedPoint();
 		break;
 	}
 
 	case kAssetHeaderEndPoint: {
-		_endPoint = Datum(chunk, kDatumTypePoint2).u.point;
+		_endPoint = chunk.readTypedPoint();
 		break;
 	}
 
 	case kAssetHeaderStepRate: {
-		double _stepRateFloat = Datum(chunk, kDatumTypeFloat64_2).u.f;
+		double _stepRateFloat = chunk.readTypedDouble();
 		// This should always be an integer anyway,
 		// so we'll cast away any fractional part.
 		_stepRate = static_cast<uint32>(_stepRateFloat);
@@ -302,62 +227,62 @@ void AssetHeader::readSection(AssetHeaderSectionType sectionType, Chunk& chunk) 
 	case kAssetHeaderDuration: {
 		// These are stored in the file as fractional seconds,
 		// but we want milliseconds.
-		_duration = (uint32)(Datum(chunk).u.f * 1000);
+		_duration = (uint32)(chunk.readTypedTime() * 1000);
 		break;
 	}
 
 	case kAssetHeaderX: {
-		_x = Datum(chunk).u.i;
+		_x = chunk.readTypedUint16();
 		break;
 	}
 
 	case kAssetHeaderY: {
-		_y = Datum(chunk).u.i;
+		_y = chunk.readTypedUint16();
 		break;
 	}
 
 	case kAssetHeaderEditable: {
-		_editable = Datum(chunk).u.i;
+		_editable = chunk.readTypedByte();
 		break;
 	}
 
 	case kAssetHeaderFontId: {
-		_fontAssetId = Datum(chunk).u.i;
+		_fontAssetId = chunk.readTypedUint16();
 		break;
 	}
 
 	case kAssetHeaderTextMaxLength: {
-		_maxTextLength = Datum(chunk).u.i;
+		_maxTextLength = chunk.readTypedUint16();
 		break;
 	}
 
 	case kAssetHeaderInitialText: {
-		_text = Datum(chunk).u.string;
+		_text = chunk.readTypedString();
 		break;
 	}
 
 	case kAssetHeaderTextJustification: {
-		_justification = static_cast<TextJustification>(Datum(chunk).u.i);
+		_justification = static_cast<TextJustification>(chunk.readTypedUint16());
 		break;
 	}
 
 	case kAssetHeaderTextPosition: {
-		_position = static_cast<TextPosition>(Datum(chunk).u.i);
+		_position = static_cast<TextPosition>(chunk.readTypedUint16());
 		break;
 	}
 
 	case kAssetHeaderTextCharacterClass: {
 		CharacterClass characterClass;
-		characterClass.firstAsciiCode = Datum(chunk).u.i;
-		characterClass.lastAsciiCode = Datum(chunk).u.i;
+		characterClass.firstAsciiCode = chunk.readTypedUint16();
+		characterClass.lastAsciiCode = chunk.readTypedUint16();
 		_acceptedInput.push_back(characterClass);
 		break;
 	}
 
 	case kAssetHeaderSpriteFrameMapping: {
-		uint32 externalFrameId = Datum(chunk).u.i;
-		uint32 internalFrameId = Datum(chunk).u.i;
-		uint32 unk1 = Datum(chunk).u.i;
+		uint32 externalFrameId = chunk.readTypedUint16();
+		uint32 internalFrameId = chunk.readTypedUint16();
+		uint32 unk1 = chunk.readTypedUint16();
 		if (unk1 != internalFrameId) {
 			warning("AssetHeader::readSection(): Repeated internalFrameId doesn't match");
 		}
@@ -366,19 +291,13 @@ void AssetHeader::readSection(AssetHeaderSectionType sectionType, Chunk& chunk) 
 	}
 
     case kAssetHeaderPathTotalSteps: {
-		_totalSteps = Datum(chunk).u.i;
+		_totalSteps = chunk.readTypedUint16();
 		break;
 	}
 
 	default:
 		error("AssetHeader::readSection(): Unknown section type 0x%x (@0x%llx)", static_cast<uint>(sectionType), static_cast<long long int>(chunk.pos()));
 	}
-}
-
-AssetHeaderSectionType AssetHeader::getSectionType(Chunk &chunk) {
-	Datum datum = Datum(chunk, kDatumTypeUint16_1);
-	AssetHeaderSectionType sectionType = static_cast<AssetHeaderSectionType>(datum.u.i);
-	return sectionType;
 }
 
 } // end of namespace MediaStation

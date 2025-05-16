@@ -19,6 +19,7 @@
  *
  */
 
+#include "common/events.h"
 #include "common/system.h"
 #include "common/translation.h"
 
@@ -121,6 +122,12 @@ bool Window::processEvent(Common::Event &event) {
 }
 
 bool Movie::processEvent(Common::Event &event) {
+	// When in GUI message box is being shown, movie may record clicking on the message box as a movie event
+	// Make sure that these events (mouseUp, mouseDown) are not recorded in the movie
+	if (_inGuiMessageBox) {
+		return false;
+	}
+
 	Score *sc = getScore();
 	if (sc->getCurrentFrameNum() > sc->getFramesNum()) {
 		warning("processEvents: request to access frame %d of %d", sc->getCurrentFrameNum(), sc->getFramesNum());
@@ -147,7 +154,7 @@ bool Movie::processEvent(Common::Event &event) {
 
 		// hiliteChannelId is specified for BitMap castmember, so we deal with them separately with other castmember
 		// if we are moving out of bounds, then we don't hilite it anymore
-		if (_currentHiliteChannelId && !sc->_channels[_currentHiliteChannelId]->isMouseIn(pos)) {
+		if (_currentHiliteChannelId && (sc->_channels[_currentHiliteChannelId]->isMouseIn(pos) != kCollisionYes)) {
 			g_director->getCurrentWindow()->setDirty(true);
 			g_director->getCurrentWindow()->addDirtyRect(sc->_channels[_currentHiliteChannelId]->getBbox());
 			_currentHiliteChannelId = 0;
@@ -191,6 +198,7 @@ bool Movie::processEvent(Common::Event &event) {
 		} else {
 			pos = event.mouse;
 
+			// FIXME: Check if these are tracked with the right mouse button
 			_lastEventTime = g_director->getMacTicks();
 			_lastClickTime2 = _lastClickTime;
 			_lastClickTime = _lastEventTime;
@@ -198,25 +206,39 @@ bool Movie::processEvent(Common::Event &event) {
 			if (_timeOutMouse)
 				_lastTimeOut = _lastEventTime;
 
+			LEvent ev = kEventMouseDown;
+			// In D5 and up, right mouse clicks don't trigger the mouseDown handler.
+			// They are caught by the rightMouseDown handler only.
+			if ((g_director->getVersion() >= 500) && event.type == Common::EVENT_RBUTTONDOWN)
+				ev = kEventRightMouseDown;
+
 			debugC(3, kDebugEvents, "Movie::processEvent(): Button Down @(%d, %d), movie '%s'", pos.x, pos.y, _macName.c_str());
-			queueInputEvent(kEventMouseDown, 0, pos);
+			queueInputEvent(ev, 0, pos);
 		}
 
 		return true;
 
 	case Common::EVENT_LBUTTONUP:
 	case Common::EVENT_RBUTTONUP:
-		pos = event.mouse;
+		{
+			pos = event.mouse;
 
-		debugC(3, kDebugEvents, "Movie::processEvent(): Button Up @(%d, %d), movie '%s'", pos.x, pos.y, _macName.c_str());
+			debugC(3, kDebugEvents, "Movie::processEvent(): Button Up @(%d, %d), movie '%s'", pos.x, pos.y, _macName.c_str());
 
-		queueInputEvent(kEventMouseUp, 0, pos);
-		sc->renderCursor(pos);
+			LEvent ev = kEventMouseUp;
+			// In D5 and up, right mouse clicks don't trigger the mouseUp handler.
+			// They are caught by the rightMouseUp handler only.
+			if ((g_director->getVersion() >= 500) && event.type == Common::EVENT_RBUTTONUP)
+				ev = kEventRightMouseUp;
+
+			queueInputEvent(ev, 0, pos);
+			sc->renderCursor(pos);
+		}
 		return true;
 
 	case Common::EVENT_KEYDOWN:
 		_keyCode = _vm->_KeyCodes.contains(event.kbd.keycode) ? _vm->_KeyCodes[event.kbd.keycode] : 0;
-		_key = (unsigned char)(event.kbd.ascii & 0xff);
+		_key = event.kbd.ascii;
 		_keyFlags = event.kbd.flags;
 
 		if (event.kbd.keycode == Common::KEYCODE_LSHIFT || event.kbd.keycode == Common::KEYCODE_RSHIFT ||

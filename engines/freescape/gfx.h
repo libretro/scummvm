@@ -85,11 +85,11 @@ public:
 	virtual void freeTexture(Texture *texture) = 0;
 	virtual void drawTexturedRect2D(const Common::Rect &screenRect, const Common::Rect &textureRect, Texture *texture) = 0;
 
-	virtual void renderSensorShoot(byte color, const Math::Vector3d sensor, const Math::Vector3d player, const Common::Rect viewPort) = 0;
-	virtual void renderPlayerShootBall(byte color, const Common::Point position, int frame, const Common::Rect viewPort) = 0;
-	virtual void renderPlayerShootRay(byte color, const Common::Point position, const Common::Rect viewPort) = 0;
+	virtual void renderSensorShoot(byte color, const Math::Vector3d sensor, const Math::Vector3d player, const Common::Rect &viewPort) = 0;
+	virtual void renderPlayerShootBall(byte color, const Common::Point &position, int frame, const Common::Rect &viewPort) = 0;
+	virtual void renderPlayerShootRay(byte color, const Common::Point &position, const Common::Rect &viewPort) = 0;
 
-	virtual void renderCrossair(const Common::Point crossairPosition) = 0;
+	virtual void renderCrossair(const Common::Point &crossairPosition) = 0;
 
 	virtual void renderCube(const Math::Vector3d &position, const Math::Vector3d &size, Common::Array<uint8> *colours, Common::Array<uint8> *ecolours, float offset = 0.0);
 	virtual void renderRectangle(const Math::Vector3d &position, const Math::Vector3d &size, Common::Array<uint8> *colours, Common::Array<uint8> *ecolours, float offset = 0.0);
@@ -274,7 +274,7 @@ public:
 	 * This also sets the viewport
 	 */
 
-	virtual void positionCamera(const Math::Vector3d &pos, const Math::Vector3d &interest) = 0;
+	virtual void positionCamera(const Math::Vector3d &pos, const Math::Vector3d &interest, float rollAngle = 0.0f) = 0;
 	virtual void updateProjectionMatrix(float fov, float aspectRatio, float nearClipPlane, float farClipPlane) = 0;
 
 	Math::Matrix4 getMvpMatrix() const { return _mvpMatrix; }

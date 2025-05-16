@@ -90,6 +90,7 @@ void TinyGLRenderer::init() {
 void TinyGLRenderer::setViewport(const Common::Rect &rect) {
 	_viewport = rect;
 	tglViewport(rect.left, g_system->getHeight() - rect.bottom, rect.width(), rect.height());
+	tglScissor(rect.left, g_system->getHeight() - rect.bottom, rect.width(), rect.height());
 }
 
 void TinyGLRenderer::drawTexturedRect2D(const Common::Rect &screenRect, const Common::Rect &textureRect, Texture *texture) {
@@ -162,15 +163,16 @@ void TinyGLRenderer::updateProjectionMatrix(float fov, float aspectRatio, float 
 	tglLoadIdentity();
 }
 
-void TinyGLRenderer::positionCamera(const Math::Vector3d &pos, const Math::Vector3d &interest) {
+void TinyGLRenderer::positionCamera(const Math::Vector3d &pos, const Math::Vector3d &interest, float rollAngle) {
 	Math::Vector3d up_vec(0, 1, 0);
 
 	Math::Matrix4 lookMatrix = Math::makeLookAtMatrix(pos, interest, up_vec);
 	tglMultMatrixf(lookMatrix.getData());
+	tglRotatef(rollAngle, 0.0f, 0.0f, 1.0f);
 	tglTranslatef(-pos.x(), -pos.y(), -pos.z());
 }
 
-void TinyGLRenderer::renderSensorShoot(byte color, const Math::Vector3d sensor, const Math::Vector3d player, const Common::Rect viewArea) {
+void TinyGLRenderer::renderSensorShoot(byte color, const Math::Vector3d sensor, const Math::Vector3d player, const Common::Rect &viewArea) {
 	tglEnable(TGL_BLEND);
 	tglBlendFunc(TGL_ONE_MINUS_DST_COLOR, TGL_ZERO);
 	tglColor3ub(255, 255, 255);
@@ -185,8 +187,8 @@ void TinyGLRenderer::renderSensorShoot(byte color, const Math::Vector3d sensor, 
 	tglDisable(TGL_BLEND);
 }
 
-void TinyGLRenderer::renderPlayerShootBall(byte color, const Common::Point position, int frame, const Common::Rect viewArea) {
-	/*uint8 r, g, b;
+void TinyGLRenderer::renderPlayerShootBall(byte color, const Common::Point &position, int frame, const Common::Rect &viewArea) {
+	uint8 r, g, b;
 
 	tglMatrixMode(TGL_PROJECTION);
 	tglLoadIdentity();
@@ -228,11 +230,11 @@ void TinyGLRenderer::renderPlayerShootBall(byte color, const Common::Point posit
 
 	tglDisable(TGL_BLEND);
 	tglEnable(TGL_DEPTH_TEST);
-	tglDepthMask(TGL_TRUE);*/
+	tglDepthMask(TGL_TRUE);
 }
 
 
-void TinyGLRenderer::renderPlayerShootRay(byte color, const Common::Point position, const Common::Rect viewArea) {
+void TinyGLRenderer::renderPlayerShootRay(byte color, const Common::Point &position, const Common::Rect &viewArea) {
 	uint8 r, g, b;
 	readFromPalette(color, r, g, b); // TODO: should use opposite color
 
@@ -278,7 +280,7 @@ void TinyGLRenderer::renderPlayerShootRay(byte color, const Common::Point positi
 	tglDepthMask(TGL_TRUE);
 }
 
-void TinyGLRenderer::renderCrossair(const Common::Point crossairPosition) {
+void TinyGLRenderer::renderCrossair(const Common::Point &crossairPosition) {
 	tglMatrixMode(TGL_PROJECTION);
 	tglLoadIdentity();
 	tglOrtho(0, _screenW, _screenH, 0, 0, 1);
@@ -449,10 +451,10 @@ void TinyGLRenderer::drawCelestialBody(Math::Vector3d position, float radius, by
 
 	// Quick billboard effect inspired from this code:
 	// http://www.lighthouse3d.com/opengl/billboarding/index.php?billCheat
-	/*glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-	GLfloat m[16];
-	glGetFloatv(GL_MODELVIEW_MATRIX, m);
+	tglMatrixMode(TGL_MODELVIEW);
+	tglPushMatrix();
+	TGLfloat m[16];
+	tglGetFloatv(TGL_MODELVIEW_MATRIX, m);
 	for(int i = 1; i < 4; i++)
 		for(int j = 0; j < 4; j++ ) {
 			if (i == 2)
@@ -463,7 +465,7 @@ void TinyGLRenderer::drawCelestialBody(Math::Vector3d position, float radius, by
 				m[i*4 + j] = 0.0;
 		}
 
-	glLoadMatrixf(m);*/
+	tglLoadMatrixf(m);
 	tglDisable(TGL_DEPTH_TEST);
 	tglDepthMask(TGL_FALSE);
 
@@ -508,7 +510,7 @@ void TinyGLRenderer::drawCelestialBody(Math::Vector3d position, float radius, by
 
 	tglEnable(TGL_DEPTH_TEST);
 	tglDepthMask(TGL_TRUE);
-	//tglPopMatrix();
+	tglPopMatrix();
 }
 
 void TinyGLRenderer::depthTesting(bool enabled) {
@@ -537,46 +539,12 @@ void TinyGLRenderer::useColor(uint8 r, uint8 g, uint8 b) {
 }
 
 void TinyGLRenderer::clear(uint8 r, uint8 g, uint8 b, bool ignoreViewport) {
-	tglClear(TGL_DEPTH_BUFFER_BIT | TGL_STENCIL_BITS);
-	if (ignoreViewport) {
-		tglClearColor(r / 255., g / 255., b / 255., 1.0);
-		tglClear(TGL_COLOR_BUFFER_BIT);
-	} else {
-		// Create a viewport sized quad and color it
-		useColor(r, g, b);
-
-		tglMatrixMode(TGL_PROJECTION);
-		tglPushMatrix();
-		tglLoadIdentity();
-
-		tglOrtho(0, _viewport.width(), _viewport.height(), 0, 0, 1);
-		tglMatrixMode(TGL_MODELVIEW);
-		tglPushMatrix();
-		tglLoadIdentity();
-
-		tglDisable(TGL_DEPTH_TEST);
-		tglDepthMask(TGL_FALSE);
-
-		tglEnableClientState(TGL_VERTEX_ARRAY);
-		copyToVertexArray(0, Math::Vector3d(0, 0, 0));
-		copyToVertexArray(1, Math::Vector3d(0, _viewport.height(), 0));
-		copyToVertexArray(2, Math::Vector3d(_viewport.width(), _viewport.height(), 0));
-
-		copyToVertexArray(3, Math::Vector3d(0, 0, 0));
-		copyToVertexArray(4, Math::Vector3d(_viewport.width(), 0, 0));
-		copyToVertexArray(5, Math::Vector3d(_viewport.width(), _viewport.height(), 0));
-
-		tglVertexPointer(3, TGL_FLOAT, 0, _verts);
-		tglDrawArrays(TGL_TRIANGLES, 0, 6);
-		tglDisableClientState(TGL_VERTEX_ARRAY);
-
-		tglEnable(TGL_DEPTH_TEST);
-		tglDepthMask(TGL_TRUE);
-
-		tglPopMatrix();
-		tglMatrixMode(TGL_PROJECTION);
-		tglPopMatrix();
-	}
+	if (ignoreViewport)
+		tglDisable(TGL_SCISSOR_TEST);
+	tglClearColor(r / 255., g / 255., b / 255., 1.0);
+	tglClear(TGL_COLOR_BUFFER_BIT | TGL_DEPTH_BUFFER_BIT | TGL_STENCIL_BUFFER_BIT);
+	if (ignoreViewport)
+		tglEnable(TGL_SCISSOR_TEST);
 }
 
 void TinyGLRenderer::drawFloor(uint8 color) {
@@ -616,7 +584,7 @@ Graphics::Surface *TinyGLRenderer::getScreenshot() {
 
 	Graphics::Surface *s = new Graphics::Surface();
 	s->create(_screenW, _screenH, getRGBAPixelFormat());
-	s->copyFrom(glBuffer);
+	s->convertFrom(glBuffer, getRGBAPixelFormat());
 
 	return s;
 }

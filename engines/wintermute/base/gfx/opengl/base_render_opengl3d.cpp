@@ -160,20 +160,6 @@ bool BaseRenderOpenGL3D::setup2D(bool force) {
 		glDisable(GL_STENCIL_TEST);
 
 		glDisable(GL_FOG);
-
-		//
-		// WME has this. It's unknown if it's really needed
-		// Support this would require higher OpenGL version
-		//
-		// D3DTSS_COLOROP               = D3DTOP_MODULATE
-		// D3DTSS_COLORARG1             = D3DTA_TEXTURE
-		// D3DTSS_COLORARG              = D3DTA_DIFFUSE
-		// D3DTSS_ALPHAOP               = D3DTOP_MODULATE
-		// D3DTSS_ALPHAARG1             = D3DTA_TEXTURE
-		// D3DTSS_ALPHAARG2             = D3DTA_DIFFUSE
-		// D3DTSS_MIPFILTER             = D3DTEXF_NONE
-		// D3DTSS_TEXCOORDINDEX         = 0
-		// D3DTSS_TEXTURETRANSFORMFLAGS = D3DTTFF_DISABLE
 	}
 
 	return true;
@@ -184,15 +170,6 @@ bool BaseRenderOpenGL3D::setup3D(Camera3D *camera, bool force) {
 		_state = RSTATE_3D;
 
 		glEnable(GL_NORMALIZE);
-
-		//
-		// WME has this. It's unknown if it's really needed
-		// Support this would require higher OpenGL version
-		//
-		// D3DTSS_COLORARG1 = D3DTA_TEXTURE
-		// D3DTSS_COLORARG2 = D3DTA_CURRENT
-		// D3DTSS_COLOROP   = D3DTOP_MODULATE
-		// D3DTSS_ALPHAOP   = D3DTOP_SELECTARG1
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
@@ -254,9 +231,9 @@ bool BaseRenderOpenGL3D::setup3D(Camera3D *camera, bool force) {
 		if (fogEnabled) {
 			glEnable(GL_FOG);
 			GLfloat color[4] = { RGBCOLGetR(fogColor) / 255.0f,
-								 RGBCOLGetG(fogColor) / 255.0f,
-								 RGBCOLGetB(fogColor) / 255.0f,
-								 RGBCOLGetA(fogColor) / 255.0f };
+			                     RGBCOLGetG(fogColor) / 255.0f,
+			                     RGBCOLGetB(fogColor) / 255.0f,
+			                     RGBCOLGetA(fogColor) / 255.0f };
 			glFogfv(GL_FOG_COLOR, color);
 			glFogi(GL_FOG_MODE, GL_LINEAR);
 			glFogf(GL_FOG_START, fogStart);
@@ -320,19 +297,15 @@ bool BaseRenderOpenGL3D::setupLines() {
 }
 
 bool BaseRenderOpenGL3D::drawSpriteEx(BaseSurface *tex, const Wintermute::Rect32 &rect,
-								  const Wintermute::Vector2 &pos, const Wintermute::Vector2 &rot, const Wintermute::Vector2 &scale,
-								  float angle, uint32 color, bool alphaDisable, Graphics::TSpriteBlendMode blendMode,
-								  bool mirrorX, bool mirrorY) {
+	                              const Wintermute::Vector2 &pos, const Wintermute::Vector2 &rot,
+	                              const Wintermute::Vector2 &scale,
+	                              float angle, uint32 color, bool alphaDisable,
+	                              Graphics::TSpriteBlendMode blendMode,
+	                              bool mirrorX, bool mirrorY) {
 
 	BaseSurfaceOpenGL3D *texture = dynamic_cast<BaseSurfaceOpenGL3D *>(tex);
 	if (!texture)
 		return false;
-
-	if (_spriteBatchMode) {
-		_batchTexture = texture;
-		_batchAlphaDisable = alphaDisable;
-		_batchBlendMode = blendMode;
-	}
 
 	if (_forceAlphaColor != 0) {
 		color = _forceAlphaColor;
@@ -358,12 +331,6 @@ bool BaseRenderOpenGL3D::drawSpriteEx(BaseSurface *tex, const Wintermute::Rect32
 	}
 
 	SpriteVertex vertices[4] = {};
-
-	// batch mode
-	if (_spriteBatchMode) {
-		// TODO
-		commitSpriteBatch();
-	}
 
 	// Convert to OpenGL origin space
 	SWAP(texTop, texBottom);
@@ -420,68 +387,41 @@ bool BaseRenderOpenGL3D::drawSpriteEx(BaseSurface *tex, const Wintermute::Rect32
 		transformVertices(vertices, &rotation, &sc, degToRad(-angle));
 	}
 
-	if (_spriteBatchMode) {
-		// TODO
-	} else {
-		setSpriteBlendMode(blendMode);
-		if (alphaDisable) {
-			glDisable(GL_ALPHA_TEST);
-			glDisable(GL_BLEND);
-		}
-
-		if (_lastTexture != texture) {
-			_lastTexture = texture;
-			glBindTexture(GL_TEXTURE_2D, texture->getTextureName());
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			// for sprites we clamp to the edge, to avoid line fragments at the edges
-			// this is not done by wme, though
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glEnable(GL_TEXTURE_2D);
-		}
-
-		setProjection2D();
-
-		glEnableClientState(GL_COLOR_ARRAY);
-		glEnableClientState(GL_VERTEX_ARRAY);
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-		glDisableClientState(GL_NORMAL_ARRAY);
-		
-		glVertexPointer(3, GL_FLOAT, sizeof(SpriteVertex), &vertices[0].x);
-		glTexCoordPointer(2, GL_FLOAT, sizeof(SpriteVertex), &vertices[0].u);
-		glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(SpriteVertex), &vertices[0].r);
-		
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-		
-		glDisableClientState(GL_COLOR_ARRAY);
-		glDisableClientState(GL_VERTEX_ARRAY);
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		
-		if (alphaDisable) {
-			glEnable(GL_ALPHA_TEST);
-			glEnable(GL_BLEND);
-		}
-	}
-
-	return true;
-}
-
-bool BaseRenderOpenGL3D::commitSpriteBatch() {
-	// render
-	setSpriteBlendMode(_batchBlendMode);
-	if (_batchAlphaDisable) {
+	setSpriteBlendMode(blendMode);
+	if (alphaDisable) {
 		glDisable(GL_ALPHA_TEST);
 		glDisable(GL_BLEND);
 	}
 
-	if (_lastTexture != _batchTexture) {
-		_lastTexture = _batchTexture;
-		glBindTexture(GL_TEXTURE_2D, _batchTexture->getTextureName());
+	if (_lastTexture != texture) {
+		_lastTexture = texture;
+		glBindTexture(GL_TEXTURE_2D, texture->getTextureName());
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		// for sprites we clamp to the edge, to avoid line fragments at the edges
+		// this is not done by wme, though
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glEnable(GL_TEXTURE_2D);
 	}
 
-	// TODO
+	setProjection2D();
 
-	if (_batchAlphaDisable) {
+	glEnableClientState(GL_COLOR_ARRAY);
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	glDisableClientState(GL_NORMAL_ARRAY);
+
+	glVertexPointer(3, GL_FLOAT, sizeof(SpriteVertex), &vertices[0].x);
+	glTexCoordPointer(2, GL_FLOAT, sizeof(SpriteVertex), &vertices[0].u);
+	glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(SpriteVertex), &vertices[0].r);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	glDisableClientState(GL_COLOR_ARRAY);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+
+	if (alphaDisable) {
 		glEnable(GL_ALPHA_TEST);
 		glEnable(GL_BLEND);
 	}
@@ -489,17 +429,19 @@ bool BaseRenderOpenGL3D::commitSpriteBatch() {
 	return true;
 }
 
+bool BaseRenderOpenGL3D::commitSpriteBatch() {
+	// nothing to implement
+	return true;
+}
+
 bool BaseRenderOpenGL3D::startSpriteBatch() {
-	//_spriteBatchMode = true;
+	// nothing to implement
 	return true;
 }
 
 bool BaseRenderOpenGL3D::endSpriteBatch() {
-	if (!_spriteBatchMode)
-		return false;
-
-	_spriteBatchMode = false;
-	return commitSpriteBatch();
+	// nothing to implement
+	return true;
 }
 
 DXMatrix *BaseRenderOpenGL3D::buildMatrix(DXMatrix* out, const DXVector2 *centre, const DXVector2 *scaling, float angle) {
@@ -672,7 +614,7 @@ BaseImage *BaseRenderOpenGL3D::takeScreenshot() {
 	surface->create(_viewportRect.width(), _viewportRect.height(), format);
 
 	glReadPixels(_viewportRect.left, _viewportRect.height() - _viewportRect.bottom, _viewportRect.width(), _viewportRect.height(),
-				 GL_RGBA, GL_UNSIGNED_BYTE, surface->getPixels());
+	              GL_RGBA, GL_UNSIGNED_BYTE, surface->getPixels());
 	flipVertical(surface);
 	Graphics::Surface *converted = surface->convertTo(getPixelFormat());
 	screenshot->copyFrom(converted);
@@ -682,7 +624,7 @@ BaseImage *BaseRenderOpenGL3D::takeScreenshot() {
 }
 
 bool BaseRenderOpenGL3D::enableShadows() {
-	_gameRef->_supportsRealTimeShadows = false;
+	_gameRef->_supportsRealTimeShadows = true;
 	return true;
 }
 
@@ -690,21 +632,10 @@ bool BaseRenderOpenGL3D::disableShadows() {
 	return true;
 }
 
-void BaseRenderOpenGL3D::displayShadow(BaseObject *object, const DXVector3 *lightPos, bool lightPosRelative) {
-	if (!_ready || !object || !lightPos)
+void BaseRenderOpenGL3D::displaySimpleShadow(BaseObject *object) {
+	if (!_ready || !object)
 		return;
 
-	// redirect simple shadow if needed
-	bool simpleShadow = _gameRef->getMaxShadowType(object) <= SHADOW_SIMPLE;
-	if (!_gameRef->_supportsRealTimeShadows)
-		simpleShadow = true;
-	if (simpleShadow)
-		return renderSimpleShadow(object);
-
-	// TODO: to be implemented
-}
-
-void BaseRenderOpenGL3D::renderSimpleShadow(BaseObject *object) {
 	BaseSurface *shadowImage;
 	if (object->_shadowImage) {
 		shadowImage = object->_shadowImage;
@@ -783,10 +714,20 @@ int BaseRenderOpenGL3D::getMaxActiveLights() {
 bool BaseRenderOpenGL3D::invalidateTexture(BaseSurfaceOpenGL3D *texture) {
 	if (_lastTexture == texture)
 		_lastTexture = nullptr;
-	if (_batchTexture == texture)
-		_batchTexture = nullptr;
 
 	return true;
+}
+
+bool BaseRenderOpenGL3D::invalidateDeviceObjects() {
+	return STATUS_OK;
+}
+
+bool BaseRenderOpenGL3D::restoreDeviceObjects() {
+	return STATUS_OK;
+}
+
+bool BaseRenderOpenGL3D::resetDevice() {
+	return STATUS_OK;
 }
 
 // implements D3D LightEnable()
@@ -833,7 +774,7 @@ void BaseRenderOpenGL3D::setLightParameters(int index, const DXVector3 &position
 
 // backend layer AdSceneGeometry::Render
 void BaseRenderOpenGL3D::renderSceneGeometry(const BaseArray<AdWalkplane *> &planes, const BaseArray<AdBlock *> &blocks,
-										 const BaseArray<AdGeneric *> &generics, const BaseArray<Light3D *> &lights, Camera3D *camera) {
+	                                     const BaseArray<AdGeneric *> &generics, const BaseArray<Light3D *> &lights, Camera3D *camera) {
 	DXMatrix matIdentity;
 	DXMatrixIdentity(&matIdentity);
 
@@ -912,8 +853,8 @@ void BaseRenderOpenGL3D::renderSceneGeometry(const BaseArray<AdWalkplane *> &pla
 
 // backend layer 3DShadowVolume::Render()
 void BaseRenderOpenGL3D::renderShadowGeometry(const BaseArray<AdWalkplane *> &planes,
-											  const BaseArray<AdBlock *> &blocks,
-											  const BaseArray<AdGeneric *> &generics, Camera3D *camera) {
+	                                      const BaseArray<AdBlock *> &blocks,
+	                                      const BaseArray<AdGeneric *> &generics, Camera3D *camera) {
 	DXMatrix matIdentity;
 	DXMatrixIdentity(&matIdentity);
 

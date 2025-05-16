@@ -23,16 +23,16 @@
 
 namespace MediaStation {
 
-const char *instructionTypeToStr(InstructionType type) {
+const char *expressionTypeToStr(ExpressionType type) {
 	switch (type) {
-	case kInstructionTypeEmpty:
+	case kExpressionTypeEmpty:
 		return "Empty";
-	case kInstructionTypeFunctionCall:
-		return "FunctionCall";
-	case kInstructionTypeOperand:
-		return "Operand";
-	case kInstructionTypeVariableRef:
-		return "VariableReference";
+	case kExpressionTypeVariable:
+		return "Variable";
+	case kExpressionTypeValue:
+		return "Value";
+	case kExpressionTypeOperation:
+		return "Operation";
 	default:
 		return "UNKNOWN";
 	}
@@ -40,14 +40,16 @@ const char *instructionTypeToStr(InstructionType type) {
 
 const char *opcodeToStr(Opcode opcode) {
 	switch (opcode) {
+	case kOpcodeIf:
+		return "If";
 	case kOpcodeIfElse:
 		return "IfElse";
 	case kOpcodeAssignVariable:
 		return "AssignVariable";
 	case kOpcodeOr:
 		return "Or";
-	case kOpcodeNot:
-		return "Not";
+	case kOpcodeXor:
+		return "Xor";
 	case kOpcodeAnd:
 		return "And";
 	case kOpcodeEquals:
@@ -78,16 +80,18 @@ const char *opcodeToStr(Opcode opcode) {
 		return "CallFunction";
 	case kOpcodeCallMethod:
 		return "CallMethod";
-	case kOpcodeDeclareVariables:
-		return "DeclareVariables";
+	case kOpcodeDeclareLocals:
+		return "DeclareLocals";
 	case kOpcodeReturn:
 		return "Return";
-	case kOpcodeUnk1:
-		return "UNKNOWN (Unk1)";
-	case kOpcodeCallFunctionInVariable:
-		return "CallFunctionInVariable";
+	case kOpcodeReturnNoValue:
+		return "ReturnNoValue";
 	case kOpcodeWhile:
 		return "While";
+	case kOpcodeCallFunctionInVariable:
+		return "CallFunctionInVariable";
+	case kOpcodeCallMethodInVariable:
+		return "CallMethodInVariable";
 	default:
 		return "UNKNOWN";
 	}
@@ -203,28 +207,38 @@ const char *builtInMethodToStr(BuiltInMethod method) {
 		return "SetText";
 	case kSetMaximumTextLengthMethod:
 		return "SetMaximumTextLength";
-	case kIsEmptyMethod:
-		return "IsEmpty";
-	case kEmptyMethod:
-		return "Empty";
 	case kAppendMethod:
 		return "Append";
-	case kGetAtMethod:
-		return "GetAt";
+	case kApplyMethod:
+		return "Apply";
 	case kCountMethod:
 		return "Count";
-	case kSendMethod:
-		return "Send";
-	case kSeekMethod:
-		return "Seek";
-	case kSortMethod:
-		return "Sort";
-	case kDeleteAtMethod:
-		return "DeleteAt";
-	case kJumbleMethod:
-		return "Jumble";
 	case kDeleteFirstMethod:
 		return "DeleteFirst";
+	case kDeleteLastMethod:
+		return "DeleteLast";
+	case kEmptyMethod:
+		return "Empty";
+	case kGetAtMethod:
+		return "GetAt";
+	case kIsEmptyMethod:
+		return "IsEmpty";
+	case kJumbleMethod:
+		return "Jumble";
+	case kSeekMethod:
+		return "Seek";
+	case kSendMethod:
+		return "Send";
+	case kDeleteAtMethod:
+		return "DeleteAt";
+	case kInsertAtMethod:
+		return "InsertAt";
+	case kReplaceAtMethod:
+		return "ReplaceAt";
+	case kPrependListMethod:
+		return "PrependList";
+	case kSortMethod:
+		return "Sort";
 	case kOpenLensMethod:
 		return "OpenLens";
 	case kCloseLensMethod:
@@ -297,74 +311,59 @@ const char *eventTypeToStr(EventType type) {
 	}
 }
 
-const char *eventHandlerArgumentTypeToStr(EventHandlerArgumentType type) {
-	switch (type) {
-	case kNullEventHandlerArgument:
-		return "Null";
-	case kAsciiCodeEventHandlerArgument:
-		return "AsciiCode";
-	case kTimeEventHandlerArgument:
-		return "Time";
-	case kUnk1EventHandlerArgument:
-		return "Unk1";
-	case kContextEventHandlerArgument:
-		return "Context";
-	default:
-		return "UNKNOWN";
-	}
-}
-
 const char *operandTypeToStr(OperandType type) {
 	switch (type) {
 	case kOperandTypeEmpty:
 		return "Empty";
-	case kOperandTypeLiteral1:
-		return "Literal1";
-	case kOperandTypeLiteral2:
-		return "Literal2";
-	case kOperandTypeFloat1:
-		return "Float1";
-	case kOperandTypeFloat2:
-		return "Float2";
+	case kOperandTypeBool:
+		return "Bool";
+	case kOperandTypeFloat:
+		return "Float";
+	case kOperandTypeInt:
+		return "Int";
 	case kOperandTypeString:
 		return "String";
-	case kOperandTypeDollarSignVariable:
+	case kOperandTypeParamToken:
 		return "DollarSignVariable";
 	case kOperandTypeAssetId:
 		return "AssetId";
-	case kOperandTypeVariableDeclaration:
-		return "VariableDeclaration";
+	case kOperandTypeTime:
+		return "Time";
+	case kOperandTypeVariable:
+		return "Variable";
+	case kOperandTypeFunctionId:
+		return "FunctionId";
+	case kOperandTypeMethodId:
+		return "MethodId";
 	case kOperandTypeCollection:
 		return "Collection";
-	case kOperandTypeFunction:
-		return "Function";
-	case kOperandTypeMethod:
-		return "Method";
 	default:
 		return "UNKNOWN";
 	}
 }
 
-const char *variableTypeToStr(VariableType type) {
+const char *scriptValueTypeToStr(ScriptValueType type) {
 	switch (type) {
-	case kVariableTypeEmpty:
+	case kScriptValueTypeEmpty:
 		return "Empty";
-	case kVariableTypeFunction:
-		return "Function";
-	case kVariableTypeCollection:
-		return "Collection";
-	case kVariableTypeString:
-		return "String";
-	case kVariableTypeAssetId:
-		return "AssetId";
-	case kVariableTypeInt:
+	case kScriptValueTypeFloat:
+		return "Float";
+	case kScriptValueTypeBool:
+		return "Bool";
+	case kScriptValueTypeTime:
+		return "Time";
+	case kScriptValueTypeParamToken:
 		return "Int";
-	case kVariableTypeUnk2:
-		return "Unknown2";
-	case kVariableTypeBoolean:
-		return "Boolean";
-	case kVariableTypeFloat:
-		return "Literal";
+	case kScriptValueTypeAssetId:
+		return "AssetId";
+	case kScriptValueTypeString:
+		return "String";
+	case kScriptValueTypeCollection:
+		return "Collection";
+	case kScriptValueTypeFunctionId:
+		return "FunctionId";
+	case kScriptValueTypeMethodId:
+		return "MethodId";
 	default:
 		return "UNKNOWN";
 	}

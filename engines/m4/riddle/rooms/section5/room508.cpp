@@ -269,7 +269,7 @@ void Room508::daemon() {
 		_statue = series_place_sprite("STATU SPRITE AFTER DOME TURN", 0, 0, 0, 100, 0x450);
 
 		_light = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0xf00, false,
-			triggerMachineByHashCallback, "Receeding Light");
+			triggerMachineByHashCallback, "Receding Light");
 		sendWSMessage_10000(1, _light, _lightAppearing, 12, 12, -1,
 			_lightAppearing, 12, 12, 0);
 
@@ -469,7 +469,7 @@ void Room508::parser() {
 		case 2:
 			if (inv_player_has("CRYSTAL SKULL")) {
 				digi_play("508R05A", 1);
-			} else if (inv_object_is_here("CRYSTALL SKULL")) {
+			} else if (inv_object_is_here("CRYSTAL SKULL")) {
 				digi_play("508R05B", 1);
 			} else {
 				digi_play("508R05", 1);

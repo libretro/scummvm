@@ -114,7 +114,7 @@ void ChainedGamesManager::clear() {
 	_chainedGames.clear();
 }
 
-void ChainedGamesManager::push(const Common::String target, const int slot) {
+void ChainedGamesManager::push(const Common::String &target, const int slot) {
 	Game game;
 	game.target = target;
 	game.slot = slot;
@@ -321,7 +321,7 @@ void splashScreen() {
 	screen.free();
 
 	// Draw logo
-	Graphics::Surface *logo = bitmap.getSurface()->convertTo(g_system->getOverlayFormat(), bitmap.getPalette());
+	Graphics::Surface *logo = bitmap.getSurface()->convertTo(g_system->getOverlayFormat(), bitmap.getPalette().data(), bitmap.getPalette().size());
 	if (scaleFactor != 1.0f) {
 		Graphics::Surface *tmp = logo->scale(int16(logo->w * scaleFactor), int16(logo->h * scaleFactor), true);
 		logo->free();

@@ -265,6 +265,12 @@ void GLContext::init(int screenW, int screenH, Graphics::PixelFormat pixelFormat
 	current_shade_model = TGL_SMOOTH;
 	cull_face_enabled = 0;
 
+	// scissor
+	scissor_test_enabled = false;
+	scissor[0] = scissor[1] = 0;
+	scissor[2] = screenW;
+	scissor[3] = screenH;
+
 	// fog
 	fog_enabled = false;
 	fog_mode = TGL_EXP;
@@ -357,8 +363,6 @@ void GLContext::init(int screenW, int screenH, Graphics::PixelFormat pixelFormat
 	_drawCallAllocator[1].initialize(drawCallMemorySize);
 	_debugRectsEnabled = false;
 	_profilingEnabled = false;
-
-	TinyGL::Internal::tglBlitResetScissorRect();
 }
 
 void GLContext::deinit() {

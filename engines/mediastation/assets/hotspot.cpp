@@ -32,7 +32,7 @@ Hotspot::Hotspot(AssetHeader *header) : Asset(header) {
 
 bool Hotspot::isInside(const Common::Point &pointToCheck) {
 	// No sense checking the polygon if we're not even in the bbox.
-	if (!_header->_boundingBox->contains(pointToCheck)) {
+	if (!_header->_boundingBox.contains(pointToCheck)) {
 		return false;
 	}
 
@@ -43,14 +43,14 @@ bool Hotspot::isInside(const Common::Point &pointToCheck) {
 
 	// Polygon intersection code adapted from HADESCH engine, might need more
 	// refinement once more testing is possible.
-	Common::Point point = pointToCheck - Common::Point(_header->_boundingBox->left, _header->_boundingBox->top);
+	Common::Point point = pointToCheck - Common::Point(_header->_boundingBox.left, _header->_boundingBox.top);
 	int rcross = 0; // Number of right-side overlaps
 
 	// Each edge is checked whether it cuts the outgoing stream from the point
-	Common::Array<Common::Point *> _polygon = _header->_mouseActiveArea;
+	Common::Array<Common::Point> _polygon = _header->_mouseActiveArea;
 	for (unsigned i = 0; i < _polygon.size(); i++) {
-		const Common::Point &edgeStart = *_polygon[i];
-		const Common::Point &edgeEnd = *_polygon[(i + 1) % _polygon.size()];
+		const Common::Point &edgeStart = _polygon[i];
+		const Common::Point &edgeEnd = _polygon[(i + 1) % _polygon.size()];
 
 		// A vertex is a point? Then it lies on one edge of the polygon
 		if (point == edgeStart)
@@ -68,39 +68,40 @@ bool Hotspot::isInside(const Common::Point &pointToCheck) {
 	return ((rcross % 2) == 1);
 }
 
-Operand Hotspot::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args) {
+ScriptValue Hotspot::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) {
+	ScriptValue returnValue;
+
 	switch (methodId) {
 	case kMouseActivateMethod: {
 		assert(args.empty());
 		_isActive = true;
 		g_engine->addPlayingAsset(this);
 		g_engine->_needsHotspotRefresh = true;
-		return Operand();
+		return returnValue;
 	}
 
 	case kMouseDeactivateMethod: {
 		assert(args.empty());
 		_isActive = false;
 		g_engine->_needsHotspotRefresh = true;
-		return Operand();
+		return returnValue;
 	}
 
 	case kIsActiveMethod: {
 		assert(args.empty());
-		Operand returnValue(kOperandTypeLiteral1);
-		returnValue.putInteger(static_cast<int>(_isActive));
+		returnValue.setToBool(_isActive);
 		return returnValue;
 	}
 
 	case kTriggerAbsXPositionMethod: {
-		Operand returnValue(kOperandTypeLiteral1);
-		returnValue.putInteger(g_engine->_mousePos.x);
+		double mouseX = static_cast<double>(g_engine->_mousePos.x);
+		returnValue.setToFloat(mouseX);
 		return returnValue;
 	}
 
 	case kTriggerAbsYPositionMethod: {
-		Operand returnValue(kOperandTypeLiteral1);
-		returnValue.putInteger(g_engine->_mousePos.y);
+		double mouseY = static_cast<double>(g_engine->_mousePos.y);
+		returnValue.setToFloat(mouseY);
 		return returnValue;
 	}
 

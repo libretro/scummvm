@@ -2726,11 +2726,11 @@ const Common::SharedPtr<CursorGraphicCollection> &ProjectDescription::getCursorG
 	return _cursorGraphics;
 }
 
-void ProjectDescription::setLanguage(const Common::Language &language) {
+void ProjectDescription::setLanguage(Common::Language language) {
 	_language = language;
 }
 
-const Common::Language &ProjectDescription::getLanguage() const {
+Common::Language ProjectDescription::getLanguage() const {
 	return _language;
 }
 

@@ -176,9 +176,9 @@ void Room205::pre_parser() {
 }
 
 void Room205::parser() {
-	bool lookFl = player_said_any("look", "look at");
-	bool takeFl = player_said("take");
-	bool gearFl = player_said("gear");
+	const bool lookFl = player_said_any("look", "look at");
+	const bool takeFl = player_said("take");
+	const bool gearFl = player_said("gear");
 
 	if (player_said("GONG", "BRAZIER") || player_said("GONG", "GUN")) {
 		if (!_G(flags)[V024]) {
@@ -196,7 +196,7 @@ void Room205::parser() {
 				series_unload(_205FireInBrazierSeries);
 				series_show("205GONG", 1025, 16, -1, -1, 0, 100, 0, 0);
 				digi_play_loop("205_s34", 3, 25, -1, -1);
-				digi_play_loop("205_S23", 1, 255, -1, -1);
+				digi_play("205_S23", 1, 255, -1, -1);
 				hotspot_set_active(_G(currentSceneDef).hotspots, "GONG ", true);
 				hotspot_set_active(_G(currentSceneDef).hotspots, "GUN", false);
 				inv_move_object("GONG", 999);
@@ -438,7 +438,7 @@ void Room205::parser() {
 				_fieldDC = 1;
 				digi_preload("205_S30", -1);
 				digi_preload("205R34", -1);
-				ws_unhide_walker(_G(my_walker));
+				ws_hide_walker(_G(my_walker));
 				series_stream("205RTEST", 7, 0, 7);
 				kernel_timing_trigger(240, 5, nullptr);
 			} else if (!_G(flags)[V024]) {
@@ -1732,7 +1732,7 @@ void Room205::daemon() {
 			series_unload(_205Fite4Series);
 			_205all7Series = series_load("205ALL7", -1, nullptr);
 			_fieldDC = 0;
-			ws_walk(_G(my_walker), 482, 351, 0, 1016, 3, true);
+			ws_walk(_G(my_walker), 482, 351, nullptr, 1016, 3, true);
 		}
 		break;
 
@@ -2157,6 +2157,11 @@ void Room205::daemon() {
 		hotspot_set_active(_G(currentSceneDef).hotspots, "FALLEN TABLETS", true);
 		hotspot_set_active(_G(currentSceneDef).hotspots, "GLASSES", true);
 		hotspot_set_active(_G(currentSceneDef).hotspots, "MASTER LU'S TABLET", true);
+		// Note - The original was not disabling this hotspot, but it's weird the crushed enemy is still active of course...
+		// Furthermore, it you exit and re-enter the room, the init properly disables the hotspot.
+		// Thus, the hotspot is now disabled in ScummVM too...
+		hotspot_set_active(_G(currentSceneDef).hotspots, "SHEN GUO", false);
+
 		player_set_commands_allowed(true);
 		_fieldDC = 0;
 		break;

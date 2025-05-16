@@ -66,6 +66,11 @@ CastMember::CastMember(Cast *cast, uint16 castId) : Object<CastMember>("CastMemb
 	_erase = false;
 }
 
+CastMember *CastMember::duplicate(Cast *cast, uint16 castId) {
+	warning("CastMember::duplicate(): unsupported cast type %s", castType2str(_type));
+	return nullptr;
+}
+
 void CastMember::setModified(bool modified) {
 	_modified = modified;
 	if (modified)
@@ -119,6 +124,7 @@ bool CastMember::hasField(int field) {
 	case kTheFileName:
 	case kTheForeColor:
 	case kTheHeight:
+	case kTheHilite:
 	case kTheLoaded:
 	case kTheModified:
 	case kTheMemberNum:
@@ -169,6 +175,9 @@ Datum CastMember::getField(int field) {
 		break;
 	case kTheHeight:
 		d = _cast->getCastMemberInitialRect(_castId).height();
+		break;
+	case kTheHilite:
+		d = (int)_hilite;
 		break;
 	case kTheLoaded:
 		d = 1; // Not loaded handled in Lingo::getTheCast
@@ -240,6 +249,10 @@ bool CastMember::setField(int field, const Datum &d) {
 	case kTheHeight:
 		warning("BUILDBOT: CastMember::setField(): Attempt to set read-only field \"%s\" of cast %d", g_lingo->field2str(field), _castId);
 		return false;
+	case kTheHilite:
+		_hilite = (bool)d.asInt();
+		_modified = true;
+		return true;
 	case kTheName:
 		if (!castInfo) {
 			warning("CastMember::setField(): CastMember info for %d not found", _castId);

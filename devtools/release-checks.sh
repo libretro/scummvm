@@ -79,7 +79,7 @@ cd "$oldpwd"
 
 echo_n "Checking default icons pack..."
 
-fileDate=`git log -1 gui/themes/gui-icons.dat | grep Date | sed 's/Date: //'`
+fileDate=`git log -1 --pretty=format:"%aI" gui/themes/gui-icons.dat`
 
 cd ../scummvm-icons
 
@@ -117,7 +117,7 @@ cd "$oldpwd"
 
 echo_n "Checking default shaders pack..."
 
-fileDate=`git log -1 gui/themes/shaders.dat | grep Date | sed 's/Date: //'`
+fileDate=`git log -1 --pretty=format:"%aI" gui/themes/shaders.dat`
 
 cd ../scummvm-shaders
 
@@ -193,12 +193,26 @@ fi
 
 echo_n "Checking translations..."
 
-fileDate=`git log -1 gui/themes/translations.dat | grep Date | sed 's/Date: //'`
+fileDate=`git log -1 --pretty=format:"%aI" gui/themes/translations.dat`
 
 num_lines=`git -P log --oneline "--since=$fileDate" po/ | wc -l`
 
 if [ "$num_lines" -ne "0" ]; then
   echo -e "$num_lines unprocessed commits. ${RED}Run 'make translations-dat'${NC}"
+
+  failPlus
+else
+  echoOk
+fi
+
+echo_n "Checking Android translations..."
+
+fileDate=`git log -1 --pretty=format:"%aI" dists/android/res/values-*/strings.xml`
+
+num_lines=`git -P log --oneline "--since=$fileDate" po/ | wc -l`
+
+if [ "$num_lines" -ne "0" ]; then
+  echo -e "$num_lines unprocessed commits. ${RED}Run 'make android-translations'${NC}"
 
   failPlus
 else
@@ -504,7 +518,7 @@ IFS="$OLDIFS"
 
 echo_n "Checking bagel.dat..."
 
-fileDate=`git log -1 dists/engine-data/bagel.dat | grep Date | sed 's/Date: //'`
+fileDate=`git log -1 --pretty=format:"%aI" dists/engine-data/bagel.dat`
 
 num_lines=`git -P log --oneline "--since=$fileDate" devtools/create_bagel/files | wc -l`
 
@@ -523,7 +537,7 @@ fi
 
 echo_n "Checking mm.dat..."
 
-fileDate=`git log -1 dists/engine-data/mm.dat | grep Date | sed 's/Date: //'`
+fileDate=`git log -1 --pretty=format:"%aI" dists/engine-data/mm.dat`
 
 num_lines=`git -P log --oneline "--since=$fileDate" devtools/create_mm/files | wc -l`
 
@@ -542,7 +556,7 @@ fi
 
 echo_n "Checking nancy.dat..."
 
-fileDate=`git log -1 dists/engine-data/nancy.dat | grep Date | sed 's/Date: //'`
+fileDate=`git log -1 --pretty=format:"%aI" dists/engine-data/nancy.dat`
 
 num_lines=`git -P log --oneline "--since=$fileDate" devtools/create_nancy/files | wc -l`
 
@@ -561,7 +575,7 @@ fi
 
 echo_n "Checking ultima.dat..."
 
-fileDate=`git log -1 dists/engine-data/ultima.dat | grep Date | sed 's/Date: //'`
+fileDate=`git log -1 --pretty=format:"%aI" dists/engine-data/ultima.dat`
 
 num_lines=`git -P log --oneline "--since=$fileDate" devtools/create_ultima/files | wc -l`
 
@@ -581,7 +595,7 @@ fi
 
 echo_n "Checking ultima8.dat..."
 
-fileDate=`git log -1 dists/engine-data/ultima8.dat | grep Date | sed 's/Date: //'`
+fileDate=`git log -1 --pretty=format:"%aI" dists/engine-data/ultima8.dat`
 
 num_lines=`git -P log --oneline "--since=$fileDate" devtools/create_ultima8 | wc -l`
 

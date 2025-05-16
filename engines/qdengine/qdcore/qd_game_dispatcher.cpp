@@ -2052,7 +2052,8 @@ bool qdGameDispatcher::toggle_inventory(bool state) {
 		}
 	}
 
-	_cur_inventory = NULL;
+	if (g_engine->_gameVersion > 20031206 || !state)
+		_cur_inventory = NULL;
 	update_ingame_interface();
 	return true;
 }
@@ -2394,7 +2395,7 @@ bool qdGameDispatcher::keyboard_handler(Common::KeyCode vkey, bool event) {
 	}
 
 	if (event) {
-		if (_interface_dispatcher.keyboard_handler(vkey))
+		if (g_engine->_gameVersion > 20060715 && _interface_dispatcher.keyboard_handler(vkey))
 			return true;
 
 		switch (vkey) {
@@ -2845,8 +2846,14 @@ bool qdGameDispatcher::game_screenshot(Graphics::Surface &thumb) const {
 		for (int i = 0; i < h; i++) {
 			uint16 *dst = (uint16 *)thumb.getBasePtr(0, i);
 			for (int j = 0; j < w; j++) {
-				grDispatcher::instance()->getPixel(j, i, col);
-				*dst = col;
+				if (grDispatcher::instance()->pixel_format() == GR_RGB565) {
+					grDispatcher::instance()->getPixel(j, i, col);
+					*dst = col;
+				} else {
+					byte r, g, b;
+					grDispatcher::instance()->getPixel(j, i, r, g, b);
+					*dst = grDispatcher::make_rgb565u(r, g, b);
+				}
 				dst++;
 			}
 		}
@@ -2995,7 +3002,7 @@ void qdGameDispatcher::request_file_package(const qdFileOwner &file_owner) const
 	error("Requested file package is not available");
 }
 
-Common::Path qdGameDispatcher::find_file(const Common::Path file_name, const qdFileOwner &file_owner) const {
+Common::Path qdGameDispatcher::find_file(const Common::Path &file_name, const qdFileOwner &file_owner) const {
 	debugC(4, kDebugLoad, "qdGameDispatcher::find_file(%s)", file_name.toString().c_str());
 
 	return file_name;

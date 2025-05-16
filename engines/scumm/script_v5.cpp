@@ -358,6 +358,10 @@ void ScummEngine_v5::setupOpcodes() {
 	OPCODE(0xfd, o5_findInventory);
 	OPCODE(0xfe, o5_walkActorTo);
 	OPCODE(0xff, o5_drawBox);
+
+	if (_game.id == GID_MONKEY && _game.platform == Common::kPlatformSegaCD && _language == Common::EN_ANY && enhancementEnabled(kEnhMinorBugFixes)) {
+		OPCODE(0x1a, o5_move_segafix);
+	}
 }
 
 int ScummEngine_v5::getVar() {
@@ -437,24 +441,9 @@ void ScummEngine_v5::o5_actorOps() {
 	Actor *a = derefActor(act, "o5_actorOps");
 	int i, j;
 
-	// WORKAROUND: There's a continuity error in Monkey 1, in that the Jolly Roger should
-	// only appear in the first scene showing the Sea Monkey in the middle of the sea,
-	// since Guybrush must have picked it for the two other ship cutscenes to happen.
-	//
-	// Some official releases appear to have a fix for this (e.g. the English floppy VGA
-	// version), but most releases don't. The fixed release would check whether the
-	// script describing that "the crew begins to plan their voyage" is running in order
-	// to display the flag, so we just reuse this check. The Ultimate Talkie also fixed
-	// this, but in a different way which doesn't look as portable between releases.
-	if ((_game.id == GID_MONKEY_EGA || _game.id == GID_MONKEY_VGA || (_game.id == GID_MONKEY && !(_game.features & GF_ULTIMATE_TALKIE))) &&
-		_roomResource == 87 && vm.slot[_currentScript].number == 10002 && act == 9 &&
-		enhancementEnabled(kEnhVisualChanges)) {
-		const int scriptNr = (_game.version == 5) ? 122 : 119;
-		if (!isScriptRunning(scriptNr)) {
-			a->putActor(0);
-			stopObjectCode();
-			return;
-		}
+	if (workaroundMonkey1JollyRoger(_opcode, a->_number)) {
+		stopObjectCode();
+		return;
 	}
 
 	while ((_opcode = fetchScriptByte()) != 0xFF) {
@@ -475,7 +464,9 @@ void ScummEngine_v5::o5_actorOps() {
 			// hard disk, I believe.
 			//
 			// Costume 0 doesn't have any cigar smoke, perhaps to
-			// cut down on disk access.
+			// cut down on disk access -- or, according to Aric
+			// Wilmunder, possibly because it "looked too 'cartoony'
+			// next to the higher-fidelity close-ups."
 			//
 			// But in the VGA CD version, only costume 0 is used
 			// and the close-up is missing the cigar smoke.
@@ -549,16 +540,27 @@ void ScummEngine_v5::o5_actorOps() {
 			// CD animation uses colors 1-3, where the floppy
 			// version uses 2, 3, and 9.
 			//
-			// We don't touch the colours in general - the Special
-			// edition have pretty much made them canon anyway -
-			// but for the Smirk close-up we want the same colors
-			// as the floppy version.
+			// So we have to adjust which colors are remapped. We
+			// also need to make sure they are remapped to the
+			// correct colors, because not only does the GUI occupy
+			// some colors, apparently the FM Towns version has a
+			// different palette altogether. So we look up the
+			// closest available color to the ones we want.
+			//
+			// We could use this to get back the original smoke
+			// colors for other scenes as well, but we currently do
+			// not. The Special Edition kept the new colors too.
 
 			if (_game.id == GID_MONKEY && _currentRoom == 76 && enhancementEnabled(kEnhVisualChanges)) {
 				if (i == 3)
 					i = 1;
 				else if (i == 9)
 					i = 3;
+
+				if (j == 3)
+					j = findClosestPaletteColor(_currentPalette, 256, 0, 171, 171);
+				else if (j == 7)
+					j = findClosestPaletteColor(_currentPalette, 256, 171, 171, 171);
 			}
 
 			// WORKAROUND for original bug. The original interpreter has a color fix for CGA mode which can be seen
@@ -698,7 +700,7 @@ void ScummEngine_v5::o5_add() {
 	//
 	// We fix this by changing Var[229] += 8 to Var[229] += 1.
 
-	if (_game.id == GID_MONKEY && _game.platform == Common::kPlatformSegaCD && _resultVarNumber == 229 && a == 8 && enhancementEnabled(kEnhSubFmtCntChanges)) {
+	if (_game.id == GID_MONKEY && _game.platform == Common::kPlatformSegaCD && _language == Common::EN_ANY && _resultVarNumber == 229 && a == 8 && enhancementEnabled(kEnhSubFmtCntChanges)) {
 		int scriptNr = vm.slot[_currentScript].number;
 
 		// Room 35 - Talking to the Men of Low Moral Fiber (pirates),
@@ -1460,7 +1462,8 @@ void ScummEngine_v5::o5_getRandomNr() {
 
 void ScummEngine_v5::o5_isScriptRunning() {
 	getResultPos();
-	setResult(isScriptRunning(getVarOrDirectByte(PARAM_1)));
+	int scriptNr = getVarOrDirectByte(PARAM_1);
+	setResult(isScriptRunning(scriptNr));
 
 	// WORKAROUND bug #346 (also occurs in original): Object stopped with active cutscene
 	// In script 204 room 25 (Cannibal Village) a crash can occur when you are
@@ -1487,6 +1490,8 @@ void ScummEngine_v5::o5_isScriptRunning() {
 			}
 		}
 	}
+
+	(void)workaroundMonkey1JollyRoger(_opcode, scriptNr);
 }
 
 void ScummEngine_v5::o5_getVerbEntrypoint() {
@@ -1738,7 +1743,26 @@ void ScummEngine_v5::o5_notEqualZero() {
 			}
 		}
 	} else {
-		a = getVar();
+		// WORKAROUND: There is a message for when Guybrush first
+		// enters the hold where he remarks that the whole thing reeks
+		// of monkeys. But the way it's scripted, the message is only
+		// shown if it has already been shown.
+		//
+		// Ron Gilbert commented on this: "Not sure I'd call that a
+		// coding error. The lines were just cut. But what do I know."
+
+		if ((_game.id == GID_MONKEY || _game.id == GID_MONKEY_VGA || _game.id == GID_MONKEY_EGA) && _roomResource == 8 && vm.slot[_currentScript].number == 10002) {
+			// A local getVar(), where the var number can be examined.
+			// Taking care to limit this to Monkey1, so that the proper getVar()
+			// implementation still gets called for v2 and below.
+			int var = fetchScriptWord();
+			a = readVar(var);
+
+			if (var == 0x8000 + 321 && enhancementEnabled(kEnhRestoredContent))
+				a = !a;
+		} else {
+			a = getVar();
+		}
 	}
 
 	jumpRelative(a != 0);
@@ -1926,6 +1950,65 @@ void ScummEngine_v5::o5_move() {
 	setResult(getVarOrDirectWord(PARAM_1));
 }
 
+// WORKAROUND: MI1 uses bit flags for some sort of bookkeeping for its
+// conversation trees. These are assigned by "Bit[384 + Var[100]] = 1", or
+// "B.384[V.100] = 1" in NUTCracker syntax.
+//
+// Var[100] is supposed to be a value between 0 and 8, but it's also used for
+// the verb ID, which is between 120 and 128. In other versions, the scripts
+// subtract 120 before setting the bit, the the Sega CD version does not. This
+// means that the Sega version uses bits 504 through 512 instead of bits 384
+// through 392.
+//
+// While most conversations probably only clobber a few of these flags, the
+// following things may be impacted:
+//
+// 504 - Saying "Geeze, what an obvious sales pitch." to Cobb.
+// 505 - Saying "You know, you really should quit smoking." to Smirk.
+// 506 - Something unknown around the line "I give up!  You win!"
+// 507 - unused
+// 508 - Saying "I need a ship." / "Can you guys crew a ship?" to the cannibals.
+// 509 - Saying "Money.  I want money." to the cannibals.
+// 510 - Saying "What's in your standard potion of exorcism?" to the cannibals.
+// 511 - Saying "Where is he hiding it?" to the cannibals.
+// 512 - Saying "How do I get to these catacombs?" to the cannibals.
+//       This is also unavailable if Herman already told you.
+//
+// We're just lucky the bug didn't impact anything more important than this,
+// because the bug is literally in hundreds of places throughout the game. And
+// just to rub it in, the Sega version doesn't even seem to use these flags for
+// the conversation trees.
+//
+// Fortunately, this is the only places in the game where the bit variables are
+// set in this particular fashion, so we can detect and correct for it. Though
+// old savegames will of course still be impacted.
+
+void ScummEngine_v5::o5_move_segafix() {
+	int result;
+
+	// In most cases, this is identical to getResultPos()
+	_resultVarNumber = fetchScriptWord();
+	if (_resultVarNumber & 0x2000) {
+		int a = fetchScriptWord();
+		result = getVarOrDirectWord(PARAM_1);
+
+		if (a & 0x2000) {
+			int var = a & ~0x2000;
+			int value = readVar(var);
+			if (_resultVarNumber == 0xA000 + 384 && var == 100 && value >= 120 && value <= 128 && result == 1) {
+				value -= 120;
+			}
+			_resultVarNumber += value;
+		} else {
+			_resultVarNumber += a & 0xFFF;
+		}
+		_resultVarNumber &= ~0x2000;
+	} else {
+		result = getVarOrDirectWord(PARAM_1);
+	}
+	setResult(result);
+}
+
 void ScummEngine_v5::o5_multiply() {
 	int a;
 	getResultPos();
@@ -2033,7 +2116,8 @@ void ScummEngine_v5::o5_putActor() {
 
 	// WORKAROUND: When enabling the cigar smoke in the captain Smirk
 	// close-up, it turns out that the coordinates in the CD
-	// version's script were taken from the EGA version.
+	// version's script were taken from the EGA version. (This alignment
+	// problem was also remembered and mentionned by Aric Wilmunder.)
 	//
 	// The coordinates below are taken from the VGA floppy version. The
 	// "Ultimate Talkie" version also corrects the positions, but uses
@@ -2350,11 +2434,12 @@ void ScummEngine_v5::o5_roomOps() {
 			_opcode = fetchScriptByte();
 			d = getVarOrDirectByte(PARAM_1);
 
-			// WORKAROUND: The CD version of Monkey Island 1 will
-			// set a couple of default colors, presumably for the
-			// GUI to use. But in the close-up of captain Smirk,
-			// we want the original color 3 for the cigar smoke. It
-			// should be ok since there is no GUI in this scene.
+			// WORKAROUND: The CD versions of Monkey Island 1 may
+			// set a few colors, presumably for the GUI. But this is
+			// the close-up of captain Smirk, so it doesn't need all
+			// of those colors. Only the ones used by the dialog
+			// boxes and such. The others we may need for the cigar
+			// smoke.
 
 			if (_game.id == GID_MONKEY && _currentRoom == 76 && d == 3 && enhancementEnabled(kEnhVisualChanges)) {
 				// Do nothing
@@ -2542,6 +2627,7 @@ void ScummEngine_v5::o5_roomOps() {
 				assert(ptr);
 				int r = file->read(ptr, len);
 				assert(r == len);
+				(void)r;
 				ptr[len] = '\0';
 				loadPtrToResource(rtString, a, ptr);
 				free(ptr);
@@ -2724,7 +2810,7 @@ void ScummEngine_v5::o5_startMusic() {
 			// can look at the global script #9 (0x888A in 49.LFL).
 			break;
 		}
-		debugC(DEBUG_GENERAL,"o5_startMusic(%d)", b);
+		debugC(DEBUG_GENERAL, "o5_startMusic(%d)", b);
 		setResult(result);
 	} else {
 		_sound->startSound(getVarOrDirectByte(PARAM_1));
@@ -2900,6 +2986,36 @@ void ScummEngine_v5::o5_startScript() {
 	// Save on IQ increment (= script 125 was executed).
 	if (_game.id == GID_INDY3 && script == 125)
 		((ScummEngine_v4 *)this)->updateIQPoints();
+
+	// WORKAROUND: In the CD version of Monkey Island 1, and the EGA
+	// version before it, there is animated smoke in parts of the lava maze
+	// beneath the monkey head. The VGA floppy version still calls the
+	// script to add the smoke, but the script is empty (the Amiga release
+	// has it, though -- at least the 1.2 release does -- so that's what we
+	// replicate).
+	//
+	// According to Aric Wilmunder, this may have been done to avoid swapping
+	// floppy disks when exploring the maze (since the resource is stored in the
+	// fortune teller's room, and the Hellmaze being large, it was hard for the
+	// memory manager to keep it in memory).
+
+	if (_game.id == GID_MONKEY_VGA && _roomResource == 39 && script == 211 && enhancementEnabled(kEnhRestoredContent)) {
+		Actor *a = derefActorSafe(12, "o5_startScript");
+
+		if (a && (a->_room != _roomResource || a->_costume == 0)) {
+			a->initActor(0);
+			a->setActorCostume(76);
+			a->setPalette(3, 8);
+			a->setPalette(2, 12);
+			a->setPalette(9, 4);
+			putClass(12, 150, true);
+			putClass(12, 149, true);
+			a->animateActor(250);
+			a->_room = _roomResource;
+			a->putActor(data[0], data[1]);
+			a->animateActor(6);
+		}
+	}
 }
 
 void ScummEngine_v5::o5_stopObjectCode() {
@@ -2937,6 +3053,18 @@ void ScummEngine_v5::o5_stopScript() {
 void ScummEngine_v5::o5_stringOps() {
 	int a, b, c, i;
 	byte *ptr;
+	int len;
+
+	// We do bounds checking on get/set string char to catch misbehaving
+	// scripts. Known cases so far:
+	//
+	// * Fate of Atlantis, the copy protection screen. This will read from
+	//   a negative index if the mouse cursor is moved to the top of the
+	//   screen. Technically we should return 48 (ASCII for "0"), but
+	//   anything outside the 49-56 range is fine. See bug #15884.
+	//
+	// * VGA Loom writes one byte past the end of a string on startup, but
+	//   this is within the "safety area" so it's ok.
 
 	_opcode = fetchScriptByte();
 	switch (_opcode & 0x1F) {
@@ -2959,9 +3087,15 @@ void ScummEngine_v5::o5_stringOps() {
 		b = getVarOrDirectByte(PARAM_2);
 		c = getVarOrDirectByte(PARAM_3);
 		ptr = getResourceAddress(rtString, a);
+		len = getResourceSize(rtString, a);
 		if (ptr == nullptr)
 			error("String %d does not exist", a);
-		ptr[b] = c;
+		if (b >= 0 && b < len + SAFETY_AREA) {
+			if (b >= len)
+				debug(0, "o5_stringOps: Allowing OOB write string%d[%d] = %d (size %d) (within safety area)", a, b, c, len);
+			ptr[b] = c;
+		} else
+			warning("o5_stringOps: Denying OOB write string-%d[%d] = %d (size %d)", a, b, c, len);
 		break;
 
 	case 4:											/* get string char */
@@ -2969,9 +3103,17 @@ void ScummEngine_v5::o5_stringOps() {
 		a = getVarOrDirectByte(PARAM_1);
 		b = getVarOrDirectByte(PARAM_2);
 		ptr = getResourceAddress(rtString, a);
+		len = getResourceSize(rtString, a);
 		if (ptr == nullptr)
 			error("String %d does not exist", a);
-		setResult(ptr[b]);
+		if (b >= 0 && b < len + SAFETY_AREA) {
+			if (b >= len)
+				debug(0, "o5_stringOps: Allowing OOB read string-%d[%d] (size %d) (within safety area)", a, b, len);
+			setResult(ptr[b]);
+		} else {
+			warning("o5_stringOps: Denying OOB read string-%d[%d] (size %d)", a, b, len);
+			setResult(0);
+		}
 		break;
 
 	case 5:											/* create empty string */
@@ -3461,7 +3603,10 @@ void ScummEngine_v5::decodeParseStringTextString(int textSlot) {
 		// color, but for some reason this is only a problem on the
 		// FM-TOWNS. In order to determine who's who, we look for a
 		// `\xFF\x03` wait instruction or the `Junior` word, since
-		// only Henry Sr. uses them in this script.
+		// only Henry Sr. uses them in this script. (The Japanese
+		// FM-TOWNS release tried to fix this with SetPalColor()
+		// calls, but they have no effect -- I haven't checked the
+		// behavior of this particular release in DREAMM, though.)
 		if (strstr((const char *)_scriptPointer, "\xFF\x03") || strstr((const char *)_scriptPointer, "Junior"))
 			_string[textSlot].color = 0x0A;
 		else
@@ -3646,6 +3791,50 @@ void ScummEngine_v5::workaroundLoomHetchelDoubleHead(Actor *a, int act) {
 				a->_talkStartFrame = a->_talkStopFrame = 6;
 		}
 	}
+}
+
+bool ScummEngine_v5::workaroundMonkey1JollyRoger(byte callerOpcode, int arg) {
+	// WORKAROUND: There's a continuity error in Monkey 1, in that the Jolly Roger should
+	// only appear in the *first* scene showing the Sea Monkey in the middle of the sea,
+	// since Guybrush must have picked it for the two other ship cutscenes to happen.
+	//
+	// Most (all?) releases are impacted by this; the English floppy VGA release made a
+	// change to check whether the script describing that "the crew begins to plan their
+	// voyage" is running before displaying the flag, but it's an incomplete fix, as it'd
+	// also need to remove the flag from the room, once it's been shown for the first time.
+	// We fix both issues.
+	if ((_game.id == GID_MONKEY_EGA || _game.id == GID_MONKEY_VGA || (_game.id == GID_MONKEY && !(_game.features & GF_ULTIMATE_TALKIE))) &&
+		_roomResource == 87 && _currentScript != 0xFF && vm.slot[_currentScript].number == 10002 &&
+		enhancementEnabled(kEnhVisualChanges)) {
+		// The script that's only run the first time the flag is shown
+		const int defaultExpectedScriptNr = (_game.version == 5) ? 122 : 119;
+		// Jolly Roger actor number
+		const int defaultExpectedActNr = 9;
+		int scriptNr = -1, actNr = -1;
+
+		if (callerOpcode == 0x13) {
+			// called before o5_actorOps is done
+			actNr = arg;
+			scriptNr = defaultExpectedScriptNr;
+		} else if (callerOpcode == 0x68) {
+			// called after o5_isScriptRunning is done
+			scriptNr = arg;
+			actNr = defaultExpectedActNr;
+		}
+
+		// Unmet conditions; abort any workaround attempt
+		if (scriptNr != defaultExpectedScriptNr || actNr != defaultExpectedActNr)
+			return false;
+
+		// Remove the Jolly Roger from the screen, if not right at the start of Part II
+		Actor *a = derefActorSafe(actNr, "workaroundMonkey1JollyRoger");
+		if (a && !isScriptRunning(scriptNr)) {
+			a->putActor(0);
+			return true;
+		}
+	}
+
+	return false;
 }
 
 } // End of namespace Scumm

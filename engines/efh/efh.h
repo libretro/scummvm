@@ -257,6 +257,24 @@ struct TeamMonster {
 	void init();
 };
 
+enum EFHAction {
+	kActionNone,
+	kActionExit,
+	kActionSave,
+	kActionLoad,
+	kActionMoveUp,
+	kActionMoveDown,
+	kActionMoveLeft,
+	kActionMoveRight,
+	kActionMoveUpLeft,
+	kActionMoveUpRight,
+	kActionMoveDownLeft,
+	kActionMoveDownRight,
+	kActionCharacter1Status,
+	kActionCharacter2Status,
+	kActionCharacter3Status
+};
+
 class EfhEngine : public Engine {
 public:
 	EfhEngine(OSystem *syst, const ADGameDescription *gd);
@@ -282,9 +300,6 @@ public:
 	Common::Error loadGameState(int slot) override;
 	Common::Error saveGameState(int slot, const Common::String &desc, bool isAutosave = false) override;
 
-	bool _shouldQuit;
-	bool shouldQuitGame() const { return _shouldQuit || shouldQuit(); }
-
 protected:
 	int _lastTime;
 	// Engine APIs
@@ -294,12 +309,12 @@ private:
 	Common::Platform _platform;
 	int _loadSaveSlot;
 	bool _saveAuthorized;
+	Common::CustomEventType _customAction = kActionNone;
 
 	void initialize();
 	void playIntro();
 	void initEngine();
 	void initMapMonsters();
-	void loadMapArrays(int idx);
 	void saveAnimImageSetId();
 	int16 getEquipmentDefense(int16 charId);
 	uint16 getEquippedExclusiveType(int16 charId, int16 exclusiveType, bool flag);
@@ -310,7 +325,6 @@ private:
 	void loadEfhGame();
 	void copyCurrentPlaceToBuffer(int16 id);
 	uint8 getMapTileInfo(int16 mapPosX, int16 mapPosY);
-	void writeTechAndMapFiles();
 	uint16 getStringWidth(const Common::String &str) const;
 	void setTextPos(int16 textPosX, int16 textPosY);
 	void drawGameScreenAndTempText(bool flag);
@@ -341,10 +355,12 @@ private:
 	void goSouthEast();
 	void goNorthWest();
 	void goSouthWest();
+	void showCharacterStatus(uint8 character);
 	void handleNewRoundEffects();
 	void resetGame();
 	void computeMapAnimation();
 	void handleAnimations();
+	void handleEvents();
 	int8 checkMonsterMoveCollisionAndTileTexture(int16 monsterId);
 	bool moveMonsterAwayFromTeam(int16 monsterId);
 	bool moveMonsterTowardsTeam(int16 monsterId);
@@ -502,22 +518,21 @@ private:
 	void genericGenerateSound(int16 soundType, int16 repeatCount);
 
 	// Utils
-	void setDefaultNoteDuration();
 	void decryptImpFile(bool techMapFl);
 	void loadImageSet(int16 imageSetId, uint8 *buffer, uint8 **subFilesArray, uint8 *destBuffer);
 	uint32 uncompressBuffer(uint8 *compressedBuf, uint8 *destBuf);
 	int16 getRandom(int16 maxVal);
 	Common::KeyCode getLastCharAfterAnimCount(int16 delay);
 	Common::KeyCode getInput(int16 delay);
-	Common::KeyCode getKeyCode(const Common::Event & event);
 	Common::KeyCode waitForKey();
-	Common::KeyCode mapInputCode(Common::KeyCode input);
 	Common::KeyCode handleAndMapInput(bool animFl);
-	Common::KeyCode getInputBlocking();
-	void setNumLock();
 	bool getValidationFromUser();
 	uint32 ROR(uint32 val, uint8 shiftVal);
 	Common::String getArticle(int pronoun);
+
+	// Actions
+	void handleActionSave();
+	void handleActionLoad();
 
 	uint8 _videoMode;
 	uint8 _bufferCharBM[128];

@@ -85,10 +85,10 @@ public:
 	Asset *getAssetById(uint assetId);
 	Asset *getAssetByChunkReference(uint chunkReference);
 	Function *getFunctionById(uint functionId);
+	ScriptValue *getVariable(uint variableId);
 
-	Operand callMethod(BuiltInMethod methodId, Common::Array<Operand> &args);
-	Operand callBuiltInFunction(BuiltInFunction function, Common::Array<Operand> &args);
-	Common::HashMap<uint32, Variable *> _variables;
+	ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args);
+	ScriptValue callBuiltInFunction(BuiltInFunction function, Common::Array<ScriptValue> &args);
 	Common::RandomSource _randomSource;
 
 	Graphics::Screen *_screen = nullptr;
@@ -129,7 +129,7 @@ private:
 	void releaseContext(uint32 contextId);
 	Asset *findAssetToAcceptMouseEvents();
 
-	void effectTransition(Common::Array<Operand> &args);
+	void effectTransition(Common::Array<ScriptValue> &args);
 };
 
 extern MediaStationEngine *g_engine;

@@ -69,7 +69,7 @@ If you are adding an unknown version of a game, ScummVM is not able to add the g
 
    The **Game Options** window does not open when **Mass Add** is used.
 
-5. Games are now ready to play! To play, either double-click on the game in the games list, or highlight the game by clicking on it, and then click **Start**. In grid view, either double-click on a game to start it, or select the game and click the play icon in the pop-up window. 
+5. Games are now ready to play! To play, either double-click on the game in the games list, or highlight the game by clicking on it, and then click **Start**. In grid view, either double-click on a game to start it, or select the game and click the play icon in the pop-up window.
 
 .. image:: ../images/Launcher/start_game.png
    :class: with-shadow
@@ -79,7 +79,7 @@ Games can also be launched directly from the command line. For more information,
 A note about copyright
 ==============================
 
-ScummVM has a strict anti-piracy stance and the team wil not tolerate discussions around pirated games in any part of the project, including on the Forum or on Discord.
+ScummVM has a strict anti-piracy stance and the team will not tolerate discussions around pirated games in any part of the project, including on the Forum or on Discord.
 
 Copy protection screen
 ************************

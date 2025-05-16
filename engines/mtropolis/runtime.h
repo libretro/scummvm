@@ -1268,8 +1268,8 @@ public:
 	void setCursorGraphics(const Common::SharedPtr<CursorGraphicCollection> &cursorGraphics);
 	const Common::SharedPtr<CursorGraphicCollection> &getCursorGraphics() const;
 
-	void setLanguage(const Common::Language &language);
-	const Common::Language &getLanguage() const;
+	void setLanguage(Common::Language language);
+	Common::Language getLanguage() const;
 
 	ProjectPlatform getPlatform() const;
 	RuntimeVersion getRuntimeVersion() const;

@@ -57,6 +57,8 @@ EclipseEngine::EclipseEngine(OSystem *syst, const ADGameDescription *gd) : Frees
 		initDOS();
 	else if (isCPC())
 		initCPC();
+	else if (isC64())
+		initC64();
 	else if (isSpectrum())
 		initZX();
 	else if (isAmiga() || isAtariST())
@@ -236,7 +238,7 @@ void EclipseEngine::initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *in
 
 	// I18N: Illustrates the angle at which you turn left or right.
 	act = new Common::Action("CHNGANGLE", _("Change Angle"));
-	act->setCustomEngineActionEvent(kActionChangeAngle);
+	act->setCustomEngineActionEvent(kActionIncreaseAngle);
 	act->addDefaultInputMapping("a");
 	engineKeyMap->addAction(act);
 
@@ -322,7 +324,7 @@ void EclipseEngine::drawBackground() {
 		uint8 color1 = 15;
 		uint8 color2 = 10;
 
-		if (isSpectrum() || isCPC()) {
+		if (isSpectrum() || isCPC() || isC64()) {
 			color1 = 2;
 			color2 = 10;
 		} else if (isAmiga() || isAtariST()) {
@@ -458,12 +460,8 @@ void EclipseEngine::drawInfoMenu() {
 }
 
 void EclipseEngine::pressedKey(const int keycode) {
-	if (keycode == kActionRotateLeft) {
-		rotate(-_angleRotations[_angleRotationIndex], 0);
-	} else if (keycode == kActionRotateRight) {
-		rotate(_angleRotations[_angleRotationIndex], 0);
-	} else if (keycode == kActionChangeAngle) {
-		changeAngle();
+	if (keycode == kActionIncreaseAngle) {
+		changeAngle(1, true);
 	} else if (keycode == kActionChangeStepSize) {
 		changeStepSize();
 	} else if (keycode == kActionToggleRiseLower) {
@@ -518,6 +516,9 @@ void EclipseEngine::drawAnalogClockHand(Graphics::Surface *surface, int x, int y
 	double w = magnitude * cos(degrees * degtorad);
 	double h = magnitude * sin(degrees * degtorad);
 	surface->drawLine(x, y, x+(int)w, y+(int)h, color);
+	if (isC64()) {
+		surface->drawLine(x+1, y, x+1+(int)w, y+(int)h, color);
+	}
 }
 
 void EclipseEngine::drawCompass(Graphics::Surface *surface, int x, int y, double degrees, double magnitude, uint32 color) {
@@ -530,28 +531,28 @@ void EclipseEngine::drawCompass(Graphics::Surface *surface, int x, int y, double
 
 	// Adjust dx and dy to make the compass look like a compass
 	if (degrees == 0 || degrees == 360) {
-		dx = 0;
+		dx = 1;
 		dy = 2;
 	} else if (degrees > 0 && degrees < 90) {
-		dx = 1;
+		dx = 2;
 		dy = 1;
 	} else if (degrees == 90) {
 		dx = 2;
-		dy = 0;
+		dy = 1;
 	} else if (degrees > 90 && degrees < 180) {
-		dx = 1;
+		dx = 2;
 		dy = -1;
 	} else if (degrees == 180) {
-		dx = 0;
+		dx = 1;
 		dy = 2;
 	} else if (degrees > 180 && degrees < 270) {
-		dx = -1;
+		dx = -2;
 		dy = -1;
 	} else if (degrees == 270) {
 		dx = 2;
-		dy = 0;
+		dy = 1;
 	} else if (degrees > 270 && degrees < 360) {
-		dx = -1;
+		dx = -2;
 		dy = 1;
 	}
 
@@ -621,7 +622,7 @@ void EclipseEngine::drawIndicator(Graphics::Surface *surface, int xPosition, int
 		return;
 
 	for (int i = 0; i < 5; i++) {
-		if (isSpectrum()) {
+		if (isSpectrum() || isC64()) {
 			if (_gameStateVars[kVariableEclipseAnkhs] <= i)
 				continue;
 		} else if (_gameStateVars[kVariableEclipseAnkhs] > i)
@@ -696,6 +697,24 @@ void EclipseEngine::drawSensorShoot(Sensor *sensor) {
 			}
 		}
 	}
+}
+
+Common::String EclipseEngine::getScoreString(int score) {
+	Common::String scoreStr = Common::String::format("%07d", score);
+
+	if (isDOS() || isCPC() || isSpectrum()) {
+		scoreStr = shiftStr(scoreStr, 'Z' - '0' + 1);
+		if (_renderMode == Common::RenderMode::kRenderEGA || isSpectrum())
+			return scoreStr;
+	}
+	Common::String encodedScoreStr;
+
+	for (int i = 0; i < int(scoreStr.size()); i++) {
+		encodedScoreStr.insertChar(scoreStr[int(scoreStr.size()) - i - 1], 0);
+		if ((i + 1) % 3 == 0 && i > 0)
+		encodedScoreStr.insertChar(',', 0);
+	}
+	return encodedScoreStr;
 }
 
 void EclipseEngine::updateTimeVariables() {

@@ -35,6 +35,7 @@
 #include "common/archive.h"
 #include "common/config-manager.h"
 #include "common/debug.h"
+#include "common/events.h"
 #include "common/file.h"
 #include "common/keyboard.h"
 #include "common/memstream.h"
@@ -122,7 +123,18 @@ Common::QuickTimeParser::SampleDesc *QuickTimeDecoder::readPanoSampleDesc(Common
 	if (entry->_maximumZoom == 0.0)
 		entry->_maximumZoom = 65.0;
 
-	return entry;
+	debugC(2, kDebugLevelGVideo, "    version: %d.%d sceneTrackID: %d loResSceneTrackID: %d hotSpotTrackID: %d",
+		entry->_majorVersion, entry->_minorVersion, entry->_sceneTrackID, entry->_loResSceneTrackID, entry->_hotSpotTrackID);
+	debugC(2, kDebugLevelGVideo, "    hpan: [%f - %f] vpan: [%f - %f] zoom: [%f - %f]",
+		entry->_hPanStart, entry->_hPanEnd, entry->_vPanTop, entry->_vPanBottom, entry->_minimumZoom, entry->_maximumZoom);
+	debugC(2, kDebugLevelGVideo, "    sceneDims: [%d x %d] frames: %d sceneFrm: [%d x %d] bpp: %d",
+		entry->_sceneSizeX, entry->_sceneSizeY, entry->_numFrames, entry->_sceneNumFramesX,
+		entry->_sceneNumFramesY, entry->_sceneColorDepth);
+	debugC(2, kDebugLevelGVideo, "    hotspotDims: [%d x %d] hotspotFrm: [%d x %d] bpp: %d",
+		entry->_hotSpotSizeX, entry->_hotSpotSizeY, entry->_hotSpotNumFramesX, entry->_hotSpotNumFramesY,
+		entry->_hotSpotColorDepth);
+
+		return entry;
 }
 
 void QuickTimeDecoder::closeQTVR() {
@@ -143,9 +155,7 @@ void QuickTimeDecoder::renderHotspots(bool mode) {
 }
 
 void QuickTimeDecoder::setQuality(float quality) {
-	_quality = quality;
-
-	warning("STUB: Quality mode set to %f", quality);
+	_quality = CLIP<float>(quality, 0.0f, 4.0f);
 
 	// 4.0 Highest quality rendering. The rendered image is fully anti-aliased.
 	//
@@ -158,13 +168,12 @@ void QuickTimeDecoder::setQuality(float quality) {
 	//     4.0 during idle time when the user stops panning or zooming.
 	//     All other updates are rendered at quality 4.0.
 
-	((PanoTrackHandler *)getTrack(_panoTrack->targetTrack))->setDirty();
+	PanoTrackHandler *track = ((PanoTrackHandler *)getTrack(_panoTrack->targetTrack));
+	track->setDirty();
 }
 
 void QuickTimeDecoder::setWarpMode(int warpMode) {
-	_warpMode = warpMode;
-
-	warning("STUB: Warp mode set to %d", warpMode);
+	_warpMode = CLIP(warpMode, 0, 2);
 
 	// 2 Two-dimensional warping. This produces perspectively correct
 	//   images from a panoramic source picture.
@@ -174,16 +183,16 @@ void QuickTimeDecoder::setWarpMode(int warpMode) {
 	// 0 No warping. This reproduces the source panorama directly,
 	//   without warping it at all.
 
-	((PanoTrackHandler *)getTrack(_panoTrack->targetTrack))->setDirty();
+	PanoTrackHandler *track = ((PanoTrackHandler *)getTrack(_panoTrack->targetTrack));
+	track->setDirty();
 }
 
 void QuickTimeDecoder::setTransitionMode(Common::String mode) {
-	if (mode.equalsIgnoreCase("swing"))
+	if (mode.equalsIgnoreCase("swing")) {
 		_transitionMode = kTransitionModeSwing;
-	else
+	} else {
 		_transitionMode = kTransitionModeNormal;
-
-	warning("STUB: Transition mode set to '%s'", getTransitionMode().c_str());
+	}
 
 	// normal The new view is imaged and displayed. No transition effect is
 	//        used. The user sees a "cut" from the current view to the new
@@ -200,8 +209,6 @@ void QuickTimeDecoder::setTransitionMode(Common::String mode) {
 
 void QuickTimeDecoder::setTransitionSpeed(float speed) {
 	_transitionSpeed = speed;
-
-	warning("STUB: Transition Speed set to %f", speed);
 
 	// The TransitionSpeed is a floating point quantity that provides the slowest swing transition
 	// at 1.0 and faster transitions at higher values. On mid-range computers, a rate of 4.0
@@ -281,7 +288,7 @@ void QuickTimeDecoder::setTargetSize(uint16 w, uint16 h) {
 		_height = h;
 
 		setFOV(_fov);
-	} if (_qtvrType == QTVRType::OBJECT) {
+	} else if (_qtvrType == QTVRType::OBJECT) {
 		if (_width != w)
 			_scaleFactorX *= Common::Rational(_width, w);
 
@@ -291,23 +298,27 @@ void QuickTimeDecoder::setTargetSize(uint16 w, uint16 h) {
 		_width = w;
 		_height = h;
 	}
+	// Set up the _hfov properly for the very first frame of the pano
+	// After our setFOV will handle the _hfov
+	_hfov = _fov * (float)_height / (float)_width;
 }
 
 void QuickTimeDecoder::setPanAngle(float angle) {
 	PanoSampleDesc *desc = (PanoSampleDesc *)_panoTrack->sampleDescs[0];
 
-	if (desc->_hPanStart != desc->_hPanStart && (desc->_hPanStart != 0.0 || desc->_hPanStart != 360.0)) {
-		if (angle < desc->_hPanStart)
-			angle = desc->_hPanStart + _hfov / 2;
-
-		if (angle > desc->_hPanEnd - _hfov / 2)
-			angle = desc->_hPanStart - _hfov / 2;
+	if (desc->_hPanStart != desc->_hPanEnd && (desc->_hPanStart != 0.0 || desc->_hPanEnd != 360.0)) {
+		if (angle < desc->_hPanStart + _hfov) {
+			angle = desc->_hPanStart + _hfov;
+		} else if (angle > desc->_hPanEnd - _hfov) {
+			angle = desc->_hPanEnd - _hfov;
+		}
 	}
 
 	if (_panAngle != angle) {
-		_panAngle = angle;
-
 		PanoTrackHandler *track = (PanoTrackHandler *)getTrack(_panoTrack->targetTrack);
+
+		track->_currentPanAngle = _panAngle;
+		_panAngle = angle;
 		track->setDirty();
 	}
 }
@@ -315,16 +326,17 @@ void QuickTimeDecoder::setPanAngle(float angle) {
 void QuickTimeDecoder::setTiltAngle(float angle) {
 	PanoSampleDesc *desc = (PanoSampleDesc *)_panoTrack->sampleDescs[0];
 
-	if (angle < desc->_vPanBottom + _fov / 2)
+	if (angle < desc->_vPanBottom + _fov / 2) {
 		angle = desc->_vPanBottom + _fov / 2;
-
-	if (angle > desc->_vPanTop - _fov / 2)
+	} else if (angle > desc->_vPanTop - _fov / 2) {
 		angle = desc->_vPanTop - _fov / 2;
+	}
 
 	if (_tiltAngle != angle) {
-		_tiltAngle = angle;
-
 		PanoTrackHandler *track = (PanoTrackHandler *)getTrack(_panoTrack->targetTrack);
+
+		track->_currentTiltAngle = _tiltAngle;
+		_tiltAngle = angle;
 		track->setDirty();
 	}
 }
@@ -333,25 +345,28 @@ bool QuickTimeDecoder::setFOV(float fov) {
 	PanoSampleDesc *desc = (PanoSampleDesc *)_panoTrack->sampleDescs[0];
 	bool success = true;
 
-	if (fov == 0.0f) // No change
-		return true;
-
 	if (fov <= desc->_minimumZoom) {
 		fov = desc->_minimumZoom;
 		success = false;
-	}
-
-	if (fov >= desc->_maximumZoom) {
+	} else if (fov >= desc->_maximumZoom) {
 		fov = desc->_maximumZoom;
 		success = false;
 	}
 
 	if (_fov != fov) {
+		PanoTrackHandler *track = (PanoTrackHandler *)getTrack(_panoTrack->targetTrack);
+
+		track->_currentFOV = _fov;
 		_fov = fov;
 
-		_hfov = _fov * (float)_width / (float)_height;
+		track->_currentHFOV = _hfov;
+		_hfov = _fov * (float)_height / (float)_width;
 
-		PanoTrackHandler *track = (PanoTrackHandler *)getTrack(_panoTrack->targetTrack);
+		// We need to recalculate the pan angle and tilt angle to see if it has went
+		// out of bound for the current value of FOV
+		// This solves the distortion that we got sometimes when we zoom out at Tilt Angle != 0
+		setPanAngle(_panAngle);
+		setTiltAngle(_tiltAngle);
 		track->setDirty();
 	}
 
@@ -457,8 +472,8 @@ void QuickTimeDecoder::goToNode(uint32 nodeID) {
 	}
 
 	if (idx == -1) {
-		warning("QuickTimeDecoder::goToNode(): Incorrect nodeID: %d", nodeID);
-		return;
+		warning("QuickTimeDecoder::goToNode(): Incorrect nodeID: %d (numNodes: %d)", nodeID, _panoTrack->panoSamples.size());
+		idx = 0;
 	}
 
 	_currentSample = idx;
@@ -482,6 +497,7 @@ QuickTimeDecoder::PanoTrackHandler::PanoTrackHandler(QuickTimeDecoder *decoder, 
 
 	_constructedPano = nullptr;
 	_constructedHotspots = nullptr;
+	_upscaledConstructedPano = nullptr;
 	_projectedPano = nullptr;
 	_planarProjection = nullptr;
 
@@ -495,8 +511,13 @@ QuickTimeDecoder::PanoTrackHandler::~PanoTrackHandler() {
 		_constructedPano->free();
 		delete _constructedPano;
 
-		_constructedHotspots->free();
-		delete _constructedHotspots;
+		_upscaledConstructedPano->free();
+		delete _upscaledConstructedPano;
+
+		if (_constructedHotspots) {
+			_constructedHotspots->free();
+			delete _constructedHotspots;
+		}
 	}
 
 	if (_projectedPano) {
@@ -531,12 +552,138 @@ Common::Rational QuickTimeDecoder::PanoTrackHandler::getScaledHeight() const {
 	return Common::Rational(_parent->height) / _parent->scaleFactorY;
 }
 
+void QuickTimeDecoder::PanoTrackHandler::swingTransitionHandler() {
+	// The number of steps (the speed) of the transition is decided by the _transitionSpeed
+	const int NUM_STEPS = 300 / _decoder->_transitionSpeed;
+
+	// Calculate the step
+	float stepFOV = (_decoder->_fov - _currentFOV) / NUM_STEPS;
+	float stepHFOV = (_decoder->_hfov - _currentHFOV) / NUM_STEPS;
+
+	float stepTiltAngle = (_decoder->_tiltAngle - _currentTiltAngle) / NUM_STEPS;
+
+	float targetPanAngle = _decoder->_panAngle;
+	float difference = ABS(_currentPanAngle - targetPanAngle);
+	float stepPanAngle;
+
+	// All of this is just because the panorama is supposed to take the smallest path
+	if (targetPanAngle > _currentPanAngle) {
+		if (difference <= 180) {
+			stepPanAngle = difference / NUM_STEPS;
+		} else {
+			stepPanAngle = (- (360 - difference)) / NUM_STEPS;
+		}
+	} else {
+		if (difference <= 180) {
+			stepPanAngle = (- difference) / NUM_STEPS;
+		} else {
+			stepPanAngle = (360 - difference) / NUM_STEPS;
+		}
+	}
+
+	int16 rectLeft = _decoder->_origin.x;
+	int16 rectRight = _decoder->_origin.y;
+	Common::Point mouse;
+	int mw = _decoder->_width, mh = _decoder->_height;
+
+	for (int i = 0; i < NUM_STEPS; i++) {
+		projectPanorama(1,
+						_currentFOV + i * stepFOV,
+						_currentHFOV + i * stepHFOV,
+						_currentTiltAngle + i * stepTiltAngle,
+						_currentPanAngle + i * stepPanAngle);
+
+		g_system->copyRectToScreen(_projectedPano->getPixels(),
+									_projectedPano->pitch,
+									rectLeft,
+									rectRight,
+									_projectedPano->w,
+									_projectedPano->h);
+
+		Common::Event event;
+		while (g_system->getEventManager()->pollEvent(event)) {
+			if (event.type == Common::EVENT_QUIT) {
+				debugC(1, kDebugLevelGVideo, "EVENT_QUIT passed during the Swing Transition.");
+				g_system->quit();
+				return;
+			}
+
+			if (Common::isMouseEvent(event)) {
+				mouse = event.mouse;
+			}
+
+			// Referenced from video.cpp in testbed engine
+			if (mouse.x >= _decoder->_prevMouse.x &&
+				mouse.x < _decoder->_prevMouse.x + mw &&
+				mouse.y >= _decoder->_prevMouse.y &&
+				mouse.y < _decoder->_prevMouse.y + mh) {
+
+				switch (event.type) {
+				case Common::EVENT_MOUSEMOVE:
+					_decoder->handleMouseMove(event.mouse.x - _decoder->_prevMouse.x, event.mouse.y - _decoder->_prevMouse.y);
+					break;
+
+				default:
+					break;
+				}
+			}
+		}
+		g_system->updateScreen();
+		g_system->delayMillis(10);
+	}
+
+	// This is so if we call swingTransitionHandler() twice
+	// The second time there will be no transition
+	_currentFOV = _decoder->_fov;
+	_currentPanAngle = _decoder->_panAngle;
+	_currentHFOV = _decoder->_hfov;
+	_currentTiltAngle = _decoder->_tiltAngle;
+
+	// Due to floating point errors, we may end a few degrees here and there
+	// Make sure we reach the destination at the end of this loop
+	// Also we have to go back to our original quality
+	projectPanorama(3, _decoder->_fov, _decoder->_hfov, _decoder->_tiltAngle, _decoder->_panAngle);
+}
+
 const Graphics::Surface *QuickTimeDecoder::PanoTrackHandler::decodeNextFrame() {
 	if (!_isPanoConstructed)
 		return nullptr;
 
-	if (_dirty)
-		projectPanorama();
+	if (_dirty && _decoder->_transitionMode == kTransitionModeNormal) {
+		float quality = _decoder->getQuality();
+		float fov = _decoder->_fov;
+		float hfov = _decoder->_hfov;
+		float tiltAngle = _decoder->_tiltAngle;
+		float panAngle = _decoder->_panAngle;
+
+		switch ((int)quality) {
+		case 1:
+			projectPanorama(1, fov, hfov, tiltAngle, panAngle);
+			break;
+
+		case 2:
+			projectPanorama(2, fov, hfov, tiltAngle, panAngle);
+			break;
+
+		case 4:
+			projectPanorama(3, fov, hfov, tiltAngle, panAngle);
+			break;
+
+		case 0:
+			if (_decoder->_isMouseButtonDown || _decoder->_isKeyDown) {
+				projectPanorama(1, fov, hfov, tiltAngle, panAngle);
+			} else {
+				projectPanorama(3, fov, hfov, tiltAngle, panAngle);
+			}
+			break;
+
+		default:
+			projectPanorama(3, fov, hfov, tiltAngle, panAngle);
+			break;
+		}
+	} else if (_decoder->_transitionMode == kTransitionModeSwing) {
+		swingTransitionHandler();
+	}
 
 	return _projectedPano;
 }
@@ -575,6 +722,8 @@ Graphics::Surface *QuickTimeDecoder::PanoTrackHandler::constructMosaic(VideoTrac
 		Common::DumpFile bitmapFile;
 		if (!bitmapFile.open(path, true)) {
 			warning("Cannot dump panorama into file '%s'", path.toString().c_str());
+			target->free();
+			delete target;
 			return nullptr;
 		}
 
@@ -588,7 +737,153 @@ Graphics::Surface *QuickTimeDecoder::PanoTrackHandler::constructMosaic(VideoTrac
 }
 
 void QuickTimeDecoder::PanoTrackHandler::initPanorama() {
+	if (_decoder->_panoTrack->panoInfo.nodes.size() == 0) {
+		// This is a single node panorama
+		// We add one node to the list, so the rest of our code
+		// is happy
+		PanoTrackSample *sample = &_parent->panoSamples[0];
+
+		_decoder->_panoTrack->panoInfo.nodes.resize(1);
+		_decoder->_panoTrack->panoInfo.nodes[0].nodeID = sample->hdr.nodeID;
+		_decoder->_panoTrack->panoInfo.nodes[0].timestamp = 0;
+
+		_decoder->_panoTrack->panoInfo.defNodeID = sample->hdr.nodeID;
+	}
+
 	_decoder->goToNode(_decoder->_panoTrack->panoInfo.defNodeID);
+}
+
+Graphics::Surface *QuickTimeDecoder::PanoTrackHandler::upscalePanorama(Graphics::Surface *sourceSurface, int8 level) {
+	// This algorithm (bilinear upscaling) takes quite some time to complete
+	//
+	// upscaling method
+	//
+	// for level 1 upscaling
+	// a | b			a | avg(a, b) | b
+	// -----	=>		-----------------
+	// c | d			c | avg(c, d) | d
+	//
+	// for level 2 upscaling
+	//                a              | avg(a, b)     | b
+	// a | b          -----------------------------------------
+	// -----    =>    avg(a, c) [e]	 | avg(e, f)     | avg(b, d) [f]
+	// c | d		  -----------------------------------------
+	//                c              | avg(c, d)     | d
+
+	uint w = sourceSurface->w;
+	uint h = sourceSurface->h;
+
+	Graphics::Surface *target = new Graphics::Surface();
+
+	if (level == 2) {
+		target->create(w * 2, h * 2, sourceSurface->format);
+
+		for (uint y = 0; y < h; ++y) {
+			for (uint x = 0; x < w; ++x) {
+				// For the row x==w and column y==h, wrap around the panorama
+				// and average these pixels with row x==0 and column y==0 respectively
+				uint x1 = (x + 1) % w;
+				uint y1 = (y + 1) % h;
+
+				// Couldn't find a better way to do this
+				// Should I write a function in the Surface or PixelFormat class?
+				int32 p00 = sourceSurface->getPixel(x, y);
+				int32 p01 = sourceSurface->getPixel(x, y1);
+				int32 p10 = sourceSurface->getPixel(x1, y);
+				int32 p11 = sourceSurface->getPixel(x1, y1);
+
+				uint8 a00, r00, g00, b00;
+				uint8 a01, r01, g01, b01;
+				uint8 a10, r10, g10, b10;
+				uint8 a11, r11, g11, b11;
+
+				sourceSurface->format.colorToARGB(p00, a00, r00, g00, b00);
+				sourceSurface->format.colorToARGB(p01, a01, r01, g01, b01);
+				sourceSurface->format.colorToARGB(p10, a10, r10, g10, b10);
+				sourceSurface->format.colorToARGB(p11, a11, r11, g11, b11);
+
+				int32 avgPixel00 = p00;
+				int32 avgPixel01 = sourceSurface->format.ARGBToColor((a00 + a01) >> 1, (r00 + r01) >> 1, (g00 + g01) >> 1, (b00 + b01) >> 1);
+				int32 avgPixel10 = sourceSurface->format.ARGBToColor((a00 + a10) >> 1, (r00 + r10) >> 1, (g00 + g10) >> 1, (b00 + b10) >> 1);
+				int32 avgPixel11 =  sourceSurface->format.ARGBToColor(
+					(a00 + a01 + a10 + a11) >> 2,
+					(r00 + r01 + r10 + r11) >> 2,
+					(g00 + g01 + g10 + g11) >> 2,
+					(b00 + b01 + b10 + b11) >> 2);
+
+				target->setPixel(x * 2, y * 2, avgPixel00);
+				target->setPixel(x * 2, y * 2 + 1, avgPixel01);
+				target->setPixel(x * 2 + 1, y * 2, avgPixel10);
+				target->setPixel(x * 2 + 1, y * 2 + 1,avgPixel11);
+			}
+		}
+	} else {
+		target->create(w * 2, h, sourceSurface->format);
+
+		for (uint y = 0; y < h; ++y) {
+			for (uint x = 0; x < w; ++x) {
+				uint x1 = (x + 1) % w;
+
+				int32 p00 = sourceSurface->getPixel(x, y);
+				int32 p01 = sourceSurface->getPixel(x1, y);
+
+				uint8 a00, r00, g00, b00;
+				uint8 a01, r01, g01, b01;
+				sourceSurface->format.colorToARGB(p00, a00, r00, g00, b00);
+				sourceSurface->format.colorToARGB(p01, a01, r01, g01, b01);
+
+				int32 avgPixel00 = p00;
+				int32 avgPixel01 = sourceSurface->format.ARGBToColor((a00 + a01) >> 1, (r00 + r01) >> 1, (g00 + g01) >> 1, (b00 + b01) >> 1);
+
+				target->setPixel(x * 2, y, avgPixel00);
+				target->setPixel(x * 2 + 1, y, avgPixel01);
+			}
+		}
+	}
+
+	return target;
+}
+
+void QuickTimeDecoder::PanoTrackHandler::boxAverage(Graphics::Surface *sourceSurface, uint8 scaleFactor) {
+	uint16 h = sourceSurface->h;
+	uint16 w = sourceSurface->w;
+
+	// Apply box average if quality is higher than 1
+	// Otherwise it'll be quicker to just copy the _planarProjection onto _projectedPano
+	if (scaleFactor == 1) {
+		_projectedPano->copyFrom(*sourceSurface);
+		return;
+	}
+
+	uint8 scaleSquare = scaleFactor * scaleFactor;
+
+	// Average out the pixels from the larger image
+	for (uint16 y = 0; y < h / scaleFactor; y++) {
+		for (uint16 x = 0; x < w / scaleFactor; x++) {
+			uint16 avgA = 0, avgR = 0, avgG = 0, avgB = 0;
+
+			for (uint8 row = 0; row < scaleFactor; row++) {
+				for (uint8 column = 0; column < scaleFactor; column++) {
+					uint8 a00, r00, g00, b00;
+					uint32 pixel00 = sourceSurface->getPixel(MIN((x * scaleFactor + row), w - 1), MIN((y * scaleFactor + column), h - 1));
+					_projectedPano->format.colorToARGB(pixel00, a00, r00, g00, b00);
+
+					avgA += a00;
+					avgR += r00;
+					avgG += g00;
+					avgB += b00;
+				}
+			}
+
+			avgA /= scaleSquare;
+			avgR /= scaleSquare;
+			avgG /= scaleSquare;
+			avgB /= scaleSquare;
+
+			uint32 avgPixel = _projectedPano->format.ARGBToColor(avgA, avgR, avgG, avgB);
+			_projectedPano->setPixel(x, y, avgPixel);
+		}
+	}
 }
 
 void QuickTimeDecoder::PanoTrackHandler::constructPanorama() {
@@ -599,8 +894,10 @@ void QuickTimeDecoder::PanoTrackHandler::constructPanorama() {
 		_constructedPano->free();
 		delete _constructedPano;
 
-		_constructedHotspots->free();
-		delete _constructedHotspots;
+		if (_constructedHotspots) {
+			_constructedHotspots->free();
+			delete _constructedHotspots;
+		}
 	}
 
 	debugC(1, kDebugLevelGVideo, "scene: %d (%d x %d) hotspots: %d (%d x %d)", desc->_sceneTrackID, desc->_sceneSizeX, desc->_sceneSizeY,
@@ -618,7 +915,7 @@ void QuickTimeDecoder::PanoTrackHandler::constructPanorama() {
 		}
 
 	if (nodeidx == -1) {
-		warning("constructPanorama(): Missing node %d in anoInfo", sample->hdr.nodeID);
+		warning("constructPanorama(): Missing node %d in panoInfo", sample->hdr.nodeID);
 		nodeidx = 0;
 	}
 
@@ -632,20 +929,27 @@ void QuickTimeDecoder::PanoTrackHandler::constructPanorama() {
 
 	_constructedPano = constructMosaic(track, desc->_sceneNumFramesX, desc->_sceneNumFramesY, "dumps/pano-full.png");
 
-	track = (VideoTrackHandler *)(_decoder->getTrack(_decoder->Common::QuickTimeParser::_tracks[desc->_hotSpotTrackID - 1]->targetTrack));
+	// _upscaleLevel = 0 means _contructedPano has just been constructed, hasn't been upscaled yet
+	// or that the upscaledConstructedPanorama has upscaled a different panorama, not the current constructedPano
+	_upscaleLevel = 0;
 
-	track->seek(Audio::Timestamp(0, timestamp, _decoder->_timeScale));
+	if (desc->_hotSpotTrackID) {
+		track = (VideoTrackHandler *)(_decoder->getTrack(_decoder->Common::QuickTimeParser::_tracks[desc->_hotSpotTrackID - 1]->targetTrack));
 
-	_constructedHotspots = constructMosaic(track, desc->_hotSpotNumFramesX, desc->_hotSpotNumFramesY, "dumps/pano-hotspot.png");
+		track->seek(Audio::Timestamp(0, timestamp, _decoder->_timeScale));
+
+		_constructedHotspots = constructMosaic(track, desc->_hotSpotNumFramesX, desc->_hotSpotNumFramesY, "dumps/pano-hotspot.png");
+	}
 
 	_isPanoConstructed = true;
 }
 
 Common::Point QuickTimeDecoder::PanoTrackHandler::projectPoint(int16 mx, int16 my) {
-	if (!_isPanoConstructed)
+	if (!_isPanoConstructed || !_constructedHotspots)
 		return Common::Point(-1, -1);
 
 	uint16 w = _decoder->getWidth(), h = _decoder->getHeight();
+	uint16 hotWidth = _constructedHotspots->w, hotHeight = _constructedHotspots->h;
 
 	PanoSampleDesc *desc = (PanoSampleDesc *)_parent->sampleDescs[0];
 
@@ -681,6 +985,18 @@ Common::Point QuickTimeDecoder::PanoTrackHandler::projectPoint(int16 mx, int16 m
 	float minTiltY = tan(desc->_vPanBottom * M_PI / 180.0f);
 	float maxTiltY = tan(desc->_vPanTop * M_PI / 180.0f);
 
+	int warpMode = _decoder->_warpMode;
+	int hotX, hotY;
+
+	// Compute the largest projected X value, which determines the horizontal angle range
+	float maxProjectedX = 0.0f;
+
+	// X coords are the same here so whichever has the lower Z coord will have the maximum projected X
+	if (topRightVector[2] < bottomRightVector[2])
+		maxProjectedX = topRightVector[0] / topRightVector[2];
+	else
+		maxProjectedX = bottomRightVector[0] / bottomRightVector[2];
+
 	// Compute the side edge vector by interpolating between topRightVector and
 	// bottomRightVector based on the mouse Y position
 	float yRatio = (float)my / (float)h;
@@ -688,52 +1004,116 @@ Common::Point QuickTimeDecoder::PanoTrackHandler::projectPoint(int16 mx, int16 m
 	mousePixelVector[1] = topRightVector[1] + yRatio * (bottomRightVector[1] - topRightVector[1]);
 	mousePixelVector[2] = topRightVector[2] + yRatio * (bottomRightVector[2] - topRightVector[2]);
 
-	// Multiply the X value ([0]) of the result of that on a value ranging from -1 to 1
-	// based on the mouse X position to get the mouse pixel vector
-	mousePixelVector[0] = mousePixelVector[0] * ((float)(mx - w / 2) / (float)w * 2.0);
+	float t, xCoord = 0, yawRatio = 0;
+	float horizontalFovRadians = _decoder->_hfov * M_PI / 180.0f;
+	float verticalFovRadians = _decoder->_fov * M_PI / 180.0f;
+	float tiltAngleRadians = -_decoder->_tiltAngle * M_PI / 180.0f;
 
-	// The yaw angle is atan2(mousePixelVector[0], mousePixelVector[2]), multiply that
-	// by the panorama width and divide by 2*pi to get the horizontal coordinate
-	float yawAngle = atan2(mousePixelVector[0], mousePixelVector[2]);
+	if (warpMode == 0) {
+		t = (float)mx / (float)(w) - 0.5f;
+		xCoord = t * horizontalFovRadians / M_PI / 2.0f;
+		yawRatio = xCoord;
+	} else {
+		t = ((float)(mx - w / 2) / (float)w * 2.0);
+		if (warpMode == 1) {
+			xCoord = t * maxProjectedX;
+		} else if (warpMode == 2) {
+			xCoord = t * mousePixelVector[0] / mousePixelVector[2];
+		}
+		yawRatio = atan(xCoord) / (2.0 * M_PI);
+	}
+
+	float angleT = (360.0f - _decoder->_panAngle) / 360.0f;
 
 	// panorama is turned 90 degrees, width is height
-	int hotX = (1.0f - (yawAngle / (2.0 * M_PI) + (360.0f - _decoder->_panAngle) / 360.0f)) * (float)_constructedHotspots->h;
+	hotX = (1.0f - (angleT + yawRatio)) * (float)hotHeight;
 
-	hotX = hotX % _constructedHotspots->h;
+	if (warpMode == 0) {
+		float tiltFactor = tan(verticalFovRadians / 2.0f);
+		float normalizedY = ((float)my / (float)(h - 1)) * 2.0f - 1.0f;  // Range [-1, 1]
+		float projectedY = (normalizedY * tiltFactor) + tan(tiltAngleRadians);
+		hotY = static_cast<int32>((projectedY + 1.0f) / 2.0f * hotWidth);
+	} else {
+		// To get the vertical coordinate, need to project the vector on to a unit cylinder.
+		// To do that, compute the length of the XZ vector,
+		float xzVectorLen = sqrt(xCoord * xCoord + 1.0f);
+
+		float projectedY = xzVectorLen * mousePixelVector[1] / mousePixelVector[2];
+		float normalizedYCoordinate = (projectedY - minTiltY) / (maxTiltY - minTiltY);
+		hotY = (int)(normalizedYCoordinate * (float)hotWidth);
+	}
+
+	hotX = hotX % hotHeight;
 	if (hotX < 0)
-		hotX += _constructedHotspots->h;
-
-	// To get the vertical coordinate, need to project the vector on to a unit cylinder.
-	// To do that, compute the length of the XZ vector,
-	float xzVectorLen = sqrt(mousePixelVector[0] * mousePixelVector[0] + mousePixelVector[2] * mousePixelVector[2]);
-
-	// then compute projectedY = mousePixelVector[1] / xzVectorLen
-	float projectedY = mousePixelVector[1] / xzVectorLen;
-
-	float normalizedYCoordinate = (projectedY - minTiltY) / (maxTiltY - minTiltY);
-
-	int hotY = (int)(normalizedYCoordinate * (float)_constructedHotspots->w);
+		hotX += hotHeight;
 
 	if (hotY < 0)
 		hotY = 0;
-	else if (hotY > _constructedHotspots->w)
-		hotY = _constructedHotspots->w;
+	else if (hotY > hotWidth)
+		hotY = hotWidth;
 
 	return Common::Point(hotX, hotY);
 }
 
-void QuickTimeDecoder::PanoTrackHandler::projectPanorama() {
+// It may get confusing what the three terms _quality, scaleVector and _upscaleLevel mean
+// They are all related to the quality of the _projectedPanorama
+// These are relevant for the functions upscalePanorama(), boxAverage() and projectPanorama()
+//
+// _quality is the attribute of the panorama that dictates how good the panorama looks
+// This is taken directly from the original QTVR Xtra documentation by Apple
+// (float) _quality can take three values:
+//		1.0f; (higher
+//		2.0f; means
+//	 	4.0f; better)
+// Excluding _quality = 0.0f (which is a combination of _quality = 1.0f and _quality = 4.0f)
+// See setQuality() function to get a better idea
+//
+// This _quality determines what the scaleFactor value will be passed to projectPanorama()
+// scaleFactor is the parameter to projectPanorama used for anti-aliasing the panorama
+// We project a Surface object that has [scaleFactor] times the target height and width from _constructedPano
+// Then we take a boxAverage() in a [scaleFactor * scaleFactor] box to make the panorama target sized
+// This effectively removes aliasing from the image
+// (uint8) scaleFactor can take three values:
+//		1; (no-anti-aliasing)
+//  	2; (some anti-aliasing)
+// 		3; (better anti-aliasing) (For better Performance, we may remove this option)
+//
+// _quality also controls another factor that is the scale of original panorama (_constructedPano)
+// Basically we upscalePanorama() at higher _quality values, exactly by how much is given by _upscaleLevel
+// (uint8) _upscaleLevel can take two values:
+//		1 (upscale to twice the width);
+//		2 (upscale to twice the width and height);
+//
+// _quality = 1.0f => scaleFactor = 1; No upscaling;
+// _quality = 2.0f => scaleFactor = 2; _upscaleLevel = 1;
+// _quality = 4.0f => scaleFactor = 3; _upscaleLevel = 2;
+
+void QuickTimeDecoder::PanoTrackHandler::projectPanorama(uint8 scaleFactor,
+                                                         float fov,
+                                                         float hfov,
+                                                         float tiltAngle,
+                                                         float panAngle) {
 	if (!_isPanoConstructed)
 		return;
 
-	uint16 w = _decoder->getWidth(), h = _decoder->getHeight();
+	uint16 w = _decoder->getWidth() * scaleFactor, h = _decoder->getHeight() * scaleFactor;
 
 	if (!_projectedPano) {
 		if (w == 0 || h == 0)
 			error("QuickTimeDecoder::PanoTrackHandler::projectPanorama(): setTargetSize() was not called");
 
 		_projectedPano = new Graphics::Surface();
-		_projectedPano->create(w, h, _constructedPano->format);
+		_projectedPano->create(w / scaleFactor, h / scaleFactor, _constructedPano->format);
+	}
+
+	// The size of _planarProjection will keep changing in quality mode 0
+	// It might (will definitely) cause some out of bound access if left as it is
+	if (!_planarProjection || _planarProjection->w != w || _planarProjection->h != h) {
+		// If _planarProjection holds some pixels, first need to free all the pixel data
+		if (_planarProjection) {
+			_planarProjection->free();
+		}
+		delete _planarProjection;
 
 		_planarProjection = new Graphics::Surface();
 		_planarProjection->create(w, h, _constructedPano->format);
@@ -746,7 +1126,9 @@ void QuickTimeDecoder::PanoTrackHandler::projectPanorama() {
 	float *topRightVector = cornerVectors[0];
 	float *bottomRightVector = cornerVectors[1];
 
-	bottomRightVector[1] = tan(_decoder->_fov * M_PI / 360.0);
+	// tangent of half of fov angle, is the bottom edge point
+	// the negative of that is the top edge point
+	bottomRightVector[1] = tan(fov * M_PI / 360.0);
 	bottomRightVector[0] = bottomRightVector[1] * (float)w / (float)h;
 	bottomRightVector[2] = 1.0f;
 
@@ -755,9 +1137,10 @@ void QuickTimeDecoder::PanoTrackHandler::projectPanorama() {
 	topRightVector[2] = bottomRightVector[2];
 
 	// Apply pitch (tilt) rotation
-	float cosTilt = cos(-_decoder->_tiltAngle * M_PI / 180.0);
-	float sinTilt = sin(-_decoder->_tiltAngle * M_PI / 180.0);
+	float cosTilt = cos(-tiltAngle * M_PI / 180.0);
+	float sinTilt = sin(-tiltAngle * M_PI / 180.0);
 
+	// Using trigonometry to account for the tilt
 	for (int v = 0; v < 2; v++) {
 		float y = cornerVectors[v][1];
 		float z = cornerVectors[v][2];
@@ -773,6 +1156,7 @@ void QuickTimeDecoder::PanoTrackHandler::projectPanorama() {
 	float maxTiltY = tan(desc->_vPanTop * M_PI / 180.0f);
 
 	// Compute the largest projected X value, which determines the horizontal angle range
+	// Same with max projected y as well
 	float maxProjectedX = 0.0f;
 
 	// X coords are the same here so whichever has the lower Z coord will have the maximum projected X
@@ -784,6 +1168,197 @@ void QuickTimeDecoder::PanoTrackHandler::projectPanorama() {
 	float minProjectedY = topRightVector[1] / topRightVector[2];
 	float maxProjectedY = bottomRightVector[1] / bottomRightVector[2];
 
+	float angleT = fmod((360.0f - panAngle) / 360.0f, 1.0f);
+	if (angleT < 0.0f) {
+		angleT += 1.0f;
+	}
+
+	Graphics::Surface *sourceSurface;
+
+	switch (scaleFactor) {
+	case 1:
+		sourceSurface = _decoder->_renderHotspots ? _constructedHotspots : _constructedPano;
+		break;
+
+	case 2:
+		if (!_upscaledConstructedPano || _upscaleLevel != 1) {
+			// Avoid memory leakage if _upscaledConstructedPano already points to a Panorama
+			if (_upscaledConstructedPano) {
+				_upscaledConstructedPano->free();
+				delete _upscaledConstructedPano;
+			}
+			_upscaleLevel = 1;
+			_upscaledConstructedPano = upscalePanorama(_constructedPano, _upscaleLevel);
+		}
+		sourceSurface = _decoder->_renderHotspots ? _constructedHotspots : _upscaledConstructedPano;
+		break;
+
+	case 3:
+		if (!_upscaledConstructedPano || _upscaleLevel != 2) {
+			// Avoid memory leakage if _upscaledConstructedPano already points to a Panorama
+			if (_upscaledConstructedPano) {
+				_upscaledConstructedPano->free();
+				delete _upscaledConstructedPano;
+			}
+			_upscaleLevel = 2;
+			_upscaledConstructedPano = upscalePanorama(_constructedPano, _upscaleLevel);
+		}
+		sourceSurface = _decoder->_renderHotspots ? _constructedHotspots : _upscaledConstructedPano;
+		break;
+
+	default:
+		sourceSurface = _decoder->_renderHotspots ? _constructedHotspots : _constructedPano;
+		break;
+	}
+
+	int32 panoWidth = sourceSurface->h;
+	int32 panoHeight = sourceSurface->w;
+
+	// This angle offset will tell you exactly which portion of Cylindrical panorama
+	// (when you construct a rectangular mosaic out of it) you're projecting on the plane surface
+	uint16 angleOffset = static_cast<uint32>(angleT * panoWidth);
+
+	const bool isWidthOdd = ((w % 2) == 1);
+	uint16 halfWidthRoundedUp = (w + 1) / 2;
+	float halfWidthFloat = (float)w * 0.5f;
+
+	float verticalFovRadians = fov * M_PI / 180.0f;
+	float horizontalFovRadians = hfov * M_PI / 180.0f;
+	float tiltAngleRadians = tiltAngle * M_PI / 180.0f;
+
+	float warpMode = _decoder->_warpMode;
+
+	Common::Array<float> cylinderProjectionRanges;
+	Common::Array<float> cylinderAngleOffsets;
+
+	cylinderProjectionRanges.resize(halfWidthRoundedUp * 2);
+	cylinderAngleOffsets.resize(halfWidthRoundedUp);
+
+	if (warpMode == 0.0f) {
+		for (uint16 x = 0; x < halfWidthRoundedUp; x++) {
+			float xFloat = (float) x;
+
+			if (!isWidthOdd) {
+				xFloat += 0.5f;
+			}
+
+			float normalizedX = (float)xFloat / (float)(w - 1);
+			cylinderAngleOffsets[x] = normalizedX * horizontalFovRadians / M_PI / 2.0f;  // Scale to FOV
+		}
+	} else {
+		for (uint16 x = 0; x < halfWidthRoundedUp; x++) {
+			float xFloat = (float)x;
+
+			// If width is odd, then the first column is on the pixel center
+			// If width is even, then the first column is on the pixel boundary
+			if (!isWidthOdd) {
+				xFloat += 0.5f;
+			}
+
+			float t = xFloat / halfWidthFloat;
+			float xCoord = t * maxProjectedX;
+
+			float yCoords[2] = {minProjectedY, maxProjectedY};
+			float length = sqrt(xCoord * xCoord + 1.0f);
+
+			// Compute projection ranges
+			for (int v = 0; v < 2; v++) {
+				// Intersect (xCoord, yCoord[v], 1) with a 1-radius cylinder
+				float newY = yCoords[v] / length;
+				cylinderProjectionRanges[x * 2 + v] = (newY - minTiltY) / (maxTiltY - minTiltY);
+			}
+
+			cylinderAngleOffsets[x] = atan(xCoord) * 0.5f / M_PI;
+		}
+	}
+
+	for (uint16 x = 0; x < halfWidthRoundedUp; x++) {
+		int32 centerXImageCoord = static_cast<int32>(angleOffset);
+		int32 edgeCoordOffset = static_cast<int32>(cylinderAngleOffsets[x] * panoWidth);
+
+		int32 leftSourceXCoord = centerXImageCoord - edgeCoordOffset;
+		int32 rightSourceXCoord = centerXImageCoord + edgeCoordOffset;
+
+		int32 topSrcCoord = 0, bottomSrcCoord = 0;
+		if (warpMode != 0) {
+			topSrcCoord = static_cast<int32>(cylinderProjectionRanges[x * 2 + 0] * panoHeight);
+			bottomSrcCoord = static_cast<int32>(cylinderProjectionRanges[x * 2 + 1] * panoHeight);
+
+			if (topSrcCoord < 0) {
+				topSrcCoord = 0;
+			} else if (topSrcCoord >= panoHeight) {
+				topSrcCoord = panoHeight - 1;
+			}
+
+			if (bottomSrcCoord >= panoHeight) {
+				bottomSrcCoord = panoHeight - 1;
+			}
+		}
+
+		// The descriptor has the original sceneSizeX and sceneSizeY of the movie
+		// But in quality mode 3 we're increasing them to twice the original
+		// This factor just make sure we're wrapping leftSourceXCoord and rightSourceXCoord
+		// According to the sourceSurface's dimensions rather than the original's
+		int factor = scaleFactor == 3 && !_decoder->_renderHotspots ? 2 : 1;
+
+		// Wrap around if out of range
+		leftSourceXCoord = leftSourceXCoord % static_cast<int32>(panoWidth);
+		if (leftSourceXCoord < 0) {
+			leftSourceXCoord += panoWidth;
+		}
+
+		leftSourceXCoord = desc->_sceneSizeY * factor - 1 - leftSourceXCoord;
+
+		rightSourceXCoord = rightSourceXCoord % static_cast<int32>(panoWidth);
+		if (rightSourceXCoord < 0) {
+			rightSourceXCoord += panoWidth;
+		}
+
+		rightSourceXCoord = desc->_sceneSizeY * factor - 1 - rightSourceXCoord;
+
+		uint16 x1 = halfWidthRoundedUp - 1 - x;
+		uint16 x2 = w - halfWidthRoundedUp + x;
+
+		for (uint16 y = 0; y < h; y++) {
+			int32 sourceYCoord;
+
+			if (warpMode == 0) {
+				float tiltFactor = tan(verticalFovRadians / 2.0f);
+				float normalizedY = ((float)y / (float)(h - 1)) * 2.0f - 1.0f;
+				float projectedY = (normalizedY * tiltFactor) - tan(tiltAngleRadians);
+				sourceYCoord = static_cast<int32>((projectedY + 1.0f) / 2.0f * panoHeight);
+			} else {
+				sourceYCoord = (2 * y + 1) * (bottomSrcCoord - topSrcCoord) / (2 * h) + topSrcCoord;
+			}
+
+			if (sourceYCoord < 0)
+				sourceYCoord = 0;
+			if (sourceYCoord >= panoHeight)
+				sourceYCoord = panoHeight - 1;
+
+			// Our panorma is apparently vertical, that's why we're passing Y co-ord before X co-ord
+			uint32 pixel1 = sourceSurface->getPixel(sourceYCoord, leftSourceXCoord);
+			uint32 pixel2 = sourceSurface->getPixel(sourceYCoord, rightSourceXCoord);
+
+			if (_decoder->_renderHotspots) {
+				const byte *col1 = &quickTimeDefaultPalette256[pixel1 * 3];
+				pixel1 = _planarProjection->format.RGBToColor(col1[0], col1[1], col1[2]);
+				const byte *col2 = &quickTimeDefaultPalette256[pixel2 * 3];
+				pixel2 = _planarProjection->format.RGBToColor(col2[0], col2[1], col2[2]);
+			}
+
+			_planarProjection->setPixel(x1, y, pixel1);
+			_planarProjection->setPixel(x2, y, pixel2);
+		}
+	}
+
+	if (warpMode != 2) {
+		boxAverage(_planarProjection, scaleFactor);
+		_dirty = false;
+		return;
+	}
+
+	// If warp mode is set to 2, also apply the perspective projection
 	Common::Array<float> sideEdgeXYInterpolators;
 
 	// The X interpolators are from 0 to maxProjectedX
@@ -796,121 +1371,17 @@ void QuickTimeDecoder::PanoTrackHandler::projectPanorama() {
 		float vector[3];
 		for (int v = 0; v < 3; v++) {
 			vector[v] = cornerVectors[0][v] * (1.0f - t) + cornerVectors[1][v] * t;
-
-			float projectedX = vector[0] / vector[2];
-			float projectedY = vector[1] / vector[2];
-
-			sideEdgeXYInterpolators[y * 2 + 0] = projectedX / maxProjectedX;
-			sideEdgeXYInterpolators[y * 2 + 1] = (projectedY - minProjectedY) / (maxProjectedY - minProjectedY);
-		}
-	}
-
-	const bool isWidthOdd = ((w % 2) == 1);
-	uint16 halfWidthRoundedUp = (w + 1) / 2;
-
-	float halfWidthFloat = (float)w * 0.5f;
-
-	Common::Array<float> cylinderProjectionRanges;
-	Common::Array<float> cylinderAngleOffsets;
-
-	cylinderProjectionRanges.resize(halfWidthRoundedUp * 2);
-	cylinderAngleOffsets.resize(halfWidthRoundedUp);
-
-	for (uint16 x = 0; x < halfWidthRoundedUp; x++) {
-		float xFloat = (float)x;
-
-		// If width is odd, then the first column is on the pixel center
-		// If width is even, then the first column is on the pixel boundary
-		if (!isWidthOdd)
-			xFloat += 0.5f;
-
-		float t = xFloat / halfWidthFloat;
-		float xCoord = t * maxProjectedX;
-
-		float yCoords[2] = {minProjectedY, maxProjectedY};
-
-		// Compute projection ranges
-		for (int v = 0; v < 2; v++) {
-			// Intersect (xCoord, yCoord[v], 1) with a 1-radius cylinder
-			float length = sqrt(xCoord * xCoord + 1.0f);
-
-			float newY = yCoords[v] / length;
-
-			cylinderProjectionRanges[x * 2 + v] = (newY - minTiltY) / (maxTiltY - minTiltY);
 		}
 
-		cylinderAngleOffsets[x] = atan(xCoord) * 0.5f / M_PI;
+		float projectedX = vector[0] / vector[2];
+		float projectedY = vector[1] / vector[2];
+
+		sideEdgeXYInterpolators[y * 2 + 0] = projectedX / maxProjectedX;
+		sideEdgeXYInterpolators[y * 2 + 1] = (projectedY - minProjectedY) / (maxProjectedY - minProjectedY);
 	}
 
-	float angleT = fmod((360.0f - _decoder->_panAngle) / 360.0f, 1.0f);
-	if (angleT < 0.0f)
-		angleT += 1.0f;
-
-	Graphics::Surface *srcSurf = _decoder->_renderHotspots ? _constructedHotspots : _constructedPano;
-
-	int32 panoWidth = srcSurf->h;
-	int32 panoHeight = srcSurf->w;
-
-	uint16 angleOffset = static_cast<uint32>(angleT * panoWidth);
-
-	// Convert cylinder projection into planar projection
-	for (uint16 projectionCol = 0; projectionCol < halfWidthRoundedUp; projectionCol++) {
-		int32 centerXImageCoord = static_cast<int32>(angleOffset);
-
-		int32 edgeCoordOffset = static_cast<int32>(cylinderAngleOffsets[projectionCol] * panoWidth);
-
-		int32 leftSrcCoord = centerXImageCoord - edgeCoordOffset;
-		int32 rightSrcCoord = centerXImageCoord + edgeCoordOffset;
-
-		int32 topSrcCoord = static_cast<int32>(cylinderProjectionRanges[projectionCol * 2 + 0] * panoHeight);
-		int32 bottomSrcCoord = static_cast<int32>(cylinderProjectionRanges[projectionCol * 2 + 1] * panoHeight);
-
-		if (topSrcCoord < 0)
-			topSrcCoord = 0;
-
-		// Should never happen
-		if (topSrcCoord >= panoHeight)
-			topSrcCoord = panoHeight - 1;
-
-		if (bottomSrcCoord >= panoHeight)
-			bottomSrcCoord = panoHeight - 1;
-
-		// Should never happen
-		if (bottomSrcCoord < 0)
-			bottomSrcCoord = 0;
-
-		leftSrcCoord = leftSrcCoord % static_cast<int32>(panoWidth);
-		if (leftSrcCoord < 0)
-			leftSrcCoord += panoWidth;
-
-		leftSrcCoord = desc->_sceneSizeY - 1 - leftSrcCoord;
-
-		rightSrcCoord = rightSrcCoord % static_cast<int32>(panoWidth);
-		if (rightSrcCoord < 0)
-			rightSrcCoord += w;
-
-		rightSrcCoord = desc->_sceneSizeY - 1 - rightSrcCoord;
-
-		uint16 x1 = halfWidthRoundedUp - 1 - projectionCol;
-		uint16 x2 = w - halfWidthRoundedUp + projectionCol;
-
-		for (uint16 y = 0; y < h; y++) {
-			int32 sourceYCoord = (2 * y + 1) * (bottomSrcCoord - topSrcCoord) / (2 * h) + topSrcCoord;
-
-			uint32 pixel1 = srcSurf->getPixel(sourceYCoord, leftSrcCoord);
-			uint32 pixel2 = srcSurf->getPixel(sourceYCoord, rightSrcCoord);
-
-			if (_decoder->_renderHotspots) {
-				const byte *col = &quickTimeDefaultPalette256[pixel1 * 3];
-				pixel1 = _planarProjection->format.RGBToColor(col[0], col[1], col[2]);
-				col = &quickTimeDefaultPalette256[pixel2 * 3];
-				pixel2 = _planarProjection->format.RGBToColor(col[0], col[1], col[2]);
-			}
-
-			_planarProjection->setPixel(x1, y, pixel1);
-			_planarProjection->setPixel(x2, y, pixel2);
-		}
-	}
+	Graphics::Surface *aliasedProjectedPano = new Graphics::Surface();
+	aliasedProjectedPano->create(w, h, _planarProjection->format);
 
 	// Convert planar projection into perspective projection
 	for (uint16 y = 0; y < h; y++) {
@@ -918,18 +1389,26 @@ void QuickTimeDecoder::PanoTrackHandler::projectPanorama() {
 		float yInterpolator = sideEdgeXYInterpolators[y * 2 + 1];
 
 		int32 srcY = static_cast<int32>(yInterpolator * (float)h);
-		int32 scanlineWidth = static_cast<int32>(xInterpolator * w) / 2 * 2;
+		int32 scanlineWidth = static_cast<int32>(xInterpolator * w);
 		int32 startX = (w - scanlineWidth) / 2;
 		//int32 endX = startX + scanlineWidth;
 
 		// It would be better to compute a reciprocal and do this as a multiply instead,
 		// doing divides per pixel is SLOW!
 		for (uint16 x = 0; x < w; x++) {
-			int32 srcX = (2 * x + 1) * scanlineWidth / (2 * w) + startX;
+			int32 srcX = (x + 0.5f) * xInterpolator + startX;
 			uint32 pixel = _planarProjection->getPixel(srcX, srcY);
-			_projectedPano->setPixel(x, y, pixel);
+
+			// I increased the size of the surface (made it twice as wide and twice as tall)
+			// Now I'm just getting the perspective projected pixel and creating a 2x2 box
+			aliasedProjectedPano->setPixel(x, y, pixel);
 		}
 	}
+
+	boxAverage(aliasedProjectedPano, scaleFactor);
+	// Memory leakage avoided; Should I use a stack allocated object?
+	aliasedProjectedPano->free();
+	delete aliasedProjectedPano;
 
 	_dirty = false;
 }
@@ -956,13 +1435,16 @@ Graphics::FloatPoint QuickTimeDecoder::getPanAngles(int16 x, int16 y) {
 void QuickTimeDecoder::lookupHotspot(int16 x, int16 y) {
 	PanoTrackHandler *track = (PanoTrackHandler *)getTrack(_panoTrack->targetTrack);
 
+	if (!track->_constructedHotspots)
+		return;
+
 	Common::Point hotspotPoint = track->projectPoint(x, y);
 
 	if (hotspotPoint.x < 0) {
 		_rolloverHotspot = nullptr;
 		_rolloverHotspotID = 0;
 	} else {
-		int hotspotId = (int)(((PanoTrackHandler *)getTrack(_panoTrack->targetTrack))->_constructedHotspots->getPixel(hotspotPoint.y, hotspotPoint.x));
+		int hotspotId = (int)track->_constructedHotspots->getPixel(hotspotPoint.y, hotspotPoint.x);
 
 		_rolloverHotspotID = hotspotId;
 
@@ -1011,6 +1493,13 @@ void QuickTimeDecoder::setClickedHotSpot(int id) {
 ///////////////////////////////
 // INTERACTIVITY
 //////////////////////////////
+
+void QuickTimeDecoder::handleQuit() {
+	if (_repeatTimerActive) {
+		_repeatTimerActive = false;
+		g_system->getTimerManager()->removeTimerProc(&repeatCallback);
+	}
+}
 
 void QuickTimeDecoder::handleMouseMove(int16 x, int16 y) {
 	if (_qtvrType == QTVRType::OBJECT)
@@ -1156,6 +1645,13 @@ void QuickTimeDecoder::handlePanoMouseButton(bool isDown, int16 x, int16 y, bool
 		}
 	}
 
+	// This line is necessary to let the decodeNextFrame() function know that the _isMouseButtonDown
+	// variable has been updated, otherwise, it won't call projectPanorama() function
+	if (!isDown) {
+		PanoTrackHandler *track = (PanoTrackHandler *)getTrack(_panoTrack->targetTrack);
+		track->setDirty();
+	}
+
 	// Further we have simulated mouse button which are generated by timer, e.g. those
 	// are used for dragging
 	if (!repeat)
@@ -1179,10 +1675,11 @@ void QuickTimeDecoder::handlePanoMouseButton(bool isDown, int16 x, int16 y, bool
 }
 
 void QuickTimeDecoder::handleKey(Common::KeyState &state, bool down, bool repeat) {
-	if (_qtvrType == QTVRType::OBJECT)
+	if (_qtvrType == QTVRType::OBJECT) {
 		handleObjectKey(state, down, repeat);
-	else if (_qtvrType == QTVRType::PANORAMA)
+	} else if (_qtvrType == QTVRType::PANORAMA) {
 		handlePanoKey(state, down, repeat);
+	}
 
 	if (down) {
 		_lastKey = state;
@@ -1224,6 +1721,9 @@ void QuickTimeDecoder::handleObjectKey(Common::KeyState &state, bool down, bool 
 }
 
 void QuickTimeDecoder::handlePanoKey(Common::KeyState &state, bool down, bool repeat) {
+	PanoTrackHandler *track = (PanoTrackHandler *)getTrack(_panoTrack->targetTrack);
+	track->setDirty();
+
 	if ((state.flags & Common::KBD_SHIFT) && (state.flags & Common::KBD_CTRL)) {
 		_zoomState = kZoomQuestion;
 	} else if (state.flags & Common::KBD_SHIFT) {
@@ -1240,8 +1740,10 @@ void QuickTimeDecoder::handlePanoKey(Common::KeyState &state, bool down, bool re
 		_zoomState = kZoomNone;
 	}
 
-	if (state.keycode == Common::KEYCODE_h && down && !repeat)
-		renderHotspots(!_renderHotspots);
+	if (state.keycode == Common::KEYCODE_h && down && !repeat) {
+		if (track->_constructedHotspots)
+			renderHotspots(!_renderHotspots);
+	}
 }
 
 enum {
@@ -1405,7 +1907,8 @@ void QuickTimeDecoder::updateQTVRCursor(int16 x, int16 y) {
 		} else {
 			int res = 0;
 			PanoSampleDesc *desc = (PanoSampleDesc *)_panoTrack->sampleDescs[0];
-			bool pano360 = !(desc->_hPanStart != desc->_hPanStart && (desc->_hPanStart != 0.0 || desc->_hPanStart != 360.0));
+			bool pano360 = !(desc->_hPanStart != desc->_hPanEnd && (desc->_hPanStart != 0.0 || desc->_hPanEnd != 360.0));
+			debugC(4, kDebugLevelGVideo, "pano360: %d _panAngle: %f [%f - %f] +%f  -%f fov: %f hfov: %f", pano360, _panAngle, desc->_hPanStart, desc->_hPanEnd, desc->_hPanStart + _fov, desc->_hPanEnd - _fov, _fov, _hfov);
 
 			// left
 			if (x < _mouseDrag.x - sensitivity) {
@@ -1413,7 +1916,7 @@ void QuickTimeDecoder::updateQTVRCursor(int16 x, int16 y) {
 				res <<= 1;
 
 				// left stop
-				if (!pano360 && _panAngle <= desc->_hPanStart + _hfov / 2)
+				if (!pano360 && _panAngle >= desc->_hPanEnd - _hfov)
 					res |= 1;
 				res <<= 1;
 			} else {
@@ -1426,7 +1929,7 @@ void QuickTimeDecoder::updateQTVRCursor(int16 x, int16 y) {
 				res <<= 1;
 
 				// right stop
-				if (!pano360 && _panAngle >= desc->_hPanEnd - _hfov / 2)
+				if (!pano360 && _panAngle <= desc->_hPanStart + _hfov)
 					res |= 1;
 				res <<= 1;
 			} else {
@@ -1476,9 +1979,6 @@ void QuickTimeDecoder::cleanupCursors() {
 }
 
 void QuickTimeDecoder::setCursor(int curId) {
-	if (_currentQTVRCursor == curId)
-		return;
-
 	_currentQTVRCursor = curId;
 
 	if (!_dataBundle) {

@@ -19,15 +19,30 @@
  *
  */
 
-//=============================================================================
-//
-// Implementation from acfonts.cpp specific to Engine runtime
-//
-//=============================================================================
+#ifndef AWE_RESOURCE_NTH_H
+#define AWE_RESOURCE_NTH_H
 
-//include <alfont.h>
-#include "ags/shared/ac/game_setup_struct.h"
+#include "awe/intern.h"
 
-namespace AGS3 {
+namespace Awe {
 
-} // namespace AGS3
+struct ResourceNth {
+	virtual ~ResourceNth() {
+	}
+
+	virtual bool init() = 0;
+	virtual uint8 *load(const char *name) = 0;
+	virtual uint8 *loadBmp(int num) = 0;
+	virtual void preloadDat(int part, int type, int num) {}
+	virtual uint8 *loadDat(int num, uint8 *dst, uint32 *size) = 0;
+	virtual uint8 *loadWav(int num, uint8 *dst, uint32 *size) = 0;
+	virtual const char *getString(Language lang, int num) = 0;
+	virtual const char *getMusicName(int num) = 0;
+	virtual void getBitmapSize(int *w, int *h) = 0;
+
+	static ResourceNth *create(int edition);
+};
+
+} // namespace Awe
+
+#endif

@@ -22,6 +22,8 @@
 #ifndef DIRECTOR_CASTMEMBER_RICHTEXT_H
 #define DIRECTOR_CASTMEMBER_RICHTEXT_H
 
+#include "graphics/pixelformat.h"
+
 #include "director/types.h"
 #include "director/castmember/castmember.h"
 
@@ -32,6 +34,8 @@ public:
 	RichTextCastMember(Cast *cast, uint16 castId, Common::SeekableReadStreamEndian &stream, uint16 version);
 	RichTextCastMember(Cast *cast, uint16 castId, RichTextCastMember &source);
 	~RichTextCastMember();
+
+	CastMember *duplicate(Cast *cast, uint16 castId) override { return (CastMember *)(new RichTextCastMember(cast, castId, *this)); }
 
 	void load() override;
 
@@ -45,6 +49,7 @@ public:
 
 private:
 	Common::U32String _plainText;
+	Graphics::PixelFormat _pf32;
 	uint32 _foreColor;
 	uint32 _bgColor;
 	Picture *_picture;

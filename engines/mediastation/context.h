@@ -30,7 +30,6 @@
 #include "mediastation/datafile.h"
 #include "mediastation/assetheader.h"
 #include "mediastation/mediascript/function.h"
-#include "mediastation/mediascript/variable.h"
 
 namespace MediaStation {
 
@@ -63,13 +62,12 @@ public:
 	uint32 _subfileCount;
 	uint32 _fileSize;
 	Graphics::Palette *_palette = nullptr;
-	// TODO: Eliminate this screenAsset because the screen that this context
-	// represents is now an asset in itself.
-	AssetHeader *_screenAsset = nullptr;
+	Asset *_screenAsset = nullptr;
 
 	Asset *getAssetById(uint assetId);
 	Asset *getAssetByChunkReference(uint chunkReference);
 	Function *getFunctionById(uint functionId);
+	ScriptValue *getVariable(uint variableId);
 	void registerActiveAssets();
 
 private:
@@ -77,13 +75,15 @@ private:
 	// as it appears in the filename. For instance, the context in
 	// "100.cxt" would have file number 100.
 	uint _fileNumber = 0;
-	Common::String *_contextName = nullptr;
+	Common::String _contextName;
 
 	Common::HashMap<uint, Asset *> _assets;
 	Common::HashMap<uint, Function *> _functions;
 	Common::HashMap<uint, Asset *> _assetsByChunkReference;
+	Common::HashMap<uint, ScriptValue *> _variables;
 
 	void readParametersSection(Chunk &chunk);
+	void readVariable(Chunk &chunk);
 	void readOldStyleHeaderSections(Subfile &subfile, Chunk &chunk);
 	void readNewStyleHeaderSections(Subfile &subfile, Chunk &chunk);
 	bool readHeaderSection(Subfile &subfile, Chunk &chunk);

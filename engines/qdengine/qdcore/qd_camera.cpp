@@ -677,14 +677,14 @@ bool qdCamera::draw_grid() const {
 			if (_grid[cnt].height() || _grid[cnt].attributes()) {
 				color = 0;
 				if (_grid[cnt].attributes() & sGridCell::CELL_IMPASSABLE)
-					color = grDispatcher::make_rgb565u(0xff, 0x00, 0x00);
+					color = grDispatcher::instance()->make_rgb(0xff, 0x00, 0x00);
 				else if (_grid[cnt].attributes() & sGridCell::CELL_PERSONAGE_OCCUPIED)
-					color = grDispatcher::make_rgb565u(0xff, 0xff, 0x00);
+					color = grDispatcher::instance()->make_rgb(0xff, 0xff, 0x00);
 				else if (_grid[cnt].height())
-					color = grDispatcher::make_rgb565u(0xff, 0xff, 0xff);
+					color = grDispatcher::instance()->make_rgb(0xff, 0xff, 0xff);
 
 				if (_grid[cnt].attributes() & sGridCell::CELL_OCCUPIED)
-					color = grDispatcher::make_rgb565u(0x00, 0x00, 0xff);
+					color = grDispatcher::instance()->make_rgb(0x00, 0x00, 0xff);
 				if (_grid[cnt].attributes() & sGridCell::CELL_PERSONAGE_PATH)
 					warning("path");
 
@@ -1300,7 +1300,7 @@ bool qdCamera::is_walkable(const Vect2s &center_pos, const Vect2s &size, bool ig
 	debugC(3, kDebugMovement, "qdCamera::is_walkable(): attr: %d [%d, %d] size: [%d, %d], ignore_personages: %d", cells->attributes(), x0, y0, size.x, size.y, ignore_personages);
 
 	int attr = sGridCell::CELL_IMPASSABLE | sGridCell::CELL_OCCUPIED;
-	if (!ignore_personages) {
+	if (g_engine->_gameVersion > 20031206 && !ignore_personages) {
 		attr |= sGridCell::CELL_PERSONAGE_OCCUPIED;
 	 }
 

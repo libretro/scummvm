@@ -569,13 +569,32 @@ public:
 	void clearRegion(int x, int y, int w, int h, bool clearZ, int z,
 	                 bool clearColor, int r, int g, int b, bool clearStencil, int stencilValue);
 
-	void setScissorRectangle(const Common::Rect &rect) {
-		_clipRectangle = rect;
-		_enableScissor = true;
+	const Common::Rect &getClippingRectangle() const {
+		return _clipRectangle;
 	}
 
-	void resetScissorRectangle() {
-		_enableScissor = false;
+	void setupScissor(bool enable, const int (&scissor)[4], const Common::Rect *clippingRectangle) {
+		_clippingEnabled = enable || clippingRectangle;
+
+		if (enable && clippingRectangle) {
+			_clipRectangle = clippingRectangle->findIntersectingRect(Common::Rect(
+					scissor[0],
+					// all viewport calculations are already flipped upside down
+					_pbufHeight - scissor[1] - scissor[3],
+					scissor[0] + scissor[2],
+					_pbufHeight - scissor[1]));
+		} else if (enable) {
+			_clipRectangle = Common::Rect(
+					scissor[0],
+					// all viewport calculations are already flipped upside down
+					_pbufHeight - scissor[1] - scissor[3],
+					scissor[0] + scissor[2],
+					_pbufHeight - scissor[1]);
+		} else if (clippingRectangle) {
+			_clipRectangle = *clippingRectangle;
+		} else {
+			_clipRectangle = Common::Rect(0, 0, _pbufWidth, _pbufHeight);
+		}
 	}
 
 	void enableBlending(bool enable) {
@@ -770,7 +789,7 @@ private:
 	int _textureSizeMask;
 
 	Common::Rect _clipRectangle;
-	bool _enableScissor;
+	bool _clippingEnabled;
 
 	const TexelBuffer *_currentTexture;
 	uint _wrapS, _wrapT;

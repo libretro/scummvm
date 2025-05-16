@@ -2371,6 +2371,13 @@ void Scene342::postInit(SceneObjectList *OwnerList) {
 		}
 	}
 
+	// seagull
+	_object2.postInit();
+	_object2.setVisage(340);
+	_object2.setStrip(2);
+	_object2.animate(ANIM_MODE_2, NULL);
+	_object2._numFrames = 4;
+	_object2._moveDiff = Common::Point(2, 2);
 	switch (BF_GLOBALS._randomSource.getRandomNumber(2)) {
 	case 0:
 		_object2.setPosition(Common::Point(46, 59));
@@ -5262,10 +5269,14 @@ void Scene385::Action1::signal() {
 		case 3857:
 		case 3863:
 		case 3866: {
+			// NOTE: The 3866 seems unused (Hayley says "You know where to find me if you need me")
 			ADD_PLAYER_MOVER(187, 144);
 			break;
 		}
 		default: {
+			// Used in potentially untriggered 3868 (_talkAction value) case.
+			// Jake and Hayley greeting each other using their first names,
+			// but Jake walks up to Jim's location - a  bug?
 			ADD_PLAYER_MOVER(231, 158);
 			break;
 		}
@@ -5279,7 +5290,8 @@ void Scene385::Action1::signal() {
 		scene->_stripManager.start(scene->_talkAction, this);
 		break;
 	case 3:
-		if (scene->_talkAction)
+		// Hayley only points to her left (at Jim) when asked about the blueprints
+		if (scene->_talkAction == 3863)
 			scene->_dezi.animate(ANIM_MODE_5, NULL);
 		BF_GLOBALS._player.enableControl();
 		remove();
@@ -5294,6 +5306,7 @@ void Scene385::Action2::signal() {
 
 	switch (_actionIndex++) {
 	case 0: {
+		BF_GLOBALS._player.disableControl();
 		ADD_PLAYER_MOVER(231, 158);
 		break;
 	}
@@ -5363,7 +5376,9 @@ bool Scene385::Jim::startAction(CursorType action, Event &event) {
 				break;
 			default:
 				BF_GLOBALS._deziTopic = 3;
-				scene->_talkAction = 3868;
+				// Is this ever triggered? It would require a day number > 4
+				// In 3862 (more banter talk) Jake asks "How's life treating you today, Jim?"
+				scene->_talkAction = 3862;
 				break;
 			}
 
@@ -5395,7 +5410,6 @@ bool Scene385::Dezi::startAction(CursorType action, Event &event) {
 		if (BF_GLOBALS._deziTopic == 3) {
 			scene->_talkAction = 3857;
 		} else {
-			BF_GLOBALS._deziTopic = 3;
 
 			switch (BF_GLOBALS._dayNumber) {
 			case 1:
@@ -5427,6 +5441,8 @@ bool Scene385::Dezi::startAction(CursorType action, Event &event) {
 				scene->_talkAction = 3856;
 				break;
 			default:
+				// Is this ever triggered? It would require a day number > 4
+				// In 3868 Jake and Hayley are greeting each other using their first names.
 				BF_GLOBALS._deziTopic = 3;
 				scene->_talkAction = 3868;
 				break;

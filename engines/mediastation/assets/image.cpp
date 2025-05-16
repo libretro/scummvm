@@ -40,24 +40,26 @@ Image::~Image() {
 	_bitmap = nullptr;
 }
 
-Operand Image::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args) {
+ScriptValue Image::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) {
+	ScriptValue returnValue;
+
 	switch (methodId) {
 	case kSpatialShowMethod: {
 		assert(args.empty());
 		spatialShow();
-		return Operand();
+		return returnValue;
 	}
 
 	case kSpatialHideMethod: {
 		assert(args.empty());
 		spatialHide();
-		return Operand();
+		return returnValue;
 	}
 
 	case kSetDissolveFactorMethod: {
 		assert(args.size() == 1);
 		warning("Image::callMethod(): setDissolveFactor not implemented yet");
-		return Operand();
+		return returnValue;
 	}
 
 	case kSpatialMoveToMethod: {
@@ -68,8 +70,8 @@ Operand Image::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args) 
 		g_engine->_dirtyRects.push_back(bbox);
 
 		// Update location and mark new location dirty.
-		int newXAdjust = args[0].getInteger();
-		int newYAdjust = args[1].getInteger();
+		int newXAdjust = static_cast<int>(args[0].asFloat());
+		int newYAdjust = static_cast<int>(args[1].asFloat());
 		if (_xAdjust != newXAdjust || _yAdjust != newYAdjust) {
 			_xAdjust = newXAdjust;
 			_yAdjust = newYAdjust;
@@ -78,7 +80,7 @@ Operand Image::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args) 
 			g_engine->_dirtyRects.push_back(bbox);
 		}
 
-		return Operand();
+		return returnValue;
 	}
 
 	default:
@@ -116,7 +118,7 @@ void Image::spatialHide() {
 }
 
 Common::Point Image::getLeftTop() {
-	return Common::Point(_header->_x + _header->_boundingBox->left + _xAdjust, _header->_y + _header->_boundingBox->top + _yAdjust);
+	return Common::Point(_header->_x + _header->_boundingBox.left + _xAdjust, _header->_y + _header->_boundingBox.top + _yAdjust);
 }
 
 void Image::readChunk(Chunk &chunk) {

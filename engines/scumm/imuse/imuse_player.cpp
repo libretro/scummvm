@@ -1111,14 +1111,18 @@ void Player::metaEvent(byte type, byte *msg, uint16 len) {
 static void syncWithSerializer(Common::Serializer &s, ParameterFader &pf) {
 	s.syncAsSint16LE(pf.param, VER(17));
 	if (s.isLoading() && s.getVersion() < 116) {
-		int16 start, end;
-		uint32 tt, ct;
+		int16 start = 0, end = 0;
+		uint32 tt = 0, ct = 0;
 		s.syncAsSint16LE(start, VER(17));
 		s.syncAsSint16LE(end, VER(17));
 		s.syncAsUint32LE(tt, VER(17));
 		s.syncAsUint32LE(ct, VER(17));
 		int32 diff = end - start;
 		if (pf.param && diff && tt) {
+			if (tt < 10000) {
+				tt = 10000;
+				ct = tt - diff;
+			}
 			pf.dir = diff / ABS<int>(diff);
 			pf.incr = diff / (tt / 10000);
 			pf.ifrac = ABS<int>(diff) % (tt / 10000);

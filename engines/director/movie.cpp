@@ -418,6 +418,40 @@ Archive *Movie::loadExternalCastFrom(Common::Path &filename) {
 	return externalCast;
 }
 
+bool Movie::loadCastLibFrom(uint16 libId, Common::Path &filename) {
+	if (_casts.contains(libId)) {
+		Cast *cast = _casts[libId];
+		if (cast->getArchive()->getPathName() == filename) {
+			// CastLib is already loaded, change nothing
+			return false;
+		}
+	}
+
+	Archive *castArchive = loadExternalCastFrom(filename);
+	if (!castArchive) {
+		return false;
+	}
+
+	uint16 libResourceId = 1024;
+	Common::String name;
+	if (_casts.contains(libId)) {
+		Cast *cast = _casts[libId];
+		libResourceId = cast->_libResourceId;
+		name = cast->getCastName();
+		delete cast;
+		_casts.erase(libId);
+	}
+
+	Cast *cast = new Cast(this, libId, false, true, libResourceId);
+	cast->setArchive(castArchive);
+	cast->loadConfig();
+	cast->loadCast();
+
+	_casts.setVal(libId, cast);
+	_score->refreshPointersForCastLib(libId);
+	return true;
+}
+
 CastMember *Movie::getCastMember(CastMemberID memberID) {
 	CastMember *result = nullptr;
 	if (_casts.contains(memberID.castLib)) {
@@ -531,6 +565,21 @@ int Movie::getCastLibIDByName(const Common::String &name) {
 		}
 	}
 	return -1;
+}
+
+void Movie::setCastLibName(const Common::String &name, int castLib) {
+	if (!_casts.contains(castLib)) {
+		warning("Movie::setCastLibName: castLib %d not found", castLib);
+		return;
+	}
+	for (auto &it : _castNames) {
+		if (it._value == castLib) {
+			_castNames.erase(it._key);
+		}
+	}
+
+	_castNames[name] = castLib;
+	_casts[castLib]->setCastName(name);
 }
 
 CastMemberID Movie::getCastMemberIDByName(const Common::String &name) {

@@ -94,6 +94,7 @@ enum AGOSAction {
 	kActionToggleHitboxName,
 	kActionToggleSoundEffects,
 	kActionToggleBackgroundSound,
+	kActionToggleFightMode,
 	kActionShowObjects,
 	kActionTextSpeedFast,
 	kActionTextSpeedMedium,
@@ -1371,6 +1372,7 @@ protected:
 	int countSaveGames();
 
 	virtual Common::String genSaveName(int slot) const;
+	void enterSaveLoadScreen(bool entering);
 };
 
 class AGOSEngine_PN : public AGOSEngine {

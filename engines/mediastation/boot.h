@@ -31,67 +31,45 @@
 
 namespace MediaStation {
 
-// Contains information about the engine (also called
-//  "title compiler") used in this particular game.
-// Engine version information is not present in early games.
-class VersionInfo {
-public:
-	VersionInfo(Chunk &chunk);
-	~VersionInfo();
-
-	// The version number of this engine,
-	// in the form 4.0r8 (major . minor r revision).
-	uint32 _majorVersion = 0;
-	uint32 _minorVersion = 0;
-	uint32 _revision = 0;
-
-	// A textual description of this engine.
-	// Example: "Title Compiler T4.0r8 built Feb 13 1998 10:16:52"
-	//           ^^^^^^^^^^^^^^  ^^^^^
-	//           | Engine name   | Version number
-	Common::String *string = nullptr;
-};
-
 enum ContextDeclarationSectionType {
 	kContextDeclarationEmptySection = 0x0000,
 	kContextDeclarationPlaceholder = 0x0003,
-	kContextDeclarationFileNumber1 = 0x0004,
-	kContextDeclarationFileNumber2 = 0x0005,
-	kContextDeclarationFileReference = 0x0006,
+	kContextDeclarationContextId = 0x0004,
+	kContextDeclarationStreamId = 0x0005,
+	kContextDeclarationParentContextId = 0x0006,
 	kContextDeclarationName = 0x0bb8
 };
 
 class ContextDeclaration {
 public:
 	ContextDeclaration(Chunk &chunk);
-	~ContextDeclaration();
+	ContextDeclaration() {};
 
-	Common::Array<uint32> _fileReferences;
-	uint32 _fileNumber = 0;
-	Common::String *_contextName = nullptr;
-	// Signal that there are no more declarations to read.
-	bool _isLast = false;
+	uint _contextId = 0;
+	uint _streamId = 0;
+	Common::String _name;
+	Common::Array<uint> _parentContextIds;
 
 private:
 	ContextDeclarationSectionType getSectionType(Chunk &chunk);
 };
 
-enum UnknownDeclarationSectionType {
-	kUnknownDeclarationEmptySection = 0x0000,
-	kUnknownDeclarationUnk1 = 0x0009,
-	kUnknownDeclarationUnk2 = 0x0004
+enum ScreenDeclarationSectionType {
+	kScreenDeclarationEmpty = 0x0000,
+	kScreenDeclarationAssetId = 0x0009,
+	kScreenDeclarationScreenId = 0x0004
 };
 
-class UnknownDeclaration {
+class ScreenDeclaration {
 public:
-	uint16 _unk = 0;
-	// Signal that there are no more declarations to read.
-	bool _isLast = false;
+	ScreenDeclaration(Chunk &chunk);
+	ScreenDeclaration() {};
 
-	UnknownDeclaration(Chunk &chunk);
+	uint _assetId = 0;
+	uint _screenId = 0;
 
 private:
-	UnknownDeclarationSectionType getSectionType(Chunk& chunk);
+	ScreenDeclarationSectionType getSectionType(Chunk& chunk);
 };
 
 enum FileDeclarationSectionType {
@@ -103,6 +81,7 @@ enum FileDeclarationSectionType {
 // Indicates where a file is intended to be stored.
 // NOTE: This might not be correct and this might be a more general "file type".
 enum IntendedFileLocation {
+	kFileLocationEmpty = 0x0000,
 	// Usually all files that have numbers remain on the CD-ROM.
 	kFileIntendedOnCdRom = 0x0007,
 	// These UNKs only appear in George Shrinks.
@@ -115,13 +94,11 @@ enum IntendedFileLocation {
 class FileDeclaration {
 public:
 	FileDeclaration(Chunk &chunk);
-	~FileDeclaration();
+	FileDeclaration() {};
 
-	uint32 _id = 0;
-	IntendedFileLocation _intendedLocation;
-	Common::String *_name = nullptr;
-	// Signal that there are no more declarations to read.
-	bool _isLast = false;
+	uint _id = 0;
+	IntendedFileLocation _intendedLocation = kFileLocationEmpty;
+	Common::String _name;
 
 private:
 	FileDeclarationSectionType getSectionType(Chunk &chunk);
@@ -137,12 +114,11 @@ enum SubfileDeclarationSectionType {
 class SubfileDeclaration {
 public:
 	SubfileDeclaration(Chunk &chunk);
+	SubfileDeclaration() {};
 
-	uint16 _assetId = 0;
-	uint16 _fileId = 0;
-	uint32 _startOffsetInFile = 0;
-	// Signal that there are no more context declarations to read.
-	bool _isLast = false;
+	uint _assetId = 0;
+	uint _fileId = 0;
+	uint _startOffsetInFile = 0;
 
 private:
 	SubfileDeclarationSectionType getSectionType(Chunk &chunk);
@@ -152,20 +128,20 @@ private:
 class CursorDeclaration {
 public:
 	CursorDeclaration(Chunk &chunk);
-	~CursorDeclaration();
+	CursorDeclaration() {};
 
-	uint16 _id = 0;
-	uint16 _unk = 0;
-	Common::String *_name = nullptr;
+	uint _id = 0;
+	uint _unk = 0;
+	Common::String _name;
 };
 
 class EngineResourceDeclaration {
 public:
-	Common::String *_resourceName = nullptr;
-	int _resourceId = 0;
+	EngineResourceDeclaration(Common::String resourceName, int resourceId) : _name(resourceName), _id(resourceId) {};
+	EngineResourceDeclaration() {};
 
-	EngineResourceDeclaration(Common::String *resourceName, int resourceId);
-	~EngineResourceDeclaration();
+	Common::String _name;
+	int _id = 0;
 };
 
 enum BootSectionType {
@@ -178,7 +154,7 @@ enum BootSectionType {
 	kBootUnk3 = 0x0193,
 	kBootEngineResource = 0x0bba,
 	kBootEngineResourceId = 0x0bbb,
-	kBootUnknownDeclaration = 0x0007,
+	kBootScreenDeclaration = 0x0007,
 	kBootFileDeclaration = 0x000a,
 	kBootSubfileDeclaration = 0x000b,
 	kBootUnk5 = 0x000c,
@@ -194,15 +170,16 @@ private:
 	BootSectionType getSectionType(Chunk &chunk);
 
 public:
-	Common::String *_gameTitle = nullptr;
-	VersionInfo *_versionInfo = nullptr;
-	Common::String *_sourceString = nullptr;
-	Common::HashMap<uint32, ContextDeclaration *> _contextDeclarations;
-	Common::Array<UnknownDeclaration *> _unknownDeclarations;
-	Common::HashMap<uint32, FileDeclaration *> _fileDeclarations;
-	Common::HashMap<uint32, SubfileDeclaration *> _subfileDeclarations;
-	Common::HashMap<uint32, CursorDeclaration *> _cursorDeclarations;
-	Common::HashMap<uint32, EngineResourceDeclaration *> _engineResourceDeclarations;
+	Common::String _gameTitle;
+	VersionInfo _versionInfo;
+	Common::String _engineInfo;
+	Common::String _sourceString;
+	Common::HashMap<uint32, ContextDeclaration> _contextDeclarations;
+	Common::HashMap<uint32, ScreenDeclaration> _screenDeclarations;
+	Common::HashMap<uint32, FileDeclaration> _fileDeclarations;
+	Common::HashMap<uint32, SubfileDeclaration> _subfileDeclarations;
+	Common::HashMap<uint32, CursorDeclaration> _cursorDeclarations;
+	Common::HashMap<uint32, EngineResourceDeclaration> _engineResourceDeclarations;
 
 	uint32 _entryContextId = 0;
 	bool _allowMultipleSounds = false;

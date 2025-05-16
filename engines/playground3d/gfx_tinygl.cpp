@@ -189,6 +189,19 @@ void TinyGLRenderer::enableFog(const Math::Vector4d &fogColor) {
 	tglEnable(TGL_FOG);
 }
 
+void TinyGLRenderer::disableFog() {
+	tglDisable(TGL_FOG);
+}
+
+void TinyGLRenderer::enableScissor(int x, int y, int width, int height) {
+	tglScissor(x, y, width, height);
+	tglEnable(TGL_SCISSOR_TEST);
+}
+
+void TinyGLRenderer::disableScissor() {
+	tglDisable(TGL_SCISSOR_TEST);
+}
+
 void TinyGLRenderer::drawFace(uint face) {
 	tglBegin(TGL_TRIANGLE_STRIP);
 	for (uint i = 0; i < 4; i++) {
@@ -206,6 +219,12 @@ void TinyGLRenderer::drawCube(const Math::Vector3d &pos, const Math::Vector3d &r
 	tglMatrixMode(TGL_MODELVIEW);
 	tglLoadMatrixf(_modelViewMatrix.getData());
 
+	tglDisable(TGL_BLEND);
+	tglBlendFunc(TGL_ONE, TGL_ZERO);
+	tglEnable(TGL_DEPTH_TEST);
+	tglDepthMask(TGL_TRUE);
+	tglDisable(TGL_TEXTURE_2D);
+
 	tglTranslatef(pos.x(), pos.y(), pos.z());
 	tglRotatef(roll.x(), 1.0f, 0.0f, 0.0f);
 	tglRotatef(roll.y(), 0.0f, 1.0f, 0.0f);
@@ -222,6 +241,12 @@ void TinyGLRenderer::drawPolyOffsetTest(const Math::Vector3d &pos, const Math::V
 
 	tglMatrixMode(TGL_MODELVIEW);
 	tglLoadMatrixf(_modelViewMatrix.getData());
+
+	tglDisable(TGL_BLEND);
+	tglBlendFunc(TGL_ONE, TGL_ZERO);
+	tglEnable(TGL_DEPTH_TEST);
+	tglDepthMask(TGL_TRUE);
+	tglDisable(TGL_TEXTURE_2D);
 
 	tglTranslatef(pos.x(), pos.y(), pos.z());
 	tglRotatef(roll.y(), 0.0f, 1.0f, 0.0f);
@@ -317,9 +342,9 @@ void TinyGLRenderer::drawInViewport() {
 	tglPushMatrix();
 	_pos.x() += 0.01f;
 	_pos.y() += 0.01f;
-	if (_pos.x() >= 1.0f) {
-		_pos.x() = -1.0;
-		_pos.y() = -1.0;
+	if (_pos.x() >= 1.1f) {
+		_pos.x() = -1.1f;
+		_pos.y() = -1.1f;
 	}
 	tglTranslatef(_pos.x(), _pos.y(), 0);
 

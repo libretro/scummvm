@@ -31,6 +31,8 @@ public:
 
 	Common::Error createInstance(OSystem *syst, Engine **engine, const ADGameDescription *desc) const override;
 
+	GUI::OptionsContainerWidget *buildEngineOptionsWidget(GUI::GuiObject *boss, const Common::String &name, const Common::String &target) const override;
+
 	/**
 	 * Determine whether the engine supports the specified MetaEngine feature.
 	 *

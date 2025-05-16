@@ -20,9 +20,13 @@
  */
 
 #include "engines/advancedDetector.h"
+#include "backends/keymapper/action.h"
+#include "backends/keymapper/keymapper.h"
+#include "backends/keymapper/standard-actions.h"
 #include "common/system.h"
 #include "common/savefile.h"
 #include "common/textconsole.h"
+#include "common/translation.h"
 #include "graphics/thumbnail.h"
 #include "graphics/surface.h"
 
@@ -70,6 +74,7 @@ public:
 	SaveStateList listSaves(const char *target) const override;
 	SaveStateDescriptor querySaveMetaInfos(const char *target, int slot) const override;
 	bool removeSaveState(const char *target, int slot) const override;
+	Common::KeymapArray initKeymaps(const char *target) const override;
 };
 
 Common::Error EfhMetaEngine::createInstance(OSystem *syst, Engine **engine, const ADGameDescription *gd) const {
@@ -190,6 +195,99 @@ SaveStateDescriptor EfhMetaEngine::querySaveMetaInfos(const char *target, int sl
 bool EfhMetaEngine::removeSaveState(const char *target, int slot) const {
 	Common::String fileName = Common::String::format("%s.%03d", target, slot);
 	return g_system->getSavefileManager()->removeSavefile(fileName);
+}
+
+Common::KeymapArray EfhMetaEngine::initKeymaps(const char *target) const {
+	using namespace Common;
+
+	Keymap *keymap = new Keymap(Keymap::kKeymapTypeGame, "efh", _("Game keymappings"));
+
+	Action *act;
+
+	act = new Action(kStandardActionLeftClick, _("Left click"));
+	act->setLeftClickEvent();
+	act->addDefaultInputMapping("MOUSE_LEFT");
+	act->addDefaultInputMapping("JOY_A");
+	keymap->addAction(act);
+
+	act = new Action(kStandardActionRightClick, _("Right click"));
+	act->setRightClickEvent();
+	act->addDefaultInputMapping("MOUSE_RIGHT");
+	act->addDefaultInputMapping("JOY_B");
+	keymap->addAction(act);
+
+	act = new Action(kStandardActionSave, _("Save game"));
+	act->setCustomEngineActionEvent(kActionSave);
+	act->addDefaultInputMapping("F5");
+	act->addDefaultInputMapping("JOY_LEFT_SHOULDER");
+	keymap->addAction(act);
+
+	act = new Action(kStandardActionLoad, _("Load game"));
+	act->setCustomEngineActionEvent(kActionLoad);
+	act->addDefaultInputMapping("F7");
+	act->addDefaultInputMapping("JOY_RIGHT_SHOULDER");
+	keymap->addAction(act);
+
+	act = new Action("MOVEUP", _("Move up"));
+	act->setCustomEngineActionEvent(kActionMoveUp);
+	act->addDefaultInputMapping("UP");
+	act->addDefaultInputMapping("JOY_UP");
+	keymap->addAction(act);
+
+	act = new Action("MOVEDOWN", _("Move down"));
+	act->setCustomEngineActionEvent(kActionMoveDown);
+	act->addDefaultInputMapping("DOWN");
+	act->addDefaultInputMapping("JOY_DOWN");
+	keymap->addAction(act);
+
+	act = new Action("MOVELEFT", _("Move left"));
+	act->setCustomEngineActionEvent(kActionMoveLeft);
+	act->addDefaultInputMapping("LEFT");
+	act->addDefaultInputMapping("JOY_LEFT");
+	keymap->addAction(act);
+
+	act = new Action("MOVERIGHT", _("Move right"));
+	act->setCustomEngineActionEvent(kActionMoveRight);
+	act->addDefaultInputMapping("RIGHT");
+	act->addDefaultInputMapping("JOY_RIGHT");
+	keymap->addAction(act);
+
+	act = new Action("MOVEUPLEFT", _("Move up left"));
+	act->setCustomEngineActionEvent(kActionMoveUpLeft);
+	act->addDefaultInputMapping("HOME");
+	keymap->addAction(act);
+
+	act = new Action("MOVEUPRIGHT", _("Move up right"));
+	act->setCustomEngineActionEvent(kActionMoveUpRight);
+	act->addDefaultInputMapping("PAGEUP");
+	keymap->addAction(act);
+
+	act = new Action("MOVEDOWNLEFT", _("Move down left"));
+	act->setCustomEngineActionEvent(kActionMoveDownLeft);
+	act->addDefaultInputMapping("END");
+	keymap->addAction(act);
+
+	act = new Action("MOVEDOWNRIGHT", _("Move down right"));
+	act->setCustomEngineActionEvent(kActionMoveDownRight);
+	act->addDefaultInputMapping("PAGEDOWN");
+	keymap->addAction(act);
+
+	act = new Action("CHARACTER1STATUS", _("Character 1 status"));
+	act->setCustomEngineActionEvent(kActionCharacter1Status);
+	act->addDefaultInputMapping("F1");
+	keymap->addAction(act);
+
+	act = new Action("CHARACTER2STATUS", _("Character 2 status"));
+	act->setCustomEngineActionEvent(kActionCharacter2Status);
+	act->addDefaultInputMapping("F2");
+	keymap->addAction(act);
+
+	act = new Action("CHARACTER3STATUS", _("Character 3 status"));
+	act->setCustomEngineActionEvent(kActionCharacter3Status);
+	act->addDefaultInputMapping("F3");
+	keymap->addAction(act);
+
+	return Keymap::arrayOf(keymap);
 }
 
 } // End of namespace Efh

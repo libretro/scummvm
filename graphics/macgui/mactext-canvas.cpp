@@ -19,6 +19,7 @@
  *
  */
 
+#include "common/debug.h"
 #include "common/tokenizer.h"
 #include "common/unicode-bidi.h"
 
@@ -68,6 +69,7 @@ void MacTextCanvas::chopChunk(const Common::U32String &str, int *curLinePtr, int
 		return;
 	}
 
+	// If maxWidth is not restricted (-1 means possibly invalid width), just append and return
 	if (maxWidth == -1) {
 		chunk->text += str;
 
@@ -82,9 +84,17 @@ void MacTextCanvas::chopChunk(const Common::U32String &str, int *curLinePtr, int
 
 	chunk->getFont()->wordWrapText(str, maxWidth, text, lineContinuations, w);
 
-	if (text.size() == 0) {
+	for (int i = 0; i < (int)text.size(); i++) {
+		D(9, "Line Continuations [%d] : %d", i, lineContinuations[i]);
+	}
+
+	if (text.empty()) {
 		D(5, "chopChunk: too narrow width, >%d", maxWidth);
-		chunk->text += str;
+
+		if (w < maxWidth) {
+			chunk->text += str;	// Only append if within bounds
+		}
+		
 		getLineCharWidth(curLine, true);
 
 		return;
@@ -95,7 +105,11 @@ void MacTextCanvas::chopChunk(const Common::U32String &str, int *curLinePtr, int
 	}
 
 	chunk->text += text[0];
-	_text[curLine].wordContinuation = lineContinuations[0];
+
+	// Ensure line continuations is valid before accesing index 0
+	if (!lineContinuations.empty()) {
+		_text[curLine].wordContinuation = lineContinuations[0];
+	}
 
 	// Recalc dims
 	getLineWidth(curLine, true);
@@ -107,8 +121,7 @@ void MacTextCanvas::chopChunk(const Common::U32String &str, int *curLinePtr, int
 		return;
 
 	// Now add rest of the chunks
-	MacFontRun newchunk = _text[curLine].chunks[curChunk];
-
+	MacFontRun newchunk = *chunk;
 	for (uint i = 1; i < text.size(); i++) {
 		newchunk.text = text[i];
 
@@ -241,7 +254,6 @@ const Common::U32String::value_type *MacTextCanvas::splitString(const Common::U3
 	int indentSize = 0;
 	int firstLineIndent = 0;
 	bool inTable = false;
-
 
 	bool lineBreakOnLineEnd = false;
 
@@ -739,6 +751,9 @@ void MacTextCanvas::render(int from, int to) {
 }
 
 int getStringMaxWordWidth(MacFontRun &format, const Common::U32String &str) {
+	if (str.empty()) 
+		return 0;
+	
 	if (format.plainByteMode()) {
 		Common::StringTokenizer tok(Common::convertFromU32String(str, format.getEncoding()));
 		int maxW = 0;
@@ -925,7 +940,6 @@ int MacTextCanvas::getLineWidth(int lineNum, bool enforce, int col) {
 		height = MAX(height, line->chunks[i].getFont()->getFontHeight());
 	}
 
-
 	line->width = width;
 	line->minWidth = minWidth;
 	line->height = height;
@@ -1029,16 +1043,23 @@ Common::U32String MacTextCanvas::getTextChunk(int startRow, int startCol, int en
 					continue;
 				}
 
+				Common::U32String nextChunk;
 				if (startCol <= 0) {
-					ADDFORMATTING();
-
-					if (endCol >= (int)_text[i].chunks[chunk].text.size())
-						res += _text[i].chunks[chunk].text;
-					else
-						res += _text[i].chunks[chunk].text.substr(0, endCol);
+					if (endCol >= (int)_text[i].chunks[chunk].text.size()) {
+						nextChunk = _text[i].chunks[chunk].text;
+					} else {
+						nextChunk = _text[i].chunks[chunk].text.substr(0, endCol);
+					}
 				} else if ((int)_text[i].chunks[chunk].text.size() > startCol) {
+					nextChunk = _text[i].chunks[chunk].text.substr(startCol, endCol - startCol);
+				}
+
+				if (!nextChunk.empty()) {
 					ADDFORMATTING();
-					res += _text[i].chunks[chunk].text.substr(startCol, endCol - startCol);
+					res += nextChunk;
+					if (debugLevelSet(5)) {
+						debugN(5, "MacTextCanvas::getTextChunk: row %d, startCol %d, endCol %d - %s\n", i, startCol, endCol, nextChunk.encode().c_str());
+					}
 				}
 
 				startCol -= _text[i].chunks[chunk].text.size();
@@ -1053,12 +1074,20 @@ Common::U32String MacTextCanvas::getTextChunk(int startRow, int startCol, int en
 				if (_text[i].chunks[chunk].text.empty()) // skip empty chunks
 					continue;
 
+				Common::U32String nextChunk;
+
 				if (startCol <= 0) {
-					ADDFORMATTING();
-					res += _text[i].chunks[chunk].text;
+					nextChunk = _text[i].chunks[chunk].text;
 				} else if ((int)_text[i].chunks[chunk].text.size() > startCol) {
+					nextChunk = _text[i].chunks[chunk].text.substr(startCol);
+				}
+
+				if (!nextChunk.empty()) {
 					ADDFORMATTING();
-					res += _text[i].chunks[chunk].text.substr(startCol);
+					res += nextChunk;
+					if (debugLevelSet(5)) {
+						debugN(5, "MacTextCanvas::getTextChunk: (topline) row %d, startCol %d, endCol %d - %s\n", i, startCol, endCol, nextChunk.encode().c_str());
+					}
 				}
 
 				startCol -= _text[i].chunks[chunk].text.size();
@@ -1071,12 +1100,21 @@ Common::U32String MacTextCanvas::getTextChunk(int startRow, int startCol, int en
 				if (_text[i].chunks[chunk].text.empty()) // skip empty chunks
 					continue;
 
-				ADDFORMATTING();
+				Common::U32String nextChunk;
 
-				if (endCol >= (int)_text[i].chunks[chunk].text.size())
-					res += _text[i].chunks[chunk].text;
-				else
-					res += _text[i].chunks[chunk].text.substr(0, endCol);
+				if (endCol >= (int)_text[i].chunks[chunk].text.size()) {
+					nextChunk = _text[i].chunks[chunk].text;
+				} else {
+					nextChunk = _text[i].chunks[chunk].text.substr(0, endCol);
+				}
+
+				if (!nextChunk.empty()) {
+					ADDFORMATTING();
+					res += nextChunk;
+					if (debugLevelSet(5)) {
+						debugN(5, "MacTextCanvas::getTextChunk: (endline) row %d, startCol %d, endCol %d - %s\n", i, startCol, endCol, nextChunk.encode().c_str());
+					}
+				}
 
 				endCol -= _text[i].chunks[chunk].text.size();
 
@@ -1091,6 +1129,9 @@ Common::U32String MacTextCanvas::getTextChunk(int startRow, int startCol, int en
 
 				ADDFORMATTING();
 				res += _text[i].chunks[chunk].text;
+				if (debugLevelSet(5)) {
+					debugN(5, "MacTextCanvas::getTextChunk: (midline) row %d, startCol %d, endCol %d - %s\n", i, startCol, endCol, _text[i].chunks[chunk].text.encode().c_str());
+				}
 			}
 
 			if (newlines && _text[i].paragraphEnd)

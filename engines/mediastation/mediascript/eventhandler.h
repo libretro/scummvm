@@ -25,7 +25,6 @@
 #include "common/str.h"
 
 #include "mediastation/datafile.h"
-#include "mediastation/datum.h"
 #include "mediastation/mediascript/codechunk.h"
 #include "mediastation/mediascript/scriptconstants.h"
 
@@ -36,14 +35,12 @@ public:
 	EventHandler(Chunk &chunk);
 	~EventHandler();
 
-	Operand execute(uint assetId);
+	ScriptValue execute(uint assetId);
+	Common::String getDebugHeader();
 	EventType _type;
-	EventHandlerArgumentType _argumentType;
-	Datum _argumentValue;
+	ScriptValue _argumentValue;
 
 private:
-	Common::String getDebugHeader(uint assetId);
-
 	CodeChunk *_code = nullptr;
 };
 

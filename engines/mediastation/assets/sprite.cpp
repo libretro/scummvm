@@ -19,7 +19,6 @@
  *
  */
 
-#include "mediastation/datum.h"
 #include "mediastation/assets/sprite.h"
 #include "mediastation/debugchannels.h"
 #include "mediastation/mediastation.h"
@@ -27,15 +26,10 @@
 namespace MediaStation {
 
 SpriteFrameHeader::SpriteFrameHeader(Chunk &chunk) : BitmapHeader(chunk) {
-	_index = Datum(chunk).u.i;
+	_index = chunk.readTypedUint16();
 	debugC(5, kDebugLoading, "SpriteFrameHeader::SpriteFrameHeader(): _index = 0x%x (@0x%llx)", _index, static_cast<long long int>(chunk.pos()));
-	_boundingBox = Datum(chunk, kDatumTypePoint2).u.point;
+	_boundingBox = chunk.readTypedPoint();
 	debugC(5, kDebugLoading, "SpriteFrameHeader::SpriteFrameHeader(): _boundingBox (@0x%llx)", static_cast<long long int>(chunk.pos()));
-}
-
-SpriteFrameHeader::~SpriteFrameHeader() {
-	delete _boundingBox;
-	_boundingBox = nullptr;
 }
 
 SpriteFrame::SpriteFrame(Chunk &chunk, SpriteFrameHeader *header) : Bitmap(chunk, header) {
@@ -47,11 +41,11 @@ SpriteFrame::~SpriteFrame() {
 }
 
 uint32 SpriteFrame::left() {
-	return _bitmapHeader->_boundingBox->x;
+	return _bitmapHeader->_boundingBox.x;
 }
 
 uint32 SpriteFrame::top() {
-	return _bitmapHeader->_boundingBox->y;
+	return _bitmapHeader->_boundingBox.y;
 }
 
 Common::Point SpriteFrame::topLeft() {
@@ -85,58 +79,59 @@ Sprite::~Sprite() {
 	_frames.clear();
 }
 
-Operand Sprite::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args) {
+ScriptValue Sprite::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) {
+	ScriptValue returnValue;
+
 	switch (methodId) {
 	case kSpatialShowMethod: {
 		assert(args.empty());
 		spatialShow();
-		return Operand();
+		return returnValue;
 	}
 
 	case kSpatialHideMethod: {
 		assert(args.empty());
 		spatialHide();
-		return Operand();
+		return returnValue;
 	}
 
 	case kTimePlayMethod: {
 		assert(args.empty());
 		timePlay();
-		return Operand();
+		return returnValue;
 	}
 
 	case kTimeStopMethod: {
 		assert(args.empty());
 		timeStop();
-		return Operand();
+		return returnValue;
 	}
 
 	case kMovieResetMethod: {
 		assert(args.empty());
 		movieReset();
-		return Operand();
+		return returnValue;
 	}
 
 	case kSetCurrentClipMethod: {
 		assert(args.size() <= 1);
-		if (args.size() == 1 && args[0].getInteger() != 0) {
-			error("Sprite::callMethod(): (%d) setClip() called with unhandled arg: %d", _header->_id, args[0].getInteger());
+		if (args.size() == 1 && args[0].asParamToken() != 0) {
+			error("Sprite::callMethod(): (%d) setClip() called with unhandled arg: %d", _header->_id, args[0].asParamToken());
 		}
 		setCurrentClip();
-		return Operand();
+		return returnValue;
 	}
 
 	case kSetSpriteFrameByIdMethod: {
 		assert(args.size() == 1);
-		uint32 externalFrameId = args[0].getInteger();
+		uint32 externalFrameId = args[0].asParamToken();
 		uint32 internalFrameId = _header->_spriteFrameMapping.getVal(externalFrameId);
 		showFrame(_frames[internalFrameId]);
-		return Operand();
+		return returnValue;
 	}
 
 	case kIsPlayingMethod: {
-		Operand returnValue(kOperandTypeLiteral1);
-		returnValue.putInteger(static_cast<int>(_isPlaying));
+		returnValue.setToBool(_isPlaying);
 		return returnValue;
 	}
 
@@ -149,8 +144,8 @@ Operand Sprite::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args)
 		}
 
 		// Update the location and mark the new location dirty.
-		int newXAdjust = args[0].getInteger();
-		int newYAdjust = args[1].getInteger();
+		int newXAdjust = static_cast<int>(args[0].asFloat());
+		int newYAdjust = static_cast<int>(args[1].asFloat());
 		if (_xAdjust != newXAdjust || _yAdjust != newYAdjust) {
 			debugC(5, kDebugGraphics, "Sprite::callMethod(): (%d) Moving sprite to (%d, %d)", _header->_id, newXAdjust, newYAdjust);
 			_xAdjust = newXAdjust;
@@ -160,7 +155,7 @@ Operand Sprite::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args)
 			}
 		}
 
-		return Operand();
+		return returnValue;
 	}
 
 	default:
@@ -311,7 +306,10 @@ void Sprite::updateFrameState() {
 		_currentFrameIndex = 0;
 		_nextFrameTime = 0;
 
-		runEventHandlerIfExists(kSpriteMovieEndEvent);
+		ScriptValue defaultSpriteClip;
+		const uint DEFAULT_SPRITE_CLIP_ID = 1200;
+		defaultSpriteClip.setToParamToken(DEFAULT_SPRITE_CLIP_ID);
+		runEventHandlerIfExists(kSpriteMovieEndEvent, defaultSpriteClip);
 	}
 }
 
@@ -324,7 +322,7 @@ void Sprite::redraw(Common::Rect &rect) {
 	Common::Rect areaToRedraw = bbox.findIntersectingRect(rect);
 	if (!areaToRedraw.isEmpty()) {
 		Common::Point originOnScreen(areaToRedraw.left, areaToRedraw.top);
-		areaToRedraw.translate(-_activeFrame->left() - _header->_boundingBox->left - _xAdjust, -_activeFrame->top() - _header->_boundingBox->top - _yAdjust);
+		areaToRedraw.translate(-_activeFrame->left() - _header->_boundingBox.left - _xAdjust, -_activeFrame->top() - _header->_boundingBox.top - _yAdjust);
 		areaToRedraw.clip(Common::Rect(0, 0, _activeFrame->width(), _activeFrame->height()));
 		g_engine->_screen->simpleBlitFrom(_activeFrame->_surface, areaToRedraw, originOnScreen);
 	}
@@ -347,7 +345,7 @@ Common::Rect Sprite::getActiveFrameBoundingBox() {
 	// The frame dimensions are relative to those of the sprite movie.
 	// So we must get the absolute coordinates.
 	Common::Rect bbox = _activeFrame->boundingBox();
-	bbox.translate(_header->_boundingBox->left + _xAdjust, _header->_boundingBox->top + _yAdjust);
+	bbox.translate(_header->_boundingBox.left + _xAdjust, _header->_boundingBox.top + _yAdjust);
 	return bbox;
 }
 

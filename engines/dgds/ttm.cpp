@@ -371,6 +371,7 @@ static void _doScroll(Graphics::ManagedSurface &compBuf, int16 dir, int16 steps,
 		screen = g_system->lockScreen();
 	}
 	g_system->unlockScreen();
+	screenCopy.free();
 }
 
 void TTMInterpreter::doWipeOp(uint16 code, const TTMEnviro &env, const TTMSeq &seq, const Common::Rect &r) {
@@ -612,6 +613,7 @@ void TTMInterpreter::doDrawSpriteOp(const TTMEnviro &env, const TTMSeq &seq, uin
 
 void TTMInterpreter::doFadeOutOp(int16 colorno, int16 ncolors, int16 targetcol, int16 speed) {
 	if (speed == 0) {
+		// Immediately fade to black.
 		_vm->getGamePals()->clearPalette();
 	} else {
 		// The original tight-loops here with 640 steps and i/10 as the fade level..

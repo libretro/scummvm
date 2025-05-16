@@ -117,7 +117,6 @@ void Texture::create() {
 
 	// Set up all texture parameters.
 	bind();
-	GL_CALL(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
 	GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, _glFilter));
 	GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, _glFilter));
 	if (OpenGLContext.textureEdgeClampSupported) {
@@ -210,16 +209,9 @@ void Texture::updateArea(const Common::Rect &area, const Graphics::Surface &src)
 	//
 	// 3) Use glTexSubImage2D per line changed. This is what the old OpenGL
 	//    graphics manager did but it is much slower! Thus, we do not use it.
+	GL_CALL(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
 	GL_CALL(glTexSubImage2D(GL_TEXTURE_2D, 0, 0, area.top, src.w, area.height(),
 	                       _glFormat, _glType, src.getBasePtr(0, area.top)));
-}
-
-const Graphics::PixelFormat Texture::getRGBAPixelFormat() {
-#ifdef SCUMM_BIG_ENDIAN
-	return Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0);
-#else
-	return Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24);
-#endif
 }
 
 } // End of namespace OpenGL

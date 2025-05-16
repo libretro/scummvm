@@ -75,12 +75,23 @@ void grDispatcher::putSpr_a(int x, int y, int sx, int sy, const byte *p, int mod
 			uint32 a = src_data[3];
 
 			if (a != 255 && clipCheck(x + j, y + i)) {
-				if (a) {
-					uint16 sc;
-					getPixel(x + j, y + i, sc);
-					setPixel(x + j, y + i, alpha_blend_565(make_rgb565u(src_data[2], src_data[1], src_data[0]), sc, a));
-				} else
-					setPixel(x + j, y + i, make_rgb565u(src_data[2], src_data[1], src_data[0]));
+				if (_pixel_format == GR_RGB565) {
+					if (a) {
+						uint16 sc;
+						getPixel(x + j, y + i, sc);
+						setPixel(x + j, y + i, alpha_blend_565(make_rgb565u(src_data[2], src_data[1], src_data[0]), sc, a));
+					} else
+						setPixel(x + j, y + i, make_rgb565u(src_data[2], src_data[1], src_data[0])); 
+				} else {
+					byte sr, sg, sb;
+					getPixel(x + j, y + i, sr, sg, sb);
+
+					uint32 r = src_data[2] + ((a * sr) >> 8);
+					uint32 g = src_data[1] + ((a * sg) >> 8);
+					uint32 b = src_data[0] + ((a * sb) >> 8);
+
+					setPixelFast(x + j, y + i, r, g, b);
+				}
 			}
 			fx += dx;
 		}
@@ -119,19 +130,42 @@ void grDispatcher::putSpr(int x, int y, int sx, int sy, const byte *p, int mode,
 		x1 = 0;
 		ix = -1;
 	}
-	const uint16 *src = reinterpret_cast<const uint16 *>(p);
+	if (_pixel_format == GR_RGB565) {
+		const uint16 *src = reinterpret_cast<const uint16 *>(p);
 
-	for (int i = y0; i != y1; i += iy) {
-		const uint16 *line_src = src + ((fy >> 16) * sx);
+		for (int i = y0; i != y1; i += iy) {
+			const uint16 *line_src = src + ((fy >> 16) * sx);
 
-		fy += dy;
-		fx = (1 << 15);
+			fy += dy;
+			fx = (1 << 15);
 
-		for (int j = x0; j != x1; j += ix) {
-			uint32 cl = line_src[fx >> 16];
-			if (cl)
-				setPixel(x + j, y + i, cl);
-			fx += dx;
+			for (int j = x0; j != x1; j += ix) {
+				uint32 cl = line_src[fx >> 16];
+				if (cl)
+					setPixel(x + j, y + i, cl);
+				fx += dx;
+			}
+		}
+	} else {
+		int sx3 = sx * 3;
+		for (int i = y0; i != y1; i += iy) {
+			const byte *line_src = p + ((fy >> 16) * sx3);
+
+			fy += dy;
+			fx = (1 << 15);
+
+			for (int j = x0; j != x1; j += ix) {
+				int idx = (fx >> 16) * 3;
+
+				uint32 r = line_src[idx + 2];
+				uint32 g = line_src[idx + 1];
+				uint32 b = line_src[idx + 0];
+
+				if (r || g || b)
+					setPixel(x + j, y + i, r, g, b);
+
+				fx += dx;
+			}
 		}
 	}
 	return;
@@ -147,14 +181,17 @@ void grDispatcher::putSpr_a(int x, int y, int sx, int sy, const byte *p, int mod
 	int psy = sy;
 
 	if (!clip_rectangle(x, y, px, py, psx, psy)) return;
-	int dx = -1;
+	int dx = -2;
 	int dy = -1;
 
 	if (mode & GR_FLIP_HORIZONTAL) {
 		x += psx - 1;
 		px = sx - px - psx;
 	} else
-		dx = 1;
+		dx = 2;
+
+	if (_pixel_format == GR_RGBA8888)
+		dx *= 2;
 
 	if (mode & GR_FLIP_VERTICAL) {
 		y += psy - 1;
@@ -167,16 +204,28 @@ void grDispatcher::putSpr_a(int x, int y, int sx, int sy, const byte *p, int mod
 
 	const byte *data_ptr = p + py * sx;
 	for (int i = 0; i < psy; i++) {
-		uint16 *scr_buf = reinterpret_cast<uint16 *>(_screenBuf->getBasePtr(x, y));
+		byte *scr_buf = reinterpret_cast<byte *>(_screenBuf->getBasePtr(x, y));
 		const byte *data_line = data_ptr + px;
 
 		for (int j = 0; j < psx; j++) {
 			uint32 a = data_line[3];
 			if (a != 255) {
-				if (a)
-					*scr_buf = alpha_blend_565(make_rgb565u(data_line[2], data_line[1], data_line[0]), *scr_buf, a);
-				else
-					*scr_buf = make_rgb565u(data_line[2], data_line[1], data_line[0]);
+				if (_pixel_format == GR_RGB565) {
+					if (a)
+						setPixelFast(scr_buf, alpha_blend_565(make_rgb565u(data_line[2], data_line[1], data_line[0]), *(uint16 *)scr_buf, a));
+					else
+						setPixelFast(scr_buf, make_rgb565u(data_line[2], data_line[1], data_line[0]));
+				} else {
+					if (a) {
+						scr_buf[1] = data_line[0] + ((a * scr_buf[1]) >> 8);
+						scr_buf[2] = data_line[1] + ((a * scr_buf[2]) >> 8);
+						scr_buf[3] = data_line[2] + ((a * scr_buf[3]) >> 8);
+					} else {
+						scr_buf[1] = data_line[0];
+						scr_buf[2] = data_line[1];
+						scr_buf[3] = data_line[2];
+					}
+				}
 			}
 
 			scr_buf += dx;
@@ -232,7 +281,7 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 
 	if (has_alpha) {
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
+			byte *screen_ptr = (byte *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + ((size.x + 1 + dx) << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + ((size.y + 1 + dy) << (F_PREC - 1));
@@ -251,22 +300,28 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 
 					uint32 a = data_ptr[3];
 					if (a != 255) {
-						if (a)
-							*screen_ptr = alpha_blend_565(make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]), *screen_ptr, a);
-						else
-							*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
+						if (a) {
+							if (_pixel_format == GR_RGB565) {
+								*(uint16 *)screen_ptr = alpha_blend_565(make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]), *screen_ptr, a);
+							} else if (_pixel_format == GR_RGBA8888) {
+								screen_ptr[1] = data_ptr[0] + ((a * screen_ptr[1]) >> 8);
+								screen_ptr[2] = data_ptr[1] + ((a * screen_ptr[2]) >> 8);
+								screen_ptr[3] = data_ptr[2] + ((a * screen_ptr[3]) >> 8);
+							}
+						} else
+							setPixelFast(screen_ptr, make_rgb(data_ptr[2], data_ptr[1], data_ptr[0]));
 					}
 				}
 
 				xx += cos_a;
 				yy -= sin_a;
 
-				screen_ptr++;
+				screen_ptr += bytes_per_pixel();
 			}
 		}
 	} else {
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
+			byte *screen_ptr = (byte *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + ((size.x + 1 + dx) << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + ((size.y + 1 + dy) << (F_PREC - 1));
@@ -283,13 +338,13 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 
 					const byte *data_ptr = data + size.x * 3 * yb + xb * 3;
 					if (data_ptr[0] || data_ptr[1] || data_ptr[2])
-						*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
+						setPixelFast(screen_ptr, make_rgb(data_ptr[2], data_ptr[1], data_ptr[0]));
 				}
 
 				xx += cos_a;
 				yy -= sin_a;
 
-				screen_ptr++;
+				screen_ptr += bytes_per_pixel();
 			}
 		}
 	}
@@ -323,7 +378,7 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 
 	if (has_alpha) {
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
+			byte *screen_ptr = (byte *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
@@ -342,22 +397,28 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 
 					uint32 a = data_ptr[3];
 					if (a != 255) {
-						if (a)
-							*screen_ptr = alpha_blend_565(make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]), *screen_ptr, a);
-						else
-							*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
+						if (a) {
+							if (_pixel_format == GR_RGB565) {
+								*(uint16 *)screen_ptr = alpha_blend_565(make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]), *screen_ptr, a);
+							} else if (_pixel_format == GR_RGBA8888) {
+								screen_ptr[1] = data_ptr[0] + ((a * screen_ptr[1]) >> 8);
+								screen_ptr[2] = data_ptr[1] + ((a * screen_ptr[2]) >> 8);
+								screen_ptr[3] = data_ptr[2] + ((a * screen_ptr[3]) >> 8);
+							}
+						} else
+							setPixelFast(screen_ptr, make_rgb(data_ptr[2], data_ptr[1], data_ptr[0]));
 					}
 				}
 
 				xx += cos_a;
 				yy -= sin_a;
 
-				screen_ptr++;
+				screen_ptr += bytes_per_pixel();
 			}
 		}
 	} else {
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
+			byte *screen_ptr = (byte *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
@@ -373,13 +434,13 @@ void grDispatcher::putSpr_rot(const Vect2i &pos, const Vect2i &size, const byte 
 						yb = size.y - yb - 1;
 
 					const byte *data_ptr = data + size.x * 3 * yb + xb * 3;
-					*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
+					setPixelFast(screen_ptr, make_rgb(data_ptr[2], data_ptr[1], data_ptr[0]));
 				}
 
 				xx += cos_a;
 				yy -= sin_a;
 
-				screen_ptr++;
+				screen_ptr += bytes_per_pixel();
 			}
 		}
 	}
@@ -410,10 +471,13 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 
 	if (has_alpha) {
 		byte mr, mg, mb;
-		split_rgb565u(mask_color, mr, mg, mb);
+		if (bytes_per_pixel() == 2)
+			split_rgb565u(mask_color, mr, mg, mb);
+		else
+			split_rgb888(mask_color, mr, mg, mb);
 
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
+			byte *screen_ptr = (byte *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + (size.x + 1) * (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + (size.y + 1) * (1 << (F_PREC - 1));
@@ -438,22 +502,31 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 						uint32 g = (mg * (255 - a)) >> 8;
 						uint32 b = (mb * (255 - a)) >> 8;
 
-						uint32 cl = make_rgb565u(r, g, b);
+						if (_pixel_format == GR_RGB565) {
+							uint32 cl = make_rgb565u(r, g, b);
 
-						*screen_ptr = alpha_blend_565(cl, *screen_ptr, a);
+							*(uint16 *)screen_ptr = alpha_blend_565(cl, *screen_ptr, a);
+						} else if (_pixel_format == GR_RGBA8888) {
+							screen_ptr[1] = b + ((a * screen_ptr[1]) >> 8);
+							screen_ptr[2] = g + ((a * screen_ptr[2]) >> 8);
+							screen_ptr[3] = r + ((a * screen_ptr[3]) >> 8);
+						}
 					}
 				}
 
 				xx += cos_a;
 				yy -= sin_a;
 
-				screen_ptr++;
+				screen_ptr += bytes_per_pixel();
 			}
 		}
 
 	} else {
 		byte mr, mg, mb;
-		split_rgb565u(mask_color, mr, mg, mb);
+		if (bytes_per_pixel() == 2)
+			split_rgb565u(mask_color, mr, mg, mb);
+		else
+			split_rgb888(mask_color, mr, mg, mb);
 
 		mr = (mr * (255 - mask_alpha)) >> 8;
 		mg = (mg * (255 - mask_alpha)) >> 8;
@@ -462,7 +535,7 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 		uint32 mcl = make_rgb565u(mr, mg, mb);
 
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
+			byte *screen_ptr = (byte *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + (size.x + 1) * (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + (size.y + 1) * (1 << (F_PREC - 1));
@@ -479,14 +552,20 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 
 					const byte *data_ptr = data + size.x * 3 * yb + xb * 3;
 					if (data_ptr[0] || data_ptr[1] || data_ptr[2]) {
-						*screen_ptr = alpha_blend_565(mcl, *screen_ptr, mask_alpha);
+						if (_pixel_format == GR_RGB565) {
+							*(uint16 *)screen_ptr = alpha_blend_565(mcl, *screen_ptr, mask_alpha);
+						} else if (_pixel_format == GR_RGBA8888) {
+							screen_ptr[1] = mb + ((mask_alpha * screen_ptr[1]) >> 8);
+							screen_ptr[2] = mg + ((mask_alpha * screen_ptr[2]) >> 8);
+							screen_ptr[3] = mr + ((mask_alpha * screen_ptr[3]) >> 8);
+						}
 					}
 				}
 
 				xx += cos_a;
 				yy -= sin_a;
 
-				screen_ptr++;
+				screen_ptr += bytes_per_pixel();
 			}
 		}
 	}
@@ -520,10 +599,13 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 
 	if (has_alpha) {
 		byte mr, mg, mb;
-		split_rgb565u(mask_color, mr, mg, mb);
+		if (bytes_per_pixel() == 2)
+			split_rgb565u(mask_color, mr, mg, mb);
+		else
+			split_rgb888(mask_color, mr, mg, mb);
 
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
+			byte *screen_ptr = (byte *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
@@ -548,28 +630,37 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 						uint32 g = (mg * (255 - a)) >> 8;
 						uint32 b = (mb * (255 - a)) >> 8;
 
-						uint32 cl = make_rgb565u(r, g, b);
+						if (_pixel_format == GR_RGB565) {
+							uint32 cl = make_rgb565u(r, g, b);
 
-						*screen_ptr = alpha_blend_565(cl, *screen_ptr, a);
+							*(uint16 *)screen_ptr = alpha_blend_565(cl, *screen_ptr, a);
+						} else if (_pixel_format == GR_RGBA8888) {
+							screen_ptr[1] = b + ((a * screen_ptr[1]) >> 8);
+							screen_ptr[2] = g + ((a * screen_ptr[2]) >> 8);
+							screen_ptr[3] = r + ((a * screen_ptr[3]) >> 8);
+						}
 					}
 				}
 
 				xx += cos_a;
 				yy -= sin_a;
 
-				screen_ptr++;
+				screen_ptr += bytes_per_pixel();
 			}
 		}
 	} else {
 		byte mr, mg, mb;
-		split_rgb565u(mask_color, mr, mg, mb);
+		if (bytes_per_pixel() == 2)
+			split_rgb565u(mask_color, mr, mg, mb);
+		else
+			split_rgb888(mask_color, mr, mg, mb);
 
 		mr = (mr * (255 - mask_alpha)) >> 8;
 		mg = (mg * (255 - mask_alpha)) >> 8;
 		mb = (mb * (255 - mask_alpha)) >> 8;
 
 		for (int y = 0; y <= sy; y++) {
-			uint16 *screen_ptr = (uint16 *)_screenBuf->getBasePtr(x0, y + y0);
+			byte *screen_ptr = (byte *)_screenBuf->getBasePtr(x0, y + y0);
 
 			int xx = (x0 - xc) * cos_a + (y + y0 - yc) * sin_a + scaled_size.x / 2 + (1 << (F_PREC - 1));
 			int yy = (y + y0 - yc) * cos_a - (x0 - xc) * sin_a + scaled_size.y / 2 + (1 << (F_PREC - 1));
@@ -585,13 +676,13 @@ void grDispatcher::putSprMask_rot(const Vect2i &pos, const Vect2i &size, const b
 						yb = size.y - yb - 1;
 
 					const byte *data_ptr = data + size.x * 3 * yb + xb * 3;
-					*screen_ptr = make_rgb565u(data_ptr[2], data_ptr[1], data_ptr[0]);
+					setPixelFast(screen_ptr, make_rgb(data_ptr[2], data_ptr[1], data_ptr[0]));
 				}
 
 				xx += cos_a;
 				yy -= sin_a;
 
-				screen_ptr++;
+				screen_ptr += bytes_per_pixel();
 			}
 		}
 	}
@@ -607,14 +698,17 @@ void grDispatcher::putSpr(int x, int y, int sx, int sy, const byte *p, int mode,
 	int psy = sy;
 
 	if (!clip_rectangle(x, y, px, py, psx, psy)) return;
-	int dx = -1;
+	int dx = -2;
 	int dy = -1;
 
 	if (mode & GR_FLIP_HORIZONTAL) {
 		x += psx - 1;
 		px = sx - px - psx;
 	} else
-		dx = 1;
+		dx = 2;
+
+	if (_pixel_format == GR_RGBA8888)
+		dx *= 2;
 
 	if (mode & GR_FLIP_VERTICAL) {
 		y += psy - 1;
@@ -629,12 +723,12 @@ void grDispatcher::putSpr(int x, int y, int sx, int sy, const byte *p, int mode,
 		const byte *data_ptr = p + py * sx;
 
 		for (int i = 0; i < psy; i++) {
-			uint16 *scr_buf = reinterpret_cast<uint16 *>(_screenBuf->getBasePtr(x, y));
+			byte *scr_buf = reinterpret_cast<byte *>(_screenBuf->getBasePtr(x, y));
 			const byte *data_line = data_ptr + px;
 
 			for (int j = 0; j < psx; j++) {
 				if (data_line[0] || data_line[1] || data_line[2])
-					*scr_buf = make_rgb565u(data_line[2], data_line[1], data_line[0]);
+					setPixelFast(scr_buf, make_rgb(data_line[2], data_line[1], data_line[0]));
 				scr_buf += dx;
 				data_line += 3;
 			}
@@ -649,12 +743,15 @@ void grDispatcher::putSpr(int x, int y, int sx, int sy, const byte *p, int mode,
 		const byte *data_ptr = p + py * sx;
 
 		for (int i = 0; i < psy; i++) {
-			uint16 *scr_buf = reinterpret_cast<uint16 *>(_screenBuf->getBasePtr(x, y));
+			byte *scr_buf = reinterpret_cast<byte *>(_screenBuf->getBasePtr(x, y));
 			const byte *data_line = data_ptr + px;
 
 			for (int j = 0; j < psx; j++) {
-				if (*data_line)
-					*scr_buf = *(const uint16 *)data_line;
+				if (*data_line) {
+					byte r, g, b;
+					split_rgb565u(*(const uint16 *)data_line, r, g, b);
+					setPixelFast(scr_buf, make_rgb(r, g, b));
+				}
 				scr_buf += dx;
 				data_line += 2;
 			}
@@ -987,25 +1084,52 @@ void grDispatcher::putChar(int x, int y, uint32 color, int font_sx, int font_sy,
 
 	color = make_rgb(color);
 
-	for (int i = 0; i < psy; i++, y++) {
-		uint16 *scr_buf = reinterpret_cast<uint16 *>(_screenBuf->getBasePtr(x, y));
-		for (int j = 0; j < psx; j++) {
-			uint32 a = alpha_buf[j];
-			uint32 a1 = 255 - a;
-			if (a) {
-				if (a != 255) {
-					uint32 scr_col = *scr_buf;
-					*scr_buf++ = (((((color & mask_565_r) * a) >> 8) & mask_565_r) |
-									((((color & mask_565_g) * a) >> 8) & mask_565_g) |
-									((((color & mask_565_b) * a) >> 8) & mask_565_b)) +
-									(((((scr_col & mask_565_r) * a1) >> 8) & mask_565_r) |
-									((((scr_col & mask_565_g) * a1) >> 8) & mask_565_g) |
-									((((scr_col & mask_565_b) * a1) >> 8) & mask_565_b));
-				} else
-					*scr_buf++ = color;
-			} else scr_buf++;
+	if (_pixel_format == GR_RGB565) {
+		for (int i = 0; i < psy; i++, y++) {
+			uint16 *scr_buf = reinterpret_cast<uint16 *>(_screenBuf->getBasePtr(x, y));
+			for (int j = 0; j < psx; j++) {
+				uint32 a = alpha_buf[j];
+				uint32 a1 = 255 - a;
+				if (a) {
+					if (a != 255) {
+						uint32 scr_col = *scr_buf;
+						*scr_buf++ = (((((color & mask_565_r) * a) >> 8) & mask_565_r) |
+										((((color & mask_565_g) * a) >> 8) & mask_565_g) |
+										((((color & mask_565_b) * a) >> 8) & mask_565_b)) +
+										(((((scr_col & mask_565_r) * a1) >> 8) & mask_565_r) |
+										((((scr_col & mask_565_g) * a1) >> 8) & mask_565_g) |
+										((((scr_col & mask_565_b) * a1) >> 8) & mask_565_b));
+					} else
+						*scr_buf++ = color;
+				} else scr_buf++;
+			}
+			alpha_buf += font_sx;
 		}
-		alpha_buf += font_sx;
+	} else {
+		uint32 r = ((byte *)(&color))[2];
+		uint32 g = ((byte *)(&color))[1];
+		uint32 b = ((byte *)(&color))[0];
+
+		for (int i = 0; i < psy; i++, y++) {
+			byte *scr_buf = reinterpret_cast<byte *>(_screenBuf->getBasePtr(x, y));
+			for (int j = 0; j < psx; j++) {
+				uint32 a = alpha_buf[j];
+				uint32 a1 = 255 - a;
+				if (a) {
+					if (a != 255) {
+						scr_buf[1] = ((r * a) >> 8) + ((a1 * scr_buf[1]) >> 8);
+						scr_buf[2] = ((g * a) >> 8) + ((a1 * scr_buf[2]) >> 8);
+						scr_buf[3] = ((b * a) >> 8) + ((a1 * scr_buf[3]) >> 8);
+					} else {
+						scr_buf[1] = r;
+						scr_buf[2] = g;
+						scr_buf[3] = b;
+					}
+				}
+				scr_buf += 4;
+			}
+			alpha_buf += font_sx;
+		}
 	}
 	return;
 }
@@ -1020,14 +1144,17 @@ void grDispatcher::putSprMask(int x, int y, int sx, int sy, const byte *p, uint3
 	int psy = sy;
 
 	if (!clip_rectangle(x, y, px, py, psx, psy)) return;
-	int dx = -1;
+	int dx = -2;
 	int dy = -1;
 
 	if (mode & GR_FLIP_HORIZONTAL) {
 		x += psx - 1;
 		px = sx - px - psx;
 	} else
-		dx = 1;
+		dx = 2;
+
+	if (_pixel_format == GR_RGBA8888)
+		dx *= 2;
 
 	if (mode & GR_FLIP_VERTICAL) {
 		y += psy - 1;
@@ -1041,7 +1168,10 @@ void grDispatcher::putSprMask(int x, int y, int sx, int sy, const byte *p, uint3
 	const byte *data_ptr = p + py * sx + px;
 
 	byte mr, mg, mb;
-	split_rgb565u(mask_color, mr, mg, mb);
+	if (bytes_per_pixel() == 2)
+		split_rgb565u(mask_color, mr, mg, mb);
+	else
+		split_rgb888(mask_color, mr, mg, mb);
 
 	mr = (mr * (255 - mask_alpha)) >> 8;
 	mg = (mg * (255 - mask_alpha)) >> 8;
@@ -1051,12 +1181,19 @@ void grDispatcher::putSprMask(int x, int y, int sx, int sy, const byte *p, uint3
 
 	warning("STUB: grDispatcher::putSprMask");
 	for (int i = 0; i < psy; i++) {
-		uint16 *scr_buf = (uint16 *)(_screenBuf->getBasePtr(x, y));
+		byte *scr_buf = (byte *)(_screenBuf->getBasePtr(x, y));
 		const byte *data_line = data_ptr;
 
 		for (int j = 0; j < psx; j++) {
-			if (data_line[0] || data_line[1] || data_line[2])
-				*scr_buf = alpha_blend_565(mcl, *scr_buf, mask_alpha);
+			if (data_line[0] || data_line[1] || data_line[2]) {
+				if (_pixel_format == GR_RGB565) {
+					*(uint16 *)scr_buf = alpha_blend_565(mcl, *scr_buf, mask_alpha);
+				} else if (_pixel_format == GR_RGBA8888) {
+					scr_buf[1] = mb + ((mask_alpha * scr_buf[1]) >> 8);
+					scr_buf[2] = mg + ((mask_alpha * scr_buf[2]) >> 8);
+					scr_buf[3] = mr + ((mask_alpha * scr_buf[3]) >> 8);
+				}
+			}
 			scr_buf += dx;
 			data_line += 3;
 		}
@@ -1100,7 +1237,10 @@ void grDispatcher::putSprMask(int x, int y, int sx, int sy, const byte *p, uint3
 	}
 
 	byte mr, mg, mb;
-	split_rgb565u(mask_color, mr, mg, mb);
+	if (bytes_per_pixel() == 2)
+		split_rgb565u(mask_color, mr, mg, mb);
+	else
+		split_rgb888(mask_color, mr, mg, mb);
 
 	mr = (mr * (255 - mask_alpha)) >> 8;
 	mg = (mg * (255 - mask_alpha)) >> 8;
@@ -1109,6 +1249,8 @@ void grDispatcher::putSprMask(int x, int y, int sx, int sy, const byte *p, uint3
 	uint32 mcl = make_rgb565u(mr, mg, mb);
 
 	sx *= 3;
+
+	warning("STUB: grDispatcher::putSprMask (scaled)");
 
 	for (int i = y0; i != y1; i += iy) {
 		const byte *line_src = p + ((fy >> 16) * sx);
@@ -1119,9 +1261,18 @@ void grDispatcher::putSprMask(int x, int y, int sx, int sy, const byte *p, uint3
 		for (int j = x0; j != x1; j += ix) {
 			const byte *src_data = line_src + (fx >> 16) * 3;
 			if (src_data[0] || src_data[1] || src_data[2]) {
-				uint16 scl;
-				getPixel(x + j, y + i, scl);
-				setPixel(x + j, y + i, alpha_blend_565(mcl, scl, mask_alpha));
+				if (_pixel_format == GR_RGB565) {
+					uint16 scl;
+					getPixel(x + j, y + i, scl);
+					setPixel(x + j, y + i, alpha_blend_565(mcl, scl, mask_alpha));
+				} else if (_pixel_format == GR_RGBA8888) {
+					byte r, g, b;
+					b = mb + ((mask_alpha * src_data[0]) >> 8);
+					g = mg + ((mask_alpha * src_data[1]) >> 8);
+					r = mr + ((mask_alpha * src_data[2]) >> 8);
+
+					setPixel(x + j, y + i, r, g, b);
+				}
 			}
 			fx += dx;
 		}
@@ -1138,14 +1289,17 @@ void grDispatcher::putSprMask_a(int x, int y, int sx, int sy, const byte *p, uin
 	int psy = sy;
 
 	if (!clip_rectangle(x, y, px, py, psx, psy)) return;
-	int dx = -1;
+	int dx = -2;
 	int dy = -1;
 
 	if (mode & GR_FLIP_HORIZONTAL) {
 		x += psx - 1;
 		px = sx - px - psx;
 	} else
-		dx = 1;
+		dx = 2;
+
+	if (_pixel_format == GR_RGBA8888)
+		dx *= 2;
 
 	if (mode & GR_FLIP_VERTICAL) {
 		y += psy - 1;
@@ -1159,10 +1313,13 @@ void grDispatcher::putSprMask_a(int x, int y, int sx, int sy, const byte *p, uin
 	const byte *data_ptr = p + py * sx + px;
 
 	byte mr, mg, mb;
-	split_rgb565u(mask_color, mr, mg, mb);
+	if (_pixel_format == GR_RGB565)
+		split_rgb565u(mask_color, mr, mg, mb);
+	else
+		split_rgb888(mask_color, mr, mg, mb);
 
 	for (int i = 0; i < psy; i++) {
-		uint16 *scr_buf = (uint16 *)(_screenBuf->getBasePtr(x, y));
+		byte *scr_buf = (byte *)(_screenBuf->getBasePtr(x, y));
 		const byte *data_line = data_ptr;
 
 		for (int j = 0; j < psx; j++) {
@@ -1175,9 +1332,15 @@ void grDispatcher::putSprMask_a(int x, int y, int sx, int sy, const byte *p, uin
 				uint32 g = (mg * (255 - a)) >> 8;
 				uint32 b = (mb * (255 - a)) >> 8;
 
-				uint32 cl = make_rgb565u(r, g, b);
+				if (_pixel_format == GR_RGB565) {
+					uint32 cl = make_rgb565u(r, g, b);
 
-				*scr_buf = alpha_blend_565(cl, *scr_buf, a);
+					setPixelFast(scr_buf, alpha_blend_565(cl, *(uint16 *)scr_buf, a));
+				} else {
+					scr_buf[1] = b + ((a * scr_buf[1]) >> 8);
+					scr_buf[2] = g + ((a * scr_buf[2]) >> 8);
+					scr_buf[3] = r + ((a * scr_buf[3]) >> 8);
+				}
 			}
 			scr_buf += dx;
 			data_line += 4;
@@ -1224,7 +1387,10 @@ void grDispatcher::putSprMask_a(int x, int y, int sx, int sy, const byte *p, uin
 
 	sx <<= 2;
 	byte mr, mg, mb;
-	split_rgb565u(mask_color, mr, mg, mb);
+	if (_pixel_format == GR_RGB565)
+		split_rgb565u(mask_color, mr, mg, mb);
+	else
+		split_rgb888(mask_color, mr, mg, mb);
 
 	for (i = y0; i != y1; i += iy) {
 		const byte *line_src = p + ((fy >> 16) * sx);
@@ -1237,18 +1403,29 @@ void grDispatcher::putSprMask_a(int x, int y, int sx, int sy, const byte *p, uin
 			uint32 a = src_data[3];
 
 			if (a != 255 && clipCheck(x + j, y + i)) {
-				uint16 sc;
+				uint32 sc;
 				getPixel(x + j, y + i, sc);
 
 				a = mask_alpha + ((a * (255 - mask_alpha)) >> 8);
 
-				uint32 r = (mr * (255 - a)) >> 8;
-				uint32 g = (mg * (255 - a)) >> 8;
-				uint32 b = (mb * (255 - a)) >> 8;
+				 uint32 r = (mr * (255 - a)) >> 8;
+				 uint32 g = (mg * (255 - a)) >> 8;
+				 uint32 b = (mb * (255 - a)) >> 8;
 
-				uint32 cl = make_rgb565u(r, g, b);
+				if (_pixel_format == GR_RGB565) {
+					uint32 cl = make_rgb565u(r, g, b);
 
-				setPixel(x + j, y + i, alpha_blend_565(cl, sc, a));
+					setPixel(x + j, y + i, alpha_blend_565(cl, sc, a));
+				} else {
+					byte sr, sg, sb;
+					getPixel(x + j, y + i, sr, sg, sb);
+
+					r = r + ((a * sr) >> 8);
+					g = g + ((a * sg) >> 8);
+					b = b + ((a * sb) >> 8);
+
+					setPixel(x + j, y + i, r, g, b);
+				}
 			}
 			fx += dx;
 		}
