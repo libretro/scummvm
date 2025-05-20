@@ -55,6 +55,7 @@ class CloudConnectionWizard : public Dialog {
 	Networking::ErrorCallback _callback;
 	bool _connecting;
 	Common::U32String _errorMessage;
+	uint32 _selectedStorageIndex;
 
 	// common and generic widgets
 	StaticTextWidget *_headlineLabel;
@@ -127,6 +128,7 @@ public:
 	CloudConnectionWizard();
 	~CloudConnectionWizard() override;
 
+	int runStorageModal(uint32 selectedStorageIndex);
 	void open() override;
 	void close() override;
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;

@@ -32,20 +32,28 @@
 #include "engines/nancy/action/secondaryvideo.h"
 #include "engines/nancy/action/secondarymovie.h"
 
+#include "engines/nancy/action/puzzle/angletosspuzzle.h"
+#include "engines/nancy/action/puzzle/arcadepuzzle.h"
 #include "engines/nancy/action/puzzle/assemblypuzzle.h"
 #include "engines/nancy/action/puzzle/bballpuzzle.h"
 #include "engines/nancy/action/puzzle/bulpuzzle.h"
 #include "engines/nancy/action/puzzle/bombpuzzle.h"
 #include "engines/nancy/action/puzzle/collisionpuzzle.h"
 #include "engines/nancy/action/puzzle/cubepuzzle.h"
+#include "engines/nancy/action/puzzle/cuttingpuzzle.h"
+#include "engines/nancy/action/puzzle/matchpuzzle.h"
 #include "engines/nancy/action/puzzle/hamradiopuzzle.h"
 #include "engines/nancy/action/puzzle/leverpuzzle.h"
 #include "engines/nancy/action/puzzle/mazechasepuzzle.h"
+#include "engines/nancy/action/puzzle/memorypuzzle.h"
 #include "engines/nancy/action/puzzle/mouselightpuzzle.h"
+#include "engines/nancy/action/puzzle/multibuildpuzzle.h"
+#include "engines/nancy/action/puzzle/onebuildpuzzle.h"
 #include "engines/nancy/action/puzzle/orderingpuzzle.h"
 #include "engines/nancy/action/puzzle/overridelockpuzzle.h"
 #include "engines/nancy/action/puzzle/passwordpuzzle.h"
 #include "engines/nancy/action/puzzle/peepholepuzzle.h"
+#include "engines/nancy/action/puzzle/quizpuzzle.h"
 #include "engines/nancy/action/puzzle/raycastpuzzle.h"
 #include "engines/nancy/action/puzzle/riddlepuzzle.h"
 #include "engines/nancy/action/puzzle/rippedletterpuzzle.h"
@@ -54,12 +62,14 @@
 #include "engines/nancy/action/puzzle/setplayerclock.h"
 #include "engines/nancy/action/puzzle/sliderpuzzle.h"
 #include "engines/nancy/action/puzzle/soundequalizerpuzzle.h"
+#include "engines/nancy/action/puzzle/soundmatchpuzzle.h"
 #include "engines/nancy/action/puzzle/spigotpuzzle.h"
 #include "engines/nancy/action/puzzle/tangrampuzzle.h"
 #include "engines/nancy/action/puzzle/telephone.h"
 #include "engines/nancy/action/puzzle/towerpuzzle.h"
 #include "engines/nancy/action/puzzle/turningpuzzle.h"
 #include "engines/nancy/action/puzzle/twodialpuzzle.h"
+#include "engines/nancy/action/puzzle/whalesurvivorpuzzle.h"
 
 #include "engines/nancy/state/scene.h"
 
@@ -280,6 +290,11 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new GoInvViewScene();
 	case 140:
 		return new SetVolume();
+	case 149:
+		if (g_nancy->getGameType() >= kGameTypeNancy9) {
+			// This got moved in nancy9
+			return new SetVolume();
+		}
 	case 150:
 		return new PlaySound();
 	case 151:
@@ -360,8 +375,30 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new OrderingPuzzle(OrderingPuzzle::kKeypadTerse);
 	case 225:
 		return new SpigotPuzzle();
+	// -- Nancy 8 and up --
+	case 226:
+		return new CuttingPuzzle();
+	case 228:
+		return new MatchPuzzle();
+	case 229:
+		return new ArcadePuzzle();
 	case 230:
 		return new Telephone(true);
+	case 231:
+		return new QuizPuzzle();
+	case 232:
+		return new AngleTossPuzzle();
+	// -- Nancy 9 and up --
+	case 233:
+		return new SoundMatchPuzzle();
+	case 234:
+		return new OneBuildPuzzle();
+	case 235:
+		return new MultiBuildPuzzle();
+	case 237:
+		return new WhaleSurvivorPuzzle();
+	case 238:
+		return new MemoryPuzzle();
 	default:
 		warning("Unknown action record type %d", type);
 		return nullptr;

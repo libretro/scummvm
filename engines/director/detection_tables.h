@@ -8320,13 +8320,17 @@ static const DirectorGameDescription gameDescriptions[] = {
 	WINGAME1_l("melements", "", "MVM.EXE",        "t:31a3726973886c0f3de3ee127f56fcb3", 1512503, Common::DE_DEU, 602),
 
 	// French: "Le Maître des éléments", published by Gallimard Multimédia
-	// Hybrid disc: Mac version needs to be added, unknown projector file/needs extraction?
+	// Mac version requires installation, installer in file "Installeur", created with VISE Lite 3.6 from MindVision Software
 	WINGAME1_l("melements", "", "MDE.EXE", "t:8db5c7ffd823515b341cee7acb72b9a8", 2256946, Common::FR_FRA, 602),
 
 	// Dutch: "Meesters van Macht", Netherlands/Belgium release by Karakter Interactive
 	// Game files likely match the original 1997 release since it is the only variant built with Director 6.0.1
 	MACGAME1_l("melements", "", "Meesters van Macht", "r:888e9ea9987e5ef6833d5af3683fcb3a", 115776,  Common::NL_NLD, 601),
 	WINGAME1_l("melements", "", "MVM.EXE",            "t:25ecda33e9fc9aaf70efcd2e124b114a", 2082817, Common::NL_NLD, 601),
+
+	// Italian: "I Signori degli Elementi", published by Editori Riuniti Multimedia
+	MACGAME1_l("melements", "", "I signori degli elementi", "r:398eb2cdf121feb490097c6323d52267", 1032406, Common::IT_ITA, 602),
+	WINGAME1_l("melements", "", "MVM.EXE",                  "t:caeea1aec3be6d1171992c824e3e3714", 2292781, Common::IT_ITA, 602),
 
 	WINGAME2("meetchuck", "", "HORSE.EXE",  "t:b0f3841f6e8005e519445b22de37749b", 1130649,
 	 						  "HPICTS.DXR", "d:60aba531fc0bf4897ba94413eb8ae24f", 7878094, 600),

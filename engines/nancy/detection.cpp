@@ -59,11 +59,13 @@ static const PlainGameDescriptor nancyGames[] = {
 	{ nullptr, nullptr }
 };
 
-#define VAMPIRE_GUIOPTIONS GUIO3(GUIO_NOLANG, GAMEOPTION_PLAYER_SPEECH, GAMEOPTION_CHARACTER_SPEECH)
-#define NANCY_GUIOPTIONS GUIO2(GAMEOPTION_PLAYER_SPEECH, GAMEOPTION_CHARACTER_SPEECH)
-#define NANCY2_GUIOPTIONS GUIO4(GAMEOPTION_PLAYER_SPEECH, GAMEOPTION_CHARACTER_SPEECH, GAMEOPTION_FIX_SOFTLOCKS, GAMEOPTION_NANCY2_TIMER)
-#define NANCY5_GUIOPTIONS GUIO3(GAMEOPTION_PLAYER_SPEECH, GAMEOPTION_CHARACTER_SPEECH, GAMEOPTION_FIX_SOFTLOCKS)
-#define NANCY6_7_GUIOPTIONS GUIO2(GAMEOPTION_AUTO_MOVE, GAMEOPTION_FIX_SOFTLOCKS)
+#define VAMPIRE_GUIOPTIONS GUIO4(GUIO_NOLANG, GAMEOPTION_PLAYER_SPEECH, GAMEOPTION_CHARACTER_SPEECH, GAMEOPTION_ORIGINAL_SAVELOAD)
+#define NANCY_GUIOPTIONS GUIO3(GAMEOPTION_PLAYER_SPEECH, GAMEOPTION_CHARACTER_SPEECH, GAMEOPTION_ORIGINAL_SAVELOAD)
+#define NANCY2_GUIOPTIONS GUIO5(GAMEOPTION_PLAYER_SPEECH, GAMEOPTION_CHARACTER_SPEECH, GAMEOPTION_FIX_SOFTLOCKS, GAMEOPTION_NANCY2_TIMER, GAMEOPTION_ORIGINAL_SAVELOAD)
+#define NANCY5_GUIOPTIONS GUIO4(GAMEOPTION_PLAYER_SPEECH, GAMEOPTION_CHARACTER_SPEECH, GAMEOPTION_FIX_SOFTLOCKS, GAMEOPTION_ORIGINAL_SAVELOAD)
+#define NANCY6_7_GUIOPTIONS GUIO3(GAMEOPTION_AUTO_MOVE, GAMEOPTION_FIX_SOFTLOCKS, GAMEOPTION_ORIGINAL_SAVELOAD)
+// TODO: Since the original save/load menus aren't implemented for
+// Nancy 8 and newer games, we always use the ScummVM ones there
 #define NANCY8_GUIOPTIONS GUIO1(GAMEOPTION_AUTO_MOVE)
 
 static const Nancy::NancyGameDescription gameDescriptions[] = {
@@ -445,7 +447,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			},
 			Common::EN_ANY,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM,
+			ADGF_TESTING | ADGF_DROPPLATFORM,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy6
@@ -462,7 +464,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			},
 			Common::EN_ANY,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
+			ADGF_TESTING | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy6
@@ -479,7 +481,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			},
 			Common::EN_ANY,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
+			ADGF_TESTING | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy6
@@ -496,7 +498,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			},
 			Common::EN_ANY,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
+			ADGF_TESTING | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy6
@@ -507,7 +509,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			AD_ENTRY1s("ciftree.dat", "e1a4db8cbac3de50d8e808f06d673b36", 29643931),
 			Common::RU_RUS,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM,
+			ADGF_TESTING | ADGF_DROPPLATFORM,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy6
@@ -524,7 +526,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			},
 			Common::RU_RUS,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
+			ADGF_TESTING | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy6
@@ -535,7 +537,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			AD_ENTRY1s("ciftree.dat", "e49e6f56a47c363e2651bd19a70ff557", 55835579),
 			Common::EN_ANY,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM,
+			ADGF_TESTING | ADGF_DROPPLATFORM,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy7
@@ -552,7 +554,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			},
 			Common::EN_ANY,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
+			ADGF_TESTING | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy7
@@ -569,7 +571,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			},
 			Common::EN_ANY,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
+			ADGF_TESTING | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy7
@@ -580,7 +582,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			AD_ENTRY1s("ciftree.dat", "a2001796b82a88d36693d087b15526e1", 56580014),
 			Common::RU_RUS,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM,
+			ADGF_TESTING | ADGF_DROPPLATFORM,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy7
@@ -597,7 +599,7 @@ static const Nancy::NancyGameDescription gameDescriptions[] = {
 			},
 			Common::RU_RUS,
 			Common::kPlatformWindows,
-			ADGF_UNSTABLE | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
+			ADGF_TESTING | ADGF_DROPPLATFORM | Nancy::GF_COMPRESSED,
 			NANCY6_7_GUIOPTIONS
 		},
 		Nancy::kGameTypeNancy7

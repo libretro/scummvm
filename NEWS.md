@@ -4,10 +4,18 @@ For a more comprehensive changelog of the latest experimental code, see:
 #### 2.10.0 (XXXX-XX-XX)
 
  New games:
+   - Added support for Another World.
    - Added support for Dark Seed.
    - Added support for God of Thunder.
    - Added support for The Adventures of Willy Beamish.
    - Added support for Heart of China.
+   - Added support for Nancy Drew: Secret of the Scarlet Hand.
+   - Added support for Nancy Drew: Ghost Dogs of Moon Lake.
+   - Added support for Ripley's Believe It or Not!: The Riddle of Master Lu
+
+ Drascula:
+   - Fixed displaying accented characters.
+   - Added Text-to-Speech support.
 
  Freescape:
    - Added roll rotation to Driller and Dark Side.
