@@ -26,6 +26,7 @@
 #include "common/str.h"
 
 #include "graphics/cursorman.h"
+#include "graphics/maccursor.h"
 #include "graphics/macgamma.h"
 #include "graphics/paletteman.h"
 #include "graphics/fonts/macfont.h"
@@ -607,6 +608,31 @@ Graphics::Surface *MacGuiImpl::createRemappedSurface(const Graphics::Surface *su
 	return s;
 }
 
+bool MacGuiImpl::setupResourceCursor(int id, int &width, int &height, int &hotspotX, int &hotspotY, int &animate) {
+	Common::MacResManager resource;
+	Graphics::MacCursor macCursor;
+	bool success = false;
+
+	resource.open(_resourceFile);
+
+	Common::SeekableReadStream *curs = resource.getResource(MKTAG('C', 'U', 'R', 'S'), id);
+
+	if (curs && macCursor.readFromStream(*curs)) {
+		width = macCursor.getWidth();
+		height = macCursor.getHeight();
+		hotspotX = macCursor.getHotspotX();
+		hotspotY = macCursor.getHotspotY();
+		animate = 0;
+
+		_windowManager->replaceCursor(Graphics::MacGUIConstants::kMacCursorCustom, &macCursor);
+		success = true;
+	}
+
+	delete curs;
+	resource.close();
+	return success;
+}
+
 // ---------------------------------------------------------------------------
 // Icon loader
 // ---------------------------------------------------------------------------
@@ -706,7 +732,7 @@ void MacGuiImpl::setMacGuiColors(Graphics::Palette &palette) {
 }
 
 MacGuiImpl::MacDialogWindow *MacGuiImpl::createWindow(Common::Rect bounds, MacDialogWindowStyle windowStyle, MacDialogMenuStyle menuStyle) {
-	if (_vm->_game.version < 6 && _vm->_game.id != GID_MANIAC) {
+	if (!_vm->_isModernMacVersion) {
 		updatePalette();
 		_macBlack = _windowManager->_colorBlack;
 		_macWhite = _windowManager->_colorWhite;
@@ -731,8 +757,7 @@ MacGuiImpl::MacDialogWindow *MacGuiImpl::createDialog(int dialogId) {
 	Common::Rect bounds;
 
 	// Default dialog sizes for dialogs without a DITL resource.
-
-	if (_vm->_game.version < 6 && _vm->_game.id != GID_MANIAC) {
+	if (!_vm->_isModernMacVersion) {
 		bounds.top = 0;
 		bounds.left = 0;
 		bounds.bottom = 86;
@@ -781,7 +806,7 @@ MacGuiImpl::MacDialogWindow *MacGuiImpl::createDialog(int dialogId, Common::Rect
 	_macWhite = _windowManager->_colorWhite;
 	_macBlack = _windowManager->_colorBlack;
 
-	if (_vm->_game.version >= 6 || _vm->_game.id == GID_MANIAC) {
+	if (_vm->_isModernMacVersion) {
 		res = resource.getResource(MKTAG('D', 'I', 'T', 'L'), dialogId);
 		if (!res)
 			return nullptr;

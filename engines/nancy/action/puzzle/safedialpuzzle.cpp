@@ -283,7 +283,7 @@ void SafeDialPuzzle::handleInput(NancyInput &input) {
 
 		if (!g_nancy->_sound->isSoundPlaying(_resetSound) && input.input & NancyInput::kLeftMouseButtonUp) {
 			_drawSurface.blitFrom(_image1, _resetSrc, _resetDest);
-			g_nancy->_sound->playSound(_resetSound);
+			g_nancy->_sound->playSound(_selectSound);
 			_animState = kReset;
 			_nextAnim = g_nancy->getTotalPlayTime() + 500; // hardcoded
 			_current = 0;
@@ -296,7 +296,6 @@ void SafeDialPuzzle::handleInput(NancyInput &input) {
 }
 
 void SafeDialPuzzle::drawDialFrame(uint frame) {
-	debug("%u", frame);
 	if (frame >= _dialSrcs.size() / 2 && !_imageName2.empty()) {
 		_drawSurface.blitFrom(_image2, _dialSrcs[frame], _dialDest);
 	} else {

@@ -20,8 +20,12 @@
  */
 
 #include "engines/wintermute/ad/ad_block.h"
+#include "engines/wintermute/ad/ad_game.h"
 #include "engines/wintermute/ad/ad_generic.h"
+#include "engines/wintermute/ad/ad_scene.h"
+#include "engines/wintermute/ad/ad_scene_geometry.h"
 #include "engines/wintermute/ad/ad_walkplane.h"
+#include "engines/wintermute/ad/ad_waypoint_group3d.h"
 #include "engines/wintermute/base/base_game.h"
 #include "engines/wintermute/base/gfx/base_image.h"
 #include "engines/wintermute/base/gfx/3dcamera.h"
@@ -95,12 +99,13 @@ bool BaseRenderOpenGL3D::initRenderer(int width, int height, bool windowed) {
 	_simpleShadow[3].v = 0.0f;
 
 	// filter post process: greyscale, sepia
-	glGenTextures(1, &_filterTexture);
-	glBindTexture(GL_TEXTURE_2D, _filterTexture);
+	glGenTextures(1, &_postfilterTexture);
+	glBindTexture(GL_TEXTURE_2D, _postfilterTexture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 
+	setSpriteBlendMode(Graphics::BLEND_NORMAL, true);
 
 	_windowed = !ConfMan.getBool("fullscreen");
 	_width = width;
@@ -109,6 +114,8 @@ bool BaseRenderOpenGL3D::initRenderer(int width, int height, bool windowed) {
 	setViewport(0, 0, width, height);
 
 	setProjection();
+
+	_postFilterMode = kPostFilterOff;
 
 	_active = true;
 
@@ -172,11 +179,6 @@ bool BaseRenderOpenGL3D::setup3D(Camera3D *camera, bool force) {
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-
-		// Disable blending for 3d rendering, it seems no need to enable it.
-		// It will be enabled in other places when needed.
-		// This is delta compared to original sources.
-		glDisable(GL_BLEND);
 
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_LIGHTING);
@@ -285,8 +287,8 @@ bool BaseRenderOpenGL3D::setupLines() {
 		glEnable(GL_ALPHA_TEST);
 		glLightModelfv(GL_LIGHT_MODEL_AMBIENT, value);
 
-		glDisable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, 0);
+		glDisable(GL_TEXTURE_2D);
 		_lastTexture = nullptr;
 	}
 
@@ -657,6 +659,8 @@ void BaseRenderOpenGL3D::displaySimpleShadow(BaseObject *object) {
 	DXMatrixMultiply(&finalm, &finalm, &trans);
 	setWorldTransform(finalm);
 
+	glFrontFace(GL_CCW);
+
 	glDepthMask(GL_FALSE);
 	glEnable(GL_TEXTURE_2D);
 	static_cast<BaseSurfaceOpenGL3D *>(shadowImage)->setTexture();
@@ -786,14 +790,13 @@ void BaseRenderOpenGL3D::renderSceneGeometry(const BaseArray<AdWalkplane *> &pla
 
 	setWorldTransform(matIdentity);
 
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_DEPTH_TEST);
 	glFrontFace(GL_CW); // WME DX have CCW
 	glEnable(GL_BLEND);
 	glDisable(GL_ALPHA_TEST);
-	glDisable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
 
 	glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
 	glEnable(GL_COLOR_MATERIAL);
@@ -802,56 +805,48 @@ void BaseRenderOpenGL3D::renderSceneGeometry(const BaseArray<AdWalkplane *> &pla
 	// render walk planes
 	for (uint i = 0; i < planes.size(); i++) {
 		if (planes[i]->_active) {
-			planes[i]->_mesh->render();
+			planes[i]->_mesh->render(true);
 		}
 	}
 
 	// render blocks
 	for (uint i = 0; i < blocks.size(); i++) {
 		if (blocks[i]->_active) {
-			blocks[i]->_mesh->render();
+			blocks[i]->_mesh->render(true);
 		}
 	}
 
 	// render generic objects
 	for (uint i = 0; i < generics.size(); i++) {
 		if (generics[i]->_active) {
-			generics[i]->_mesh->render();
+			generics[i]->_mesh->render(true);
 		}
 	}
 
-	for (uint i = 0; i < lights.size(); ++i) {
-		if (lights[i]->_active) {
-			glBegin(GL_LINES);
-			glColor3f(1.0f, 1.0f, 0.0f);
-			DXVector3 right = lights[i]->_pos + DXVector3(1000.0f, 0.0f, 0.0f);
-			DXVector3 up = lights[i]->_pos + DXVector3(0.0f, 1000.0f, 0.0f);
-			DXVector3 backward = lights[i]->_pos + DXVector3(0.0f, 0.0f, 1000.0f);
-			DXVector3 left = lights[i]->_pos + DXVector3(-1000.0f, 0.0f, 0.0f);
-			DXVector3 down = lights[i]->_pos + DXVector3(0.0f, -1000.0f, 0.0f);
-			DXVector3 forward = lights[i]->_pos + DXVector3(0.0f, 0.0f, -1000.0f);
+	// render waypoints
+	AdScene *scene = ((AdGame *)_gameRef)->_scene;
+	AdSceneGeometry *geom = scene->_geom;
+	if (geom && geom->_wptMarker) {
+		DXMatrix viewMat, projMat, worldMat;
+		DXVector3 vec2d(0.0f, 0.0f, 0.0f);
 
-			glVertex3fv(lights[i]->_pos);
-			glVertex3fv(right);
-			glVertex3fv(lights[i]->_pos);
-			glVertex3fv(up);
-			glVertex3fv(lights[i]->_pos);
-			glVertex3fv(backward);
-			glVertex3fv(lights[i]->_pos);
-			glVertex3fv(left);
-			glVertex3fv(lights[i]->_pos);
-			glVertex3fv(down);
-			glVertex3fv(lights[i]->_pos);
-			glVertex3fv(forward);
-			glEnd();
+		getViewTransform(&viewMat);
+		getProjectionTransform(&projMat);
+		DXMatrixIdentity(&worldMat);
+
+		DXViewport vport = getViewPort();
+
+		setup2D();
+
+		for (uint i = 0; i < geom->_waypointGroups.size(); i++) {
+			for (uint j = 0; j < geom->_waypointGroups[i]->_points.size(); j++) {
+				DXVec3Project(&vec2d, geom->_waypointGroups[i]->_points[j], &vport, &projMat, &viewMat, &worldMat);
+				geom->_wptMarker->display(vec2d._x + scene->getOffsetLeft() - _drawOffsetX, vec2d._y + scene->getOffsetTop() - _drawOffsetY);
+			}
 		}
 	}
-
-	// This is delta compared to original sources.
-	glDisable(GL_BLEND);
 
 	glDisable(GL_COLOR_MATERIAL);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 // backend layer 3DShadowVolume::Render()
@@ -869,11 +864,12 @@ void BaseRenderOpenGL3D::renderShadowGeometry(const BaseArray<AdWalkplane *> &pl
 	// disable color write
 	setSpriteBlendMode(Graphics::BLEND_UNKNOWN);
 	glBlendFunc(GL_ZERO, GL_ONE);
+	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
 	// no texture
 	_lastTexture = nullptr;
-	glDisable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
 
 	glFrontFace(GL_CW); // WME DX have CCW
 
@@ -899,6 +895,7 @@ void BaseRenderOpenGL3D::renderShadowGeometry(const BaseArray<AdWalkplane *> &pl
 	}
 
 	setSpriteBlendMode(Graphics::BLEND_NORMAL);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
 // implements D3D SetRenderState() D3DRS_CULLMODE - CCW
@@ -1010,7 +1007,7 @@ void BaseRenderOpenGL3D::postfilter() {
 
 
 		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, _filterTexture);
+		glBindTexture(GL_TEXTURE_2D, _postfilterTexture);
 
 
 		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, _width, _height, 0);

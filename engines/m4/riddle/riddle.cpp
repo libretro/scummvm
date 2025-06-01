@@ -27,7 +27,6 @@
 #include "m4/riddle/console.h"
 #include "m4/riddle/vars.h"
 #include "m4/adv_r/other.h"
-#include "m4/core/errors.h"
 #include "m4/console.h"
 
 namespace M4 {
@@ -774,5 +773,12 @@ void sketchInJournal(const char *digiName) {
 	}
 }
 
+bool RiddleEngine::canLoadGameStateCurrently(Common::U32String *msg) {
+	if (g_vars && _G(game).room_id == 494)
+		// Allow loading games from the main menu
+		return true;
+	else
+		return M4Engine::canLoadGameStateCurrently(msg);
+}
 } // namespace Riddle
 } // namespace M4

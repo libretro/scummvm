@@ -64,7 +64,15 @@
 #include "qdengine/minigames/3mice2_babochka.h"
 
 // dogncat
+#include "qdengine/minigames/adv/m_scores.h"
 #include "qdengine/minigames/adv/m_triangles.h"
+
+// dogncat2
+#include "qdengine/minigames/adv/m_swap.h"
+
+// klepa
+#include "qdengine/minigames/adv/m_puzzle.h"
+#include "qdengine/minigames/adv/m_karaoke.h"
 
 namespace QDEngine {
 
@@ -80,6 +88,8 @@ qdMiniGame::qdMiniGame(const qdMiniGame &mg) : qdNamedObject(mg),
 }
 
 qdMiniGame::~qdMiniGame() {
+	if (_interface)
+		_interface->finit();
 	release_interface();
 }
 
@@ -261,14 +271,15 @@ bool qdMiniGame::load_config() {
 		return false;
 
 	_config.clear();
+	Common::INIFile ini;
 	Common::INIFile::SectionList section_list;
-	enumerateIniSections(config_file_name(), section_list);
+	enumerateIniSections(ini, config_file_name(), section_list);
 
 	_config.reserve(section_list.size());
 
 	for (auto &it : section_list) {
 		qdMinigameConfigParameter prm;
-		prm.load_ini(config_file_name(), it.name.c_str());
+		prm.load_ini(ini, config_file_name(), it.name.c_str());
 		_config.push_back(prm);
 	}
 
@@ -336,8 +347,12 @@ bool qdMiniGame::load_interface() {
 			return true;
 
 		// klepa
-		// Karaoke.dll
-		// puzzle.dll
+		} else if (_dll_name == "DLL\\puzzle.dll") {
+			_interface = create_adv_minigame(_dll_name.c_str(), createMinigamePuzzle);
+			return true;
+		} else if (_dll_name == "DLL\\Karaoke.dll") {
+			_interface = create_adv_minigame(_dll_name.c_str(), createMinigameKaraoke);
+			return true;
 
 		// 3mice2
 		} else if (_dll_name == "DLL\\3Mice2_sbor_karty.dll") {
@@ -378,12 +393,14 @@ bool qdMiniGame::load_interface() {
 		} else if (_dll_name == "DLL\\triangles.dll") {
 			_interface = create_adv_minigame(_dll_name.c_str(), createMinigameTriangle);
 			return true;
-		// scores.dll
-		// triangles.dll
+		} else if (_dll_name == "DLL\\scores.dll") {
+			_interface = create_adv_minigame(_dll_name.c_str(), createMinigameScores);
+			return true;
 
 		// dogncat2
-		// scores.dll
-		// swap.dll
+		} else if (_dll_name == "DLL\\swap.dll") {
+			_interface = create_adv_minigame(_dll_name.c_str(), createMinigameSwap);
+			return true;
 		} else {
 			warning("qdMiniGame::load_interface(): trying to load dll: %s", _dll_name.c_str());
 			// call here dll->open_game_interface(game_name())
@@ -395,7 +412,9 @@ bool qdMiniGame::load_interface() {
 }
 
 bool qdMiniGame::release_interface() {
-	delete _interface;
+	if (_interface)
+		close_adv_minigame(_interface);
+
 	_interface = nullptr;
 	return true;
 }

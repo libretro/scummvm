@@ -20,6 +20,7 @@
  */
 
 #include "common/debug.h"
+#include "common/file.h"
 #include "common/memstream.h"
 #include "common/savefile.h"
 
@@ -449,8 +450,13 @@ bool MinigameManager::loadState(bool current) {
 
 			GameInfoIndex index(0, 0);
 
-			while (!file->eos()) {
+			while (!file->eos() && file->pos() < file->size()) {
 				index.read(*file);
+
+				if (file->eos() || file->pos() >= file->size()) {
+					delete file;
+					return false;
+				}
 
 				GameInfo data;
 				data.read(*file);
@@ -540,10 +546,8 @@ bool MinigameManager::quant(float dt) {
 		if (_game_help)
 			_game_help.setState(_game_help_enabled ? _game_help_state_name.c_str() : "off");
 
-#ifdef _DEBUG
-		if (keyPressed(VK_MULTIPLY, true))
+		if (keyPressed(VK_MULTIPLY) || (keyPressed(VK_LSHIFT) && keyPressed('8')))
 			_game->setState(MinigameInterface::GAME_WIN);
-#endif
 
 		switch (_game->state()) {
 		case MinigameInterface::GAME_LOST:
@@ -611,38 +615,30 @@ const MinigameData *MinigameManager::getScore(int level, int game) const {
 }
 
 bool MinigameManager::testAllGamesWin() {
-	warning("STUB: MinigameManager::testAllGamesWin()");
-
-#if 0
-	XStream file(false);
-	if (!file.open(gameListFileName(), XS_IN))
+	Common::File file;
+	if (!file.open(Common::Path(gameListFileName())))
 		return false;
 
 	char read_buf[512];
-	while (!file.eof()) {
-		file.getline(read_buf, 512);
-		XBuffer xbuf((void*)read_buf, strlen(read_buf));
-		int level;
-		xbuf >= level;
-		unsigned char ch;
-		xbuf > ch;
+	while (!file.eos()) {
+		file.readLine(read_buf, 512);
+		Common::MemoryReadStream buf((const byte *)&read_buf[0], strlen(read_buf));
+		int level = buf.readByte() - '0';
+		byte ch = buf.readByte();
 		if (ch != ':') {
 			warning("MinigameManager::testAllGamesWin(): incorrect file format: '%s'", gameListFileName());
 			return false;
 		}
-		while (xbuf.tell() < xbuf.size()) {
-			xbuf > ch;
+		while (buf.pos() < buf.size()) {
+			ch = buf.readByte();
 			if (Common::isDigit(ch)) {
-				--xbuf;
-				int game;
-				xbuf >= game;
+				int game = ch - '0';
 				const MinigameData *data = getScore(level, game);
 				if (!data || data->_sequenceIndex == -1)
 					return false;
 			}
 		}
 	}
-#endif
 
 	return true;
 }
@@ -725,8 +721,16 @@ const char *MinigameManager::parameter(const char *name, const char *def) const 
 }
 
 bool MinigameManager::mouseLeftPressed() const {
-	if (_invertMouseButtons)
+	if (_invertMouseButtons) {
+		if (keyPressed(VK_LMENU)) {
+			return _engine->is_mouse_event_active(qdEngineInterface::MOUSE_EV_LEFT_DOWN);
+		}
 		return _engine->is_mouse_event_active(qdEngineInterface::MOUSE_EV_RIGHT_DOWN);
+	}
+
+	if (keyPressed(VK_LMENU))
+		return false;
+
 	return _engine->is_mouse_event_active(qdEngineInterface::MOUSE_EV_LEFT_DOWN);
 
 }
@@ -734,6 +738,10 @@ bool MinigameManager::mouseLeftPressed() const {
 bool MinigameManager::mouseRightPressed() const {
 	if (_invertMouseButtons)
 		return _engine->is_mouse_event_active(qdEngineInterface::MOUSE_EV_LEFT_DOWN);
+
+	if (keyPressed(VK_LMENU)) {
+		return _engine->is_mouse_event_active(qdEngineInterface::MOUSE_EV_LEFT_DOWN);
+	}
 	return _engine->is_mouse_event_active(qdEngineInterface::MOUSE_EV_RIGHT_DOWN);
 
 }
@@ -811,7 +819,7 @@ QDObject MinigameManager::getObject(const char *name) const {
 }
 
 bool MinigameManager::testObject(const char *name) const {
-	if (qdMinigameObjectInterface *obj = _scene->object_interface(name)) {
+	if (qdMinigameObjectInterface *obj = _scene->object_interface(name, true)) {
 		_scene->release_object_interface(obj);
 		return true;
 	}
@@ -899,15 +907,11 @@ bool MinigameManager::processGameData(Common::SeekableReadStream &data) {
 	if (_currentGameInfo) {
 		if (_currentGameInfo->_empty) {
 			_currentGameInfo->_empty = false;
-			assert(data.pos());
+			assert(data.size());
 			_currentGameInfo->persist(data);
 		} else {
-			if (data.pos() != _currentGameInfo->_dataSize)
+			if (data.size() != _currentGameInfo->_dataSize) {
 				warning("MinigameManager::processGameData(): Old minigame save detected. Remove '%s'", _state_container_name.c_str());
-
-			if (data.pos() == _currentGameInfo->_dataSize) {
-				_currentGameInfo->persist(data);
-			} else {
 				data.seek(0);
 				return false;
 			}

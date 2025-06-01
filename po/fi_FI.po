@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ScummVM 1.6.0git\n"
 "Report-Msgid-Bugs-To: scummvm-devel@lists.scummvm.org\n"
-"POT-Creation-Date: 2025-05-18 21:13+0000\n"
-"PO-Revision-Date: 2025-05-11 15:18+0000\n"
+"POT-Creation-Date: 2025-05-31 08:30+0000\n"
+"PO-Revision-Date: 2025-05-22 18:56+0000\n"
 "Last-Translator: Timo Mikkolainen <tmikkola@gmail.com>\n"
 "Language-Team: Finnish <https://translations.scummvm.org/projects/scummvm/"
 "scummvm/fi/>\n"
@@ -317,7 +317,7 @@ msgstr "Toinen tallennustila on aktiivinen. Haluatko keskeyttää sen?"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:611 engines/kyra/gui/saveload_eob.cpp:644
 #: engines/parallaction/metaengine.cpp:143
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4202
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4216
 #: engines/toon/toon.cpp:1543
 msgid "Yes"
 msgstr "Kyllä"
@@ -330,7 +330,7 @@ msgstr "Kyllä"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:611 engines/kyra/gui/saveload_eob.cpp:644
 #: engines/parallaction/metaengine.cpp:149
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4202
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4216
 #: engines/toon/toon.cpp:1543
 msgid "No"
 msgstr "Ei"
@@ -359,9 +359,9 @@ msgstr "JSON-koodin sisältö on epämuodostunutta."
 #: engines/groovie/script.cpp:665 engines/mtropolis/mtropolis.cpp:114
 #: engines/mtropolis/mtropolis.cpp:124 engines/parallaction/saveload.cpp:270
 #: engines/saga/music.cpp:102 engines/sci/engine/kgraphics.cpp:76
-#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1353
-#: engines/scumm/scumm.cpp:1770 engines/scumm/scumm.cpp:2260
-#: engines/scumm/scumm.cpp:2276 engines/sky/compact.cpp:140
+#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1359
+#: engines/scumm/scumm.cpp:1784 engines/scumm/scumm.cpp:2274
+#: engines/scumm/scumm.cpp:2290 engines/sky/compact.cpp:140
 #: engines/sword1/animation.cpp:566 engines/sword1/animation.cpp:574
 #: engines/sword1/control.cpp:2816 engines/sword1/logic.cpp:1738
 #: engines/sword2/animation.cpp:459 engines/sword2/animation.cpp:469
@@ -3108,19 +3108,19 @@ msgstr "Tiedon lukeminen epäonnistui"
 msgid "Writing data failed"
 msgstr "Tiedon kirjoittaminen epäonnistui"
 
-#: common/error.cpp:67
+#: common/error.cpp:68
 msgid "Could not find suitable engine plugin"
 msgstr "Sopivaa pelimoottorin pluginia ei löytynyt"
 
-#: common/error.cpp:69
+#: common/error.cpp:70
 msgid "Engine plugin does not support saved games"
 msgstr "Pelimoottoriliitännäinen ei tue pelitallenteita"
 
-#: common/error.cpp:72
+#: common/error.cpp:73
 msgid "User canceled"
 msgstr "Käyttäjä peruutti"
 
-#: common/error.cpp:76
+#: common/error.cpp:77
 msgid "Unknown error"
 msgstr "Tuntematon virhe"
 
@@ -4826,12 +4826,12 @@ msgstr "Suurennustila poissa. Siirrytään raahaustilaan..."
 msgid "Magnify Mode Off"
 msgstr "Suurennustila poissa"
 
-#: backends/platform/android/android.cpp:1114
+#: backends/platform/android/android.cpp:1125
 #: backends/platform/ios7/ios7_osys_misc.mm:249
 msgid "Getting help"
 msgstr "Apua"
 
-#: backends/platform/android/android.cpp:1117
+#: backends/platform/android/android.cpp:1128
 msgid ""
 "## Help, I'm lost!\n"
 "\n"
@@ -4871,13 +4871,13 @@ msgstr ""
 "usein jopa pirullisen vaikeita. Jos olet pelissä jumissa, voit etsiä käsiisi "
 "pelin läpipeluuohjeen. Onnea matkaan!\n"
 
-#: backends/platform/android/android.cpp:1126
+#: backends/platform/android/android.cpp:1137
 #: backends/platform/ios7/ios7_osys_misc.mm:261
 #: backends/platform/ios7/ios7_osys_misc.mm:357
 msgid "Touch Controls"
 msgstr "Kosketuskontrollit"
 
-#: backends/platform/android/android.cpp:1129
+#: backends/platform/android/android.cpp:1140
 msgid ""
 "## Touch control modes\n"
 "The touch control mode can be changed by tapping or clicking on the "
@@ -5016,13 +5016,13 @@ msgstr ""
 "  ![Näppäimistökuvake](keyboard.png \"Näppäimistökuvake\"){w=10em}\n"
 "\n"
 
-#: backends/platform/android/android.cpp:1185
+#: backends/platform/android/android.cpp:1196
 #: backends/platform/ios7/ios7_osys_misc.mm:336
 #: backends/platform/ios7/ios7_osys_misc.mm:380
 msgid "Adding Games"
 msgstr "Pelien lisääminen"
 
-#: backends/platform/android/android.cpp:1188
+#: backends/platform/android/android.cpp:1199
 msgid ""
 "## Adding Games \n"
 "\n"
@@ -6381,7 +6381,7 @@ msgstr "Lataa tallenne"
 msgid "Quick load or save game isn't supported in this location"
 msgstr "Pelin pikalataus tai tallennus ei ole tuettu tässä sijainnissa"
 
-#: engines/agos/saveload.cpp:160 engines/scumm/scumm.cpp:3156
+#: engines/agos/saveload.cpp:160 engines/scumm/scumm.cpp:3170
 #, c-format
 msgid ""
 "Failed to load saved game from file:\n"
@@ -6392,7 +6392,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:195 engines/scumm/scumm.cpp:3143
+#: engines/agos/saveload.cpp:195 engines/scumm/scumm.cpp:3157
 #, c-format
 msgid ""
 "Failed to save game to file:\n"
@@ -6403,7 +6403,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:203 engines/scumm/scumm.cpp:3176
+#: engines/agos/saveload.cpp:203 engines/scumm/scumm.cpp:3190
 #, c-format
 msgid ""
 "Successfully saved game in file:\n"
@@ -9912,10 +9912,8 @@ msgstr ""
 "virallinen korjaus."
 
 #: engines/nancy/state/loadsave.cpp:154
-#, fuzzy
-#| msgid "Would you like to save or restore a game?"
 msgid "Would you like to load or save a game?"
-msgstr "Haluatko tallentaa vai ladata pelin?"
+msgstr "Haluatko ladata vai tallentaa pelin?"
 
 #: engines/neverhood/dialogs.cpp:52
 msgid "Skip the Hall of Records storyboard scenes"
@@ -10666,7 +10664,7 @@ msgid "Your Name:"
 msgstr "Sinun nimesi:"
 
 #. I18N: Button, start hosting online multiplayer game
-#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4208
+#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4222
 msgid "Host"
 msgstr "Isännöi"
 
@@ -10676,7 +10674,7 @@ msgid "Querying games..."
 msgstr "Etsitään pelejä..."
 
 #. I18N: Join online multiplayer game
-#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4208
+#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4222
 msgid "Join"
 msgstr "Liity"
 
@@ -11677,12 +11675,12 @@ msgstr ""
 "Kuvasuhteen korjaus saadaan mahdolliseksi trimmaamalla resoluution 320x200:"
 "aan 'Pelimoottori'-välilehdellä."
 
-#: engines/scumm/scumm.cpp:1344
+#: engines/scumm/scumm.cpp:1345
 #, c-format
 msgid "This game requires the '%s' Macintosh executable for its fonts."
 msgstr "Tämä peli tarvitsee '%s' Macintosh-ohjelmatiedoston fonteilleen."
 
-#: engines/scumm/scumm.cpp:1348
+#: engines/scumm/scumm.cpp:1354
 #, c-format
 msgid ""
 "This game requires the '%s' Macintosh executable for its music and fonts."
@@ -11690,7 +11688,7 @@ msgstr ""
 "Tämä peli tarvitsee '%s' Macintosh-ohjelmatiedoston musiikilleen ja "
 "fonteilleen."
 
-#: engines/scumm/scumm.cpp:1352
+#: engines/scumm/scumm.cpp:1358
 #, c-format
 msgid ""
 "Could not find the '%s' Macintosh executable to read resources from. %s will "
@@ -11699,25 +11697,25 @@ msgstr ""
 "Macintosh-ohjelmatiedostoa \"%s\" ei löydetty resurssien lukemiseksi. %s "
 "tulee olemaan pois käytöstä."
 
-#: engines/scumm/scumm.cpp:1353
+#: engines/scumm/scumm.cpp:1359
 msgid "The Mac GUI"
 msgstr "Mac-käyttöliittymä"
 
-#: engines/scumm/scumm.cpp:1353
+#: engines/scumm/scumm.cpp:1359
 msgid "The music and the Mac GUI"
 msgstr "Musiikki ja Mac-käyttöliittymä"
 
-#: engines/scumm/scumm.cpp:1373
+#: engines/scumm/scumm.cpp:1388
 #, c-format
 msgid "Could not open Macintosh resource file %s"
 msgstr "Macintosh-resurssitiedoston %s avaaminen epäonnistui"
 
-#: engines/scumm/scumm.cpp:1376
+#: engines/scumm/scumm.cpp:1391
 #, c-format
 msgid "Could not find resource fork in Macintosh resource file %s"
 msgstr "Macintosh-resurssitiedostosta %s ei löytynyt resource fork:ia"
 
-#: engines/scumm/scumm.cpp:1384
+#: engines/scumm/scumm.cpp:1398
 #, c-format
 msgid ""
 "'%s' appears to be the wrong Dig executable. It may be the launcher one "
@@ -11730,7 +11728,7 @@ msgstr ""
 "tarvituista menu- ja dialogimäärityksistä. Etsi CD:ltäsi 'The Dig f'-"
 "hakemisto. Minkä tahansa sen alahakemistoista pitäisi toimia."
 
-#: engines/scumm/scumm.cpp:1767
+#: engines/scumm/scumm.cpp:1781
 msgid ""
 "Audio files compressed with ScummVM Tools were detected; *.BUN/*.SOU\n"
 "compression is not supported anymore for this game, audio will be disabled.\n"
@@ -11740,7 +11738,7 @@ msgstr ""
 "pakkaukset eivät enää ole tuettuja tässä pelissä, joten äänet eivät kuulu.\n"
 "Ole hyvä ja asenna peli uudelleen sopivien äänitiedostojen kera."
 
-#: engines/scumm/scumm.cpp:2258
+#: engines/scumm/scumm.cpp:2272
 #, c-format
 msgid ""
 "Native MIDI support requires the Roland Upgrade from LucasArts,\n"
@@ -11749,7 +11747,7 @@ msgstr ""
 "Suora MIDI tuki vaatii Roland päivityksen LucasArtsilta, mutta\n"
 "%s puuttuu. Käytetään AdLibia sen sijaan."
 
-#: engines/scumm/scumm.cpp:2274
+#: engines/scumm/scumm.cpp:2288
 msgid ""
 "This particular version of Monkey Island 1 is known to miss some\n"
 "required resources for MT-32. Using AdLib instead."
@@ -11758,7 +11756,7 @@ msgstr ""
 "vaadittuja käytön mahdollistavia osasia MT-32:lle. Otetaan sen sijasta "
 "käyttöön AdLib."
 
-#: engines/scumm/scumm.cpp:4096
+#: engines/scumm/scumm.cpp:4110
 msgid ""
 "Usually, Maniac Mansion would start now. But for that to work, the game "
 "files for Maniac Mansion have to be in the 'Maniac' directory inside the "
@@ -11768,7 +11766,7 @@ msgstr ""
 "Maniac Mansionin pelitiedostojen pitää löytyä \"Maniac\"-kansiosta Tentacle-"
 "pelikansion sisältä, ja sen pitää myös olla lisätty pelinä ScummVM:ään."
 
-#: engines/scumm/scumm.cpp:4208
+#: engines/scumm/scumm.cpp:4222
 msgid "Would you like to host or join a network play session?"
 msgstr "Haluatko isännöidä vai liittyä verkkopeliin?"
 

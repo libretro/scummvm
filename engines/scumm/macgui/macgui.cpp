@@ -43,8 +43,14 @@ MacGui::MacGui(ScummEngine *vm, const Common::Path &resourceFile) {
 
 	case GID_MONKEY:
 	case GID_MONKEY2:
-	case GID_INDY4:
 		_impl = new MacV5Gui(vm, resourceFile);
+		break;
+
+	case GID_INDY4:
+		if (vm->_isModernMacVersion)
+			_impl = new MacV6Gui(vm, resourceFile);
+		else
+			_impl = new MacV5Gui(vm, resourceFile);
 		break;
 
 	case GID_TENTACLE:

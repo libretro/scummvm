@@ -66,7 +66,7 @@ class MinigameTriangle : public MinigameInterface {
 		bool _highlight;
 		bool _animated;
 
-		static const char *getFaceStateName(int angle, bool selected, bool animated, bool instantaneous);
+		static const Common::String getFaceStateName(int angle, bool selected, bool animated, bool instantaneous);
 		static const char *getBackStateName(bool selected, bool animated, bool instantaneous);
 		static const char *getBorderStateName(bool selected);
 	};
@@ -90,6 +90,8 @@ private:
 	ObjectContainer _backSides[6];
 	int _selected = 0;
 	int _hovered = 0;
+
+	bool _quickReselect;
 
 	AnimationState _animationState = NO_ANIMATION;
 	int _animatedNodes[2] =  { 0 };

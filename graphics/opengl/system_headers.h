@@ -115,8 +115,22 @@
 	#define GL_CLAMP_TO_BORDER 0x812D
 #endif
 
+#if !defined(GL_MIRRORED_REPEAT)
+	#define GL_MIRRORED_REPEAT 0x8370
+#endif
+
 #if !defined(GL_DRAW_FRAMEBUFFER_BINDING)
 	#define GL_DRAW_FRAMEBUFFER_BINDING 0x8CA6
+#endif
+
+#if !defined(GL_DEPTH_STENCIL)
+	// For WebGL: see https://github.com/emscripten-core/emscripten/issues/4832
+	#define GL_DEPTH_STENCIL 0x84F9
+#endif
+
+#if !defined(GL_DEPTH_STENCIL_ATTACHMENT)
+	// For WebGL: see https://github.com/emscripten-core/emscripten/issues/4832
+	#define GL_DEPTH_STENCIL_ATTACHMENT 0x821A
 #endif
 
 #endif

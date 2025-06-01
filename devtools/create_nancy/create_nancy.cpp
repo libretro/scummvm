@@ -30,11 +30,13 @@
 #include "nancy6_data.h"
 #include "nancy7_data.h"
 #include "nancy8_data.h"
+#include "nancy9_data.h"
+#include "nancy10_data.h"
 
 #define NANCYDAT_MAJOR_VERSION 1
 #define NANCYDAT_MINOR_VERSION 1
 
-#define NANCYDAT_NUM_GAMES 9
+#define NANCYDAT_NUM_GAMES 11
 
 /**
  * Format specifications for nancy.dat:
@@ -71,6 +73,8 @@
  * 		Nancy Drew: Secret of the Scarlet Hand
  * 		Nancy Drew: Ghost Dogs of Moon Lake
  * 		Nancy Drew: The Haunted Carousel
+ * 		Nancy Drew: Danger on Deception Island
+ * 		Nancy Drew: The Secret of Shadow Ranch
 */
 
 // Add the offset to the next tagged section before the section itself for easier navigation
@@ -307,6 +311,26 @@ int main(int argc, char *argv[]) {
 	WRAPWITHOFFSET(writeGoodbyes(output, _nancy8Goodbyes))
 	WRAPWITHOFFSET(writeRingingTexts(output, _nancy8TelephoneRinging))
 	WRAPWITHOFFSET(writeEventFlagNames(output, _nancy8EventFlagNames))
+
+	// Nancy Drew: Danger on Deception Island
+	gameOffsets.push_back(output.pos());
+	WRAPWITHOFFSET(writeConstants(output, _nancy9Constants))
+	WRAPWITHOFFSET(writeSoundChannels(output, _nancy3andUpSoundChannelInfo))	// same as 3
+	WRAPWITHOFFSET(writeLanguages(output, _nancy8LanguagesOrder))	// same as 8
+	WRAPWITHOFFSET(writeConditionalDialogue(output, _nancy9ConditionalDialogue))
+	WRAPWITHOFFSET(writeGoodbyes(output, _nancy9Goodbyes))
+	WRAPWITHOFFSET(writeRingingTexts(output, _nancy8TelephoneRinging))	// same as 8
+	WRAPWITHOFFSET(writeEventFlagNames(output, _nancy9EventFlagNames))
+
+	// Nancy Drew: The Secret of Shadow Ranch
+	gameOffsets.push_back(output.pos());
+	WRAPWITHOFFSET(writeConstants(output, _nancy10Constants))
+	WRAPWITHOFFSET(writeSoundChannels(output, _nancy3andUpSoundChannelInfo)) // same as 3
+	WRAPWITHOFFSET(writeLanguages(output, _nancy8LanguagesOrder))            // same as 8
+	WRAPWITHOFFSET(writeConditionalDialogue(output, _nancy10ConditionalDialogue))
+	WRAPWITHOFFSET(writeGoodbyes(output, _nancy10Goodbyes))
+	WRAPWITHOFFSET(writeRingingTexts(output, _nancy8TelephoneRinging)) // same as 8
+	WRAPWITHOFFSET(writeEventFlagNames(output, _nancy10EventFlagNames))
 
 	// Write the offsets for each game in the header
 	output.seek(offsetsOffset);

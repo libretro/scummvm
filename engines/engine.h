@@ -102,7 +102,7 @@ class Engine;
 */
 class PauseToken {
 public:
-	PauseToken();
+	constexpr PauseToken() : _engine(nullptr) {}
 	/**
 	 * Construct a pause token.
 	 */
@@ -132,7 +132,7 @@ public:
 	bool isActive() const { return _engine != nullptr; }
 
 private:
-	PauseToken(Engine *);
+	constexpr PauseToken(Engine *engine) : _engine(engine) {}
 
 	Engine *_engine;
 	/**
@@ -201,6 +201,11 @@ private:
 	 * The time when the pause was started.
 	 */
 	uint32 _pauseStartTime;
+
+	/**
+	 * The screen change ID when the pause was started
+	 */
+	int _pauseScreenChangeID;
 
 	/**
 	 * The time when the engine was started.

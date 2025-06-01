@@ -27,6 +27,8 @@
 
 namespace QDEngine {
 
+MinigameInterface *createMinigameScores(MinigameManager *runtime);
+
 class Scores : public MinigameInterface {
 public:
 	Scores(MinigameManager *runtime);
@@ -62,8 +64,11 @@ private:
 	const char *_lastScore;
 	const char *_lastTime;
 
+	const char *_timeFormat;
+
 	QDObject _prev;
 	QDObject _next;
+	QDObject _gameBorder;
 	QDObject _outMaxLevel;
 
 	QDObjects _games;

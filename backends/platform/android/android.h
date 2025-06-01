@@ -34,6 +34,7 @@
 #include "backends/fs/posix/posix-fs-factory.h"
 #include "backends/log/log.h"
 #include "backends/platform/android/touchcontrols.h"
+#include "engines/engine.h"
 
 #include <pthread.h>
 
@@ -147,6 +148,8 @@ private:
 	Audio::MixerImpl *_mixer;
 	timeval _startTime;
 
+	PauseToken _pauseToken;
+
 	Common::Queue<Common::Event> _event_queue;
 	EventWithDelay _delayedMouseBtnUpEvent;
 	EventWithDelay _delayedMouseBtnDownEvent;
@@ -221,6 +224,8 @@ public:
 	void setFeatureState(OSystem::Feature f, bool enable) override;
 	bool getFeatureState(OSystem::Feature f) override;
 
+	void setPause(bool pause);
+
 	void pushEvent(int type, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6);
 	void pushEvent(const Common::Event &event);
 	void pushEvent(const Common::Event &event1, const Common::Event &event2);
@@ -265,12 +270,10 @@ public:
 	bool isConnectionLimited() override;
 	Common::String getSystemLanguage() const override;
 
-	const OSystem::GraphicsMode *getSupportedGraphicsModes() const override;
-	int getDefaultGraphicsMode() const override;
-	bool setGraphicsMode(int mode, uint flags) override;
-	int getGraphicsMode() const override;
-
+#if defined(USE_OPENGL_GAME) || defined(USE_OPENGL_SHADERS)
 	OpenGL::ContextType getOpenGLType() const override { return OpenGL::kContextGLES2; }
+	Common::Array<uint> getSupportedAntiAliasingLevels() const override;
+#endif
 #if defined(USE_OPENGL) && defined(USE_GLAD)
 	void *getOpenGLProcAddress(const char *name) const override;
 #endif

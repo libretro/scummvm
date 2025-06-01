@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ScummVM 1.8.0git\n"
 "Report-Msgid-Bugs-To: scummvm-devel@lists.scummvm.org\n"
-"POT-Creation-Date: 2025-05-18 21:13+0000\n"
+"POT-Creation-Date: 2025-05-31 08:30+0000\n"
 "PO-Revision-Date: 2021-03-21 08:24+0000\n"
 "Last-Translator: Eugene Sandulenko <sev@scummvm.org>\n"
 "Language-Team: Belarusian <https://translations.scummvm.org/projects/scummvm/"
@@ -334,7 +334,7 @@ msgstr "Цяпер працуе іншае сховішча. Перапыніц�
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:611 engines/kyra/gui/saveload_eob.cpp:644
 #: engines/parallaction/metaengine.cpp:143
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4202
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4216
 #: engines/toon/toon.cpp:1543
 msgid "Yes"
 msgstr "Так"
@@ -347,7 +347,7 @@ msgstr "Так"
 #: engines/director/lingo/xlibs/jitdraw3.cpp:139 engines/grim/grim.cpp:366
 #: engines/kyra/gui/saveload_eob.cpp:611 engines/kyra/gui/saveload_eob.cpp:644
 #: engines/parallaction/metaengine.cpp:149
-#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4202
+#: engines/sci/graphics/controls32.cpp:929 engines/scumm/scumm.cpp:4216
 #: engines/toon/toon.cpp:1543
 msgid "No"
 msgstr "Не"
@@ -378,9 +378,9 @@ msgstr ""
 #: engines/groovie/script.cpp:665 engines/mtropolis/mtropolis.cpp:114
 #: engines/mtropolis/mtropolis.cpp:124 engines/parallaction/saveload.cpp:270
 #: engines/saga/music.cpp:102 engines/sci/engine/kgraphics.cpp:76
-#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1353
-#: engines/scumm/scumm.cpp:1770 engines/scumm/scumm.cpp:2260
-#: engines/scumm/scumm.cpp:2276 engines/sky/compact.cpp:140
+#: engines/sci/graphics/controls32.cpp:926 engines/scumm/scumm.cpp:1359
+#: engines/scumm/scumm.cpp:1784 engines/scumm/scumm.cpp:2274
+#: engines/scumm/scumm.cpp:2290 engines/sky/compact.cpp:140
 #: engines/sword1/animation.cpp:566 engines/sword1/animation.cpp:574
 #: engines/sword1/control.cpp:2816 engines/sword1/logic.cpp:1738
 #: engines/sword2/animation.cpp:459 engines/sword2/animation.cpp:469
@@ -3075,19 +3075,19 @@ msgstr "Памылка чытання дадзеных"
 msgid "Writing data failed"
 msgstr "Памылка запісу дадзеных"
 
-#: common/error.cpp:67
+#: common/error.cpp:68
 msgid "Could not find suitable engine plugin"
 msgstr "Не магу знайсці падыходны плагін для рухавічка"
 
-#: common/error.cpp:69
+#: common/error.cpp:70
 msgid "Engine plugin does not support saved games"
 msgstr "Рухавічок не падтрымвае захаванне гульняў"
 
-#: common/error.cpp:72
+#: common/error.cpp:73
 msgid "User canceled"
 msgstr "Перапынена карыстачом"
 
-#: common/error.cpp:76
+#: common/error.cpp:77
 msgid "Unknown error"
 msgstr "Невядомая памылка"
 
@@ -4821,14 +4821,14 @@ msgstr "Рэжым павелічэння выключаны. Зварот да 
 msgid "Magnify Mode Off"
 msgstr "Рэжым павелічэння выключаны"
 
-#: backends/platform/android/android.cpp:1114
+#: backends/platform/android/android.cpp:1125
 #: backends/platform/ios7/ios7_osys_misc.mm:249
 #, fuzzy
 #| msgid "Settings"
 msgid "Getting help"
 msgstr "Налады"
 
-#: backends/platform/android/android.cpp:1117
+#: backends/platform/android/android.cpp:1128
 msgid ""
 "## Help, I'm lost!\n"
 "\n"
@@ -4850,7 +4850,7 @@ msgid ""
 "checking out a game walkthrough. Good luck!\n"
 msgstr ""
 
-#: backends/platform/android/android.cpp:1126
+#: backends/platform/android/android.cpp:1137
 #: backends/platform/ios7/ios7_osys_misc.mm:261
 #: backends/platform/ios7/ios7_osys_misc.mm:357
 #, fuzzy
@@ -4858,7 +4858,7 @@ msgstr ""
 msgid "Touch Controls"
 msgstr "Кіраванне"
 
-#: backends/platform/android/android.cpp:1129
+#: backends/platform/android/android.cpp:1140
 msgid ""
 "## Touch control modes\n"
 "The touch control mode can be changed by tapping or clicking on the "
@@ -4927,7 +4927,7 @@ msgid ""
 "\n"
 msgstr ""
 
-#: backends/platform/android/android.cpp:1185
+#: backends/platform/android/android.cpp:1196
 #: backends/platform/ios7/ios7_osys_misc.mm:336
 #: backends/platform/ios7/ios7_osys_misc.mm:380
 #, fuzzy
@@ -4936,7 +4936,7 @@ msgstr ""
 msgid "Adding Games"
 msgstr "Доб. игру"
 
-#: backends/platform/android/android.cpp:1188
+#: backends/platform/android/android.cpp:1199
 msgid ""
 "## Adding Games \n"
 "\n"
@@ -6117,7 +6117,7 @@ msgstr "Узнавіць"
 msgid "Quick load or save game isn't supported in this location"
 msgstr ""
 
-#: engines/agos/saveload.cpp:160 engines/scumm/scumm.cpp:3156
+#: engines/agos/saveload.cpp:160 engines/scumm/scumm.cpp:3170
 #, c-format
 msgid ""
 "Failed to load saved game from file:\n"
@@ -6128,7 +6128,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:195 engines/scumm/scumm.cpp:3143
+#: engines/agos/saveload.cpp:195 engines/scumm/scumm.cpp:3157
 #, c-format
 msgid ""
 "Failed to save game to file:\n"
@@ -6139,7 +6139,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: engines/agos/saveload.cpp:203 engines/scumm/scumm.cpp:3176
+#: engines/agos/saveload.cpp:203 engines/scumm/scumm.cpp:3190
 #, c-format
 msgid ""
 "Successfully saved game in file:\n"
@@ -10710,7 +10710,7 @@ msgid "Your Name:"
 msgstr "Назва:"
 
 #. I18N: Button, start hosting online multiplayer game
-#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4208
+#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4222
 msgid "Host"
 msgstr ""
 
@@ -10722,7 +10722,7 @@ msgid "Querying games..."
 msgstr "Захоўваю гульню..."
 
 #. I18N: Join online multiplayer game
-#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4208
+#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4222
 msgid "Join"
 msgstr ""
 
@@ -11681,18 +11681,18 @@ msgid ""
 "320x200, under 'engine' tab."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1344
+#: engines/scumm/scumm.cpp:1345
 #, c-format
 msgid "This game requires the '%s' Macintosh executable for its fonts."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1348
+#: engines/scumm/scumm.cpp:1354
 #, c-format
 msgid ""
 "This game requires the '%s' Macintosh executable for its music and fonts."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1352
+#: engines/scumm/scumm.cpp:1358
 #, fuzzy, c-format
 #| msgid ""
 #| "Could not find the 'Monkey Island' Macintosh executable to read the\n"
@@ -11705,25 +11705,25 @@ msgstr ""
 "прачытаць\n"
 "дадзеныя пра інструменты. Музыка будзе выключана."
 
-#: engines/scumm/scumm.cpp:1353
+#: engines/scumm/scumm.cpp:1359
 msgid "The Mac GUI"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1353
+#: engines/scumm/scumm.cpp:1359
 msgid "The music and the Mac GUI"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1373
+#: engines/scumm/scumm.cpp:1388
 #, c-format
 msgid "Could not open Macintosh resource file %s"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1376
+#: engines/scumm/scumm.cpp:1391
 #, c-format
 msgid "Could not find resource fork in Macintosh resource file %s"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1384
+#: engines/scumm/scumm.cpp:1398
 #, c-format
 msgid ""
 "'%s' appears to be the wrong Dig executable. It may be the launcher one "
@@ -11732,14 +11732,14 @@ msgid ""
 "its sub-folders should be what you need."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1767
+#: engines/scumm/scumm.cpp:1781
 msgid ""
 "Audio files compressed with ScummVM Tools were detected; *.BUN/*.SOU\n"
 "compression is not supported anymore for this game, audio will be disabled.\n"
 "Please copy the game from the original media without compression."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:2258
+#: engines/scumm/scumm.cpp:2272
 #, c-format
 msgid ""
 "Native MIDI support requires the Roland Upgrade from LucasArts,\n"
@@ -11748,13 +11748,13 @@ msgstr ""
 "Рэжым \"роднага\" MIDI патрабуе абнаўленне Roland Upgrade ад\n"
 "LucasArts, але бракуе %s. Пераключаюся на AdLib."
 
-#: engines/scumm/scumm.cpp:2274
+#: engines/scumm/scumm.cpp:2288
 msgid ""
 "This particular version of Monkey Island 1 is known to miss some\n"
 "required resources for MT-32. Using AdLib instead."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:4096
+#: engines/scumm/scumm.cpp:4110
 msgid ""
 "Usually, Maniac Mansion would start now. But for that to work, the game "
 "files for Maniac Mansion have to be in the 'Maniac' directory inside the "
@@ -11765,7 +11765,7 @@ msgstr ""
 "унутры дырэкторыі гульні Tentacle і сама гульня павінна быць дададзена ў "
 "ScummVM."
 
-#: engines/scumm/scumm.cpp:4208
+#: engines/scumm/scumm.cpp:4222
 #, fuzzy
 msgid "Would you like to host or join a network play session?"
 msgstr "Ці вы хочаце захаваць або загрузіць гульню?"

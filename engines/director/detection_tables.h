@@ -543,7 +543,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "wiggles1",			"A Day with the Wiggles" },
 	{ "willywabbit",		"Willy Wabbit & His Magical Books" },
 	{ "willywabbit2",		"Around the World With Willy Wabbit" },
-	{ "willywabbitmandarin",	"Willy Wabbit Mandarin Adventure" },
+	{ "willywabbitmandarin","Willy Wabbit Mandarin Adventure" },
 	{ "willywabbitmath",	"Willy Wabbit Math Adventure" },
 	{ "willywabbitmosaic",	"Mosaic Game" },
 	{ "winniewitch",		"Winnie the Witch" },
@@ -1489,6 +1489,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "brspel",				"BR spel" },
 	{ "djuphavsjakten",		"Djuphavsjakten" },
 	{ "ernie",				"Ernie: Broke in Bayonne" },  // aka Ernie: Pank i Bayonne
+	{ "femmyrordemo",		"Fem myror är fler än fyra elefanter - Demo" },	//10 games from parts 1 and 2
 	{ "garygadget2",		"Bygg båtar med Mulle Meck" },              // First game listed under English
 	{ "garygadget3",		"Bygg flygplan med Mulle Meck" },
 	{ "garygadget4",		"Bygg hus med Mulle Meck" },
@@ -1497,6 +1498,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "jonssonligan1",		"Jönssonligan: Jakten på Mjölner" },
 	{ "jonssonligan2",		"Jönssonligan går på djupet" },
 	{ "kosmopolska",		"Kosmopolska" },
+	{ "krakeldamm",		"Krakels ABC: Den galna dammsugaren/Mera Krakel" },
 	{ "mumin1",				"Kurragömma med Mumintrollen" },
 	{ "onsalakorv",			"Onsalakorv" },
 	{ "pettson1",			"Pettson o Findus i snickarbon" },
@@ -1601,6 +1603,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "cmc",				"Creative Multimedia Catalog" },
 	{ "compuserve",			"CompuServe Demo" },
 	{ "coreltour",			"Corel Product Tour" },
+	{ "daedalusguide",		"The Official Guide to The Daedalus Encounter" },  // Companion Disc
 	{ "davidsonpp",			"Davidson Product Previews" },
 	{ "davidsonps",			"Davidson Product Sampler" },
 	{ "dewarswl",			"DeWar's \"White Label\"" },
@@ -3976,6 +3979,10 @@ static const DirectorGameDescription gameDescriptions[] = {
 	//									  "DAEDALUS.DAT", "2b9e22ee93e5d58f383ef389fa09e12b", 69538, Common::FR_FRA, 404),
 	MACGAME2_l("daedalus", "", "DAEDALUS",	   "0c7bbb4b24823e5ab871cb4c1d6f3710", 483518,
 							   "DAEDALUS.DAT", "4eb2fab14f1b932ae9f01d8b05a411de", 69538, Common::FR_FRA, 404),
+
+	MACGAME1("daedalusguide", "", "Daedalus Guide (24 Bit)", "r:77f4098988d5386794d1530065f514cd", 303961, 400),
+	WINGAME2("daedalusguide", "", "GUIDE.EXE", "t:194e099857d6524dcbabce20250048ea", 1719019,
+								  "MOVIES/TV_11.MOV", "t:3918daeea52777ceedf8e1d8fad250af", 74445870, 404),
 
 	WINDEMO2("dailymail100", "Demo", "STARTUP.EXE", "2e62abdad839e42068afdcd0644d7dcf", 1129467,
 									 "LAUNCH2.DIR", "f913a0c83847ccc9df461311a4475a77", 223086, 404),
@@ -8274,6 +8281,10 @@ static const DirectorGameDescription gameDescriptions[] = {
 	WINGAME2_l("kontyngent99", "", "START.EXE",		"d:d62438566e44826960fc16c5c23dbe43", 1513041,
 								   "DANE/MAIN.DXR",	"d:98b4f7339e1f8f6628035e6317f78912", 21043440, Common::PL_POL, 650),
 
+	// Krakel Spektakel - Krakels ABC
+	WINGAME1_l("krakeldamm", "Hemglass V1.1", "DAMMNT.EXE", "518a98696fe1122e08410b0f157f21bf", 1515971, Common::SV_SWE, 602),
+
+
 	// Published by Future Soft of Nasr City, Cairo
 	WINGAME1_l("ktaralarkam", "", "123.exe", "a593079aecf5bd938ce75264cac24b2d", 2748951, Common::AR_ARB, 600),
 
@@ -8331,6 +8342,10 @@ static const DirectorGameDescription gameDescriptions[] = {
 	// Italian: "I Signori degli Elementi", published by Editori Riuniti Multimedia
 	MACGAME1_l("melements", "", "I signori degli elementi", "r:398eb2cdf121feb490097c6323d52267", 1032406, Common::IT_ITA, 602),
 	WINGAME1_l("melements", "", "MVM.EXE",                  "t:caeea1aec3be6d1171992c824e3e3714", 2292781, Common::IT_ITA, 602),
+
+	// Japanese: "Masters of Elements: Unmei no Shihaisha" or "Ｍａｓｔｅｒｓ　ｏｆ　Ｅｌｅｍｅｎｔｓ　～運命の支配者～", published by Digitalogue
+	MACGAME1_l("melements", "", "Masters of Elements", "r:d1d1ee07987a38fd726f152a52d96114", 1035232, Common::JA_JPN, 602),
+	WINGAME1_l("melements", "", "MVM.EXE",             "t:d1c929615def3d55f47fbc2171864320", 2903578, Common::JA_JPN, 602),
 
 	WINGAME2("meetchuck", "", "HORSE.EXE",  "t:b0f3841f6e8005e519445b22de37749b", 1130649,
 	 						  "HPICTS.DXR", "d:60aba531fc0bf4897ba94413eb8ae24f", 7878094, 600),
@@ -9012,6 +9027,12 @@ static const DirectorGameDescription gameDescriptions[] = {
 							"JOTO/intro.dxr",		"d:f5a9969070ef59b66aa4474bc8ef684e",	21136, 700),
 	WINGAME2("jewels1", "", "Jewels.exe",			"t:b362017d018a849198bd0a4f3c469e0a", 2023828,
 							"JOTO/intro.dxr",		"d:f5a9969070ef59b66aa4474bc8ef684e",	21136, 700),
+
+	// Fem myror är fler än fyra elefanter, Första & Andra delen + Hemglass demo
+	// BreakinBenny: Dedicated to the memory of Magnus Härenstam, Brasse Brännström and Eva Remaeus!
+	MACGAME1_l("femmyrordemo", "Hemglass Demo", "MEDIA/Fem myror 2", "r:0944b962ebb00f4b5d5149d220f8449b", 111222, Common::SV_SWE, 702),
+	WINGAME1_l("femmyrordemo", "Hemglass Demo", "MEDIA/femmyror.exe", "7c18c9a6af2694156bf09ed195c1ab09", 2619547, Common::SV_SWE, 702),
+
 
 	// All of the installers also use Director
 	// Mac filename is Starta Jönssonligan

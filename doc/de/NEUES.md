@@ -4,10 +4,21 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
 #### 2.10.0 (xx.xx.xxxx)
 
  Neue Spiele:
+   - Unterstützung für Another World hinzugefügt.
    - Unterstützung für Dark Seed hinzugefügt.
    - Unterstützung für God of Thunder hinzugefügt.
    - Unterstützung für The Adventures of Willy Beamish hinzugefügt.
    - Unterstützung für Heart of China hinzugefügt.
+   - Unterstützung für Nancy Drew: Secret of the Scarlet Hand hinzugefügt.
+   - Unterstützung für Nancy Drew: Ghost Dogs of Moon Lake hinzugefügt.
+   - Unterstützung für Ripley's Believe It or Not!: The Riddle of Master Lu hinzugefügt.
+
+ Drascula:
+   - Hervorgehobene Charaktere werden jetzt korrekt dargestellt.
+   - Unterstützung für Text-to-speech hinzugefügt.
+
+ Freescape:
+   - Unterstützung für Rotation/Rollen in Driller und Dark Side hinzugefügt.
 
  Nuvie:
    - Funktion "Charakter übertragen" zum Hauptmenü hinzugefügt.
@@ -18,23 +29,20 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
      Remastered-Version von Day of the Tentacle hinzugefügt.
    - Unterstützung für die Sprachausgabe in den SE-Versionen von MI1 und MI2 hinzugefügt.
    - Verbesserung der Grafik-Unterstützung für die Macintosh-Versionen von DOTT, Sam & Max, The Dig,
-     Full Throttle und Maniac Mansion.
+     Full Throttle, Maniac Mansion und der PowerPC-Version von Fate of Atlantis.
    - Audio-Fehler in der Sega-CD-Version von MI1 korrigiert.
    - Option hinzugefügt, über welche die Sega CD-Version von MI1 mit der "Shadow Mode"-Farbpalette
      dargestellt wird. Die Farbpalette wurde für diese Veröffentlichung ursprünglich benutzt.
 	 (Es ist unklar, ob die deutlich dunklere Darstellung beabsichtigt ist oder nicht.)
 
  TwinE:
-   - Bewegung des Meca-Pinguins korrigiert.
-   - Fehler bei der Audio-Wiedergabe behoben.
-   - Ursprünngliche Fehlerkorrektur aktiviert (Tür zum Hauptquartier von FunFrock).
-   - Fehlerkorrektur für das Auslösen von Action-Events.
+   - Ursprüngliche Fehlerkorrekturen aktiviert (Tür zum Hauptquartier von FunFrock und Probleme beim Speichern).
 
  V-Cruise:
    - Fehlerhafte Text-Darstellung in der chinesischen und japanischen Version korrigiert.
    - Unterstützung für die japanische DVD-Version von Schizm: Mysterious Journey hinzugefügt.
 
-#### 2.9.1 (25.05.2025)
+#### 2.9.1 "Slappin da BASS" (25.05.2025)
 
  AGI:
    - Unterstützung für frühe Versionen von Christmas Card 1986 mit Werbung

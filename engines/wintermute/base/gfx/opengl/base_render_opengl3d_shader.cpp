@@ -20,11 +20,16 @@
  */
 
 #include "engines/wintermute/ad/ad_block.h"
+#include "engines/wintermute/ad/ad_game.h"
 #include "engines/wintermute/ad/ad_generic.h"
+#include "engines/wintermute/ad/ad_scene.h"
+#include "engines/wintermute/ad/ad_scene_geometry.h"
 #include "engines/wintermute/ad/ad_walkplane.h"
+#include "engines/wintermute/ad/ad_waypoint_group3d.h"
 #include "engines/wintermute/base/base_game.h"
 #include "engines/wintermute/base/gfx/base_image.h"
 #include "engines/wintermute/base/gfx/3dcamera.h"
+#include "engines/wintermute/base/gfx/3dlight.h"
 
 #include "graphics/opengl/system_headers.h"
 
@@ -47,30 +52,82 @@ BaseRenderer3D *makeOpenGL3DShaderRenderer(BaseGame *inGame) {
 
 BaseRenderOpenGL3DShader::BaseRenderOpenGL3DShader(BaseGame *inGame) : BaseRenderer3D(inGame) {
 	setDefaultAmbientLightColor();
-	_spriteVBO = 0;
 	_alphaRef = 0;
 }
 
 BaseRenderOpenGL3DShader::~BaseRenderOpenGL3DShader() {
 	_camera = nullptr; // ref only
 	glDeleteBuffers(1, &_spriteVBO);
+	glDeleteBuffers(1, &_fadeVBO);
+	glDeleteBuffers(1, &_lineVBO);
+	glDeleteBuffers(1, &_simpleShadowVBO);
+	glDeleteBuffers(1, &_postfilterVBO);
 }
 
 bool BaseRenderOpenGL3DShader::initRenderer(int width, int height, bool windowed) {
+	_simpleShadow[0].x = -1.0f;
+	_simpleShadow[0].y = 0.0f;
+	_simpleShadow[0].z = 1.0f;
+	_simpleShadow[0].nx = 0.0f;
+	_simpleShadow[0].ny = 1.0f;
+	_simpleShadow[0].nz = 0.0f;
+	_simpleShadow[0].u = 0.0f;
+	_simpleShadow[0].v = 1.0f;
+
+	_simpleShadow[1].x = -1.0f;
+	_simpleShadow[1].y = 0.0f;
+	_simpleShadow[1].z = -1.0f;
+	_simpleShadow[1].nx = 0.0f;
+	_simpleShadow[1].ny = 1.0f;
+	_simpleShadow[1].nz = 0.0f;
+	_simpleShadow[1].u = 1.0f;
+	_simpleShadow[1].v = 1.0f;
+
+	_simpleShadow[2].x = 1.0f;
+	_simpleShadow[2].y = 0.0f;
+	_simpleShadow[2].z = 1.0f;
+	_simpleShadow[2].nx = 0.0f;
+	_simpleShadow[2].ny = 1.0f;
+	_simpleShadow[2].nz = 0.0f;
+	_simpleShadow[2].u = 0.0f;
+	_simpleShadow[2].v = 0.0f;
+
+	_simpleShadow[3].x = 1.0f;
+	_simpleShadow[3].y = 0.0f;
+	_simpleShadow[3].z = -1.0f;
+	_simpleShadow[3].nx = 0.0f;
+	_simpleShadow[3].ny = 1.0f;
+	_simpleShadow[3].nz = 0.0f;
+	_simpleShadow[3].u = 1.0f;
+	_simpleShadow[3].v = 0.0f;
+
 	glGenBuffers(1, &_spriteVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, _spriteVBO);
-	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(SpriteVertex), nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(SpriteVertex), nullptr, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-	static const char *spriteAttributes[] = {"position", "texcoord", "color", nullptr};
+	static const char *spriteAttributes[] = { "position", "texcoord", "color", nullptr };
 	_spriteShader = OpenGL::Shader::fromFiles("wme_sprite", spriteAttributes);
-
 	_spriteShader->enableVertexAttribute("position", _spriteVBO, 3, GL_FLOAT, false, sizeof(SpriteVertex), 0);
 	_spriteShader->enableVertexAttribute("texcoord", _spriteVBO, 2, GL_FLOAT, false, sizeof(SpriteVertex), 12);
 	_spriteShader->enableVertexAttribute("color", _spriteVBO, 4, GL_FLOAT, false, sizeof(SpriteVertex), 20);
 
 	static const char *geometryAttributes[] = { "position", "color", nullptr };
 	_geometryShader = OpenGL::Shader::fromFiles("wme_geometry", geometryAttributes);
+
+	glGenBuffers(1, &_simpleShadowVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, _simpleShadowVBO);
+	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(SimpleShadowVertex), _simpleShadow, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	static const char *simpleShadowAttributes[] = { "position", "normal", "texcoord", nullptr };
+	_simpleShadowShader = OpenGL::Shader::fromFiles("wme_simple_shadow", simpleShadowAttributes);
+	_simpleShadowShader->enableVertexAttribute("position", _simpleShadowVBO, 3, GL_FLOAT, false, sizeof(SimpleShadowVertex), 0);
+	_simpleShadowShader->enableVertexAttribute("normal", _simpleShadowVBO, 3, GL_FLOAT, false, sizeof(SimpleShadowVertex), 12);
+	_simpleShadowShader->enableVertexAttribute("texcoord", _simpleShadowVBO, 2, GL_FLOAT, false, sizeof(SimpleShadowVertex), 24);
+
+	static const char *flatShadowAttributes[] = { "position", nullptr };
+	_flatShadowShader = OpenGL::Shader::fromFiles("wme_flat_shadow_modelx", flatShadowAttributes);
 
 	static const char *shadowVolumeAttributes[] = { "position", nullptr };
 	_shadowVolumeShader = OpenGL::Shader::fromFiles("wme_shadow_volume", shadowVolumeAttributes);
@@ -82,7 +139,7 @@ bool BaseRenderOpenGL3DShader::initRenderer(int width, int height, bool windowed
 	DXMatrixIdentity(&m);
 	_transformStack.push_back(m);
 
-	static const char *XModelAttributes[] = {"position", "texcoord", "normal", nullptr};
+	static const char *XModelAttributes[] = { "position", "texcoord", "normal", nullptr };
 	_xmodelShader = OpenGL::Shader::fromFiles("wme_modelx", XModelAttributes);
 
 	setDefaultAmbientLightColor();
@@ -94,7 +151,7 @@ bool BaseRenderOpenGL3DShader::initRenderer(int width, int height, bool windowed
 
 	glGenBuffers(1, &_fadeVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, _fadeVBO);
-	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(LineVertex), nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(LineVertex), nullptr, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	static const char *fadeAttributes[] = { "position", nullptr };
@@ -103,14 +160,36 @@ bool BaseRenderOpenGL3DShader::initRenderer(int width, int height, bool windowed
 
 	glGenBuffers(1, &_lineVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, _lineVBO);
-	glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(LineVertex), nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(LineVertex), nullptr, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	static const char *lineAttributes[] = { "position", nullptr };
 	_lineShader = OpenGL::Shader::fromFiles("wme_line", lineAttributes);
 	_lineShader->enableVertexAttribute("position", _lineVBO, 3, GL_FLOAT, false, sizeof(LineVertex), 0);
 
+	const GLfloat quadVertices[] = {
+		-1.0f, -1.0f, 0.0f, 0.0f,
+		 1.0f, -1.0f, 1.0f, 0.0f,
+		-1.0f,  1.0f, 0.0f, 1.0f,
+		 1.0f,  1.0f, 1.0f, 1.0f,
+	};
+	glGenBuffers(1, &_postfilterVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, _postfilterVBO);
+	glBufferData(GL_ARRAY_BUFFER, 16 * sizeof(GLfloat), quadVertices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+	static const char *postfilterAttributes[] = { "position", "texcoord", nullptr };
+	_postfilterShader = OpenGL::Shader::fromFiles("wme_postfilter", postfilterAttributes);
+	_postfilterShader->enableVertexAttribute("position", _postfilterVBO, 2, GL_FLOAT, false, 4 * sizeof(GLfloat), 0);
+	_postfilterShader->enableVertexAttribute("texcoord", _postfilterVBO, 2, GL_FLOAT, false, 4 * sizeof(GLfloat), 8);
+
+	glGenTextures(1, &_postfilterTexture);
+	glBindTexture(GL_TEXTURE_2D, _postfilterTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+
+	setSpriteBlendMode(Graphics::BLEND_NORMAL, true);
 
 	_windowed = !ConfMan.getBool("fullscreen");
 	_width = width;
@@ -120,6 +199,8 @@ bool BaseRenderOpenGL3DShader::initRenderer(int width, int height, bool windowed
 
 	setProjection();
 
+	_postFilterMode = kPostFilterOff;
+
 	_active = true;
 
 	return true;
@@ -127,6 +208,7 @@ bool BaseRenderOpenGL3DShader::initRenderer(int width, int height, bool windowed
 
 bool BaseRenderOpenGL3DShader::flip() {
 	_lastTexture = nullptr;
+	postfilter();
 
 	// Disable blend mode and cull face to prevent interfere with backend renderer
 	glDisable(GL_BLEND);
@@ -178,11 +260,6 @@ bool BaseRenderOpenGL3DShader::setup3D(Camera3D *camera, bool force) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
-		// Disable blending for 3d rendering, it seems no need to enable it.
-		// It will be enabled in other places when needed.
-		// This is delta compared to original sources.
-		glDisable(GL_BLEND);
-
 		glEnable(GL_DEPTH_TEST);
 		// WME uses 8 as a reference value and Direct3D expects it to be in the range [0, 255]
 		_alphaRef = 8 / 255.0f;
@@ -222,14 +299,17 @@ bool BaseRenderOpenGL3DShader::setup3D(Camera3D *camera, bool force) {
 
 		_gameRef->getFogParams(&fogEnabled, &fogColor, &fogStart, &fogEnd);
 		if (fogEnabled) {
-			// TODO: Implement fog
-			GLfloat color[4] = { RGBCOLGetR(fogColor) / 255.0f,
-			                     RGBCOLGetG(fogColor) / 255.0f,
-			                     RGBCOLGetB(fogColor) / 255.0f,
-			                     RGBCOLGetA(fogColor) / 255.0f };
-			debug(5, "BaseRenderOpenGL3DShader::setup3D fog not yet implemented! [%f %f %f %f]", color[0], color[1], color[2], color[3]);
+			Math::Vector4d color;
+			color.x() = RGBCOLGetR(fogColor) / 255.0f;
+			color.y() = RGBCOLGetG(fogColor) / 255.0f;
+			color.z() = RGBCOLGetB(fogColor) / 255.0f;
+			color.w() = RGBCOLGetA(fogColor) / 255.0f;
+			_xmodelShader->setUniform("enableFog", true);
+			_xmodelShader->setUniform("fogColor", color);
+			_xmodelShader->setUniform1f("fogStart", fogStart);
+			_xmodelShader->setUniform1f("fogEnd", fogEnd);
 		} else {
-			// TODO: Disable fog in shader
+			_xmodelShader->setUniform("enableFog", false);
 		}
 
 		setProjection();
@@ -238,16 +318,26 @@ bool BaseRenderOpenGL3DShader::setup3D(Camera3D *camera, bool force) {
 	Math::Matrix4 viewMatrix, projectionMatrix;
 	viewMatrix.setData(_viewMatrix);
 	projectionMatrix.setData(_glProjectionMatrix);
+
 	_xmodelShader->use();
 	_xmodelShader->setUniform("viewMatrix", viewMatrix);
 	_xmodelShader->setUniform("projMatrix", projectionMatrix);
 	_xmodelShader->setUniform1f("alphaRef", _alphaRef);
 	_xmodelShader->setUniform("alphaTest", true);
 
-
 	_geometryShader->use();
 	_geometryShader->setUniform("viewMatrix", viewMatrix);
 	_geometryShader->setUniform("projMatrix", projectionMatrix);
+
+	_simpleShadowShader->use();
+	_simpleShadowShader->setUniform("viewMatrix", viewMatrix);
+	_simpleShadowShader->setUniform("projMatrix", projectionMatrix);
+	_simpleShadowShader->setUniform1f("alphaRef", _alphaRef);
+	_simpleShadowShader->setUniform("alphaTest", true);
+
+	_flatShadowShader->use();
+	_flatShadowShader->setUniform("viewMatrix", viewMatrix);
+	_flatShadowShader->setUniform("projMatrix", projectionMatrix);
 
 	_shadowVolumeShader->use();
 	_shadowVolumeShader->setUniform("viewMatrix", viewMatrix);
@@ -300,8 +390,8 @@ bool BaseRenderOpenGL3DShader::setupLines() {
 		_lineShader->setUniform1f("alphaRef", _alphaRef);
 		_lineShader->setUniform("alphaTest", true);
 
-		glDisable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, 0);
+		glDisable(GL_TEXTURE_2D);
 		_lastTexture = nullptr;
 	}
 
@@ -641,7 +731,7 @@ BaseImage *BaseRenderOpenGL3DShader::takeScreenshot() {
 }
 
 bool BaseRenderOpenGL3DShader::enableShadows() {
-	_gameRef->_supportsRealTimeShadows = false;
+	_gameRef->_supportsRealTimeShadows = true;
 	return true;
 }
 
@@ -653,7 +743,39 @@ void BaseRenderOpenGL3DShader::displaySimpleShadow(BaseObject *object) {
 	if (!_ready || !object)
 		return;
 
-	// TODO: to be implemented
+	BaseSurface *shadowImage;
+	if (object->_shadowImage) {
+		shadowImage = object->_shadowImage;
+	} else {
+		shadowImage = _gameRef->_shadowImage;
+	}
+
+	if (!shadowImage) {
+		return;
+	}
+
+	DXMatrix scale, trans, rot, finalm;
+	DXMatrixScaling(&scale, object->_shadowSize * object->_scale3D, 1.0f, object->_shadowSize * object->_scale3D);
+	DXMatrixRotationY(&rot, degToRad(object->_angle));
+	DXMatrixTranslation(&trans, object->_posVector._x, object->_posVector._y, object->_posVector._z);
+	DXMatrixMultiply(&finalm, &scale, &rot);
+	DXMatrixMultiply(&finalm, &finalm, &trans);
+	setWorldTransform(finalm);
+
+	glFrontFace(GL_CCW);
+
+	glDepthMask(GL_FALSE);
+	glEnable(GL_TEXTURE_2D);
+	static_cast<BaseSurfaceOpenGL3D *>(shadowImage)->setTexture();
+
+	_simpleShadowShader->use();
+
+	glBindBuffer(GL_ARRAY_BUFFER, _simpleShadowVBO);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	glDisable(GL_TEXTURE_2D);
+	glDepthMask(GL_TRUE);
 }
 
 void BaseRenderOpenGL3DShader::setSpriteBlendMode(Graphics::TSpriteBlendMode blendMode, bool forceChange) {
@@ -760,7 +882,62 @@ void BaseRenderOpenGL3DShader::setLightParameters(int index, const DXVector3 &po
 // backend layer AdSceneGeometry::Render
 void BaseRenderOpenGL3DShader::renderSceneGeometry(const BaseArray<AdWalkplane *> &planes, const BaseArray<AdBlock *> &blocks,
 	                                           const BaseArray<AdGeneric *> &generics, const BaseArray<Light3D *> &lights, Camera3D *camera) {
-	// don't render scene geometry, as OpenGL ES 2 has no wireframe rendering and we don't have a shader alternative yet
+	DXMatrix matIdentity;
+	DXMatrixIdentity(&matIdentity);
+
+	if (camera)
+		_gameRef->_renderer3D->setup3D(camera, true);
+	
+	setWorldTransform(matIdentity);
+
+	glDisable(GL_DEPTH_TEST);
+	glFrontFace(GL_CW); // WME DX have CCW
+	glEnable(GL_BLEND);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+
+	for (uint i = 0; i < planes.size(); i++) {
+		if (planes[i]->_active) {
+			planes[i]->_mesh->render(true);
+		}
+	}
+
+	// render blocks
+	for (uint i = 0; i < blocks.size(); i++) {
+		if (blocks[i]->_active) {
+			blocks[i]->_mesh->render(true);
+		}
+	}
+
+	// render generic objects
+	for (uint i = 0; i < generics.size(); i++) {
+		if (generics[i]->_active) {
+			generics[i]->_mesh->render(true);
+		}
+	}
+
+	// render waypoints
+	AdScene *scene = ((AdGame *)_gameRef)->_scene;
+	AdSceneGeometry *geom = scene->_geom;
+	if (geom && geom->_wptMarker) {
+		DXMatrix viewMat, projMat, worldMat;
+		DXVector3 vec2d(0.0f, 0.0f, 0.0f);
+
+		getViewTransform(&viewMat);
+		getProjectionTransform(&projMat);
+		DXMatrixIdentity(&worldMat);
+
+		DXViewport vport = getViewPort();
+
+		setup2D();
+
+		for (uint i = 0; i < geom->_waypointGroups.size(); i++) {
+			for (uint j = 0; j < geom->_waypointGroups[i]->_points.size(); j++) {
+				DXVec3Project(&vec2d, geom->_waypointGroups[i]->_points[j], &vport, &projMat, &viewMat, &worldMat);
+				geom->_wptMarker->display(vec2d._x + scene->getOffsetLeft() - _drawOffsetX, vec2d._y + scene->getOffsetTop() - _drawOffsetY);
+			}
+		}
+	}
 }
 
 // backend layer 3DShadowVolume::Render()
@@ -777,11 +954,12 @@ void BaseRenderOpenGL3DShader::renderShadowGeometry(const BaseArray<AdWalkplane 
 	// disable color write
 	setSpriteBlendMode(Graphics::BLEND_UNKNOWN);
 	glBlendFunc(GL_ZERO, GL_ONE);
+	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
 	// no texture
 	_lastTexture = nullptr;
-	glDisable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
 
 	glFrontFace(GL_CW); // WME DX have CCW
 
@@ -807,6 +985,7 @@ void BaseRenderOpenGL3DShader::renderShadowGeometry(const BaseArray<AdWalkplane 
 	}
 
 	setSpriteBlendMode(Graphics::BLEND_NORMAL);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
 // implements D3D SetRenderState() D3DRS_CULLMODE - CCW
@@ -874,6 +1053,15 @@ bool BaseRenderOpenGL3DShader::setWorldTransform(const DXMatrix &transform) {
 	_xmodelShader->setUniform("modelMatrix", modelMatrix);
 	_xmodelShader->setUniform("normalMatrix", normalMatrix);
 
+	_geometryShader->use();
+	_geometryShader->setUniform("modelMatrix", modelMatrix);
+
+	_simpleShadowShader->use();
+	_simpleShadowShader->setUniform("modelMatrix", modelMatrix);
+
+	_flatShadowShader->use();
+	_flatShadowShader->setUniform("modelMatrix", modelMatrix);
+
 	_shadowVolumeShader->use();
 	_shadowVolumeShader->setUniform("modelMatrix", modelMatrix);
 
@@ -902,6 +1090,33 @@ bool BaseRenderOpenGL3DShader::setProjectionTransform(const DXMatrix &transform)
 }
 
 void BaseRenderOpenGL3DShader::postfilter() {
+	if (_postFilterMode == kPostFilterOff)
+		return;
+
+	setup2D();
+	glViewport(0, 0, _width, _height);
+
+	if (_postFilterMode == kPostFilterBlackAndWhite ||
+		_postFilterMode == kPostFilterSepia) {
+		glDisable(GL_BLEND);
+		glDisable(GL_CULL_FACE);
+
+		_postfilterShader->use();
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, _postfilterTexture);
+		glUniform1i(_postfilterShader->getUniformLocation("tex"), 0);
+
+		if (_postFilterMode == kPostFilterSepia) {
+			_postfilterShader->setUniform1f("sepiaMode", true);
+		} else {
+			_postfilterShader->setUniform1f("sepiaMode", false);
+		}
+
+		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, _width, _height, 0);
+
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	}
 }
 
 BaseSurface *BaseRenderOpenGL3DShader::createSurface() {
@@ -913,7 +1128,7 @@ Mesh3DS *BaseRenderOpenGL3DShader::createMesh3DS() {
 }
 
 XMesh *BaseRenderOpenGL3DShader::createXMesh() {
-	return new XMeshOpenGLShader(_gameRef, _xmodelShader);
+	return new XMeshOpenGLShader(_gameRef, _xmodelShader, _flatShadowShader);
 }
 
 ShadowVolume *BaseRenderOpenGL3DShader::createShadowVolume() {

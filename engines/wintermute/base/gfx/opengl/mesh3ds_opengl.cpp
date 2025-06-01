@@ -42,7 +42,7 @@ void Mesh3DSOpenGL::fillVertexBuffer() {
 	_vertexData = (Mesh3DSVertex *)_vb.ptr();
 }
 
-void Mesh3DSOpenGL::render() {
+void Mesh3DSOpenGL::render(bool color) {
 	if (_vertexCount == 0)
 		return;
 

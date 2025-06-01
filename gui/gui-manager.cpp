@@ -607,15 +607,7 @@ void GuiManager::runLoop() {
 		}
 
 		// Delete GuiObject that have been added to the trash for a delayed deletion
-		Common::List<GuiObjectTrashItem>::iterator it = _guiObjectTrash.begin();
-		while (it != _guiObjectTrash.end()) {
-			if ((*it).parent == nullptr || (*it).parent == activeDialog) {
-				debug(7, "Delayed deletion of Gui Object %p", (void *)(*it).object);
-				delete (*it).object;
-				it = _guiObjectTrash.erase(it);
-			} else
-				++it;
-		}
+		emptyTrash(activeDialog);
 
 		// Handle tooltip for the widget under the mouse cursor.
 		// 1. Only try to show a tooltip if the mouse cursor was actually moved
@@ -683,8 +675,10 @@ void GuiManager::runLoop() {
 	// it will never be removed. Since we can have multiple run loops being
 	// called we cannot rely on catching EVENT_QUIT in the event loop above,
 	// since it would only catch it for the top run loop.
-	if ((eventMan->shouldQuit() || (g_engine && eventMan->shouldReturnToLauncher())) && activeDialog == getTopDialog())
-		getTopDialog()->close();
+	if ((eventMan->shouldQuit() || (g_engine && eventMan->shouldReturnToLauncher())) && activeDialog == getTopDialog()) {
+		activeDialog->close();
+		emptyTrash(activeDialog);
+	}
 
 	if (didSaveState) {
 		_theme->disable();
@@ -997,6 +991,18 @@ Graphics::MacWindowManager *GuiManager::getWM() {
 	_wm = new Graphics::MacWindowManager(wmMode);
 
 	return _wm;
+}
+
+void GuiManager::emptyTrash(Dialog *const activeDialog) {
+	Common::List<GuiObjectTrashItem>::iterator it = _guiObjectTrash.begin();
+	while (it != _guiObjectTrash.end()) {
+		if ((*it).parent == nullptr || (*it).parent == activeDialog) {
+			debug(7, "Delayed deletion of Gui Object %p", (void *)(*it).object);
+			delete (*it).object;
+			it = _guiObjectTrash.erase(it);
+		} else
+			++it;
+	}
 }
 
 } // End of namespace GUI

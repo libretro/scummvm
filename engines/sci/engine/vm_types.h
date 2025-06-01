@@ -41,6 +41,8 @@ struct reg_t {
 	SegmentId _segment;
 	uint16 _offset;
 
+	void init(SegmentId segment, uint32 offset);
+
 	SegmentId getSegment() const;
 	void setSegment(SegmentId segment);
 
@@ -191,28 +193,17 @@ private:
 #endif
 };
 
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-// setSegment and setOffset together set all the bits without leaving
-// uninitialized parts, so this is not a real problem.
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
 static inline reg_t make_reg(SegmentId segment, uint16 offset) {
 	reg_t r;
-	r.setSegment(segment);
-	r.setOffset(offset);
+	r.init(segment, offset);
 	return r;
 }
 
 static inline reg_t make_reg32(SegmentId segment, uint32 offset) {
 	reg_t r;
-	r.setSegment(segment);
-	r.setOffset(offset);
+	r.init(segment, offset);
 	return r;
 }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 
 #define PRINT_REG(r) (kSegmentMask) & (unsigned) (r).getSegment(), (unsigned) (r).getOffset()
 
