@@ -145,13 +145,32 @@ static void setup_hw_rendering(void) {
 		hw_render.cache_context = false;
 		hw_render.bottom_left_origin = true;
 #if defined(HAVE_OPENGL)
-		hw_render.context_type = RETRO_HW_CONTEXT_OPENGL;
-		video_hw_mode |= VIDEO_GRAPHIC_MODE_HAVE_OPENGL;
+		// Check if glcore is available
+		hw_render.context_type = RETRO_HW_CONTEXT_OPENGL_CORE;
+		hw_render.version_major = 3;
+		hw_render.version_minor = 3;
+		if (!environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw_render)) {
+			retro_log_cb(RETRO_LOG_INFO, "failed to set glcore hw renderer.\n");
+			hw_render.context_type = RETRO_HW_CONTEXT_OPENGL;
+			hw_render.version_major = 0;
+			hw_render.version_minor = 0;
+			// Try gl as fallback
+			if (environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw_render)) {
+				retro_log_cb(RETRO_LOG_INFO, "gl hw renderer set.\n");
+				video_hw_mode |= VIDEO_GRAPHIC_MODE_HAVE_OPENGL;
+			}
+		} else {
+			retro_log_cb(RETRO_LOG_INFO, "glcore hw renderer set.\n");
+			video_hw_mode |= VIDEO_GRAPHIC_MODE_HAVE_OPENGL;
+		}
 #elif defined(HAVE_OPENGLES2)
 		hw_render.context_type = RETRO_HW_CONTEXT_OPENGLES2;
-		video_hw_mode |= VIDEO_GRAPHIC_MODE_HAVE_OPENGLES2;
+		if (environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw_render)){
+			retro_log_cb(RETRO_LOG_INFO, "opengles2 hw renderer set.\n");
+			video_hw_mode |= VIDEO_GRAPHIC_MODE_HAVE_OPENGLES2;
+		}
 #endif
-		if (!environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw_render)) {
+		if (!(video_hw_mode & (VIDEO_GRAPHIC_MODE_HAVE_OPENGL | VIDEO_GRAPHIC_MODE_HAVE_OPENGLES2))) {
 			retro_log_cb(RETRO_LOG_WARN, "Failed to set up hardware rendering, falling back to software.\n");
 			retro_osd_notification("Failed to set up HW rendering.");
 			video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_SW;
