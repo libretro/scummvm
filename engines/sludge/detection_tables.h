@@ -21,9 +21,31 @@
 
 namespace Sludge {
 
-#define GAME1l(t, e, f1, m1, s1, lang, pl, langId) 	{ { t, e, AD_ENTRY1s(f1, m1, s1), lang, pl, ADGF_UNSTABLE, GUIO1(GUIO_NOMIDI) }, langId }
+static const PlainGameDescriptor sludgeGames[] = {
+	{ "sludge",			"Sludge Game" },
+	{ "welcome",		"Welcome Example" },
+	{ "verbcoin",		"Verb Coin" },
+	{ "verbcoin2",		"Verb Coin 2"},
+	{ "parallax",		"Parallax Demo" },
+	{ "robinsrescue",	"Robin's Rescue" },
+	{ "outoforder",		"Out Of Order" },
+	{ "frasse",			"Frasse and the Peas of Kejick" },
+	{ "interview",		"The Interview" },
+	{ "life",			"Life Flashes By" },
+	{ "tgttpoacs",		"The Game That Takes Place on a Cruise Ship" },
+	{ "mandy",			"Mandy Christmas Adventure" },
+	{ "cubert",			"Cubert Badbone, P.I." },
+	{ "gjgagsas",		"The Game Jam Game About Games, Secrets and Stuff" },
+	{ "tsotc",			"The Secret of Tremendous Corporation" },
+	{ "nsc",			"Nathan's Second Chance" },
+	{ "atw",			"Above The Waves" },
+	{ "leptonsquest",	"Lepton's Quest" },
+	{ 0, 0 }
+};
+
+#define GAME1l(t, e, f1, m1, s1, lang, pl, langId) 	{ { t, e, AD_ENTRY1s(f1, m1, s1), lang, pl, ADGF_TESTING, GUIO1(GUIO_NOMIDI) }, langId }
 #define GAME1(t, e, f1, m1, s1) GAME1l(t, e, f1, m1, s1, Common::EN_ANY, Common::kPlatformUnknown, 0)
-#define GAME2l(t, e, f1, m1, s1, f2, m2, s2, lang, pl, langId) 	{ { t, e, AD_ENTRY2s(f1, m1, s1, f2, m2, s2), lang, pl, ADGF_UNSTABLE, GUIO1(GUIO_NOMIDI) }, langId }
+#define GAME2l(t, e, f1, m1, s1, f2, m2, s2, lang, pl, langId) 	{ { t, e, AD_ENTRY2s(f1, m1, s1, f2, m2, s2), lang, pl, ADGF_TESTING, GUIO1(GUIO_NOMIDI) }, langId }
 #define GAME2(t, e, f1, m1, s1, f2, m2, s2) GAME2l(t, e, f1, m1, s1, f2, m2, s2, Common::EN_ANY, Common::kPlatformUnknown, 0)
 
 
@@ -32,6 +54,8 @@ static const SludgeGameDescription gameDescriptions[] = {
 
 	GAME1("verbcoin", "", "Verb Coin.slg", "e39ec315dcbf3a1137481f0a5fe1617d", 980270),
 	GAME1l("verbcoin", "", "Verb Coin.slg", "e39ec315dcbf3a1137481f0a5fe1617d", 980270, Common::DE_DEU, Common::kPlatformUnknown, 1),
+	GAME1("verbcoin2", "", "Verb Coin.slg", "483b315990309c718617c7c47fa132d8", 1067575),
+	GAME1l("verbcoin2", "", "Verb Coin.slg", "483b315990309c718617c7c47fa132d8", 1067575, Common::DE_DEU, Common::kPlatformUnknown, 1),
 
 	GAME1("parallax", "", "Parallax_demo.slg", "daae3f75c6695bed47e5e633cd406a47", 65881),
 
@@ -98,6 +122,22 @@ static const SludgeGameDescription gameDescriptions[] = {
 							"Mandy.exe", "7016ef8ab67133a1d6fce20b8b70cd1d", 83968,
 							Common::PL_POL, Common::kPlatformWindows, 3),
 
+	// August 4, 2002
+	GAME2l("cubert", "v1.1", "Gamedata",   "dfb7f8012a29631349a14351ba1cfd49", 27303861,
+							 "Cubert.exe", "055b5b5c30265ba32e4235b012eb90bb", 64000,
+							 Common::EN_ANY, Common::kPlatformWindows, 0),
+	// June 11, 2003
+	GAME2l("cubert", "v1.1", "Gamedata",		   "dfb7f8012a29631349a14351ba1cfd49", 27303861,
+							 "Cubert Badbone.exe", "055b5b5c30265ba32e4235b012eb90bb", 64000,
+							 Common::EN_ANY, Common::kPlatformWindows, 0),
+	// August 16, 2002
+	GAME2l("cubert", "v1.2", "Gamedata",   "245b043e4b2ade16f56118f8d98fb940", 27304149,
+							 "Cubert.exe", "055b5b5c30265ba32e4235b012eb90bb", 64000,
+							 Common::EN_ANY, Common::kPlatformWindows, 0),
+	// September 5, 2002
+	GAME2l("cubert", "v1.25", "gamedata",   "d1d9b27d0c43a37952c1bef7bc848623", 27306453,
+							  "Cubert.exe", "acc9fb7b4be7e7824a003c88942d778d", 67072,
+							  Common::EN_ANY, Common::kPlatformWindows, 0),
 	// Mar 9, 2004
 	GAME1l("cubert", "", "cubert.dat", "cabc424d4e39ecdba4b0afd4033b5ea8", 19696514, Common::EN_ANY, Common::kPlatformWindows, 0),
 	GAME1l("cubert", "", "cubert.dat", "cabc424d4e39ecdba4b0afd4033b5ea8", 19696514, Common::IT_ITA, Common::kPlatformWindows, 1),

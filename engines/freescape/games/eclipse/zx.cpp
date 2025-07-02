@@ -57,14 +57,14 @@ void EclipseEngine::loadAssetsZXFullGame() {
 
 	file.open("totaleclipse.zx.title");
 	if (file.isOpen()) {
-		_title = loadAndCenterScrImage(&file);
+		_title = loadAndConvertScrImage(&file);
 	} else
 		error("Unable to find totaleclipse.zx.title");
 
 	file.close();
 	file.open("totaleclipse.zx.border");
 	if (file.isOpen()) {
-		_border = loadAndCenterScrImage(&file);
+		_border = loadAndConvertScrImage(&file);
 	} else
 		error("Unable to find totaleclipse.zx.border");
 	file.close();
@@ -89,19 +89,6 @@ void EclipseEngine::loadAssetsZXFullGame() {
 		_areaMap[42]->_underFireBackgroundColor = 0;
 	}
 
-	for (auto &it : _areaMap) {
-		it._value->addStructure(_areaMap[255]);
-
-		if (isEclipse2() && it._value->getAreaID() == 1)
-			continue;
-
-		if (isEclipse2() && it._value->getAreaID() == _startArea)
-			continue;
-
-		for (int16 id = 183; id < 207; id++)
-			it._value->addObjectFromArea(id, _areaMap[255]);
-	}
-
 	_indicators.push_back(loadBundledImage("eclipse_ankh_indicator"));
 
 	for (auto &it : _indicators)
@@ -113,14 +100,14 @@ void EclipseEngine::loadAssetsZXDemo() {
 
 	file.open("totaleclipse.zx.title");
 	if (file.isOpen()) {
-		_title = loadAndCenterScrImage(&file);
+		_title = loadAndConvertScrImage(&file);
 	} else
 		error("Unable to find totaleclipse.zx.title");
 
 	file.close();
 	file.open("totaleclipse.zx.border");
 	if (file.isOpen()) {
-		_border = loadAndCenterScrImage(&file);
+		_border = loadAndConvertScrImage(&file);
 	} else
 		error("Unable to find totaleclipse.zx.border");
 	file.close();
@@ -143,13 +130,6 @@ void EclipseEngine::loadAssetsZXDemo() {
 		load8bitBinary(&file, 0x6781, 4);
 	} else
 		error("Unknown ZX Spectrum demo variant");
-
-	for (auto &it : _areaMap) {
-		it._value->_name = "  NOW TRAINING  ";
-		it._value->addStructure(_areaMap[255]);
-		for (int16 id = 183; id < 207; id++)
-			it._value->addObjectFromArea(id, _areaMap[255]);
-	}
 
 	_indicators.push_back(loadBundledImage("eclipse_ankh_indicator"));
 

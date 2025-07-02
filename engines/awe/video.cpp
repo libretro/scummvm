@@ -322,7 +322,12 @@ void Video::drawString(uint8 color, uint16 x, uint16 y, uint16 strId) {
 	} else if (_res->getDataType() == DT_ATARI_DEMO && strId == 0x194) {
 		str = _str0x194AtariDemo;
 	} else {
-		str = findString(_stringsTable, strId);
+		if (_res->getDataType() == DT_AMIGA || _res->getDataType() == DT_ATARI) {
+			str = findString(STRINGS_TABLE_AMIGA_CODES, strId);
+		}
+		if (!str) {
+			str = findString(_stringsTable, strId);
+		}
 		if (!str && _res->getDataType() == DT_DOS) {
 			str = findString(STRINGS_TABLE_DEMO, strId);
 		}
@@ -458,7 +463,7 @@ static void yflip(const uint8 *src, int w, int h, uint8 *dst) {
 }
 
 void Video::scaleBitmap(const uint8 *src, int fmt) {
-	_graphics->drawBitmap(_buffers[0], src, BITMAP_W, BITMAP_H, fmt);
+	_graphics->drawBitmap(0, src, BITMAP_W, BITMAP_H, fmt);
 }
 
 void Video::copyBitmapPtr(const uint8 *src, uint32 size) {
@@ -609,7 +614,7 @@ void Video::drawBitmap3DO(const char *name, SystemStub *stub) {
 		s.setPixels(data);
 		s.w = s.pitch = w;
 		s.h = h;
-		s.format = Graphics::PixelFormat(2, 5, 5, 5, 1, 11, 6, 1, 0);
+		s.format = Graphics::PixelFormat(2, 5, 5, 5, 0, 10, 5, 0, 0);
 
 		_graphics->drawBitmapOverlay(s, FMT_RGB555, stub);
 		free(data);

@@ -61,6 +61,7 @@ Window::Window(int id, bool scrollable, bool resizable, bool editable, Graphics:
 
 	_windowType = -1;
 	_isModal = false;
+	_skipFrameAdvance = false;
 
 	updateBorderType();
 
@@ -532,7 +533,6 @@ bool Window::loadNextMovie() {
 	debug(0, "@@@@   Switching to movie '%s' in '%s'", utf8ToPrintable(_currentMovie->getMacName()).c_str(), _currentPath.c_str());
 	debug(0, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
 
-	g_director->setCurrentWindow(this);
 	if (g_director->getVersion() < 500)
 		loadNewSharedCast(previousSharedCast);
 
@@ -602,6 +602,7 @@ bool Window::step() {
 					g_director->_firstMovie = false;
 					return true;
 				}
+				g_director->_firstMovie = false;
 
 				if (!goodMovie)
 					return false;
@@ -740,6 +741,8 @@ uint32 Window::frozenLingoRecursionCount() {
 
 	for (int i = (int)_frozenLingoStates.size() - 1; i >= 0; i--) {
 		LingoState *state = _frozenLingoStates[i];
+		if (state->callstack.empty())
+			continue;
 		CFrame *frame = state->callstack.front();
 		if (frame->sp.name->equalsIgnoreCase("enterFrame") ||
 				frame->sp.name->equalsIgnoreCase("stepMovie") ||

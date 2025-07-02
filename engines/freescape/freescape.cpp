@@ -646,7 +646,7 @@ void FreescapeEngine::processInput() {
 				g_system->warpMouse(mousePos.x, mousePos.y);
 
 			if (_shootMode) {
-				_crossairPosition = mousePosToCrossairPos(mousePos);
+				_crossairPosition = _demoMode ? mousePos : mousePosToCrossairPos(mousePos);
 			} else {
 				// Mouse pointer is locked into the the middle of the screen
 				// since we only need the relative movements. This will not affect any touchscreen device
@@ -747,8 +747,13 @@ Common::Error FreescapeEngine::run() {
 	initGameState();
 	loadColorPalette();
 
-	g_system->showMouse(true);
-	g_system->lockMouse(false);
+	if (g_system->getFeatureState(OSystem::kFeatureTouchscreen)) {
+		g_system->showMouse(true);
+		g_system->lockMouse(false);
+	} else {
+		g_system->showMouse(false);
+		g_system->lockMouse(true);
+	}
 
 	// Simple main event loop
 	int saveSlot = ConfMan.getInt("save_slot");
@@ -1146,7 +1151,7 @@ Graphics::ManagedSurface *FreescapeEngine::loadAndConvertNeoImage(Common::Seekab
 	decoder.loadStream(*stream);
 	Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
 	surface->copyFrom(*decoder.getSurface());
-	surface->convertToInPlace(_gfx->_currentPixelFormat, decoder.getPalette().data(), decoder.getPalette().size());
+	surface->convertToInPlace(_gfx->_texturePixelFormat, decoder.getPalette().data(), decoder.getPalette().size());
 	return surface;
 }
 
@@ -1155,18 +1160,18 @@ Graphics::ManagedSurface *FreescapeEngine::loadAndConvertDoodleImage(Common::See
 	decoder.loadStreams(*bitmap, *color1, *color2);
 	Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
 	surface->copyFrom(*decoder.getSurface());
-	surface->convertToInPlace(_gfx->_currentPixelFormat, decoder.getPalette().data(), decoder.getPalette().size());
+	surface->convertToInPlace(_gfx->_texturePixelFormat, decoder.getPalette().data(), decoder.getPalette().size());
 	return surface;
 }
 
 
-Graphics::ManagedSurface *FreescapeEngine::loadAndCenterScrImage(Common::SeekableReadStream *stream) {
+Graphics::ManagedSurface *FreescapeEngine::loadAndConvertScrImage(Common::SeekableReadStream *stream) {
 	Image::ScrDecoder decoder;
 	decoder.loadStream(*stream);
 	Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
 	const Graphics::Surface *decoded = decoder.getSurface();
-	surface->create(320, 200, decoded->format);
-	surface->copyRectToSurface(*decoded, (320 - decoded->w) / 2, (200 - decoded->h) / 2, Common::Rect(decoded->w, decoded->h));
+	surface->create(320, 200, _gfx->_texturePixelFormat);
+	surface->simpleBlitFrom(*decoded, Common::Point((320 - decoded->w) / 2, (200 - decoded->h) / 2), &decoder.getPalette());
 	return surface;
 }
 

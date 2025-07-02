@@ -92,7 +92,7 @@ void Room701::init() {
 	}
 
 	digi_preload("701_s01", -1);
-	digi_play_loop("701_s01", 2, 45, -1, -1);
+	digi_play_loop("701_s01", 3, 45, -1, -1);
 }
 
 void Room701::pre_parser() {
@@ -147,7 +147,9 @@ void Room701::parser() {
 		case 21:
 			sendWSMessage_120000(_G(my_walker), -1);
 			sendWSMessage_10000(1, _agentPoshExpressMach, _agentTalkLoopTjSeries, 11, 14, -1, _agentTalkLoopTjSeries, 11, 13, 1);
-
+			sendWSMessage_1a0000(_agentPoshExpressMach, 11);
+			digi_play("701X09", 1, 255, 22, -1);
+			
 			break;
 
 		case 22:
@@ -252,7 +254,7 @@ void Room701::parser() {
 		digi_play("com005", 1, 255, -1, 997);
 	else if (takeFl && player_said("Yeti Skin"))
 		digi_play("701R24", 1, 255, -1, -1);
-	else if (player_said("PRAYER WHEEL BROCHURE", "PRAYER WHEEL") && inv_player_has("PRAYER WHEEL BROCHURE")) {
+	else if (player_said_any("PRAYER WHEEL BROCHURE", "PRAYER WHEEL") && inv_player_has("PRAYER WHEEL BROCHURE")) {
 		switch (_G(kernel).trigger) {
 		case -1:
 			player_set_commands_allowed(false);

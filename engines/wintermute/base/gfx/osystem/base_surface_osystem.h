@@ -45,45 +45,38 @@ public:
 	bool create(const Common::String &filename, bool defaultCK, byte ckRed, byte ckGreen, byte ckBlue, int lifeTime = -1, bool keepLoaded = false) override;
 	bool create(int width, int height) override;
 
-	bool isTransparentAt(int x, int y) override;
-	bool isTransparentAtLite(int x, int y) override;
+	bool setAlphaImage(const Common::String &filename) override;
 
+	bool invalidate() override;
+
+	bool isTransparentAtLite(int x, int y) const override;
 	bool startPixelOp() override;
 	bool endPixelOp() override;
 
-	bool displayTransRotate(int x, int y, uint32 angle, int32 hotspotX, int32 hotspotY, Rect32 rect, float zoomX, float zoomY, uint32 alpha = Graphics::kDefaultRgbaMod, Graphics::TSpriteBlendMode blendMode = Graphics::BLEND_NORMAL, bool mirrorX = false, bool mirrorY = false) override;
+	bool displayTransRotate(int x, int y, float rotate, int32 hotspotX, int32 hotspotY, Rect32 rect, float zoomX, float zoomY, uint32 alpha = Graphics::kDefaultRgbaMod, Graphics::TSpriteBlendMode blendMode = Graphics::BLEND_NORMAL, bool mirrorX = false, bool mirrorY = false) override;
 	bool displayTransZoom(int x, int y, Rect32 rect, float zoomX, float zoomY, uint32 alpha = Graphics::kDefaultRgbaMod, Graphics::TSpriteBlendMode blendMode = Graphics::BLEND_NORMAL, bool mirrorX = false, bool mirrorY = false) override;
 	bool displayTrans(int x, int y, Rect32 rect, uint32 alpha = Graphics::kDefaultRgbaMod, Graphics::TSpriteBlendMode blendMode = Graphics::BLEND_NORMAL, bool mirrorX = false, bool mirrorY = false, int offsetX = 0, int offsetY = 0) override;
 	bool display(int x, int y, Rect32 rect, Graphics::TSpriteBlendMode blendMode = Graphics::BLEND_NORMAL, bool mirrorX = false, bool mirrorY = false) override;
 	bool displayTiled(int x, int y, Rect32 rect, int numTimesX, int numTimesY) override;
 	bool putSurface(const Graphics::Surface &surface, bool hasAlpha = false) override;
-	/*  static unsigned DLL_CALLCONV ReadProc(void *buffer, unsigned size, unsigned count, fi_handle handle);
-	    static int DLL_CALLCONV SeekProc(fi_handle handle, long offset, int origin);
-	    static long DLL_CALLCONV TellProc(fi_handle handle);*/
 	int getWidth() override {
-		if (!_loaded) {
+		if (_width == 0) {
 			finishLoad();
-		}
-		if (_surface) {
-			return _surface->w;
 		}
 		return _width;
 	}
 	int getHeight() override {
-		if (!_loaded) {
+		if (_height == 0) {
 			finishLoad();
-		}
-		if (_surface) {
-			return _surface->h;
 		}
 		return _height;
 	}
-	bool getPixel(int x, int y, byte *r, byte *g, byte *b, byte *a) override {
-		if (!_loaded) {
-			finishLoad();
+	bool getPixel(int x, int y, byte *r, byte *g, byte *b, byte *a) const override {
+		if (!_pixelOpReady) {
+			return STATUS_FAILED;
 		}
 		if (_surface) {
-			uint32 pixel = getPixelAt(_surface, x, y);
+			uint32 pixel = _surface->getPixel(x, y);
 			_surface->format.colorToARGB(pixel, *a, *r, *g, *b);
 			return STATUS_OK;
 		}
@@ -93,17 +86,15 @@ public:
 	Graphics::AlphaType getAlphaType() const { return _alphaType; }
 private:
 	Graphics::Surface *_surface;
-	bool _loaded;
 	bool finishLoad();
 	bool drawSprite(int x, int y, Rect32 *rect, Rect32 *newRect, Graphics::TransformStruct transformStruct);
-	void genAlphaMask(Graphics::Surface *surface);
-	uint32 getPixelAt(Graphics::Surface *surface, int x, int y);
+	void writeAlpha(Graphics::Surface *surface, const Graphics::Surface *mask);
 
-	uint32 _rotation;
+	bool _pixelOpReady;
+	float _rotation;
 	Graphics::AlphaType _alphaType;
-	void *_lockPixels;
-	int _lockPitch;
-	byte *_alphaMask;
+	Graphics::Surface *_alphaMask;
+	Graphics::AlphaType _alphaMaskType;
 };
 
 } // End of namespace Wintermute

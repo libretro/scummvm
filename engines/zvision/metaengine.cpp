@@ -19,22 +19,18 @@
  *
  */
 
-#include "common/scummsys.h"
-
-#include "engines/advancedDetector.h"
-
-#include "zvision/zvision.h"
-#include "zvision/file/save_manager.h"
-#include "zvision/scripting/script_manager.h"
-#include "zvision/detection.h"
-
 #include "backends/keymapper/action.h"
 #include "backends/keymapper/keymapper.h"
 #include "backends/keymapper/standard-actions.h"
-
 #include "common/savefile.h"
+#include "common/scummsys.h"
 #include "common/system.h"
 #include "common/translation.h"
+#include "engines/advancedDetector.h"
+#include "zvision/detection.h"
+#include "zvision/zvision.h"
+#include "zvision/file/save_manager.h"
+#include "zvision/scripting/script_manager.h"
 
 namespace ZVision {
 
@@ -94,6 +90,30 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 			_s("Use high resolution MPEG video"),
 			_s("Use MPEG video from the DVD version instead of lower resolution AVI"),
 			"mpegmovies",
+			true,
+			0,
+			0
+		}
+	},
+
+	{
+		GAMEOPTION_ENABLE_WIDESCREEN,
+		{
+			_s("Enable widescreen support"),
+			_s("Rearrange placement of menus & subtitles so as to make better use of modern wide aspect ratio displays"),
+			"widescreen",
+			true,
+			0,
+			0
+		}
+	},
+
+	{
+		GAMEOPTION_HQ_PANORAMA,
+		{
+			_s("Enable high quality panoramas"),
+			_s("Apply bilinear filtering to panoramic backgrounds"),
+			"highquality",
 			true,
 			0,
 			0
@@ -180,13 +200,13 @@ Common::KeymapArray ZVisionMetaEngine::initKeymaps(const char *target) const {
 
 	Action *act;
 
-	act = new Action(kStandardActionLeftClick, _("Left Click"));
+	act = new Action(kStandardActionLeftClick, _("Left click"));
 	act->setLeftClickEvent();
 	act->addDefaultInputMapping("MOUSE_LEFT");
 	act->addDefaultInputMapping("JOY_A");
 	mainKeymap->addAction(act);
 
-	act = new Action(kStandardActionRightClick, _("Right Click"));
+	act = new Action(kStandardActionRightClick, _("Right click"));
 	act->setRightClickEvent();
 	act->addDefaultInputMapping("MOUSE_RIGHT");
 	act->addDefaultInputMapping("JOY_B");
@@ -194,25 +214,25 @@ Common::KeymapArray ZVisionMetaEngine::initKeymaps(const char *target) const {
 
 	Keymap *gameKeymap = new Keymap(Keymap::kKeymapTypeGame, gameKeymapId, "Z-Vision - Game");
 
-	act = new Action(kStandardActionMoveUp, _("Look Up"));
+	act = new Action(kStandardActionMoveUp, _("Look up"));
 	act->setCustomEngineActionEvent(kZVisionActionUp);
 	act->addDefaultInputMapping("UP");
 	act->addDefaultInputMapping("JOY_UP");
 	gameKeymap->addAction(act);
 
-	act = new Action(kStandardActionMoveDown, _("Look Down"));
+	act = new Action(kStandardActionMoveDown, _("Look down"));
 	act->setCustomEngineActionEvent(kZVisionActionDown);
 	act->addDefaultInputMapping("DOWN");
 	act->addDefaultInputMapping("JOY_DOWN");
 	gameKeymap->addAction(act);
 
-	act = new Action(kStandardActionMoveLeft, _("Turn Left"));
+	act = new Action(kStandardActionMoveLeft, _("Turn left"));
 	act->setCustomEngineActionEvent(kZVisionActionLeft);
 	act->addDefaultInputMapping("LEFT");
 	act->addDefaultInputMapping("JOY_LEFT");
 	gameKeymap->addAction(act);
 
-	act = new Action(kStandardActionMoveRight, _("Turn Right"));
+	act = new Action(kStandardActionMoveRight, _("Turn right"));
 	act->setCustomEngineActionEvent(kZVisionActionRight);
 	act->addDefaultInputMapping("RIGHT");
 	act->addDefaultInputMapping("JOY_RIGHT");

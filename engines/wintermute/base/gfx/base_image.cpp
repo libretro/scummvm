@@ -26,6 +26,8 @@
  */
 
 #include "engines/wintermute/base/gfx/base_image.h"
+#include "engines/wintermute/base/gfx/base_renderer.h"
+#include "engines/wintermute/base/base_engine.h"
 #include "engines/wintermute/base/base_file_manager.h"
 #include "engines/wintermute/base/file/base_savefile_manager_file.h"
 
@@ -72,12 +74,14 @@ bool BaseImage::loadFile(const Common::String &filename) {
 	} else if (_filename.hasSuffix(".tga")) {
 		_decoder = new Image::TGADecoder();
 	} else if (_filename.hasSuffix(".jpg")) {
-		_decoder = new Image::JPEGDecoder();
+		Image::JPEGDecoder *jpeg = new Image::JPEGDecoder();
+		jpeg->setOutputPixelFormat(BaseEngine::getRenderer()->getPixelFormat());
+		_decoder = jpeg;
 	} else {
 		error("BaseImage::loadFile : Unsupported fileformat %s", filename.c_str());
 	}
 	_filename = filename;
-	Common::SeekableReadStream *file = _fileManager->openFile(filename.c_str());
+	Common::SeekableReadStream *file = _fileManager->openFile(filename);
 	if (!file) {
 		return false;
 	}
@@ -89,21 +93,6 @@ bool BaseImage::loadFile(const Common::String &filename) {
 	_fileManager->closeFile(file);
 
 	return true;
-}
-
-byte BaseImage::getAlphaAt(int x, int y) const {
-	if (!_surface) {
-		return 0xFF;
-	}
-	uint32 color = *(const uint32 *)_surface->getBasePtr(x, y);
-	byte r, g, b, a;
-	_surface->format.colorToARGB(color, a, r, g, b);
-	return a;
-}
-
-void BaseImage::copyFrom(const Graphics::Surface *surface) {
-	_surface = _deletableSurface = new Graphics::Surface();
-	_deletableSurface->copyFrom(*surface);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -119,116 +108,36 @@ bool BaseImage::saveBMPFile(const Common::String &filename) const {
 
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseImage::resize(int newWidth, int newHeight) {
-	Graphics::Surface *temp = _surface->scale((uint16)newWidth, (uint16)newHeight, true);
-	if (_deletableSurface) {
-		_deletableSurface->free();
-		delete _deletableSurface;
-		_deletableSurface = nullptr;
-	}
-	_surface = _deletableSurface = temp;
-	return true;
-}
-
-
-//////////////////////////////////////////////////////////////////////////
 bool BaseImage::writeBMPToStream(Common::WriteStream *stream) const {
-	if (!_surface) {
+	if (!stream || !_surface) {
 		return false;
 	}
 
-	/* The following is just copied over and inverted to write-ops from the BMP-decoder */
-	stream->writeByte('B');
-	stream->writeByte('M');
-
-	/* Since we don't care during reads, we don't care during writes: */
-	/* uint32 fileSize = */
-	stream->writeUint32LE(54 + _surface->h * _surface->pitch);
-	/* uint16 res1 = */
-	stream->writeUint16LE(0);
-	/* uint16 res2 = */
-	stream->writeUint16LE(0);
-	const uint32 imageOffset = 54;
-	stream->writeUint32LE(imageOffset);
-
-	const uint32 infoSize = 40; /* Windows v3 BMP */
-	stream->writeUint32LE(infoSize);
-
-	uint32 width = _surface->w;
-	int32 height = _surface->h;
-	stream->writeUint32LE(width);
-	stream->writeUint32LE((uint32)height);
-
-	if (width == 0 || height == 0) {
-		return false;
-	}
-
-	if (height < 0) {
-		warning("Right-side up bitmaps not supported");
-		return false;
-	}
-
-	/* uint16 planes = */ stream->writeUint16LE(1);
-	const uint16 bitsPerPixel = 24;
-	stream->writeUint16LE(bitsPerPixel);
-
-	const uint32 compression = 0;
-	stream->writeUint32LE(compression);
-
-	/* uint32 imageSize = */
-	stream->writeUint32LE(_surface->h * _surface->pitch);
-	/* uint32 pixelsPerMeterX = */
-	stream->writeUint32LE(0);
-	/* uint32 pixelsPerMeterY = */
-	stream->writeUint32LE(0);
-	const uint32 paletteColorCount = 0;
-	stream->writeUint32LE(paletteColorCount);
-	/* uint32 colorsImportant = */
-	stream->writeUint32LE(0);
-
-	// Start us at the beginning of the image (54 bytes in)
-	Graphics::PixelFormat format = Graphics::PixelFormat::createFormatCLUT8();
-
-	// BGRA for 24bpp
-	if (bitsPerPixel == 24) {
-		format = Graphics::PixelFormat(4, 8, 8, 8, 8, 8, 16, 24, 0);
-	}
-
-	Graphics::Surface *surface = _surface->convertTo(format);
-
-	int srcPitch = width * (bitsPerPixel >> 3);
-	const int extraDataLength = (srcPitch % 4) ? 4 - (srcPitch % 4) : 0;
-
-	for (int32 i = height - 1; i >= 0; i--) {
-		for (uint32 j = 0; j < width; j++) {
-			byte b, g, r;
-			uint32 color = *(uint32 *)surface->getBasePtr(j, i);
-			surface->format.colorToRGB(color, r, g, b);
-			stream->writeByte(b);
-			stream->writeByte(g);
-			stream->writeByte(r);
-		}
-
-		for (int k = 0; k < extraDataLength; k++) {
-			stream->writeByte(0);
-		}
-	}
-	surface->free();
-	delete surface;
-	return true;
+	return Image::writeBMP(*stream, *_surface, _palette);
 }
 
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseImage::copyFrom(BaseImage *origImage, int newWidth, int newHeight) {
-	Graphics::Surface *temp = origImage->_surface->scale((uint16)newWidth, (uint16)newHeight, true);
+void BaseImage::copyFrom(const Graphics::Surface *surface, int newWidth, int newHeight, byte flip) {
+	if (newWidth == 0)
+		newWidth = surface->w;
+	if (newHeight == 0)
+		newHeight = surface->h;
+
+	Graphics::Surface *temp;
+	if (newWidth == surface->w && newHeight == surface->h && flip == 0) {
+		temp = new Graphics::Surface();
+		temp->copyFrom(*surface);
+	} else {
+		temp = surface->scale((uint16)newWidth, (uint16)newHeight, true, flip);
+	}
+
 	if (_deletableSurface) {
 		_deletableSurface->free();
 		delete _deletableSurface;
 		_deletableSurface = nullptr;
 	}
 	_surface = _deletableSurface = temp;
-	return true;
 }
 
 } // End of namespace Wintermute

@@ -30,7 +30,12 @@ bool enumerateIniSections(Common::INIFile& ini, const Common::Path &fname, Commo
 
 	Common::Path iniFilePath(fname);
 	ini.allowNonEnglishCharacters();
-	ini.loadFromFile(iniFilePath);
+
+	if (!ini.loadFromFile(iniFilePath)) {
+		warning("Failed to load INI file: %s", iniFilePath.toString().c_str());
+		return false;
+	}
+
 	sectionList = ini.getSections();
 	int size = sectionList.size();
 
@@ -41,7 +46,7 @@ bool enumerateIniSections(Common::INIFile& ini, const Common::Path &fname, Commo
 	return true;
 }
 
-const Common::String getIniKey(Common::INIFile ini, const Common::Path &fname, const char *section, const char *key) {
+const Common::String getIniKey(Common::INIFile& ini, const Common::Path &fname, const char *section, const char *key) {
 	Common::String buf;
 
 	bool hasValue = ini.getKey(key, section, buf);

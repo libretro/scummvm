@@ -26,6 +26,7 @@
 #include "common/savefile.h"
 #include "common/system.h"
 #include "common/textconsole.h"
+#include "common/text-to-speech.h"
 
 #include "backends/audiocd/audiocd.h"
 
@@ -545,6 +546,20 @@ Common::Error TeenAgentEngine::run() {
 
 	syncSoundSettings();
 
+	Common::TextToSpeechManager *ttsMan = g_system->getTextToSpeechManager();
+	if (ttsMan != nullptr) {
+		// Currently, the Polish and Czech versions have all text in English
+		// Therefore, the TTS language should be English to match the text
+		// The Polish CD/Floppy versions also have no working voiceover, so they need full TTS
+		if (_gameDescription->language == Common::PL_POL || _gameDescription->language == Common::CS_CZE) {
+			ttsMan->setLanguage("en");
+		} else {
+			ttsMan->setLanguage(ConfMan.get("language"));
+		}
+		
+		ttsMan->enable(ConfMan.getBool("tts_enabled"));
+	}
+
 	// Initialize CD audio
 	if (_gameDescription->flags & ADGF_CD)
 		g_system->getAudioCDManager()->open();
@@ -673,6 +688,8 @@ Common::Error TeenAgentEngine::run() {
 				if (currentObject)
 					name += currentObject->name;
 
+				sayText(name);
+
 				uint w = res->font7.render(NULL, 0, 0, name, textColorMark);
 				res->font7.render(surface, (kScreenWidth - w) / 2, 180, name, textColorMark, true);
 #if 0
@@ -681,6 +698,8 @@ Common::Error TeenAgentEngine::run() {
 					currentObject->actorRect.render(surface, 0x81);
 				}
 #endif
+			} else {
+				_previousSaid.clear();
 			}
 		}
 
@@ -714,12 +733,12 @@ Common::String TeenAgentEngine::parseMessage(uint16 addr) {
 	return message;
 }
 
-void TeenAgentEngine::displayMessage(const Common::String &str, byte color, uint16 x, uint16 y) {
+void TeenAgentEngine::displayMessage(const Common::String &str, CharacterID characterID, uint16 x, uint16 y) {
 	if (str.empty()) {
 		return;
 	}
 
-	if (color == textColorMark) { // mark's
+	if (characterDialogData[characterID].textColor == textColorMark) { // mark's
 		SceneEvent e(SceneEvent::kPlayAnimation);
 		e.animation = 0;
 		e.slot = 0x80;
@@ -729,10 +748,11 @@ void TeenAgentEngine::displayMessage(const Common::String &str, byte color, uint
 	{
 		SceneEvent event(SceneEvent::kMessage);
 		event.message = str;
-		event.color = color;
+		event.color = characterDialogData[characterID].textColor;
 		event.slot = 0;
 		event.dst.x = x;
 		event.dst.y = y;
+		event.characterID = characterID;
 		scene->push(event);
 	}
 
@@ -744,19 +764,20 @@ void TeenAgentEngine::displayMessage(const Common::String &str, byte color, uint
 	}
 }
 
-void TeenAgentEngine::displayMessage(uint16 addr, byte color, uint16 x, uint16 y) {
-	displayMessage(parseMessage(addr), color, x, y);
+void TeenAgentEngine::displayMessage(uint16 addr, CharacterID characterID, uint16 x, uint16 y) {
+	displayMessage(parseMessage(addr), characterID, x, y);
 }
 
-void TeenAgentEngine::displayAsyncMessage(uint16 addr, uint16 x, uint16 y, uint16 firstFrame, uint16 lastFrame, byte color) {
+void TeenAgentEngine::displayAsyncMessage(uint16 addr, uint16 x, uint16 y, uint16 firstFrame, uint16 lastFrame, CharacterID characterID) {
 	SceneEvent event(SceneEvent::kMessage);
 	event.message = parseMessage(addr);
 	event.slot = 0;
-	event.color = color;
+	event.color = characterDialogData[characterID].textColor;
 	event.dst.x = x;
 	event.dst.y = y;
 	event.firstFrame = firstFrame;
 	event.lastFrame = lastFrame;
+	event.characterID = characterID;
 
 	scene->push(event);
 }
@@ -793,6 +814,7 @@ void TeenAgentEngine::displayCredits(uint16 addr, uint16 timer) {
 	int w = res->font8.render(NULL, 0, 0, event.message, textColorCredits);
 	event.dst.x = (kScreenWidth - w) / 2;
 	event.timer = timer;
+	event.characterID = kCreditsText;
 	scene->push(event);
 }
 
@@ -807,6 +829,7 @@ void TeenAgentEngine::displayCredits() {
 			++lines;
 	event.dst.x = (kScreenWidth - res->font7.render(NULL, 0, 0, event.message, textColorCredits)) / 2;
 	event.timer = 11 * lines - event.dst.y + 22;
+	event.characterID = kCreditsText;
 	debug(2, "credits = %s", event.message.c_str());
 	scene->push(event);
 }
@@ -818,6 +841,7 @@ void TeenAgentEngine::displayCutsceneMessage(uint16 addr, uint16 x, uint16 y) {
 	event.dst.x = x;
 	event.dst.y = y;
 	event.lan = 7;
+	event.characterID = kMark;
 
 	scene->push(event);
 }
@@ -1061,6 +1085,111 @@ bool TeenAgentEngine::hasFeature(EngineFeature f) const {
 	default:
 		return false;
 	}
+}
+
+void TeenAgentEngine::sayText(const Common::String &text) {
+	Common::TextToSpeechManager *ttsMan = g_system->getTextToSpeechManager();
+	// _previousSaid is used to prevent the TTS from looping when sayText calls are inside loops
+	if (ttsMan && ConfMan.getBool("tts_enabled") && _previousSaid != text) {
+		if (_gameDescription->language == Common::RU_RUS) {
+			ttsMan->say(convertCyrillic(text));
+		} else {
+			ttsMan->say(text, Common::CodePage::kDos850);
+		}
+
+		_previousSaid = text;
+	}
+}
+
+void TeenAgentEngine::stopTextToSpeech() {
+	Common::TextToSpeechManager *ttsMan = g_system->getTextToSpeechManager();
+	if (ttsMan && ConfMan.getBool("tts_enabled") && ttsMan->isSpeaking()) {
+		ttsMan->stop();
+		_previousSaid.clear();
+	}
+}
+
+void TeenAgentEngine::setTTSVoice(CharacterID characterID) const {
+	Common::TextToSpeechManager *ttsMan = g_system->getTextToSpeechManager();
+	if (ttsMan && ConfMan.getBool("tts_enabled")) {
+		Common::Array<int> voices;
+		int pitch = 0;
+		Common::TTSVoice::Gender gender;
+
+		if (characterDialogData[characterID].male) {
+			voices = ttsMan->getVoiceIndicesByGender(Common::TTSVoice::MALE);
+			gender = Common::TTSVoice::MALE;
+		} else {
+			voices = ttsMan->getVoiceIndicesByGender(Common::TTSVoice::FEMALE);
+			gender = Common::TTSVoice::FEMALE;
+		}
+
+		// If no voice is available for the necessary gender, set the voice to default
+		if (voices.empty()) {
+			ttsMan->setVoice(0);
+		} else {
+			int voiceIndex = characterDialogData[characterID].voiceID % voices.size();
+			ttsMan->setVoice(voices[voiceIndex]);
+		}
+
+		// If no voices are available for this gender, alter the pitch to mimic a voice
+		// of the other gender
+		if (ttsMan->getVoice().getGender() != gender) {
+			if (gender == Common::TTSVoice::MALE) {
+				pitch -= 50;
+			} else {
+				pitch += 50;
+			}
+		}
+
+		ttsMan->setPitch(pitch);
+	}
+}
+
+Common::U32String TeenAgentEngine::convertCyrillic(const Common::String &text) const {
+	const byte *bytes = (const byte *)text.c_str();
+	byte *convertedBytes = new byte[text.size() * 2 + 1];
+
+	int i = 0;
+	for (const byte *b = bytes; *b; ++b) {
+		if (*b == 0x26) {	// & needs to be converted to и
+			convertedBytes[i] = 0xd0;
+			convertedBytes[i + 1] = 0xb8;
+			i += 2;
+			continue;
+		}
+
+		if (*b == 0x3e) {	// For ё
+			convertedBytes[i] = 0xd1;
+			convertedBytes[i + 1] = 0x91;
+			i += 2;
+			continue;
+		}
+
+		if (*b > 0x3f) {
+			int translated = *b;
+
+			if (*b > 0x70) {
+				translated += 0xd10f;
+			} else {
+				translated += 0xd04f;
+			}
+
+			convertedBytes[i] = (translated >> 8) & 0xff;
+			convertedBytes[i + 1] = translated & 0xff;
+			i += 2;
+		} else {
+			convertedBytes[i] = *b;
+			i++;
+		}
+	}
+
+	convertedBytes[i] = 0;
+
+	Common::U32String result((char *)convertedBytes);
+	delete[] convertedBytes;
+
+	return result;
 }
 
 } // End of namespace TeenAgent

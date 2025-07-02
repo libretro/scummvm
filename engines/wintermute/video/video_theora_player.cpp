@@ -49,7 +49,6 @@ VideoTheoraPlayer::VideoTheoraPlayer(BaseGame *inGame) : BaseClass(inGame) {
 //////////////////////////////////////////////////////////////////////////
 void VideoTheoraPlayer::SetDefaults() {
 
-	_file = nullptr;
 	_filename = "";
 	_startTime = 0;
 	_looping = false;
@@ -67,7 +66,6 @@ void VideoTheoraPlayer::SetDefaults() {
 	_dontDropFrames = false;
 
 	_texture = nullptr;
-	_alphaImage = nullptr;
 	_alphaFilename = "";
 
 	_frameRendered = false;
@@ -96,19 +94,11 @@ VideoTheoraPlayer::~VideoTheoraPlayer() {
 
 //////////////////////////////////////////////////////////////////////////
 void VideoTheoraPlayer::cleanup() {
-	if (_file) {
-		BaseFileManager::getEngineInstance()->closeFile(_file);
-		_file = nullptr;
-	}
-
-	_surface.free();
 	if (_theoraDecoder) {
 		_theoraDecoder->close();
 	}
 	delete _theoraDecoder;
 	_theoraDecoder = nullptr;
-	delete _alphaImage;
-	_alphaImage = nullptr;
 	delete _texture;
 	_texture = nullptr;
 }
@@ -118,21 +108,22 @@ bool VideoTheoraPlayer::initialize(const Common::String &filename, const Common:
 	cleanup();
 
 	_filename = filename;
-	_file = BaseFileManager::getEngineInstance()->openFile(filename, true, false);
-	if (!_file) {
+
+#if defined (USE_THEORADEC)
+	// Load a file, but avoid having the File-manager handle the disposal of it.
+	Common::SeekableReadStream *file = BaseFileManager::getEngineInstance()->openFile(filename, true, false);
+	if (!file) {
 		return STATUS_FAILED;
 	}
 
-#if defined (USE_THEORADEC)
 	_theoraDecoder = new Video::TheoraDecoder();
+	_theoraDecoder->loadStream(file);
 #else
 	warning("VideoTheoraPlayer::initialize - Theora support not compiled in, video will be skipped: %s", filename.c_str());
 	return STATUS_FAILED;
 #endif
 
 	_foundSubtitles = _subtitler->loadSubtitles(_filename, subtitleFile);
-
-	_theoraDecoder->loadStream(_file);
 
 	if (!_theoraDecoder->isVideoLoaded()) {
 		return STATUS_FAILED;
@@ -141,7 +132,6 @@ bool VideoTheoraPlayer::initialize(const Common::String &filename, const Common:
 	_state = THEORA_STATE_PAUSED;
 
 	// Additional setup.
-	_surface.create(_theoraDecoder->getWidth(), _theoraDecoder->getHeight(), _theoraDecoder->getPixelFormat());
 	_texture = _gameRef->_renderer->createSurface();
 	_texture->create(_theoraDecoder->getWidth(), _theoraDecoder->getHeight());
 	_state = THEORA_STATE_PLAYING;
@@ -160,17 +150,18 @@ bool VideoTheoraPlayer::resetStream() {
 	delete _theoraDecoder;
 	_theoraDecoder = nullptr;
 
-	_file = BaseFileManager::getEngineInstance()->openFile(_filename, true, false);
-	if (!_file) {
+#if defined (USE_THEORADEC)
+	// Load a file, but avoid having the File-manager handle the disposal of it.
+	Common::SeekableReadStream *file = BaseFileManager::getEngineInstance()->openFile(_filename, true, false);
+	if (!file) {
 		return STATUS_FAILED;
 	}
 
-#if defined (USE_THEORADEC)
 	_theoraDecoder = new Video::TheoraDecoder();
+	_theoraDecoder->loadStream(file);
 #else
 	return STATUS_FAILED;
 #endif
-	_theoraDecoder->loadStream(_file);
 
 	if (!_theoraDecoder->isVideoLoaded()) {
 		return STATUS_FAILED;
@@ -210,8 +201,6 @@ bool VideoTheoraPlayer::play(TVideoPlayback type, int x, int y, bool freezeGame,
 	_playbackStarted = false;
 	float width, height;
 	if (_theoraDecoder) {
-		_surface.free();
-		_surface.copyFrom(*_theoraDecoder->decodeNextFrame());
 		_state = THEORA_STATE_PLAYING;
 		_looping = looping;
 		_playbackType = type;
@@ -317,19 +306,8 @@ bool VideoTheoraPlayer::update() {
 		if (_state == THEORA_STATE_PLAYING) {
 			if (!_theoraDecoder->endOfVideo() && _theoraDecoder->getTimeToNextFrame() == 0) {
 				const Graphics::Surface *decodedFrame = _theoraDecoder->decodeNextFrame();
-				if (decodedFrame) {
-					if (decodedFrame->format == _surface.format && decodedFrame->pitch == _surface.pitch && decodedFrame->h == _surface.h) {
-						const byte *src = (const byte *)decodedFrame->getBasePtr(0, 0);
-						byte *dst = (byte *)_surface.getBasePtr(0, 0);
-						memcpy(dst, src, _surface.pitch * _surface.h);
-					} else {
-						_surface.free();
-						_surface.copyFrom(*decodedFrame);
-					}
-
-					if (_texture) {
-						writeVideo();
-					}
+				if (decodedFrame && _texture) {
+					writeVideo(decodedFrame);
 				}
 			}
 			return STATUS_OK;
@@ -363,50 +341,16 @@ uint32 VideoTheoraPlayer::getMovieTime() const {
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool VideoTheoraPlayer::writeVideo() {
+bool VideoTheoraPlayer::writeVideo(const Graphics::Surface *decodedFrame) {
 	if (!_texture) {
 		return STATUS_FAILED;
 	}
 
-	_texture->startPixelOp();
-
-	writeAlpha();
-	if (_alphaImage) {
-		_texture->putSurface(_surface, true);
-	} else {
-		_texture->putSurface(_surface, false);
-	}
-
+	_texture->putSurface(*decodedFrame, false);
 	//RenderFrame(_texture, &yuv);
 
-	_texture->endPixelOp();
 	_videoFrameReady = true;
 	return STATUS_OK;
-}
-
-void VideoTheoraPlayer::writeAlpha() {
-	if (_alphaImage && _surface.w == _alphaImage->getSurface()->w && _surface.h == _alphaImage->getSurface()->h) {
-		assert(_alphaImage->getSurface()->format.bytesPerPixel == 4);
-		assert(_surface.format.bytesPerPixel == 4);
-		const byte *alphaData = (const byte *)_alphaImage->getSurface()->getPixels();
-#ifdef SCUMM_LITTLE_ENDIAN
-		int alphaPlace = (_alphaImage->getSurface()->format.aShift / 8);
-#else
-		int alphaPlace = 3 - (_alphaImage->getSurface()->format.aShift / 8);
-#endif
-		alphaData += alphaPlace;
-		byte *imgData = (byte *)_surface.getPixels();
-#ifdef SCUMM_LITTLE_ENDIAN
-		imgData += (_surface.format.aShift / 8);
-#else
-		imgData += 3 - (_surface.format.aShift / 8);
-#endif
-		for (int i = 0; i < _surface.w * _surface.h; i++) {
-			*imgData = *alphaData;
-			alphaData += 4;
-			imgData += 4;
-		}
-	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -433,11 +377,8 @@ bool VideoTheoraPlayer::display(uint32 alpha) {
 
 //////////////////////////////////////////////////////////////////////////
 bool VideoTheoraPlayer::setAlphaImage(const Common::String &filename) {
-	delete _alphaImage;
-	_alphaImage = new BaseImage();
-	if (filename == "" || !_alphaImage || DID_FAIL(_alphaImage->loadFile(filename))) {
-		delete _alphaImage;
-		_alphaImage = nullptr;
+	assert(_texture);
+	if (filename == "" || !_texture || DID_FAIL(_texture->setAlphaImage(filename))) {
 		_alphaFilename = "";
 		return STATUS_FAILED;
 	}
@@ -445,20 +386,8 @@ bool VideoTheoraPlayer::setAlphaImage(const Common::String &filename) {
 	if (_alphaFilename != filename) {
 		_alphaFilename = filename;
 	}
-	// TODO: Conversion.
-	//_alphaImage->convert(IMG_TRUECOLOR);
 	return STATUS_OK;
 }
-
-//////////////////////////////////////////////////////////////////////////
-byte VideoTheoraPlayer::getAlphaAt(int x, int y) const {
-	if (_alphaImage) {
-		return _alphaImage->getAlphaAt(x, y);
-	} else {
-		return 0xFF;
-	}
-}
-
 
 //////////////////////////////////////////////////////////////////////////
 inline int intlog(int num) {

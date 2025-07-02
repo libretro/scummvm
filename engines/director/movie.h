@@ -151,6 +151,8 @@ public:
 	uint16 _currentActiveSpriteId;
 	uint16 _currentMouseSpriteId;
 	CastMemberID _currentMouseDownCastID;
+	CastMemberID _currentMouseDownSpriteScriptID;
+	bool _currentMouseDownSpriteImmediate;
 	uint16 _currentEditableTextChannel;
 	uint32 _lastEventTime;
 	uint32 _lastRollTime;
@@ -192,11 +194,12 @@ public:
 	bool _timeOutPlay;
 
 	bool _isBeepOn;
+	Common::HashMap<LEvent, int> _lastEventId;
 
 	Common::String _script;
 
 	// A flag to disable the event processing in the Movie
-	// This flag will be set when the user's interaction (mouse and key events like mouseUp, keyUp)  
+	// This flag will be set when the user's interaction (mouse and key events like mouseUp, keyUp)
 	// shouldn't be recorded as movie event, which may cause undesirable change in the lingo script
 	bool _inGuiMessageBox = false;
 

@@ -118,10 +118,10 @@ Common::QuickTimeParser::SampleDesc *QuickTimeDecoder::readPanoSampleDesc(Common
 	entry->_hotSpotColorDepth = _fd->readSint16BE(); // must be 8
 
 	if (entry->_minimumZoom == 0.0)
-		entry->_minimumZoom = 5.0;
+		entry->_minimumZoom = 2.0;
 
 	if (entry->_maximumZoom == 0.0)
-		entry->_maximumZoom = 65.0;
+		entry->_maximumZoom = abs(entry->_vPanTop - entry->_vPanBottom);
 
 	debugC(2, kDebugLevelGVideo, "    version: %d.%d sceneTrackID: %d loResSceneTrackID: %d hotSpotTrackID: %d",
 		entry->_majorVersion, entry->_minorVersion, entry->_sceneTrackID, entry->_loResSceneTrackID, entry->_hotSpotTrackID);
@@ -173,6 +173,10 @@ void QuickTimeDecoder::setQuality(float quality) {
 }
 
 void QuickTimeDecoder::setWarpMode(int warpMode) {
+	// Curretnly the warp mode 1 is not implemented correctly
+	// So, forcing the warp mode 1 to warp mode 2
+	if (warpMode == 1) warpMode = 2;
+
 	_warpMode = CLIP(warpMode, 0, 2);
 
 	// 2 Two-dimensional warping. This produces perspectively correct
@@ -300,11 +304,14 @@ void QuickTimeDecoder::setTargetSize(uint16 w, uint16 h) {
 	}
 	// Set up the _hfov properly for the very first frame of the pano
 	// After our setFOV will handle the _hfov
-	_hfov = _fov * (float)_height / (float)_width;
+	_hfov = _fov * (float)_width / (float)_height;
 }
 
 void QuickTimeDecoder::setPanAngle(float angle) {
 	PanoSampleDesc *desc = (PanoSampleDesc *)_panoTrack->sampleDescs[0];
+
+	float panRange = abs(desc->_hPanEnd - desc->_hPanStart);
+	angle = fmod(angle, panRange);
 
 	if (desc->_hPanStart != desc->_hPanEnd && (desc->_hPanStart != 0.0 || desc->_hPanEnd != 360.0)) {
 		if (angle < desc->_hPanStart + _hfov) {
@@ -360,7 +367,7 @@ bool QuickTimeDecoder::setFOV(float fov) {
 		_fov = fov;
 
 		track->_currentHFOV = _hfov;
-		_hfov = _fov * (float)_height / (float)_width;
+		_hfov = _fov * (float)_width / (float)_height;
 
 		// We need to recalculate the pan angle and tilt angle to see if it has went
 		// out of bound for the current value of FOV
@@ -1168,7 +1175,8 @@ void QuickTimeDecoder::PanoTrackHandler::projectPanorama(uint8 scaleFactor,
 	float minProjectedY = topRightVector[1] / topRightVector[2];
 	float maxProjectedY = bottomRightVector[1] / bottomRightVector[2];
 
-	float angleT = fmod((360.0f - panAngle) / 360.0f, 1.0f);
+	float panRange = abs(desc->_hPanEnd - desc->_hPanStart);
+	float angleT = fmod((panRange - panAngle) / panRange, 1.0f);
 	if (angleT < 0.0f) {
 		angleT += 1.0f;
 	}
@@ -1234,7 +1242,7 @@ void QuickTimeDecoder::PanoTrackHandler::projectPanorama(uint8 scaleFactor,
 	cylinderProjectionRanges.resize(halfWidthRoundedUp * 2);
 	cylinderAngleOffsets.resize(halfWidthRoundedUp);
 
-	if (warpMode == 0.0f) {
+	if (warpMode == 0) {
 		for (uint16 x = 0; x < halfWidthRoundedUp; x++) {
 			float xFloat = (float) x;
 

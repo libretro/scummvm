@@ -128,16 +128,19 @@ bool guiMenu::initialize(RGB8 *myPalette) {
 			return false;
 		}
 	}
-	if ((_GM(slotInUse) = (bool *)mem_alloc(sizeof(bool) * MAX_SLOTS, "slotUnUse array")) == nullptr) {
+	_GM(slotInUse) = (bool *)mem_alloc(sizeof(bool) * MAX_SLOTS, "slotUnUse array");
+	if (_GM(slotInUse) == nullptr) {
 		return false;
 	}
 
 	// Allocate space for the thumbnail sprites
-	if ((_GM(thumbNails) = (Sprite **)mem_alloc(sizeof(Sprite *) * MAX_SLOTS, "thumbNail array")) == nullptr) {
+	_GM(thumbNails) = (Sprite **)mem_alloc(sizeof(Sprite *) * MAX_SLOTS, "thumbNail array");
+	if (_GM(thumbNails) == nullptr) {
 		return false;
 	}
 	for (i = 0; i < MAX_SLOTS; i++) {
-		if ((_GM(thumbNails)[i] = (Sprite *)mem_alloc(sizeof(Sprite), "thumbNail")) == nullptr) {
+		_GM(thumbNails)[i] = (Sprite *)mem_alloc(sizeof(Sprite), "thumbNail");
+		if (_GM(thumbNails)[i] == nullptr) {
 			return false;
 		}
 		_GM(thumbNails)[i]->sourceHandle = nullptr;
@@ -213,20 +216,17 @@ void guiMenu::shutdown(bool fadeToColor) {
 
 GrBuff *guiMenu::copyBackground(guiMenu *myMenu, int32 x, int32 y, int32 w, int32 h) {
 	// Verify params
-	if ((!myMenu) || (!myMenu->menuBuffer)) {
+	if (!myMenu || !myMenu->menuBuffer) {
 		return nullptr;
 	}
 
 	// Create a new grbuff struct
 	GrBuff *copyOfBackground = new GrBuff(w, h);
-	if (!copyOfBackground) {
-		return nullptr;
-	}
 
 	// Get the source and destination buffers
 	Buffer *srcBuff = myMenu->menuBuffer->get_buffer();
 	Buffer *destBuff = copyOfBackground->get_buffer();
-	if ((!srcBuff) || (!destBuff)) {
+	if (!srcBuff || !destBuff) {
 		delete copyOfBackground;
 
 		return nullptr;
@@ -429,7 +429,7 @@ bool guiMenu::eventHandler(guiMenu *theMenu, int32 eventType, int32 parm1, int32
 	// If we are currently handling the events for an item, continue until that item releases control
 	if (_GM(menuCurrItem)) {
 		handled = (_GM(menuCurrItem)->itemEventHandler)(_GM(menuCurrItem), eventType, parm1, menuX, menuY, (void **)&_GM(menuCurrItem));
-		if (_GM(menuCurrItem)) {
+		if (_GM(menuCurrItem) && currScreen) {
 			*currScreen = true;
 		}
 		if (handled) {
@@ -450,7 +450,7 @@ bool guiMenu::eventHandler(guiMenu *theMenu, int32 eventType, int32 parm1, int32
 		if (myItem) {
 			if (myItem->itemEventHandler) {
 				(myItem->itemEventHandler)(myItem, eventType, parm1, menuX, menuY, (void **)&_GM(menuCurrItem));
-				if (_GM(menuCurrItem)) {
+				if (_GM(menuCurrItem) && currScreen) {
 					*currScreen = true;
 				}
 				return true;
@@ -476,7 +476,8 @@ bool guiMenu::eventHandler(guiMenu *theMenu, int32 eventType, int32 parm1, int32
 	case _ME_L_click:
 	case _ME_doubleclick:
 		if (!(myScreen->scrnFlags & SF_IMMOVABLE)) {
-			*currScreen = true;
+			if(currScreen)
+				*currScreen = true;
 			movingScreen = true;
 			movingX = parm2;
 			movingY = parm3;
@@ -494,7 +495,8 @@ bool guiMenu::eventHandler(guiMenu *theMenu, int32 eventType, int32 parm1, int32
 
 	case _ME_L_release:
 	case _ME_doubleclick_release:
-		*currScreen = false;
+		if (currScreen)
+			*currScreen = false;
 		movingScreen = false;
 		break;
 
@@ -607,10 +609,7 @@ bool guiMenu::loadSprites(const char *series, int32 numSprites) {
 	_GM(menuSeriesResource) = mem_strdup(series);
 
 	// Update the palette for the menu
-	if (IS_BURGER)
-		gr_pal_set_range(_GM(menuPalette), 59, 197);
-	else
-		gr_pal_set_range(_GM(menuPalette), 128, 128);
+	gr_pal_set_range(_GM(menuPalette), 59, 197);
 
 	_GM(spriteCount) = numSprites;
 
@@ -899,7 +898,7 @@ void menuItemButton::drawButton(menuItemButton *myItem, guiMenu *myMenu, int32 x
 	gui_DrawSprite(mySprite, myBuff, x, y);
 
 	// If the button is a textbutton, write in the text
-	if ((myItem->buttonType == BTN_TYPE_SL_TEXT) && (myItem->prompt)) {
+	if ((myItem->buttonType == BTN_TYPE_SL_TEXT) && myItem->prompt) {
 		// Write in the special tag
 		Common::sprintf_s(tempStr, 32, "%02d", myItem->tag - 1000 + _GM(firstSlotIndex));
 
@@ -1234,6 +1233,8 @@ void menuItemMsg::drawMsg(menuItemMsg *myItem, guiMenu *myMenu, int32 x, int32 y
 	case SL_TAG_THUMBNAIL:
 		mySprite = _GM(saveLoadThumbNail);
 		break;
+	default:
+		break;
 	}
 
 	// Get the menu buffer and draw the sprite to it
@@ -1443,6 +1444,7 @@ bool menuItemHSlider::handler(menuItemHSlider *myItem, int32 eventType, int32 ev
 
 	case _ME_L_hold:
 	case _ME_doubleclick_hold:
+	default:
 		break;
 	}
 
@@ -1504,7 +1506,7 @@ menuItemHSlider *menuItemHSlider::add(guiMenu *myMenu, int32 tag, int32 x, int32
 		newItem->background = guiMenu::copyBackground(myMenu, x, y, w, h);
 	}
 
-	// Intialize the new slider
+	// Initialize the new slider
 	newItem->itemFlags = H_THUMB_NORM;
 	auto *thumb = _GM(menuSprites)[IS_RIDDLE ? (int)Riddle::GUI::OM_SLIDER_BTN_NORM :
 		(int)Burger::GUI::OM_SLIDER_BTN_NORM];
@@ -1677,7 +1679,7 @@ void menuItemVSlider::drawVSlider(menuItemVSlider *myItem, guiMenu *myMenu, int3
 		}
 	}
 
-	// Draw the sprite comonents
+	// Draw the sprite components
 	gui_DrawSprite(vbarSprite, myBuff, x, y + upSprite->h);
 	gui_DrawSprite(upSprite, myBuff, x, y);
 	gui_DrawSprite(thumbSprite, myBuff, x, y + myItem->thumbY);
@@ -1868,6 +1870,8 @@ bool menuItemVSlider::handler(menuItemVSlider *myItem, int32 eventType, int32 ev
 			}
 		}
 		break;
+	default:
+		break;
 	}
 
 	// See if we need to redraw the vslider
@@ -1949,9 +1953,6 @@ void menuItemTextField::drawTextField(menuItemTextField *myItem, guiMenu *myMenu
 		break;
 
 	case TF_OVER:
-		mySprite = _GM(menuSprites)[SaveLoadMenuBase::SL_LINE_OVER];
-		break;
-
 	case TF_NORM:
 	default:
 		mySprite = _GM(menuSprites)[SaveLoadMenuBase::SL_LINE_OVER];
@@ -2060,6 +2061,7 @@ bool menuItemTextField::handler(menuItemTextField *myItem, int32 eventType, int3
 		case _ME_move:
 		case _ME_L_hold:
 		case _ME_doubleclick_hold:
+		default:
 			break;
 		}
 	} else if ((eventType == EVENT_KEY) && (myItem->itemFlags == TF_OVER)) {
@@ -2174,7 +2176,6 @@ bool menuItemTextField::handler(menuItemTextField *myItem, int32 eventType, int3
 
 menuItemTextField *menuItemTextField::add(guiMenu *myMenu, int32 tag, int32 x, int32 y, int32 w, int32 h, int32 initFlags,
 	const char *prompt, int32 specialTag, CALLBACK callback, bool transparent) {
-	menuItemTextField *textInfo;
 	int32 status;
 
 	// Verify params
@@ -2208,7 +2209,8 @@ menuItemTextField *menuItemTextField::add(guiMenu *myMenu, int32 tag, int32 x, i
 		newItem->background = guiMenu::copyBackground(myMenu, x, y, w, h);
 	}
 
-	if ((textInfo = (menuItemTextField *)mem_alloc(sizeof(menuItemTextField), "menu item textfield")) == nullptr) {
+	menuItemTextField *textInfo = (menuItemTextField *)mem_alloc(sizeof(menuItemTextField), "menu item textfield");
+	if (textInfo == nullptr) {
 		return nullptr;
 	}
 	textInfo->itemFlags = initFlags;

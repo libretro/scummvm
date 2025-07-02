@@ -41,6 +41,7 @@ Engine::Engine(Sound *sound, DataType dataType, int partNum) :
 		_sound(sound), _script(sound, &_res, &_ply, &_vid),
 		_res(&_vid, dataType), _ply(&_res), _vid(&_res),
 		_partNum(partNum) {
+	sound->setPlayer(&_ply);
 }
 
 void Engine::setSystemStub(SystemStub *stub, Gfx *graphics) {
@@ -125,6 +126,9 @@ void Engine::setup(Language lang, int graphicsType) {
 		switch (lang) {
 		case Common::FR_FRA:
 			_vid._stringsTable = Video::STRINGS_TABLE_FR;
+			break;
+		case Common::IT_ITA:
+			_vid._stringsTable = Video::STRINGS_TABLE_ITA;
 			break;
 		case Common::EN_ANY:
 		default:

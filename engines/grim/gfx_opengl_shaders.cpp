@@ -517,7 +517,7 @@ void GfxOpenGLS::clearDepthBuffer() {
 void GfxOpenGLS::flipBuffer(bool opportunistic) {
 	if (opportunistic) {
 		GLint fbo = 0;
-		glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fbo);
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
 		if (fbo == 0) {
 			// Don't flip if we are not rendering on FBO
 			// Flipping without any draw is undefined
@@ -1360,11 +1360,7 @@ void GfxOpenGLS::createBitmap(BitmapData *bitmap) {
 		glPixelStorei(GL_UNPACK_ALIGNMENT, bytes);
 
 		const Graphics::PixelFormat format_16bpp(2, 5, 6, 5, 0, 11, 5, 0, 0);
-#ifdef SCUMM_BIG_ENDIAN
-		const Graphics::PixelFormat format_32bpp(4, 8, 8, 8, 8, 24, 16, 8, 0);
-#else
-		const Graphics::PixelFormat format_32bpp(4, 8, 8, 8, 8, 0, 8, 16, 24);
-#endif
+		const Graphics::PixelFormat format_32bpp = Graphics::PixelFormat::createFormatRGBA32();
 
 		for (int pic = 0; pic < bitmap->_numImages; pic++) {
 			const Graphics::Surface &imageData = bitmap->getImageData(pic);
@@ -1790,6 +1786,7 @@ void GfxOpenGLS::dimRegion(int xin, int yReal, int w, int h, float level) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+	g_system->presentBuffer();
 	glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, xin, yin, w, h, 0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, _dimRegionVBO);
@@ -2000,11 +1997,7 @@ void GfxOpenGLS::drawPolygon(const PrimitiveObject *primitive) {
 }
 
 const Graphics::PixelFormat GfxOpenGLS::getMovieFormat() const {
-#ifdef SCUMM_BIG_ENDIAN
-	return Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0);
-#else
-	return Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24);
-#endif
+	return Graphics::PixelFormat::createFormatRGBA32();
 }
 
 void GfxOpenGLS::prepareMovieFrame(Graphics::Surface* frame) {
@@ -2223,11 +2216,7 @@ static void readPixels(int x, int y, int width, int height, byte *buffer) {
 
 Bitmap *GfxOpenGLS::getScreenshot(int w, int h, bool useStored) {
 	Graphics::Surface src;
-#ifdef SCUMM_BIG_ENDIAN
-	src.create(_screenWidth, _screenHeight, Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0));
-#else
-	src.create(_screenWidth, _screenHeight, Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24));
-#endif
+	src.create(_screenWidth, _screenHeight, Graphics::PixelFormat::createFormatRGBA32());
 	Bitmap *bmp;
 
 	if (useStored) {
@@ -2255,6 +2244,7 @@ Bitmap *GfxOpenGLS::getScreenshot(int w, int h, bool useStored) {
 #endif
 		}
 	} else {
+		g_system->presentBuffer();
 		readPixels(0, 0, _screenWidth, _screenHeight, (uint8 *)src.getPixels());
 	}
 	bmp = createScreenshotBitmap(&src, w, h, true);
@@ -2263,6 +2253,7 @@ Bitmap *GfxOpenGLS::getScreenshot(int w, int h, bool useStored) {
 }
 
 void GfxOpenGLS::createSpecialtyTextureFromScreen(uint id, uint8 *data, int x, int y, int width, int height) {
+	g_system->presentBuffer();
 	readPixels(x, y, width, height, data);
 	createSpecialtyTexture(id, data, width, height);
 }

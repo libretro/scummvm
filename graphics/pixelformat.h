@@ -181,8 +181,62 @@ struct PixelFormat {
 	}
 
 	/** Define a CLUT8 pixel format. */
-	static inline PixelFormat createFormatCLUT8() {
+	static constexpr inline PixelFormat createFormatCLUT8() {
 		return PixelFormat(1, 0, 0, 0, 0, 0, 0, 0, 0);
+	}
+
+	/** Define an endian-aware RGB24 pixel format. */
+	static inline PixelFormat createFormatRGB24() {
+#ifdef SCUMM_BIG_ENDIAN
+		return Graphics::PixelFormat(3, 8, 8, 8, 0, 16, 8, 0, 0);
+#else
+		return Graphics::PixelFormat(3, 8, 8, 8, 0, 0, 8, 16, 0);
+#endif
+	}
+
+	/** Define an endian-aware BGR24 pixel format. */
+	static inline PixelFormat createFormatBGR24() {
+#ifdef SCUMM_BIG_ENDIAN
+		return Graphics::PixelFormat(3, 8, 8, 8, 0, 0, 8, 16, 0);
+#else
+		return Graphics::PixelFormat(3, 8, 8, 8, 0, 16, 8, 0, 0);
+#endif
+	}
+
+	/** Define an endian-aware RGBA32 pixel format. */
+	static inline PixelFormat createFormatRGBA32(bool alpha = true) {
+#ifdef SCUMM_BIG_ENDIAN
+		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 24, 16, 8, 0);
+#else
+		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 0, 8, 16, 24);
+#endif
+	}
+
+	/** Define an endian-aware BGRA32 pixel format. */
+	static inline PixelFormat createFormatBGRA32(bool alpha = true) {
+#ifdef SCUMM_BIG_ENDIAN
+		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 8, 16, 24, 0);
+#else
+		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 16, 8, 0, 24);
+#endif
+	}
+
+	/** Define an endian-aware ABGR32 pixel format. */
+	static inline PixelFormat createFormatABGR32(bool alpha = true) {
+#ifdef SCUMM_BIG_ENDIAN
+		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 0, 8, 16, 24);
+#else
+		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 24, 16, 8, 0);
+#endif
+	}
+
+	/** Define an endian-aware ARGB32 pixel format. */
+	static inline PixelFormat createFormatARGB32(bool alpha = true) {
+#ifdef SCUMM_BIG_ENDIAN
+		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 16, 8, 0, 24);
+#else
+		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 8, 16, 24, 0);
+#endif
 	}
 
 	/** Check if two pixel formats are the same */

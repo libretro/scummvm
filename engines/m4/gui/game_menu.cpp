@@ -161,29 +161,25 @@ void SaveLoadMenuBase::initializeSlotTables() {
 }
 
 Sprite *SaveLoadMenuBase::menu_CreateThumbnail(int32 *spriteSize) {
-	Sprite *thumbNailSprite;
 	Buffer RLE8Buff;
 	uint8 *srcPtr, *srcPtr2, *srcPtr3, *srcRowPtr, *destPtr;
 	int32 i, status;
 	int32 currRow, beginRow;
 
 	// Create a Sprite for the thumbNail
-	if ((thumbNailSprite = (Sprite *)mem_alloc(sizeof(Sprite), "sprite")) == nullptr) {
+	Sprite *thumbNailSprite = (Sprite *)mem_alloc(sizeof(Sprite), "sprite");
+	if (thumbNailSprite == nullptr) {
 		return nullptr;
 	}
 
 	GrBuff *thumbNail = new GrBuff((MAX_VIDEO_X + 1) / 3, (MAX_VIDEO_Y + 1) / 3);
-	if (!thumbNail) {
-		return nullptr;
-	}
-
 	Buffer *destBuff = thumbNail->get_buffer();
 	if (!destBuff) {
 		return nullptr;
 	}
 
 	ScreenContext *gameScreen = vmng_screen_find(_G(gameDrawBuff), &status);
-	if ((!gameScreen) || (status != SCRN_ACTIVE)) {
+	if (!gameScreen || (status != SCRN_ACTIVE)) {
 		return nullptr;
 	}
 

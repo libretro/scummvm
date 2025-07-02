@@ -60,7 +60,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformUnknown,
-		ADGF_UNSTABLE,
+		ADGF_TESTING,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
@@ -79,7 +79,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformUnknown,
-		ADGF_UNSTABLE,
+		ADGF_TESTING,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
@@ -88,7 +88,7 @@ static const ADGameDescription gameDescriptions[] = {
 	//   express.exe  ???
 	{
 		"lastexpress",
-		"",
+		"Interplay Release",
 		{
 			{"HD.HPF",  0, "bcc32d977f92bb52c060a0b4e8589cac", 30715904},
 			{"CD1.HPF", 0, "8c86db47304033fcff32c69fddd5a920", 525522944},
@@ -98,7 +98,24 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformUnknown,
-		ADGF_UNSTABLE,
+		ADGF_TESTING,
+		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
+	},
+
+	{
+		"lastexpress",
+		"Interplay Release",
+		{
+			{"CD1.HPF", 0, "8c86db47304033fcff32c69fddd5a920", 525522944},
+			{"CD2.HPF", 0, "58aa26e782d10ec5d2231e539d2fe6a2", 669581312},
+			{"CD3.HPF", 0, "00554fbf78a2ad391d98578fbbbe1c48", 641128448},
+			{"data1.cab", 0, "895ba6eec49346245e468553ba7a64fb", 42775756},
+			{"is:data1.cab:HD.HPF", 0, "A:bcc32d977f92bb52c060a0b4e8589cac", 30715904},
+			AD_LISTEND
+		},
+		Common::EN_ANY,
+		Common::kPlatformUnknown,
+		ADGF_TESTING | GF_COMPRESSED,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
@@ -114,7 +131,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformUnknown,
-		ADGF_DEMO | ADGF_UNSTABLE,
+		ADGF_DEMO | ADGF_TESTING,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
@@ -133,13 +150,13 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::FR_FRA,
 		Common::kPlatformUnknown,
-		ADGF_UNSTABLE,
+		ADGF_TESTING,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
-	// The Last Express (German)
-	//   expressw.exe ???
-	//   express.exe  ???
+	// The Last Express (German) - Broderbund Release
+	//   expressw.exe 1997-04-02 16:31:46, Version number 1.0.0.1
+	//   express.exe  1997-04-02 17:01:02
 	{
 		"lastexpress",
 		"",
@@ -152,7 +169,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::DE_DEU,
 		Common::kPlatformUnknown,
-		ADGF_UNSTABLE,
+		ADGF_TESTING,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
@@ -171,7 +188,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::ES_ESP,
 		Common::kPlatformUnknown,
-		ADGF_UNSTABLE,
+		ADGF_TESTING,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
@@ -190,10 +207,28 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::IT_ITA,
 		Common::kPlatformUnknown,
-		ADGF_UNSTABLE,
+		ADGF_TESTING,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
+	// The Last Express (Italian 1998 Rerelease)
+	//   expressw.exe 1997-09-15 12:11:56
+	//   express.exe  1997-09-15 12:41:46
+	{
+		"lastexpress",
+		"1998 Re-Release",
+		{
+			{"HD.HPF",  0, "5539e78fd7eecb70bc858e86b5709fe9", 29548544},   // 1998-01-21 08:39:32
+			{"CD1.HPF", 0, "f6840f4b809ab259be1d93494e6fcae3", 522979328},  // 1998-01-16 16:12:28
+			{"CD2.HPF", 0, "66b34839c1400fb72ac11a470cb1ebe1", 665171968},  // 1998-01-22 12:19:00
+			{"CD3.HPF", 0, "eb542814a6bed3fe89308c9d77c9dc5e", 637612032},  // 1998-01-21 08:36:48
+			AD_LISTEND
+		},
+		Common::IT_ITA,
+		Common::kPlatformUnknown,
+		ADGF_TESTING,
+		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
+	},
 	// The Last Express (Russian)
 	//   expressw.exe 1999-04-05 15:33:56
 	//   express.exe  ???
@@ -209,7 +244,29 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::RU_RUS,
 		Common::kPlatformUnknown,
-		ADGF_UNSTABLE,
+		ADGF_TESTING,
+		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
+	},
+
+	// The Last Express (Multilanguage) - Gold Edition by DotEmu (Steam)
+	{
+		"lastexpress",
+		"Gold Edition",
+		{
+			{"BG.zip",                  0, "f7aa689629280e464293dd674126cfe6", 844756591},
+			{"DATA.zip",                0, "bd1602f10cf20a7f4add620fb6e5571f", 587488},
+			{"LNK.zip",                 0, "b281b3332a88e514543efd533643e627", 21296565},
+			{"NIS.zip",                 0, "bc108966f7142135f661cde4563390f3", 671323510},
+			{"SBE.zip",                 0, "a0345b2c6e6fa5d811767fd12283d0f8", 1380014},
+			{"SEQ.zip",                 0, "a6a6cb45b976e2ba4af546a31312afe3", 170652650},
+			{"SND.zip",                 0, "9c39b2b997f1d2504538c0b5fd1ff05f", 1160618591},
+			{"TGA.zip",                 0, "66c7c74553f635a86fad8f333825ad7d", 833177},
+			{"TheLastExpressSteam.exe", 0, "9173ea82f613b007479be0ca194ece39", 2060288},
+			AD_LISTEND
+		},
+		Common::UNK_LANG,
+		Common::kPlatformWindows,
+		ADGF_UNSTABLE | ADGF_REMASTERED,
 		GUIO2(GUIO_NOASPECT, GUIO_NOMIDI)
 	},
 
@@ -218,6 +275,7 @@ static const ADGameDescription gameDescriptions[] = {
 
 static const char *const directoryGlobs[] = {
 		"data", // GOG release
+		"roms", // Gold Edition
 		nullptr
 };
 

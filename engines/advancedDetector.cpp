@@ -80,7 +80,7 @@ private:
 	const AdvancedMetaEngineDetectionBase::FileMap &_fileMap;
 };
 
-static Common::String sanitizeName(const char *name, int maxLen) {
+Common::String AdvancedMetaEngineDetectionBase::sanitizeName(const char *name, int maxLen) {
 	Common::String res;
 	Common::String word;
 	Common::String lastWord;
@@ -133,7 +133,7 @@ static Common::String generatePreferredTarget(const ADGameDescription *desc, int
 	if (!targetID.empty()) {
 		res = targetID;
 	} else if (desc->flags & ADGF_AUTOGENTARGET && desc->extra && *desc->extra) {
-		res = sanitizeName(desc->extra, maxLen);
+		res = AdvancedMetaEngineDetectionBase::sanitizeName(desc->extra, maxLen);
 	} else {
 		res = desc->gameId;
 	}
@@ -491,7 +491,7 @@ static MD5Properties gameFileToMD5Props(const ADGameFileDescription *fileEntry, 
 	}
 
 	if (gameFlags & ADGF_MACRESFORK) {
-		ret = (MD5Properties)(ret | kMD5MacResOrDataFork);
+		ret = (MD5Properties)(ret | kMD5MacResFork);
 	}
 
 	if (gameFlags & ADGF_TAILMD5) {
@@ -507,10 +507,6 @@ Common::String md5PropToGameFile(MD5Properties flags) {
 	switch (flags & kMD5MacMask) {
 	case kMD5MacDataFork:
 		res = "d";
-		break;
-
-	case kMD5MacResOrDataFork:
-		res = "m";
 		break;
 
 	case kMD5MacResFork:
@@ -562,7 +558,7 @@ bool AdvancedMetaEngineBase::getFilePropertiesExtern(uint md5Bytes, const FileMa
 static bool getFilePropertiesIntern(uint md5Bytes, const AdvancedMetaEngineBase::FileMap &allFiles, MD5Properties md5prop, const Common::Path &fname, FileProperties &fileProps) {
 	if (md5prop & (kMD5MacResFork | kMD5MacDataFork)) {
 		FileMapArchive fileMapArchive(allFiles);
-		bool is_legacy = ((md5prop & kMD5MacMask) == kMD5MacResOrDataFork);
+
 		if (md5prop & kMD5MacResFork) {
 			Common::MacResManager macResMan;
 
@@ -580,8 +576,7 @@ static bool getFilePropertiesIntern(uint md5Bytes, const AdvancedMetaEngineBase:
 
 		if (md5prop & kMD5MacDataFork) {
 			Common::SeekableReadStream *dataFork = Common::MacResManager::openFileOrDataFork(fname, fileMapArchive);
-			// Logically 0-sized data fork is valid but legacy code continues fallback
-			if (dataFork && (dataFork->size() || !is_legacy)) {
+			if (dataFork) {
 				fileProps.size = dataFork->size();
 				fileProps.md5 = Common::computeStreamMD5AsString(*dataFork, md5Bytes);
 				fileProps.md5prop = (MD5Properties)((md5prop & kMD5Tail) | kMD5MacDataFork);
@@ -591,9 +586,8 @@ static bool getFilePropertiesIntern(uint md5Bytes, const AdvancedMetaEngineBase:
 			delete dataFork;
 		}
 
-		// In modern case stop here
-		if (!is_legacy)
-			return false;
+		// We have no forks
+		return false;
 	}
 
 	Common::ScopedPtr<Common::SeekableReadStream> testFile;
@@ -689,15 +683,16 @@ void AdvancedMetaEngineDetectionBase::dumpDetectionEntries() const {
 
 		for (auto fileDesc = g->filesDescriptions; fileDesc->fileName; fileDesc++) {
 			const char *fname = fileDesc->fileName;
-			int64 fsize = fileDesc->fileSize == AD_NO_SIZE ? -1 : fileDesc->fileSize;
+			int64 fsize = fileDesc->fileSize == AD_NO_SIZE ? -1ll : fileDesc->fileSize;
 			Common::String md5 = fileDesc->md5;
 			MD5Properties md5prop = gameFileToMD5Props(fileDesc, g->flags);
+			Common::String sizeSuffix = (md5prop & kMD5MacResFork) ? "-rd" : "";
 			Common::String md5Prefix = md5PropToGameFile(md5prop);
 			Common::String key = md5;
 			if (md5Prefix != "" && md5.find(':') == Common::String::npos)
 				key = md5Prefix + ':' + md5;
 
-			printf("\trom ( name \"%s\" size %lld md5-%d %s )\n", escapeString(fname).c_str(), static_cast<long long int>(fsize), _md5Bytes, key.c_str());
+			printf("\trom ( name \"%s\" size%s %lld md5-%d %s )\n", escapeString(fname).c_str(), sizeSuffix.c_str(), static_cast<long long int>(fsize), _md5Bytes, key.c_str());
 		}
 		printf(")\n\n"); // Closing for 'game ('
 	}

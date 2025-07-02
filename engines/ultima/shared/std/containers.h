@@ -87,10 +87,7 @@ public:
 		}
 	};
 public:
-	typedef T reference;
-	typedef const T const_reference;
-
-	vector() : Common::Array<T>() {}
+	constexpr vector() : Common::Array<T>() {}
 	vector(size_t newSize) : Common::Array<T>(newSize) {}
 	vector(size_t newSize, const T elem) : Common::Array<T>(newSize, elem) {}
 
@@ -105,14 +102,6 @@ public:
 	}
 	const_reverse_iterator rend() const {
 		return const_reverse_iterator(this, -1);
-	}
-
-	void pop_front() {
-		Common::Array<T>::remove_at(0);
-	}
-
-	T at(size_t index) const {
-		return (*this)[index];
 	}
 };
 
@@ -179,20 +168,6 @@ public:
 		for (; it != end() && *it != item; ++it) {
 		}
 		return it;
-	}
-};
-
-template<class VAL>
-class deque : public Common::List<VAL> {
-public:
-	VAL operator[](uint index) {
-		for (typename Common::List<VAL>::iterator it = this->begin();
-				it != this->end(); ++it, --index) {
-			if (index == 0)
-				return *it;
-		}
-
-		error("Invalid index");
 	}
 };
 

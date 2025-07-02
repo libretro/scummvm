@@ -147,7 +147,7 @@ bool SaveGame::load_original() {
 	init(obj_manager);
 
 	objblk_filename = OBJBLK_FILENAME;
-	len = objblk_filename.length();
+	len = objblk_filename.size();
 
 	uint8 i = 0;
 
@@ -211,7 +211,7 @@ bool SaveGame::transfer_character() {
 	Common::FSNode folder = dialog.getResult();
 
 	// TODO: Load in character data from given folder and start new game
-	g_engine->GUIError(Common::String::format("Load party file from folder - %s", folder.getPath().toString(Common::Path::kNativeSeparator).c_str()));
+	GUIErrorMessage(Common::String::format("Load party file from folder - %s", folder.getPath().toString(Common::Path::kNativeSeparator).c_str()));
 
 	return false;
 }
@@ -440,7 +440,7 @@ void SaveGame::update_objlist_for_new_game_u6() {
 
 	config->value("config/newgamedata/name", name, "Avatar");
 	objlist.seek(0xf00);
-	int len = name.length();
+	int len = name.size();
 	if (len > 13)
 		len = 13;
 
@@ -490,7 +490,7 @@ void SaveGame::update_objlist_for_new_game_se() {
 
 	config->value("config/newgamedata/name", name, "Avatar");
 	objlist.seek(0xf00);
-	int len = name.length();
+	int len = name.size();
 	if (len > 13)
 		len = 13;
 
@@ -524,7 +524,7 @@ void SaveGame::update_objlist_for_new_game_md() {
 
 	config->value("config/newgamedata/name", name, "Avatar");
 	objlist.seek(0xf00);
-	int len = name.length();
+	int len = name.size();
 	if (len > 13)
 		len = 13;
 

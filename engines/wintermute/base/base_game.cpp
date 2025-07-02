@@ -1844,11 +1844,9 @@ bool BaseGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack
 		_gameRef->displayContent(false);
 
 		bool ret = false;
-		BaseImage *image = _gameRef->_renderer->takeScreenshot();
+		BaseImage *image = _gameRef->_renderer->takeScreenshot(sizeX, sizeY);
 		if (image) {
-			ret = image->resize(sizeX, sizeY);
-			if (ret)
-				ret = image->saveBMPFile(filename);
+			ret = image->saveBMPFile(filename);
 			delete image;
 		}
 
@@ -4298,8 +4296,8 @@ bool BaseGame::displayContent(bool doUpdate, bool displayAll) {
 
 //////////////////////////////////////////////////////////////////////////
 bool BaseGame::displayContentSimple() {
-	// fill black
-	_renderer->fill(0, 0, 0);
+	// clear screen
+	_renderer->clear();
 	_renderer->displayIndicator();
 
 	return STATUS_OK;

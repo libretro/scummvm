@@ -529,6 +529,7 @@ public:
 	 * @param gKey  the green component of the color key
 	 * @param bKey  the blue component of the color key
 	 * @param overwriteAlpha if true, all other alpha will be set fully opaque
+	 * @return true if a color key was applied, otherwise false.
 	 */
 	bool applyColorKey(uint8 rKey, uint8 gKey, uint8 bKey, bool overwriteAlpha = false);
 
@@ -541,6 +542,7 @@ public:
 	 * @param rNew  the red component to replace the color key with
 	 * @param gNew  the green component to replace the color key with
 	 * @param bNew  the blue component to replace the color key with
+	 * @return true if a color key was applied, otherwise false.
 	 */
 	bool applyColorKey(uint8 rKey, uint8 gKey, uint8 bKey, bool overwriteAlpha,
 	                   uint8 rNew, uint8 gNew, uint8 bNew);
@@ -566,8 +568,9 @@ public:
 	 * @param newWidth   The resulting width.
 	 * @param newHeight  The resulting height.
 	 * @param filtering  Whether or not to use bilinear filtering.
+	 * @param flip       The flipping flags to use (see Graphics::FLIP_FLAGS).
 	 */
-	Graphics::Surface *scale(int16 newWidth, int16 newHeight, bool filtering = false) const;
+	Graphics::Surface *scale(int16 newWidth, int16 newHeight, bool filtering = false, byte flip = 0) const;
 
 	/**
 	 * @brief Rotoscale function; this returns a transformed version of this surface after rotation and

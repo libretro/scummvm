@@ -44,32 +44,26 @@ ScriptValue Timer::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue>
 
 	case kIsPlayingMethod: {
 		assert(args.size() == 0);
-		returnValue.setToBool(_isActive);
+		returnValue.setToBool(_isPlaying);
 		return returnValue;
 	}
 
 	default:
-		error("Timer::callMethod(): Got unimplemented method ID %s (%d)", builtInMethodToStr(methodId), static_cast<uint>(methodId));
+		return Asset::callMethod(methodId, args);
 	}
 }
 
 void Timer::timePlay() {
-	if (_isActive) {
-		warning("Timer::timePlay(): Attempted to play a timer that is already playing");
-		//return;
-	}
-
-	_isActive = true;
+	_isPlaying = true;
 	_startTime = g_system->getMillis();
 	_lastProcessedTime = 0;
-	g_engine->addPlayingAsset(this);
 
 	// Get the duration of the timer.
 	// TODO: Is there a better way to find out what the max time is? Do we have to look
 	// through each of the timer event handlers to figure it out?
 	_duration = 0;
-	const Common::Array<EventHandler *> &_timeHandlers = _header->_eventHandlers.getValOrDefault(kTimerEvent);
-	for (EventHandler *timeEvent : _timeHandlers) {
+	const Common::Array<EventHandler *> &timeHandlers = _eventHandlers.getValOrDefault(kTimerEvent);
+	for (EventHandler *timeEvent : timeHandlers) {
 		// Indeed float, not time.
 		double timeEventInFractionalSeconds = timeEvent->_argumentValue.asFloat();
 		uint timeEventInMilliseconds = timeEventInFractionalSeconds * 1000;
@@ -82,18 +76,19 @@ void Timer::timePlay() {
 }
 
 void Timer::timeStop() {
-	if (!_isActive) {
-		warning("Timer::stop(): Attempted to stop a timer that is not playing");
+	if (!_isPlaying) {
 		return;
 	}
 
-	_isActive = false;
+	_isPlaying = false;
 	_startTime = 0;
 	_lastProcessedTime = 0;
 }
 
 void Timer::process() {
-	processTimeEventHandlers();
+	if (_isPlaying) {
+		processTimeEventHandlers();
+	}
 }
 
 } // End of namespace MediaStation

@@ -38,6 +38,11 @@ void DrillerEngine::loadAssetsAmigaFullGame() {
 		_title = loadAndConvertNeoImage(&file, 0xce);
 
 		loadFonts(&file, 0x8940);
+		Common::Array<Graphics::ManagedSurface *> chars;
+		chars = getCharsAmigaAtariInternal(8, 8, -3, 33, 32, &file, 0x8940 + 112 * 33 + 1, 100);
+		_fontSmall = Font(chars);
+		_fontSmall.setCharWidth(5);
+
 		loadMessagesFixedSize(&file, 0xc66e, 14, 20);
 		loadGlobalObjects(&file, 0xbd62, 8);
 		load8bitBinary(&file, 0x29c16, 16);
@@ -63,6 +68,11 @@ void DrillerEngine::loadAssetsAmigaFullGame() {
 			error("Failed to open 'driller' executable for Amiga");
 
 		loadFonts(&file, 0xa62);
+		Common::Array<Graphics::ManagedSurface *> chars;
+		chars = getCharsAmigaAtariInternal(8, 8, -3, 33, 32, &file, 0xa62 + 112 * 33 + 1, 100);
+		_fontSmall = Font(chars);
+		_fontSmall.setCharWidth(5);
+
 		loadMessagesFixedSize(&file, 0x499a, 14, 20);
 		loadGlobalObjects(&file, 0x4098, 8);
 		load8bitBinary(&file, 0x21a3e, 16);
@@ -76,6 +86,21 @@ void DrillerEngine::loadAssetsAmigaFullGame() {
 		loadSoundsFx(&file, 0, 25);
 	} else
 		error("Invalid or unknown Amiga release");
+
+
+	for (auto &area : _areaMap) {
+			// Center and pad each area name so we do not have to do it at each frame
+			area._value->_name = centerAndPadString(area._value->_name, 14);
+	}
+
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_0"));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_1"));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_2"));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_3"));
+	_indicators.push_back(loadBundledImage("driller_ship_indicator"));
+
+	for (auto &it : _indicators)
+		it->convertToInPlace(_gfx->_texturePixelFormat);
 }
 
 void DrillerEngine::loadAssetsAmigaDemo() {
@@ -101,6 +126,27 @@ void DrillerEngine::loadAssetsAmigaDemo() {
 	loadDemoData(&file, 0, 0x1000);
 
 	file.close();
+	file.open("driller");
+	if (!file.isOpen())
+		error("Failed to open 'driller' file");
+
+	if (_variant & GF_AMIGA_MAGAZINE_DEMO) {
+		loadMessagesFixedSize(&file, 0x3df0, 14, 20);
+		loadGlobalObjects(&file, 0x3ba6, 8);
+		_demoMode = false;
+
+		loadFonts(&file, 0xa62);
+		Common::Array<Graphics::ManagedSurface *> chars;
+		chars = getCharsAmigaAtariInternal(8, 8, -3, 33, 32, &file, 0xa62 + 112 * 33 + 1, 100);
+		_fontSmall = Font(chars);
+		_fontSmall.setCharWidth(5);
+	} else {
+		loadFonts(&file, 0xa30);
+		loadMessagesFixedSize(&file, 0x3960, 14, 20);
+		loadGlobalObjects(&file, 0x3716, 8);
+	}
+
+	file.close();
 	file.open("data");
 	if (!file.isOpen())
 		error("Failed to open 'data' file");
@@ -109,27 +155,20 @@ void DrillerEngine::loadAssetsAmigaDemo() {
 	loadPalettes(&file, 0x0);
 
 	file.close();
-	file.open("driller");
-	if (!file.isOpen())
-		error("Failed to open 'driller' file");
-
-	if (_variant & GF_AMIGA_MAGAZINE_DEMO) {
-		loadFonts(&file, 0xa62);
-		loadMessagesFixedSize(&file, 0x3df0, 14, 20);
-		loadGlobalObjects(&file, 0x3ba6, 8);
-		_demoMode = false;
-	} else {
-		loadFonts(&file, 0xa30);
-		loadMessagesFixedSize(&file, 0x3960, 14, 20);
-		loadGlobalObjects(&file, 0x3716, 8);
-	}
-
-	file.close();
 	file.open("soundfx");
 	if (!file.isOpen())
 		error("Failed to open 'soundfx' executable for Amiga");
 
 	loadSoundsFx(&file, 0, 25);
+
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_0"));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_1"));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_2"));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_3"));
+	_indicators.push_back(loadBundledImage("driller_ship_indicator"));
+
+	for (auto &it : _indicators)
+		it->convertToInPlace(_gfx->_texturePixelFormat);
 }
 
 /*
@@ -141,6 +180,8 @@ void DrillerEngine::drawAmigaAtariSTUI(Graphics::Surface *surface) {
 	uint32 yellow = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0xFF, 0xFF, 0x55);
 	uint32 brownish = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x9E, 0x80, 0x20);
 	uint32 brown = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x7E, 0x60, 0x19);
+	uint32 red = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0xE0, 0x00, 0x00);
+	uint32 redish = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0xE0, 0x60, 0x20);
 	uint32 primaryFontColor = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0xA0, 0x80, 0x00);
 	uint32 secondaryFontColor = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x60, 0x40, 0x00);
 	uint32 black = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x00, 0x00, 0x00);
@@ -151,23 +192,21 @@ void DrillerEngine::drawAmigaAtariSTUI(Graphics::Surface *surface) {
 
 	// It seems that some demos will not include the complete font
 	if (!isDemo() || (_variant & GF_AMIGA_MAGAZINE_DEMO) || (_variant & GF_ATARI_MAGAZINE_DEMO)) {
-		drawStringInSurface("x", 37, 18, white, transparent, transparent, surface, 82);
+
+		drawString(kDrillerFontSmall, ":", 38, 18, white, white, transparent, surface); // ":" is the next character to "9" representing "x"
 		coords = Common::String::format("%04d", 2 * int(_position.x()));
-		for (int i = 0; i < 4; i++)
-			drawStringInSurface(Common::String(coords[i]), 47 + 6*i, 18, white, transparent, transparent, surface, 112);
+		drawString(kDrillerFontSmall, coords, 47, 18, white, transparent, transparent, surface);
 
-		drawStringInSurface("y", 37, 26, white, transparent, transparent, surface, 82);
+		drawString(kDrillerFontSmall, ";", 37, 26, white, white, transparent, surface); // ";" is the next character to ":" representing "y"
 		coords = Common::String::format("%04d", 2 * int(_position.z())); // Coords y and z are swapped!
-		for (int i = 0; i < 4; i++)
-			drawStringInSurface(Common::String(coords[i]), 47 + 6*i, 26, white, transparent, transparent, surface, 112);
+		drawString(kDrillerFontSmall, coords, 47, 26, white, transparent, transparent, surface);
 
-		drawStringInSurface("z", 37, 34, white, transparent, transparent, surface, 82);
+		drawString(kDrillerFontSmall, "<", 37, 34, white, white, transparent, surface); // "<" is the next character to ";" representing "z"
 		coords = Common::String::format("%04d", 2 * int(_position.y())); // Coords y and z are swapped!
-		for (int i = 0; i < 4; i++)
-			drawStringInSurface(Common::String(coords[i]), 47 + 6*i, 34, white, transparent, transparent, surface, 112);
+		drawString(kDrillerFontSmall, coords, 47, 34, white, transparent, transparent, surface);
 	}
 
-	drawStringInSurface(_currentArea->_name, 188, 185, primaryFontColor, secondaryFontColor, black, surface);
+	drawStringInSurface(_currentArea->_name, 189, 185, primaryFontColor, secondaryFontColor, black, surface);
 	drawStringInSurface(Common::String::format("%07d", score), 241, 129, primaryFontColor, secondaryFontColor, black, surface);
 
 	int seconds, minutes, hours;
@@ -199,27 +238,80 @@ void DrillerEngine::drawAmigaAtariSTUI(Graphics::Surface *surface) {
 
 	if (shield >= 0) {
 		Common::Rect shieldBar;
-		shieldBar = Common::Rect(11, 178, 76 - (_maxShield - shield), 184);
+		shieldBar = Common::Rect(11, 178, 74 - (_maxShield - shield), 184);
 		surface->fillRect(shieldBar, brown);
 
-		shieldBar = Common::Rect(11, 179, 76 - (_maxShield - shield), 183);
+		if (shield > 11)
+			shieldBar = Common::Rect(11, 178, 25, 184);
+		else
+			shieldBar = Common::Rect(11, 178, 74 - (_maxShield - shield), 184);
+		surface->fillRect(shieldBar, red);
+
+		shieldBar = Common::Rect(11, 179, 74 - (_maxShield - shield), 183);
 		surface->fillRect(shieldBar, brownish);
 
-		shieldBar = Common::Rect(11, 180, 76 - (_maxShield - shield), 182);
+		if (shield > 11)
+			shieldBar = Common::Rect(11, 179, 25, 183);
+		else
+			shieldBar = Common::Rect(11, 179, 74 - (_maxShield - shield), 183);
+		surface->fillRect(shieldBar, redish);
+
+		shieldBar = Common::Rect(11, 180, 74 - (_maxShield - shield), 182);
 		surface->fillRect(shieldBar, yellow);
 	}
 
 	if (energy >= 0) {
 		Common::Rect energyBar;
-		energyBar = Common::Rect(11, 186, 75 - (_maxEnergy - energy), 192);
+		energyBar = Common::Rect(11, 186, 74 - (_maxEnergy - energy), 192);
 		surface->fillRect(energyBar, brown);
 
-		energyBar = Common::Rect(11, 187, 75 - (_maxEnergy - energy), 191);
+		if (energy > 11)
+			energyBar = Common::Rect(11, 186, 24, 192);
+		else
+			energyBar = Common::Rect(11, 186, 74 - (_maxEnergy - energy), 192);
+		surface->fillRect(energyBar, red);
+
+		energyBar = Common::Rect(11, 187, 74 - (_maxEnergy - energy), 191);
 		surface->fillRect(energyBar, brownish);
 
-		energyBar = Common::Rect(11, 188, 75 - (_maxEnergy - energy), 190);
+		if (energy > 11)
+			energyBar = Common::Rect(11, 187, 24, 191);
+		else
+			energyBar = Common::Rect(11, 187, 74 - (_maxEnergy - energy), 191);
+		surface->fillRect(energyBar, redish);
+
+		energyBar = Common::Rect(11, 188, 74 - (_maxEnergy - energy), 190);
 		surface->fillRect(energyBar, yellow);
 	}
+
+	if (_indicators.size() > 0) {
+		if (_flyMode)
+			surface->copyRectToSurface(*_indicators[4], 106, 128, Common::Rect(_indicators[1]->w, _indicators[1]->h));
+		else
+			surface->copyRectToSurface(*_indicators[_playerHeightNumber], 106, 128, Common::Rect(_indicators[1]->w, _indicators[1]->h));
+	}
+}
+
+void DrillerEngine::drawString(const DrillerFontSize size, const Common::String &str, int x, int y, uint32 primaryColor, uint32 secondaryColor, uint32 backColor, Graphics::Surface *surface) {
+	if (!_fontLoaded)
+		return;
+
+	Font *font = nullptr;
+
+	if (size == kDrillerFontNormal) {
+		font = &_font;
+	} else if (size == kDrillerFontSmall) {
+		font = &_fontSmall;
+	} else {
+		error("Invalid font size %d", size);
+		return;
+	}
+
+	Common::String ustr = str;
+	ustr.toUppercase();
+	font->setBackground(backColor);
+	font->setSecondaryColor(secondaryColor);
+	font->drawString(surface, ustr, x, y, _screenW, primaryColor);
 }
 
 void DrillerEngine::initAmigaAtari() {

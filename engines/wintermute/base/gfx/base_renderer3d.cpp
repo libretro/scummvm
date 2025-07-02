@@ -132,22 +132,7 @@ DXViewport BaseRenderer3D::getViewPort() {
 }
 
 Graphics::PixelFormat BaseRenderer3D::getPixelFormat() const {
-#ifdef SCUMM_BIG_ENDIAN
-	return Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0);
-#else
-	return Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24);
-#endif
-}
-
-void BaseRenderer3D::flipVertical(Graphics::Surface *s) {
-	for (int y = 0; y < s->h / 2; ++y) {
-		// Flip the lines
-		byte *line1P = (byte *)s->getBasePtr(0, y);
-		byte *line2P = (byte *)s->getBasePtr(0, s->h - y - 1);
-
-		for (int x = 0; x < s->pitch; ++x)
-			SWAP(line1P[x], line2P[x]);
-	}
+	return Graphics::PixelFormat::createFormatRGBA32();
 }
 
 bool BaseRenderer3D::flip() {

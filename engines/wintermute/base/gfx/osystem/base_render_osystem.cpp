@@ -49,8 +49,7 @@ BaseRenderer *makeOSystemRenderer(BaseGame *inGame) {
 
 //////////////////////////////////////////////////////////////////////////
 BaseRenderOSystem::BaseRenderOSystem(BaseGame *inGame) : BaseRenderer(inGame) {
-	_renderSurface = new Graphics::Surface();
-	_blankSurface = new Graphics::Surface();
+	_renderSurface = new Graphics::ManagedSurface();
 	_lastFrameIter = _renderQueue.end();
 	_needsFlip = true;
 	_skipThisFrame = false;
@@ -79,8 +78,6 @@ BaseRenderOSystem::~BaseRenderOSystem() {
 
 	_renderSurface->free();
 	delete _renderSurface;
-	_blankSurface->free();
-	delete _blankSurface;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -92,11 +89,6 @@ bool BaseRenderOSystem::initRenderer(int width, int height, bool windowed) {
 
 	_realWidth = width;
 	_realHeight = height;
-
-	//TODO: Tiny resolution-displays might want to do some resolution-selection logic here
-
-	//_realWidth = BaseEngine::instance().getRegistry()->readInt("Debug", "ForceResWidth", _width);
-	//_realHeight = BaseEngine::instance().getRegistry()->readInt("Debug", "ForceResHeight", _height);
 
 	float origAspect = (float)_width / (float)_height;
 	float realAspect = (float)_realWidth / (float)_realHeight;
@@ -132,8 +124,6 @@ bool BaseRenderOSystem::initRenderer(int width, int height, bool windowed) {
 	g_system->showMouse(false);
 
 	_renderSurface->create(g_system->getWidth(), g_system->getHeight(), g_system->getScreenFormat());
-	_blankSurface->create(g_system->getWidth(), g_system->getHeight(), g_system->getScreenFormat());
-	_blankSurface->fillRect(Common::Rect(0, 0, _blankSurface->h, _blankSurface->w), _blankSurface->format.ARGBToColor(255, 0, 0, 0));
 	_active = true;
 
 	_clearColor = _renderSurface->format.ARGBToColor(255, 0, 0, 0);
@@ -143,14 +133,14 @@ bool BaseRenderOSystem::initRenderer(int width, int height, bool windowed) {
 
 bool BaseRenderOSystem::indicatorFlip() {
 	if (_indicatorWidthDrawn > 0 && _indicatorHeight > 0) {
-		g_system->copyRectToScreen((byte *)_renderSurface->getBasePtr(_indicatorX, _indicatorY), _renderSurface->pitch, _indicatorX, _indicatorY, _indicatorWidthDrawn, _indicatorHeight);
+		g_system->copyRectToScreen(_renderSurface->getBasePtr(_indicatorX, _indicatorY), _renderSurface->pitch, _indicatorX, _indicatorY, _indicatorWidthDrawn, _indicatorHeight);
 		g_system->updateScreen();
 	}
 	return STATUS_OK;
 }
 
 bool BaseRenderOSystem::forcedFlip() {
-	g_system->copyRectToScreen((byte *)_renderSurface->getPixels(), _renderSurface->pitch, 0, 0, _renderSurface->w, _renderSurface->h);
+	g_system->copyRectToScreen(_renderSurface->getPixels(), _renderSurface->pitch, 0, 0, _renderSurface->w, _renderSurface->h);
 	g_system->updateScreen();
 	return STATUS_OK;
 }
@@ -196,9 +186,8 @@ bool BaseRenderOSystem::flip() {
 
 	if (_needsFlip || _disableDirtyRects || screenChanged) {
 		if (_disableDirtyRects || screenChanged) {
-			g_system->copyRectToScreen((byte *)_renderSurface->getPixels(), _renderSurface->pitch, 0, 0, _renderSurface->w, _renderSurface->h);
+			g_system->copyRectToScreen(_renderSurface->getPixels(), _renderSurface->pitch, 0, 0, _renderSurface->w, _renderSurface->h);
 		}
-		//  g_system->copyRectToScreen((byte *)_renderSurface->getPixels(), _renderSurface->pitch, _dirtyRect->left, _dirtyRect->top, _dirtyRect->width(), _dirtyRect->height());
 		delete _dirtyRect;
 		_dirtyRect = nullptr;
 		_needsFlip = false;
@@ -224,22 +213,12 @@ void BaseRenderOSystem::setWindowed(bool windowed) {
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseRenderOSystem::fill(byte r, byte g, byte b, Common::Rect *rect) {
-	_clearColor = _renderSurface->format.ARGBToColor(0xFF, r, g, b);
+bool BaseRenderOSystem::clear() {
 	if (!_disableDirtyRects) {
 		return STATUS_OK;
 	}
-	if (!rect) {
-// TODO: This should speed things up, but for some reason it misses the size by quite a bit.
-/*		if (r == 0 && g == 0 && b == 0) {
-			// Simply memcpy from the buffered black-surface, way faster than Surface::fillRect.
-			memcpy(_renderSurface->pixels, _blankSurface->pixels, _renderSurface->pitch * _renderSurface->h);
-			return STATUS_OK;
-		}*/
-		rect = &_renderRect;
-	}
 	// TODO: This doesn't work with dirty rects
-	_renderSurface->fillRect(*rect, _clearColor);
+	_renderSurface->fillRect(_renderRect, _clearColor);
 
 	return STATUS_OK;
 }
@@ -263,22 +242,11 @@ void BaseRenderOSystem::fadeToColor(byte r, byte g, byte b, byte a) {
 
 	modTargetRect(&fillRect);
 
-	//TODO: This is only here until I'm sure about the final pixelformat
-	uint32 col = _renderSurface->format.ARGBToColor(a, r, g, b);
-
-	Graphics::Surface surf;
-	surf.create((uint16)fillRect.width(), (uint16)fillRect.height(), _renderSurface->format);
-	Common::Rect sizeRect(fillRect);
-	sizeRect.translate(-fillRect.top, -fillRect.left);
-	surf.fillRect(fillRect, col);
+	Common::Rect sizeRect(fillRect.width(), fillRect.height());
 	Graphics::TransformStruct temp = Graphics::TransformStruct();
-	temp._alphaDisable = false;
-	drawSurface(nullptr, &surf, &sizeRect, &fillRect, temp);
-	surf.free();
-
-	//SDL_SetRenderDrawColor(_renderer, r, g, b, a);
-	//SDL_SetRenderDrawBlendMode(_renderer, SDL_BLENDMODE_BLEND);
-	//SDL_RenderFillRect(_renderer, &fillRect);
+	temp._rgbaMod = MS_ARGB(a, r, g, b);
+	temp._alphaDisable = (a == 0xff);
+	drawSurface(nullptr, nullptr, &sizeRect, &fillRect, temp);
 }
 
 Graphics::PixelFormat BaseRenderOSystem::getPixelFormat() const {
@@ -452,7 +420,7 @@ void BaseRenderOSystem::drawTickets() {
 		// Some tickets want redraw but don't actually clip the dirty area (typically the ones that shouldn't become clear-color)
 		ticket->_wantsDraw = false;
 	}
-	g_system->copyRectToScreen((byte *)_renderSurface->getBasePtr(_dirtyRect->left, _dirtyRect->top), _renderSurface->pitch, _dirtyRect->left, _dirtyRect->top, _dirtyRect->width(), _dirtyRect->height());
+	g_system->copyRectToScreen(_renderSurface->getBasePtr(_dirtyRect->left, _dirtyRect->top), _renderSurface->pitch, _dirtyRect->left, _dirtyRect->top, _dirtyRect->width(), _dirtyRect->height());
 
 	it = _renderQueue.begin();
 	// Clean out the old tickets
@@ -479,11 +447,11 @@ void BaseRenderOSystem::drawFromSurface(RenderTicket *ticket, Common::Rect *dstR
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseRenderOSystem::drawLine(int x1, int y1, int x2, int y2, uint32 color) {
+bool BaseRenderOSystem::fillRect(int x, int y, int w, int h, uint32 color) {
 	// This function isn't used outside of indicator-displaying, and thus quite unused in
 	// BaseRenderOSystem when dirty-rects are enabled.
 	if (!_disableDirtyRects && !_indicatorDisplay) {
-		error("BaseRenderOSystem::DrawLine - doesn't work for dirty rects yet");
+		error("BaseRenderOSystem::fillRect - doesn't work for dirty rects yet");
 	}
 
 	byte r = RGBCOLGetR(color);
@@ -491,30 +459,21 @@ bool BaseRenderOSystem::drawLine(int x1, int y1, int x2, int y2, uint32 color) {
 	byte b = RGBCOLGetB(color);
 	byte a = RGBCOLGetA(color);
 
-	//SDL_SetRenderDrawColor(_renderer, r, g, b, a);
 	//SDL_SetRenderDrawBlendMode(_renderer, SDL_BLENDMODE_BLEND);
 
-	Point32 point1, point2;
-	point1.x = x1;
-	point1.y = y1;
-	pointToScreen(&point1);
+	Common::Rect fillRect(x, y, x + w, y + w);
+	modTargetRect(&fillRect);
 
-	point2.x = x2;
-	point2.y = y2;
-	pointToScreen(&point2);
-
-	// TODO: This thing is mostly here until I'm sure about the final color-format.
 	uint32 colorVal = _renderSurface->format.ARGBToColor(a, r, g, b);
-	_renderSurface->drawLine(point1.x, point1.y, point2.x, point2.y, colorVal);
-	//SDL_RenderDrawLine(_renderer, point1.x, point1.y, point2.x, point2.y);
+	_renderSurface->fillRect(fillRect, colorVal);
 	return STATUS_OK;
 }
 
 //////////////////////////////////////////////////////////////////////////
-BaseImage *BaseRenderOSystem::takeScreenshot() {
+BaseImage *BaseRenderOSystem::takeScreenshot(int newWidth, int newHeight) {
 	// TODO: Clip by viewport.
 	BaseImage *screenshot = new BaseImage();
-	screenshot->copyFrom(_renderSurface);
+	screenshot->copyFrom(_renderSurface->surfacePtr(), newWidth, newHeight);
 	return screenshot;
 }
 
@@ -526,7 +485,6 @@ Common::String BaseRenderOSystem::getName() const {
 //////////////////////////////////////////////////////////////////////////
 bool BaseRenderOSystem::setViewport(int left, int top, int right, int bottom) {
 	Common::Rect rect;
-	// TODO: Hopefully this is the same logic that ScummVM uses.
 	rect.left = (int16)(left + _borderLeft);
 	rect.top = (int16)(top + _borderTop);
 	rect.setWidth((int16)((right - left) * _ratioX));
@@ -580,7 +538,7 @@ void BaseRenderOSystem::endSaveLoad() {
 	_lastFrameIter = _renderQueue.end();
 
 	_renderSurface->fillRect(Common::Rect(0, 0, _renderSurface->w, _renderSurface->h), _renderSurface->format.ARGBToColor(255, 0, 0, 0));
-	g_system->copyRectToScreen((byte *)_renderSurface->getPixels(), _renderSurface->pitch, 0, 0, _renderSurface->w, _renderSurface->h);
+	g_system->fillScreen(Common::Rect(0, 0, _renderSurface->w, _renderSurface->h), _renderSurface->format.ARGBToColor(255, 0, 0, 0));
 	g_system->updateScreen();
 }
 

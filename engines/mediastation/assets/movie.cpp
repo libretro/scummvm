@@ -19,9 +19,6 @@
  *
  */
 
-#include "audio/decoders/raw.h"
-#include "audio/decoders/adpcm.h"
-
 #include "mediastation/mediastation.h"
 #include "mediastation/assets/movie.h"
 #include "mediastation/debugchannels.h"
@@ -34,155 +31,114 @@ MovieFrameHeader::MovieFrameHeader(Chunk &chunk) : BitmapHeader(chunk) {
 	_keyframeEndInMilliseconds = chunk.readTypedUint32();
 }
 
-MovieFrameFooter::MovieFrameFooter(Chunk &chunk) {
-	_unk1 = chunk.readTypedUint16();
-	_unk2 = chunk.readTypedUint32();
+MovieFrame::MovieFrame(Chunk &chunk) {
+	layerId = chunk.readTypedUint32();
 	if (g_engine->isFirstGenerationEngine()) {
-		_startInMilliseconds = chunk.readTypedUint32();
-		_endInMilliseconds = chunk.readTypedUint32();
-		_left = chunk.readTypedUint16();
-		_top = chunk.readTypedUint16();
-		_unk3 = chunk.readTypedUint16();
-		_unk4 = chunk.readTypedUint16();
-		_index = chunk.readTypedUint16();
+		startInMilliseconds = chunk.readTypedUint32();
+		endInMilliseconds = chunk.readTypedUint32();
+		// These are unsigned in the data files but ScummVM expects signed.
+		leftTop.x = static_cast<int16>(chunk.readTypedUint16());
+		leftTop.y = static_cast<int16>(chunk.readTypedUint16());
+		unk3 = chunk.readTypedUint16();
+		unk4 = chunk.readTypedUint16();
+		index = chunk.readTypedUint16();
 	} else {
-		_unk4 = chunk.readTypedUint16();
-		_startInMilliseconds = chunk.readTypedUint32();
-		_endInMilliseconds = chunk.readTypedUint32();
-		_left = chunk.readTypedUint16();
-		_top = chunk.readTypedUint16();
-		_zIndex = chunk.readTypedSint16();
-		// This represents the difference between the left coordinate of the
+		blitType = chunk.readTypedUint16();
+		startInMilliseconds = chunk.readTypedUint32();
+		endInMilliseconds = chunk.readTypedUint32();
+		// These are unsigned in the data files but ScummVM expects signed.
+		leftTop.x = static_cast<int16>(chunk.readTypedUint16());
+		leftTop.y = static_cast<int16>(chunk.readTypedUint16());
+		zIndex = chunk.readTypedSint16();
+		// This represents the difference between the left-top coordinate of the
 		// keyframe (if applicable) and the left coordinate of this frame. Zero
 		// if there is no keyframe.
-		_diffBetweenKeyframeAndFrameX = chunk.readTypedSint16();
-		// This represents the difference between the top coordinate of the
-		// keyframe (if applicable) and the top coordinate of this frame. Zero
-		// if there is no keyframe.
-		_diffBetweenKeyframeAndFrameY = chunk.readTypedSint16();
-		_index = chunk.readTypedUint32();
-		_keyframeIndex = chunk.readTypedUint32();
-		_unk9 = chunk.readTypedByte();
-		debugC(5, kDebugLoading, "MovieFrameFooter::MovieFrameFooter(): _startInMilliseconds = %d, _endInMilliseconds = %d, _left = %d, _top = %d, _index = %d, _keyframeIndex = %d (@0x%llx)",
-			_startInMilliseconds, _endInMilliseconds, _left, _top, _index, _keyframeIndex, static_cast<long long int>(chunk.pos()));
-		debugC(5, kDebugLoading, "MovieFrameFooter::MovieFrameFooter(): _zIndex = %d, _diffBetweenKeyframeAndFrameX = %d, _diffBetweenKeyframeAndFrameY = %d, _unk4 = %d, _unk9 = %d",
-			_zIndex, _diffBetweenKeyframeAndFrameX, _diffBetweenKeyframeAndFrameY, _unk4,_unk9);
+		diffBetweenKeyframeAndFrame.x = chunk.readTypedSint16();
+		diffBetweenKeyframeAndFrame.y = chunk.readTypedSint16();
+		index = chunk.readTypedUint32();
+		keyframeIndex = chunk.readTypedUint32();
+		keepAfterEnd = chunk.readTypedByte();
+		debugC(5, kDebugLoading, "MovieFrame::MovieFrame(): _blitType = %d, _startInMilliseconds = %d, \
+			_endInMilliseconds = %d, _left = %d, _top = %d, _zIndex = %d, _diffBetweenKeyframeAndFrameX = %d, \
+			_diffBetweenKeyframeAndFrameY = %d, _index = %d, _keyframeIndex = %d, _keepAfterEnd = %d (@0x%llx)",
+			blitType, startInMilliseconds, endInMilliseconds, leftTop.x, leftTop.y, zIndex, diffBetweenKeyframeAndFrame.x, \
+			diffBetweenKeyframeAndFrame.y, index, keyframeIndex, keepAfterEnd, static_cast<long long int>(chunk.pos()));
 	}
 }
 
-MovieFrame::MovieFrame(Chunk &chunk, MovieFrameHeader *header) :
-	Bitmap(chunk, header),
-	_footer(nullptr) {
+MovieFrameImage::MovieFrameImage(Chunk &chunk, MovieFrameHeader *header) : Bitmap(chunk, header) {
 	_bitmapHeader = header;
 }
 
-void MovieFrame::setFooter(MovieFrameFooter *footer) {
-	if (footer != nullptr) {
-		assert(footer->_index == _bitmapHeader->_index);
-	}
-	_footer = footer;
-}
-
-uint32 MovieFrame::left() {
-	if (_footer != nullptr) {
-		return _footer->_left;
-	} else {
-		error("MovieFrame::left(): Cannot get the left coordinate of a keyframe");
-	}
-}
-
-uint32 MovieFrame::top() {
-	if (_footer != nullptr) {
-		return _footer->_top;
-	} else {
-		error("MovieFrame::left(): Cannot get the top coordinate of a keyframe");
-	}
-}
-
-Common::Point MovieFrame::topLeft() {
-	if (_footer != nullptr) {
-		return Common::Point(_footer->_left, _footer->_top);
-	} else {
-		error("MovieFrame::topLeft(): Cannot get the top-left coordinate of a keyframe");
-	}
-}
-
-Common::Rect MovieFrame::boundingBox() {
-	if (_footer != nullptr) {
-		return Common::Rect(Common::Point(_footer->_left, _footer->_top), width(), height());
-	} else {
-		error("MovieFrame::boundingBox(): Cannot get the bounding box of a keyframe");
-	}
-}
-
-uint32 MovieFrame::index() {
-	return _bitmapHeader->_index;
-}
-
-uint32 MovieFrame::startInMilliseconds() {
-	if (_footer != nullptr) {
-		return _footer->_startInMilliseconds;
-	} else {
-		error("MovieFrame::startInMilliseconds(): Cannot get the start time of a keyframe");
-	}
-}
-
-uint32 MovieFrame::endInMilliseconds() {
-	if (_footer != nullptr) {
-		return _footer->_endInMilliseconds;
-	} else {
-		error("MovieFrame::endInMilliseconds(): Cannot get the end time of a keyframe");
-	}
-}
-
-uint32 MovieFrame::zCoordinate() {
-	if (_footer != nullptr) {
-		return _footer->_zIndex;
-	} else {
-		error("MovieFrame::zCoordinate(): Cannot get the z-coordinate of a keyframe");
-	}
-}
-
-uint32 MovieFrame::keyframeEndInMilliseconds() {
-	return _bitmapHeader->_keyframeEndInMilliseconds;
-}
-
-MovieFrame::~MovieFrame() {
+MovieFrameImage::~MovieFrameImage() {
 	// The base class destructor takes care of deleting the bitmap header, so
 	// we don't need to delete that here.
-	// The movie will delete the footer.
-	_footer = nullptr;
-}
-
-Movie::Movie(AssetHeader *header) : Asset(header) {
-	if (header->_startup == kAssetStartupActive) {
-		setActive();
-		_showByDefault = true;
-	}
 }
 
 Movie::~Movie() {
-	g_engine->_mixer->stopHandle(_soundHandle);
-
 	for (MovieFrame *frame : _frames) {
 		delete frame;
 	}
 	_frames.clear();
 
-	for (MovieFrame *still : _stills) {
-		delete still;
+	for (MovieFrameImage *image : _images) {
+		delete image;
 	}
-	_stills.clear();
+	_images.clear();
+}
 
-	for (Audio::SeekableAudioStream *stream : _audioStreams) {
-		delete stream;
+void Movie::readParameter(Chunk &chunk, AssetHeaderSectionType paramType) {
+	switch (paramType) {
+	case kAssetHeaderAssetId: {
+		// We already have this asset's ID, so we will just verify it is the same
+		// as the ID we have already read.
+		uint32 duplicateAssetId = chunk.readTypedUint16();
+		if (duplicateAssetId != _id) {
+			warning("Duplicate asset ID %d does not match original ID %d", duplicateAssetId, _id);
+		}
+		break;
 	}
-	_audioStreams.clear();
 
-	for (MovieFrameFooter *footer : _footers) {
-		delete footer;
+	case kAssetHeaderMovieLoadType:
+		_loadType = chunk.readTypedByte();
+		break;
+
+	case kAssetHeaderChunkReference:
+		_chunkReference = chunk.readTypedChunkReference();
+		break;
+
+	case kAssetHeaderHasOwnSubfile: {
+		bool hasOwnSubfile = static_cast<bool>(chunk.readTypedByte());
+		if (!hasOwnSubfile) {
+			error("Movie doesn't have a subfile");
+		}
+		break;
 	}
-	_footers.clear();
+
+	case kAssetHeaderStartup:
+		_isVisible = static_cast<bool>(chunk.readTypedByte());
+		break;
+
+	case kAssetHeaderDissolveFactor:
+		_dissolveFactor = chunk.readTypedDouble();
+		break;
+
+	case kAssetHeaderMovieAudioChunkReference:
+		_audioChunkReference = chunk.readTypedChunkReference();
+		break;
+
+	case kAssetHeaderMovieAnimationChunkReference:
+		_animationChunkReference = chunk.readTypedChunkReference();
+		break;
+
+	case kAssetHeaderSoundInfo:
+		_audioChunkCount = chunk.readTypedUint16();
+		_audioSequence.readParameters(chunk);
+		break;
+
+	default:
+		SpatialEntity::readParameter(chunk, paramType);
+	}
 }
 
 ScriptValue Movie::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) {
@@ -197,7 +153,8 @@ ScriptValue Movie::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue>
 
 	case kSpatialShowMethod: {
 		assert(args.empty());
-		spatialShow();
+		setVisibility(true);
+		updateFrameState();
 		return returnValue;
 	}
 
@@ -209,29 +166,7 @@ ScriptValue Movie::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue>
 
 	case kSpatialHideMethod: {
 		assert(args.empty());
-		spatialHide();
-		return returnValue;
-	}
-
-	case kIsVisibleMethod: {
-		assert(args.empty());
-		returnValue.setToBool(_isShowing);
-		return returnValue;
-	}
-
-	case kSpatialCenterMoveToMethod: {
-		assert(args.size() == 2);
-		int x = static_cast<int>(args[0].asFloat());
-		int y = static_cast<int>(args[1].asFloat());
-		spatialCenterMoveTo(x, y);
-		return returnValue;
-	}
-
-	case kSpatialMoveToMethod: {
-		assert(args.size() == 2);
-		int x = static_cast<int>(args[0].asFloat());
-		int y = static_cast<int>(args[1].asFloat());
-		spatialMoveTo(x, y);
+		setVisibility(false);
 		return returnValue;
 	}
 
@@ -241,205 +176,92 @@ ScriptValue Movie::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue>
 		return returnValue;
 	}
 
-	case kXPositionMethod: {
+	case kGetLeftXMethod: {
 		assert(args.empty());
-		double left = static_cast<double>(_header->_boundingBox.left);
+		double left = static_cast<double>(_boundingBox.left);
 		returnValue.setToFloat(left);
 		return returnValue;
-
 	}
 
-	case kYPositionMethod: {
+	case kGetTopYMethod: {
 		assert(args.empty());
-		double top = static_cast<double>(_header->_boundingBox.top);
+		double top = static_cast<double>(_boundingBox.top);
 		returnValue.setToFloat(top);
 		return returnValue;
 	}
 
 	case kSetDissolveFactorMethod: {
+		warning("STUB: setDissolveFactor");
 		assert(args.size() == 1);
-		warning("Movie::callMethod(): setDissolveFactor not implemented yet");
+		_dissolveFactor = args[0].asFloat();
 		return returnValue;
 	}
 
 	default:
-		error("Movie::callMethod(): Got unimplemented method ID %s (%d)", builtInMethodToStr(methodId), static_cast<uint>(methodId));
+		return SpatialEntity::callMethod(methodId, args);
 	}
-}
-
-void Movie::spatialShow() {
-	if (_isPlaying) {
-		warning("Movie::spatialShow(): (%d) Attempted to spatialShow movie that is already showing", _header->_id);
-		return;
-	} else if (_isShowing) {
-		warning("Movie::spatialShow(): (%d) Attempted to spatialShow movie that is already showing", _header->_id);
-		return;
-	} else if (_stills.empty()) {
-		warning("Movie::spatialShow(): (%d) No still frame to show", _header->_id);
-		return;
-	}
-
-	// TODO: For movies with keyframes, there is more than one still and they
-	// must be composited. All other movies should have just one still.)
-	_framesNotYetShown.clear();
-	_framesOnScreen.clear();
-	for (MovieFrame *still : _stills) {
-		_framesOnScreen.push_back(still);
-		g_engine->_dirtyRects.push_back(getFrameBoundingBox(still));
-	}
-
-	setActive();
-	_isShowing = true;
-	_isPlaying = false;
-}
-
-void Movie::spatialHide() {
-	if (_isPlaying) {
-		warning("Movie::spatialShow(): (%d) Attempted to spatialHide movie that is playing", _header->_id);
-		return;
-	} else if (!_isShowing) {
-		warning("Movie::spatialHide(): (%d) Attempted to spatialHide movie that is not showing", _header->_id);
-		return;
-	}
-
-	for (MovieFrame *frame : _framesOnScreen) {
-		g_engine->_dirtyRects.push_back(getFrameBoundingBox(frame));
-	}
-	_framesOnScreen.clear();
-	_framesNotYetShown.clear();
-
-	_isShowing = false;
-	_isPlaying = false;
-	setInactive();
 }
 
 void Movie::timePlay() {
 	// TODO: Play movies one chunk at a time, which more directly approximates
 	// the original's reading from the CD one chunk at a time.
 	if (_isPlaying) {
-		warning("Movie::timePlay(): (%d) Attempted to play a movie that is already playing", _header->_id);
 		return;
 	}
 
-	// START PLAYING SOUND.
-	// TODO: This won't work when we have some chunks that don't have audio.
-	if (!_audioStreams.empty()) {
-		Audio::QueuingAudioStream *audio = Audio::makeQueuingAudioStream(22050, false);
-		for (Audio::SeekableAudioStream *stream : _audioStreams) {
-			stream->rewind();
-			audio->queueAudioStream(stream, DisposeAfterUse::NO);
-		}
-		// Then play the audio!
-		g_engine->_mixer->playStream(Audio::Mixer::kPlainSoundType, &_soundHandle, audio, -1, Audio::Mixer::kMaxChannelVolume);
-		audio->finish();
-	}
-
+	_audioSequence.play();
 	_framesNotYetShown = _frames;
-	_isShowing = true;
+	_framesOnScreen.clear();
 	_isPlaying = true;
-	setActive();
+	_startTime = g_system->getMillis();
+	_lastProcessedTime = 0;
 	runEventHandlerIfExists(kMovieBeginEvent);
+	process();
 }
 
 void Movie::timeStop() {
-	if (!_isShowing) {
-		warning("Movie::timeStop(): (%d) Attempted to stop a movie that isn't showing", _header->_id);
-		return;
-	} else if (!_isPlaying) {
-		warning("Movie::timePlay(): (%d) Attempted to stop a movie that isn't playing", _header->_id);
+	if (!_isPlaying) {
 		return;
 	}
 
 	for (MovieFrame *frame : _framesOnScreen) {
-		g_engine->_dirtyRects.push_back(getFrameBoundingBox(frame));
+		invalidateRect(getFrameBoundingBox(frame));
+	}
+	_audioSequence.stop();
+	_framesNotYetShown.empty();
+	if (_hasStill) {
+		_framesNotYetShown = _frames;
 	}
 	_framesOnScreen.clear();
-	_framesNotYetShown.clear();
-
-	g_engine->_mixer->stopHandle(_soundHandle);
-	_soundHandle = Audio::SoundHandle();
-
-	// Show the persistent frames.
+	_startTime = 0;
+	_lastProcessedTime = 0;
 	_isPlaying = false;
-	if (!_stills.empty()) {
-		for (MovieFrame *still : _stills) {
-			_framesOnScreen.push_back(still);
-			g_engine->_dirtyRects.push_back(getFrameBoundingBox(still));
-		}
-	} else {
-		setInactive();
-	}
-
 	runEventHandlerIfExists(kMovieStoppedEvent);
 }
 
-void Movie::spatialCenterMoveTo(int x, int y) {
-	// Mark the previous location dirty.
-	for (MovieFrame *frame : _framesOnScreen) {
-		Common::Rect bbox = getFrameBoundingBox(frame);
-		g_engine->_dirtyRects.push_back(bbox);
-	}
-
-	// Calculate the center of the movie, and update location.
-	int frameWidth = _header->_boundingBox.width();
-	int frameHeight = _header->_boundingBox.height();
-	int centerX = x - frameWidth / 2;
-	int centerY = y - frameHeight / 2;
-
-	debugC(5, kDebugScript, "Movie::callMethod(): (%d) Moving movie center to (%d, %d)", _header->_id, x, y);
-	// Unlike the sprites, movie bounding boxes must be moved too.
-	_header->_boundingBox.moveTo(centerX, centerY);
-
-	// Mark the new location dirty.
-	for (MovieFrame *frame : _framesOnScreen) {
-		Common::Rect bbox = getFrameBoundingBox(frame);
-		g_engine->_dirtyRects.push_back(bbox);
-	}
-}
-
-void Movie::spatialMoveTo(int x, int y) {
-	// Mark the previous location dirty.
-	for (MovieFrame *frame : _framesOnScreen) {
-		Common::Rect bbox = getFrameBoundingBox(frame);
-		g_engine->_dirtyRects.push_back(bbox);
-	}
-
-	// Update the location and mark the new location dirty.
-	debugC(5, kDebugGraphics, "Movie::callMethod(): (%d) Moving movie to (%d, %d)", _header->_id, x, y);
-	// Unlike the sprites, movie bounding boxes must be moved too.
-	_header->_boundingBox.moveTo(x, y);
-
-	for (MovieFrame *frame : _framesOnScreen) {
-		Common::Rect bbox = getFrameBoundingBox(frame);
-		g_engine->_dirtyRects.push_back(bbox);
-	}
-}
-
 void Movie::process() {
-	if (_isPlaying) {
-		processTimeEventHandlers();
+	if (_isVisible) {
+		if (_isPlaying) {
+			processTimeEventHandlers();
+		}
+		updateFrameState();
 	}
-	updateFrameState();
+}
+
+void Movie::setVisibility(bool visibility) {
+	if (visibility != _isVisible) {
+		_isVisible = visibility;
+		invalidateLocalBounds();
+	}
 }
 
 void Movie::updateFrameState() {
-	if (_showByDefault) {
-		spatialShow();
-		_showByDefault = false;
+	uint movieTime = 0;
+	if (_isPlaying) {
+		uint currentTime = g_system->getMillis();
+		movieTime = currentTime - _startTime;
 	}
-
-	if (!_isPlaying) {
-		debugC(6, kDebugGraphics, "Movie::updateFrameState (%d): Not playing", _header->_id);
-		for (MovieFrame *frame : _framesOnScreen) {
-			debugC(6, kDebugGraphics, "   PERSIST: Frame %d (%d x %d) @ (%d, %d); start: %d ms, end: %d ms, keyframeEnd: %d ms, zIndex = %d",
-				frame->index(), frame->width(), frame->height(), frame->left(), frame->top(), frame->startInMilliseconds(), frame->endInMilliseconds(), frame->keyframeEndInMilliseconds(), frame->zCoordinate());
-		}
-		return;
-	}
-
-	uint currentTime = g_system->getMillis();
-	uint movieTime = currentTime - _startTime;
-	debugC(5, kDebugGraphics, "Movie::updateFrameState (%d): Starting update (movie time: %d)", _header->_id, movieTime);
+	debugC(5, kDebugGraphics, "Movie::updateFrameState (%d): Starting update (movie time: %d)", _id, movieTime);
 
 	// This complexity is necessary becuase movies can have more than one frame
 	// showing at the same time - for instance, a movie background and an
@@ -451,10 +273,10 @@ void Movie::updateFrameState() {
 	// see if there are any new frames to show.
 	for (auto it = _framesNotYetShown.begin(); it != _framesNotYetShown.end();) {
 		MovieFrame *frame = *it;
-		bool isAfterStart = movieTime >= frame->startInMilliseconds();
+		bool isAfterStart = movieTime >= frame->startInMilliseconds;
 		if (isAfterStart) {
-			_framesOnScreen.push_back(frame);
-			g_engine->_dirtyRects.push_back(getFrameBoundingBox(frame));
+			_framesOnScreen.insert(frame);
+			invalidateRect(getFrameBoundingBox(frame));
 
 			// We don't need ++it because we will either have another frame
 			// that needs to be drawn, or we have reached the end of the new
@@ -470,63 +292,48 @@ void Movie::updateFrameState() {
 	// Now see if there are any old frames that no longer need to be shown.
 	for (auto it = _framesOnScreen.begin(); it != _framesOnScreen.end();) {
 		MovieFrame *frame = *it;
-		bool isAfterEnd = movieTime >= frame->endInMilliseconds();
+		bool isAfterEnd = movieTime >= frame->endInMilliseconds;
 		if (isAfterEnd) {
-			g_engine->_dirtyRects.push_back(getFrameBoundingBox(frame));
+			invalidateRect(getFrameBoundingBox(frame));
 			it = _framesOnScreen.erase(it);
+
+			if (_framesOnScreen.empty() && movieTime >= _fullTime) {
+				_isPlaying = false;
+				if (_hasStill) {
+					_framesNotYetShown = _frames;
+					updateFrameState();
+				}
+				runEventHandlerIfExists(kMovieEndEvent);
+				break;
+			}
 		} else {
 			++it;
 		}
 	}
 
-	// Now see if we're at the end of the movie.
-	if (_framesOnScreen.empty() && _framesNotYetShown.empty()) {
-		_isPlaying = false;
-		_framesOnScreen.clear();
-		if (_stills.empty()) {
-			setInactive();
-		} else {
-			showPersistentFrame();
-		}
-
-		runEventHandlerIfExists(kMovieEndEvent);
-		return;
-	}
-
 	// Show the frames that are currently active, for debugging purposes.
 	for (MovieFrame *frame : _framesOnScreen) {
-		debugC(5, kDebugGraphics, "   (time: %d ms) Frame %d (%d x %d) @ (%d, %d); start: %d ms, end: %d ms, keyframeEnd: %d ms, zIndex = %d", movieTime, frame->index(), frame->width(), frame->height(), frame->left(), frame->top(), frame->startInMilliseconds(), frame->endInMilliseconds(), frame->keyframeEndInMilliseconds(), frame->zCoordinate());
-	}
-}
-
-void Movie::showPersistentFrame() {
-	for (MovieFrame *still : _stills) {
-		_framesOnScreen.push_back(still);
-		g_engine->_dirtyRects.push_back(getFrameBoundingBox(still));
+		debugC(5, kDebugGraphics, "   (time: %d ms) Frame %d (%d x %d) @ (%d, %d); start: %d ms, end: %d ms, zIndex = %d", \
+			movieTime, frame->index, frame->image->width(), frame->image->height(), frame->leftTop.x, frame->leftTop.y, frame->startInMilliseconds, frame->endInMilliseconds, frame->zIndex);
 	}
 }
 
 void Movie::redraw(Common::Rect &rect) {
-	// Make sure the frames are ordered properly before we attempt to draw them.
-	Common::sort(_framesOnScreen.begin(), _framesOnScreen.end(), [](MovieFrame * a, MovieFrame * b) {
-		return a->zCoordinate() > b->zCoordinate();
-	});
-
 	for (MovieFrame *frame : _framesOnScreen) {
 		Common::Rect bbox = getFrameBoundingBox(frame);
 		Common::Rect areaToRedraw = bbox.findIntersectingRect(rect);
 		if (!areaToRedraw.isEmpty()) {
 			Common::Point originOnScreen(areaToRedraw.left, areaToRedraw.top);
-			areaToRedraw.translate(-frame->left() - _header->_boundingBox.left, -frame->top() - _header->_boundingBox.top);
-			areaToRedraw.clip(Common::Rect(0, 0, frame->width(), frame->height()));
-			g_engine->_screen->simpleBlitFrom(frame->_surface, areaToRedraw, originOnScreen);
+			areaToRedraw.translate(-frame->leftTop.x - _boundingBox.left, -frame->leftTop.y - _boundingBox.top);
+			areaToRedraw.clip(Common::Rect(0, 0, frame->image->width(), frame->image->height()));
+			g_engine->_screen->simpleBlitFrom(frame->image->_surface, areaToRedraw, originOnScreen);
 		}
 	}
 }
 
 Common::Rect Movie::getFrameBoundingBox(MovieFrame *frame) {
-	Common::Rect bbox = frame->boundingBox();
-	bbox.translate(_header->_boundingBox.left, _header->_boundingBox.top);
+	Common::Point origin = _boundingBox.origin() + frame->leftTop;
+	Common::Rect bbox = Common::Rect(origin, frame->image->width(), frame->image->height());
 	return bbox;
 }
 
@@ -534,28 +341,21 @@ void Movie::readChunk(Chunk &chunk) {
 	// Individual chunks are "stills" and are stored in the first subfile.
 	uint sectionType = chunk.readTypedUint16();
 	switch ((MovieSectionType)sectionType) {
-	case kMovieFrameSection: {
-		debugC(5, kDebugLoading, "Movie::readStill(): Reading frame");
-		MovieFrameHeader *header = new MovieFrameHeader(chunk);
-		MovieFrame *frame = new MovieFrame(chunk, header);
-		_stills.push_back(frame);
+	case kMovieImageDataSection:
+		readImageData(chunk);
 		break;
-	}
 
-	case kMovieFooterSection: {
-		debugC(5, kDebugLoading, "Movie::readStill(): Reading footer");
-		MovieFrameFooter *footer = new MovieFrameFooter(chunk);
-		_footers.push_back(footer);
+	case kMovieFrameDataSection:
+		readFrameData(chunk);
 		break;
-	}
 
 	default:
 		error("Unknown movie still section type");
 	}
+	_hasStill = true;
 }
 
 void Movie::readSubfile(Subfile &subfile, Chunk &chunk) {
-	// READ THE METADATA FOR THE WHOLE MOVIE.
 	uint expectedRootSectionType = chunk.readTypedUint16();
 	debugC(5, kDebugLoading, "Movie::readSubfile(): sectionType = 0x%x (@0x%llx)", static_cast<uint>(expectedRootSectionType), static_cast<long long int>(chunk.pos()));
 	if (kMovieRootSection != (MovieSectionType)expectedRootSectionType) {
@@ -579,7 +379,7 @@ void Movie::readSubfile(Subfile &subfile, Chunk &chunk) {
 
 		// READ ALL THE FRAMES IN THIS CHUNK.
 		debugC(5, kDebugLoading, "Movie::readSubfile(): (Frameset %d of %d) Reading animation chunks... (@0x%llx)", i, chunkCount, static_cast<long long int>(chunk.pos()));
-		bool isAnimationChunk = (chunk._id == _header->_animationChunkReference);
+		bool isAnimationChunk = (chunk._id == _animationChunkReference);
 		if (!isAnimationChunk) {
 			warning("Movie::readSubfile(): (Frameset %d of %d) No animation chunks found (@0x%llx)", i, chunkCount, static_cast<long long int>(chunk.pos()));
 		}
@@ -587,56 +387,34 @@ void Movie::readSubfile(Subfile &subfile, Chunk &chunk) {
 			uint sectionType = chunk.readTypedUint16();
 			debugC(5, kDebugLoading, "Movie::readSubfile(): sectionType = 0x%x (@0x%llx)", static_cast<uint>(sectionType), static_cast<long long int>(chunk.pos()));
 			switch (MovieSectionType(sectionType)) {
-			case kMovieFrameSection: {
-				MovieFrameHeader *header = new MovieFrameHeader(chunk);
-				MovieFrame *frame = new MovieFrame(chunk, header);
-				_frames.push_back(frame);
+			case kMovieImageDataSection:
+				readImageData(chunk);
 				break;
-			}
 
-			case kMovieFooterSection: {
-				MovieFrameFooter *footer = new MovieFrameFooter(chunk);
-				_footers.push_back(footer);
+			case kMovieFrameDataSection:
+				readFrameData(chunk);
 				break;
-			}
 
 			default:
 				error("Movie::readSubfile(): Unknown movie animation section type 0x%x (@0x%llx)", static_cast<uint>(sectionType), static_cast<long long int>(chunk.pos()));
 			}
 
-			// READ THE NEXT CHUNK.
 			chunk = subfile.nextChunk();
-			isAnimationChunk = (chunk._id == _header->_animationChunkReference);
+			isAnimationChunk = (chunk._id == _animationChunkReference);
 		}
 
 		// READ THE AUDIO.
 		debugC(5, kDebugLoading, "Movie::readSubfile(): (Frameset %d of %d) Reading audio chunk... (@0x%llx)", i, chunkCount, static_cast<long long int>(chunk.pos()));
-		bool isAudioChunk = (chunk._id == _header->_audioChunkReference);
+		bool isAudioChunk = (chunk._id == _audioChunkReference);
 		if (isAudioChunk) {
-			byte *buffer = (byte *)malloc(chunk._length);
-			chunk.read((void *)buffer, chunk._length);
-			Audio::SeekableAudioStream *stream = nullptr;
-			switch (_header->_soundEncoding) {
-			case SoundEncoding::PCM_S16LE_MONO_22050:
-				stream = Audio::makeRawStream(buffer, chunk._length, 22050, Audio::FLAG_16BITS | Audio::FLAG_LITTLE_ENDIAN);
-				break;
-
-			case SoundEncoding::IMA_ADPCM_S16LE_MONO_22050:
-				error("Movie::readSubfile(): ADPCM decoding not supported for movies");
-				break;
-
-			default:
-				error("Movie::readSubfile(): Unknown audio encoding 0x%x", static_cast<uint>(_header->_soundEncoding));
-			}
-			_audioStreams.push_back(stream);
+			_audioSequence.readChunk(chunk);
 			chunk = subfile.nextChunk();
 		} else {
 			debugC(5, kDebugLoading, "Movie::readSubfile(): (Frameset %d of %d) No audio chunk to read. (@0x%llx)", i, chunkCount, static_cast<long long int>(chunk.pos()));
 		}
 
-		// READ THE FOOTER FOR THIS SUBFILE.
 		debugC(5, kDebugLoading, "Movie::readSubfile(): (Frameset %d of %d) Reading header chunk... (@0x%llx)", i, chunkCount, static_cast<long long int>(chunk.pos()));
-		bool isHeaderChunk = (chunk._id == _header->_chunkReference);
+		bool isHeaderChunk = (chunk._id == _chunkReference);
 		if (isHeaderChunk) {
 			if (chunk._length != 0x04) {
 				error("Movie::readSubfile(): Expected movie header chunk of size 0x04, got 0x%x (@0x%llx)", chunk._length, static_cast<long long int>(chunk.pos()));
@@ -647,21 +425,62 @@ void Movie::readSubfile(Subfile &subfile, Chunk &chunk) {
 		}
 	}
 
-	// SET THE MOVIE FRAME FOOTERS.
-	for (MovieFrame *frame : _stills) {
-		for (MovieFrameFooter *footer : _footers) {
-			if (frame->index() == footer->_index) {
-				frame->setFooter(footer);
-			}
+	for (MovieFrame *frame : _frames) {
+		if (frame->endInMilliseconds > _fullTime) {
+			_fullTime = frame->endInMilliseconds;
 		}
 	}
 
-	for (MovieFrame *frame : _frames) {
-		for (MovieFrameFooter *footer : _footers) {
-			if (frame->index() == footer->_index) {
-				frame->setFooter(footer);
+	if (_hasStill) {
+		_framesNotYetShown = _frames;
+	}
+}
+
+void Movie::invalidateRect(const Common::Rect &rect) {
+	g_engine->_dirtyRects.push_back(rect);
+}
+
+void Movie::readImageData(Chunk &chunk) {
+	MovieFrameHeader *header = new MovieFrameHeader(chunk);
+	MovieFrameImage *frame = new MovieFrameImage(chunk, header);
+	_images.push_back(frame);
+}
+
+void Movie::readFrameData(Chunk &chunk) {
+	uint frameDataToRead = chunk.readTypedUint16();
+	for (uint i = 0; i < frameDataToRead; i++) {
+		MovieFrame *frame = new MovieFrame(chunk);
+
+		// We cannot use a hashmap here because multiple frames can have the
+		// same index, and frames are not necessarily in index order. So we'll
+		// do a linear search, which is how the original does it.
+		for (MovieFrameImage *image : _images) {
+			if (image->index() == frame->index) {
+				frame->image = image;
+				break;
 			}
 		}
+
+		if (frame->keyframeIndex != 0) {
+			for (MovieFrameImage *image : _images) {
+				if (image->index() == frame->keyframeIndex) {
+					frame->keyframeImage = image;
+					break;
+				}
+			}
+		}
+
+		_frames.push_back(frame);
+	}
+}
+
+int Movie::compareFramesByZIndex(const MovieFrame *a, const MovieFrame *b) {
+	if (b->zIndex > a->zIndex) {
+		return 1;
+	} else if (a->zIndex > b->zIndex) {
+		return -1;
+	} else {
+		return 0;
 	}
 }
 

@@ -46,6 +46,7 @@
 namespace MediaStation {
 
 struct MediaStationGameDescription;
+class Hotspot;
 
 // Most Media Station titles follow this file structure from the root directory
 // of the CD-ROM:
@@ -80,7 +81,7 @@ public:
 	void redraw();
 
 	void setPalette(Asset *palette);
-	void addPlayingAsset(Asset *assetToAdd);
+	void registerAsset(Asset *assetToAdd);
 
 	Asset *getAssetById(uint assetId);
 	Asset *getAssetByChunkReference(uint chunkReference);
@@ -116,7 +117,8 @@ private:
 	void setCursor(uint id);
 
 	Boot *_boot = nullptr;
-	Common::List<Asset *> _assetsPlaying;
+	Common::Array<Asset *> _assets;
+	Common::SortedArray<SpatialEntity *, const SpatialEntity *> _spatialEntities;
 	Common::HashMap<uint, Context *> _loadedContexts;
 	Asset *_currentHotspot = nullptr;
 
@@ -125,11 +127,12 @@ private:
 	void doBranchToScreen();
 
 	Context *loadContext(uint32 contextId);
-	void setPaletteFromHeader(AssetHeader *header);
 	void releaseContext(uint32 contextId);
 	Asset *findAssetToAcceptMouseEvents();
 
 	void effectTransition(Common::Array<ScriptValue> &args);
+
+	static int compareAssetByZIndex(const SpatialEntity *a, const SpatialEntity *b);
 };
 
 extern MediaStationEngine *g_engine;

@@ -44,14 +44,14 @@ namespace AGS3 {
 using namespace AGS::Shared;
 
 void DisableHotspot(int hsnum) {
-	if ((hsnum < 1) | (hsnum >= MAX_ROOM_HOTSPOTS))
+	if ((hsnum < 1) || (hsnum >= MAX_ROOM_HOTSPOTS))
 		quit("!DisableHotspot: invalid hotspot specified");
 	_G(croom)->hotspot[hsnum].Enabled = false;
 	debug_script_log("Hotspot %d disabled", hsnum);
 }
 
 void EnableHotspot(int hsnum) {
-	if ((hsnum < 1) | (hsnum >= MAX_ROOM_HOTSPOTS))
+	if ((hsnum < 1) || (hsnum >= MAX_ROOM_HOTSPOTS))
 		quit("!EnableHotspot: invalid hotspot specified");
 	_G(croom)->hotspot[hsnum].Enabled = true;
 	debug_script_log("Hotspot %d re-enabled", hsnum);
@@ -115,7 +115,7 @@ void RunHotspotInteraction(int hotspothere, int mood) {
 		_GP(play).usedinv = _G(playerchar)->activeinv;
 	}
 
-	if ((_GP(game).options[OPT_WALKONLOOK] == 0) & (mood == MODE_LOOK));
+	if ((_GP(game).options[OPT_WALKONLOOK] == 0) && (mood == MODE_LOOK));
 	else if (_GP(play).auto_use_walkto_points == 0);
 	else if ((mood != MODE_WALK) && (_GP(play).check_interaction_only == 0))
 		MoveCharacterToHotspot(_GP(game).playercharacter, hotspothere);

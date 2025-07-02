@@ -529,7 +529,7 @@ void Room407::init() {
 		player_set_commands_allowed(true);
 
 	} else if (!_G(kittyScreaming)) {
-		midi_play("DRAMA1", 255, 0, -1, 949);
+		midi_play("DRAMA1", 255, false, -1, 949);
 		_ripEnters = series_load("407 RIP ENTERS");
 		_stair = series_load("407STAIR");
 		ws_demand_location(_G(my_walker), 250, 331, 3);
@@ -960,7 +960,7 @@ void Room407::daemon() {
 		hotspot_set_active("PERIODIC TABLE ", true);
 		_periodicTableState = 1120;
 
-		midi_play("EMERALD", 255, 0, 194, 949);
+		midi_play("EMERALD", 255, false, 194, 949);
 		kernel_examine_inventory_object("PING EMERALD/CORK",
 			_G(master_palette), 5, 1, 50, 200, 195, nullptr, -1);
 		break;
@@ -1587,9 +1587,9 @@ void Room407::daemon() {
 }
 
 void Room407::pre_parser() {
-	bool lookFlag = player_said_any("look", "look at");
-	bool takeFlag = player_said("take");
-	bool useFlag = player_said_any("push", "pull", "gear", "open", "close");
+	const bool lookFlag = player_said_any("look", "look at");
+	const bool takeFlag = player_said("take");
+	const bool useFlag = player_said_any("push", "pull", "gear", "open", "close");
 
 	if ((player_said("SURGICAL TUBE", "FAUCET PIPE") || player_said("TUBE/HOSE", "FAUCET PIPE")) &&
 			_faucetPipeState == 1100) {
@@ -2024,19 +2024,15 @@ void Room407::parser() {
 			_airValveState == 1100 && inv_object_is_here("FAUCET HANDLE")) {
 		if (_frotz2) {
 			digi_play("407r99e", 1);
-		} else if (_faucetPipeState == 1100) {
-			if (_periodicTableState == 1120)
-				digi_play("407r99o", 1);
-			else
-				useFaucet();
-		} else if (_tubeState == 1130 && _faucetPipeState != 1130) {
+		} else if (_faucetPipeState == 1100 || (_tubeState == 1130 && _faucetPipeState != 1130)) {
 			if (_periodicTableState == 1120)
 				digi_play("407r99o", 1);
 			else
 				useFaucet();
 		} else if (_faucetHookedToJar) {
 			useFaucet();
-		} else if (_faucetPipeState == 1100 || _tubeState == 1130 || _faucetHookedToJar) {
+		} else if (_tubeState == 1130) {
+			// The original is doing two additional checks on _faucetHookedToJar and (_faucetPipeState == 1100 which are useless at this point (already covered)
 			digi_play("407r99e", 1);
 		} else {
 			digi_play("407r99n", 1);

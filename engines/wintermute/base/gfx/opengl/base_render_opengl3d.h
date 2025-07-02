@@ -55,7 +55,7 @@ class BaseRenderOpenGL3D : public BaseRenderer3D {
 		float a;
 	};
 
-	struct LineVertex {
+	struct RectangleVertex {
 		float x;
 		float y;
 		float z;
@@ -98,14 +98,14 @@ public:
 	bool disableShadows() override;
 	bool stencilSupported() override;
 
-	BaseImage *takeScreenshot() override;
+	BaseImage *takeScreenshot(int newWidth = 0, int newHeight = 0) override;
 	void fadeToColor(byte r, byte g, byte b, byte a) override;
 
 	bool flip() override;
-	bool fill(byte r, byte g, byte b, Common::Rect *rect = nullptr) override;
+	bool clear() override;
 
 	bool setViewport(int left, int top, int right, int bottom) override;
-	bool drawLine(int x1, int y1, int x2, int y2, uint32 color) override;
+	bool fillRect(int x, int y, int w, int h, uint32 color) override;
 
 	DXMatrix *buildMatrix(DXMatrix* out, const DXVector2 *centre, const DXVector2 *scaling, float angle);
 	void transformVertices(struct SpriteVertex *vertices, const DXVector2 *centre, const DXVector2 *scaling, float angle);
@@ -119,7 +119,6 @@ public:
 	bool initRenderer(int width, int height, bool windowed) override;
 	bool setup2D(bool force = false) override;
 	bool setup3D(Camera3D *camera, bool force = false) override;
-	bool setupLines() override;
 
 	Common::String getName() const override {
 		return "OpenGL 3D renderer";
@@ -161,6 +160,7 @@ public:
 	void setPostfilter(PostFilter postFilter) override { _postFilterMode = postFilter; };
 
 private:
+	bool setupLines();
 	void displaySimpleShadow(BaseObject *object) override;
 
 	SimpleShadowVertex _simpleShadow[4];

@@ -42,12 +42,15 @@ public:
 
 	void leave3D();
 	void enter3D();
+	void presentBuffer();
 
 	void showOverlay(uint w, uint h);
 	void hideOverlay();
 
 	const Texture &getGLTexture() const { return _texture; }
 	bool hasTexture() const { return _texture.getGLTexture() != 0; }
+
+	void setRotation(Common::RotationMode rotation) { _texture.setRotation(rotation); }
 
 protected:
 	void setup();

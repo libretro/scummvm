@@ -70,11 +70,16 @@ void DrillerEngine::loadAssetsAtariFullGame() {
 		_title = loadAndConvertNeoImage(stream, 0x3f6);
 
 		loadFonts(stream, 0x8a92);
+		Common::Array<Graphics::ManagedSurface *> chars;
+		chars = getCharsAmigaAtariInternal(8, 8, -3, 33, 32, stream, 0x8a92 + 112 * 33 + 1, 100);
+		_fontSmall = Font(chars);
+		_fontSmall.setCharWidth(5);
+
 		loadMessagesFixedSize(stream, 0xda22, 14, 20);
 		loadGlobalObjects(stream, 0xd116, 8);
 		load8bitBinary(stream, 0x2afb8, 16);
 		loadPalettes(stream, 0x2ab76);
-		//loadSoundsFx(&file, 0x30da6, 25);
+		loadSoundsFx(stream, 0x30da6 + 0x147c, 25);
 	} else if (_variant & GF_ATARI_BUDGET) {
 		Common::File file;
 		file.open("x.prg");
@@ -103,6 +108,12 @@ void DrillerEngine::loadAssetsAtariFullGame() {
 			_title = loadAndConvertNeoImage(&file, 0x396);
 
 			loadFonts(&file, 0x8a32);
+
+			Common::Array<Graphics::ManagedSurface *> chars;
+			chars = getCharsAmigaAtariInternal(8, 8, -3, 33, 32, &file, 0x8a32 + 112 * 33 + 1, 100);
+			_fontSmall = Font(chars);
+			_fontSmall.setCharWidth(5);
+
 			loadMessagesFixedSize(&file, 0xc5d8, 14, 20);
 			loadGlobalObjects(&file, 0xbccc, 8);
 			load8bitBinary(&file, 0x29b3c, 16);
@@ -110,6 +121,20 @@ void DrillerEngine::loadAssetsAtariFullGame() {
 			loadSoundsFx(&file, 0x30da6, 25);
 		}
 	}
+
+	for (auto &area : _areaMap) {
+		// Center and pad each area name so we do not have to do it at each frame
+		area._value->_name = centerAndPadString(area._value->_name, 14);
+	}
+
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_0_Amiga", false));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_1_Amiga", false));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_2_Amiga", false));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_3_Amiga", false));
+	_indicators.push_back(loadBundledImage("driller_ship_indicator_Amiga", false));
+
+	for (auto &it : _indicators)
+		it->convertToInPlace(_gfx->_texturePixelFormat);
 }
 
 void DrillerEngine::loadAssetsAtariDemo() {
@@ -135,15 +160,6 @@ void DrillerEngine::loadAssetsAtariDemo() {
 	loadDemoData(&file, 0, 0x1000);
 
 	file.close();
-	file.open("data");
-
-	if (!file.isOpen())
-		error("Failed to open 'data' file");
-
-	load8bitBinary(&file, 0x442, 16);
-	loadPalettes(&file, 0x0);
-
-	file.close();
 	if (_variant & GF_ATARI_MAGAZINE_DEMO) {
 		file.open("auto_x.prg");
 		if (!file.isOpen())
@@ -156,9 +172,14 @@ void DrillerEngine::loadAssetsAtariDemo() {
 	}
 
 	if (_variant & GF_ATARI_MAGAZINE_DEMO) {
-		loadFonts(&file, 0x7ee);
 		loadMessagesFixedSize(&file, 0x40d2, 14, 20);
 		loadGlobalObjects(&file, 0x3e88, 8);
+
+		loadFonts(&file, 0x7ee);
+		Common::Array<Graphics::ManagedSurface *> chars;
+		chars = getCharsAmigaAtariInternal(8, 8, -3, 33, 32, &file, 0x7ee + 112 * 33 + 1, 100);
+		_fontSmall = Font(chars);
+		_fontSmall.setCharWidth(5);
 	} else {
 		loadFonts(&file, 0x7bc);
 		loadMessagesFixedSize(&file, 0x3b90, 14, 20);
@@ -166,11 +187,34 @@ void DrillerEngine::loadAssetsAtariDemo() {
 	}
 
 	file.close();
+	file.open("data");
+
+	if (!file.isOpen())
+		error("Failed to open 'data' file");
+
+	load8bitBinary(&file, 0x442, 16);
+	loadPalettes(&file, 0x0);
+
+	file.close();
 	file.open("soundfx");
 	if (!file.isOpen())
 		error("Failed to open 'soundfx' executable for AtariST demo");
 
 	loadSoundsFx(&file, 0, 25);
+
+	for (auto &area : _areaMap) {
+		// Center and pad each area name so we do not have to do it at each frame
+		area._value->_name = centerAndPadString(area._value->_name, 14);
+	}
+
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_0_Amiga", false));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_1_Amiga", false));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_2_Amiga", false));
+	_indicators.push_back(loadBundledImage("driller_tank_indicator_3_Amiga", false));
+	_indicators.push_back(loadBundledImage("driller_ship_indicator_Amiga", false));
+
+	for (auto &it : _indicators)
+		it->convertToInPlace(_gfx->_texturePixelFormat);
 }
 
 } // End of namespace Freescape

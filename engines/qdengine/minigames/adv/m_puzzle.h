@@ -54,42 +54,42 @@ public:
 	void quant(float dt);
 
 private:
-	int gameSize_;
-	int angles_;
+	int _gameSize = 0;
+	int _angles = 0;
 
-	int globalAngle_;
-	float rotateTimePeriod_;
-	float nextRotateTime_;
+	int _globalAngle = 0;
+	float _rotateTimePeriod = 0.f;
+	float _nextRotateTime = 0.f;
 
-	bool singleSize_;
-	mgVect2f size_;
-	float depth_;
+	bool _singleSize = false;
+	mgVect2f _size;
+	float _depth = 0.f;
 
-	Nodes nodes_;
+	Nodes _nodes;
 	/// Номер места с которого взяли фрагмент
-	int prevPlace_;
+	int _prevPlace = -1;
 	/// Индекс фрагмента на мыши
-	int pickedItem_;
+	int _pickedItem = -1;
 
-	int inField_;
+	int _inField = 0; // количество фрагментов на поле
 
-	float nextObjTime_;
-	int mouseObjPose_;
+	float _nextObjTime = 0.f;
+	int _mouseObjPose = -1; // индекс положения фрагмента на мыши в стеке
 
-	QDObject stackBottom_;
-	int stackSize_;
-	mgVect2f stackPlaceSize_;
+	QDObject _stackBottom;
+	int _stackSize = 0;
+	mgVect2f _stackPlaceSize;
 
-	Indexes stack_;
-	Indexes field_;
+	Indexes _stack;
+	Indexes _field;
 
-	FlyQDObjects flyObjs_;
+	FlyQDObjects _flyObjs;
 	/// скорость падения новых в стек
-	float flySpeed_;
+	float _flySpeed = 0.f;
 	/// скорость возврата в стек
-	float returnSpeed_;
+	float _returnSpeed = -1.f;
 
-	Coords positions_;
+	Coords _positions;
 
 	const char *getStateName(int angle, bool selected, bool small) const;
 	/// повернуть фишку

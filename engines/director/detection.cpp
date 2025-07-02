@@ -27,7 +27,6 @@
 #include "common/file.h"
 #include "common/formats/winexe.h"
 
-#include "director/detection.h"
 #include "director/director.h"
 
 #include "director/detection_tables.h"
@@ -85,12 +84,18 @@ static const DebugChannelDef debugFlagList[] = {
 class DirectorMetaEngineDetection : public AdvancedMetaEngineDetection<Director::DirectorGameDescription> {
 private:
 	Common::HashMap<Common::String, bool, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _customTarget;
+	Common::HashMap<Common::String, bool, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _fallback_blacklisted_names;
 
 public:
 	DirectorMetaEngineDetection() : AdvancedMetaEngineDetection(Director::gameDescriptions, directorGames) {
 		_maxScanDepth = 5;
 		_directoryGlobs = Director::directoryGlobs;
 		_flags = kADFlagMatchFullPaths | kADFlagCanPlayUnknownVariants;
+
+		_fallback_blacklisted_names["Macromedia Projector"] = true;
+		_fallback_blacklisted_names["Projector Skeleton"] = true;
+		_fallback_blacklisted_names["Director Player"] = true;
+		_fallback_blacklisted_names["Projector"] = true;
 
 		// initialize customTarget hashmap here
 		for (int i = 0; customTargetList[i].name != nullptr; i++)
@@ -132,6 +137,7 @@ static Director::DirectorGameDescription s_fallbackDesc = {
 	0
 };
 
+static char s_fallbacGameIdBuffer[256];
 static char s_fallbackFileNameBuffer[51];
 static char s_fallbackExtraBuf[256];
 
@@ -277,17 +283,36 @@ ADDetectedGame DirectorMetaEngineDetection::fallbackDetect(const FileMap &allFil
 		desc->desc.filesDescriptions[0].fileName = s_fallbackFileNameBuffer;
 
 		Common::String extra;
+		Common::String sanitizedName;
 		Common::WinResources *exe = Common::WinResources::createFromEXE(&f);
 		if (exe) {
 			Common::WinResources::VersionInfo *versionInfo = exe->getVersionResource(1);
 			if (versionInfo) {
-				extra = Common::String::format("v%d.%d.%dr%d", versionInfo->fileVersion[0], versionInfo->fileVersion[1], versionInfo->fileVersion[2], versionInfo->fileVersion[3]);
+				Common::String internalName = versionInfo->hash["InternalName"].encode();
+				Common::String fileDescription = versionInfo->hash["FileDescription"].encode();
+
+				warning("Director fallback detection int name: %s", internalName.c_str());
+				warning("Director fallback detection file name: %s", fileDescription.c_str());
+				warning("Director fallback detection version: v%d.%d.%dr%d", versionInfo->fileVersion[0], versionInfo->fileVersion[1], versionInfo->fileVersion[2], versionInfo->fileVersion[3]);
+
+				if (!_fallback_blacklisted_names.contains(fileDescription)) {
+					if (extraInfo != nullptr) {
+						*extraInfo = new ADDetectedGameExtraInfo;
+						(*extraInfo)->gameName = fileDescription;
+
+						sanitizedName = AdvancedMetaEngineDetectionBase::sanitizeName(fileDescription.c_str(), fileDescription.size());
+						Common::strlcpy(s_fallbacGameIdBuffer, sanitizedName.c_str(), sizeof(s_fallbacGameIdBuffer) - 1);
+						desc->desc.gameId = s_fallbacGameIdBuffer;
+
+						extra = Common::String::format("v%d.%d.%dr%d", versionInfo->fileVersion[0], versionInfo->fileVersion[1], versionInfo->fileVersion[2], versionInfo->fileVersion[3]);
+					}
+				}
 				delete versionInfo;
 			}
 			delete exe;
 		}
 		if (extra.empty()) {
-			extra = Common::String::format("v%d.%02d", desc->version / 100, desc->version % 100);
+			extra = Common::String::format("D%d.%02d", desc->version / 100, desc->version % 100);
 		}
 		Common::strlcpy(s_fallbackExtraBuf, extra.c_str(), sizeof(s_fallbackExtraBuf) - 1);
 		desc->desc.extra = s_fallbackExtraBuf;

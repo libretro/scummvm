@@ -63,7 +63,7 @@ public:
 	 *
 	 * @return a BaseImage containing the current screen-buffer.
 	 */
-	virtual BaseImage *takeScreenshot() = 0;
+	virtual BaseImage *takeScreenshot(int newWidth = 0, int newHeight = 0) = 0;
 	virtual bool setViewport(int left, int top, int right, int bottom);
 	virtual bool setViewport(Rect32 *rect);
 	virtual bool setScreenViewport();
@@ -87,8 +87,7 @@ public:
 	 */
 	virtual void fadeToColor(byte r, byte g, byte b, byte a) = 0;
 
-	virtual bool drawLine(int x1, int y1, int x2, int y2, uint32 color); // Unused outside indicator-display
-	virtual bool drawRect(int x1, int y1, int x2, int y2, uint32 color, int width = 1); // Unused outside indicator-display
+	virtual bool fillRect(int x, int y, int w, int h, uint32 color); // Unused outside indicator-display
 	BaseRenderer(BaseGame *inGame = nullptr);
 	~BaseRenderer() override;
 	virtual bool setProjection() {
@@ -97,13 +96,9 @@ public:
 
 	virtual bool windowedBlt();
 	/**
-	 * Fill a portion of the screen with a specified color
-	 *
-	 * @param r the red component to fill with.
-	 * @param g the green component to fill with.
-	 * @param b the blue component to fill with.
+	 * Clear the screen
 	 */
-	virtual bool fill(byte r, byte g, byte b, Common::Rect *rect = nullptr) = 0;
+	virtual bool clear() = 0;
 	virtual void onWindowChange();
 	virtual bool initRenderer(int width, int height, bool windowed);
 	/**
@@ -124,7 +119,6 @@ public:
 #ifdef ENABLE_WME3D
 	virtual bool setup3D(Camera3D *camera = nullptr, bool force = false);
 #endif
-	virtual bool setupLines();
 
 	/**
 	 * Get the name of the current renderer
@@ -230,7 +224,7 @@ protected:
 private:
 	Common::Array<BaseActiveRect *> _rectList;
 	bool displaySaveloadImage();
-	bool displaySaveloadLines();
+	bool displaySaveloadRect();
 };
 
 BaseRenderer *makeOSystemRenderer(BaseGame *inGame); // Implemented in BRenderSDL.cpp

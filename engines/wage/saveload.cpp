@@ -92,8 +92,9 @@ namespace Wage {
 int WageEngine::getSceneIndex(Scene *scene) const {
 	assert(scene);
 	Common::Array<Scene *> &orderedScenes = _world->_orderedScenes;
-	for (uint32 i = 0; i < orderedScenes.size(); ++i) {
-		if (orderedScenes[i] == scene) return i-1;
+	for (int32 i = 0; i < (int)orderedScenes.size(); ++i) {
+		if (orderedScenes[i] == scene)
+			return i - 1;
 	}
 
 	warning("Scene's index not found");
@@ -701,12 +702,28 @@ int WageEngine::loadGame(int slotId) {
 
 Common::Error WageEngine::loadGameState(int slot) {
 	warning("LOADING %d", slot);
+
+	if (_isGameOver)
+		resetState();
+
+	_gui->_consoleWindow->clearText();
+
 	if (loadGame(slot) == 0) {
 		if (slot != getAutosaveSlot()) {
 			_defaultSaveSlot = slot;
 			// save description is set inside of loadGame()
 			_gui->enableSave();
 		}
+
+		sayText(_world->_player->_currentScene->_name, Common::TextToSpeechManager::QUEUE);
+
+		_gui->regenCommandsMenu();
+		_gui->regenWeaponsMenu();
+
+		_gui->_consoleWindow->setTextWindowFont(_world->_player->_currentScene->getFont());
+
+		Common::String input("look");
+		processTurn(&input, NULL);
 
 		return Common::kNoError;
 	} else {

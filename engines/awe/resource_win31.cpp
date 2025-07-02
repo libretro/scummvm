@@ -146,7 +146,9 @@ struct LzHuffman {
 		int i = _child[kHuffmanRoot];
 		while (i < kTableSize) {
 			i += _stream.readBit();
-			i = _child[i];
+
+			if (i < kTableSize)
+				i = _child[i];
 		}
 		i -= kTableSize;
 		update(i);
@@ -171,7 +173,10 @@ struct LzHuffman {
 				const int copySize = (i - index) * sizeof(int);
 				memmove(_freq + index + 1, _freq + index, copySize);
 				_freq[index] = f;
-				memmove(_child + index + 1, _child + index, copySize);
+
+				if (index + 1 < kTableSize)
+					memmove(_child + index + 1, _child + index, copySize);
+
 				_child[index] = j;
 			}
 			for (int i = 0; i < kTableSize; ++i) {
@@ -287,10 +292,13 @@ bool ResourceWin31::readEntries() {
 }
 
 uint8 *ResourceWin31::loadFile(int num, uint8 *dst, uint32 *size) {
+	bool allocated = false;
+
 	if (num > 0 && num < _entriesCount) {
 		Win31BankEntry *e = &_entries[num];
 		*size = e->size;
 		if (!dst) {
+			allocated = true;
 			dst = (uint8 *)malloc(e->size);
 			if (!dst) {
 				warning("Unable to allocate %d bytes", e->size);
@@ -311,6 +319,10 @@ uint8 *ResourceWin31::loadFile(int num, uint8 *dst, uint32 *size) {
 		}
 	}
 	warning("Unable to load resource #%d", num);
+
+	if (allocated)
+		free(dst);
+
 	return nullptr;
 }
 

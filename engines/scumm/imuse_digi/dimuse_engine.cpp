@@ -94,9 +94,9 @@ IMuseDigital::IMuseDigital(ScummEngine_v7 *scumm, int sampleRate, Audio::Mixer *
 
 	_emptyMarker[0] = '\0';
 	_internalMixer = new IMuseDigiInternalMixer(mixer, _internalSampleRate, _isEarlyDiMUSE, _lowLatencyMode);
-	_groupsHandler = new IMuseDigiGroupsHandler(this);
-	_fadesHandler = new IMuseDigiFadesHandler(this);
-	_triggersHandler = new IMuseDigiTriggersHandler(this);
+	_groupsHandler = new IMuseDigiGroupsHandler(this, mutex);
+	_fadesHandler = new IMuseDigiFadesHandler(this, mutex);
+	_triggersHandler = new IMuseDigiTriggersHandler(this, mutex);
 	_filesHandler = new IMuseDigiFilesHandler(this, scumm);
 
 	diMUSEInitialize();

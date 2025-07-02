@@ -92,6 +92,7 @@ EclipseEngine::EclipseEngine(OSystem *syst, const ADGameDescription *gd) : Frees
 	_endEntrance = 33;
 
 	_lastThirtySeconds = 0;
+	_lastFiveSeconds = 0;
 	_lastSecond = -1;
 	_resting = false;
 }
@@ -107,11 +108,35 @@ void EclipseEngine::initGameState() {
 	int seconds, minutes, hours;
 	getTimeFromCountdown(seconds, minutes, hours);
 	_lastThirtySeconds = seconds / 30;
+	_lastFiveSeconds = seconds / 5;
 	_resting = false;
 }
 
 void EclipseEngine::loadAssets() {
 	FreescapeEngine::loadAssets();
+
+	Common::List<int> globalIds = _areaMap[255]->getEntranceIds();
+	for (auto &it : _areaMap) {
+		if (it._value->getAreaID() == 255)
+			continue;
+
+		it._value->addStructure(_areaMap[255]);
+
+		if (isDemo()) {
+			it._value->_name = "  NOW TRAINING  ";
+		}
+
+		for (auto &id : globalIds) {
+			if (it._value->entranceWithID(id))
+				continue;
+
+			Object *obj = _areaMap[255]->entranceWithID(id);
+			assert(obj);
+			assert(obj->getType() == ObjectType::kEntranceType);
+			// The entrance is not in the current area, so we need to add it
+			it._value->addObjectFromArea(id, _areaMap[255]);
+		}
+	}
 
 	_timeoutMessage = _messagesList[1];
 	_noShieldMessage = _messagesList[0];
@@ -203,17 +228,17 @@ void EclipseEngine::initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *in
 	FreescapeEngine::initKeymaps(engineKeyMap, infoScreenKeyMap, target);
 	Common::Action *act;
 
-	act = new Common::Action("SAVE", _("Save Game"));
+	act = new Common::Action("SAVE", _("Save game"));
 	act->setCustomEngineActionEvent(kActionSave);
 	act->addDefaultInputMapping("s");
 	infoScreenKeyMap->addAction(act);
 
-	act = new Common::Action("LOAD", _("Load Game"));
+	act = new Common::Action("LOAD", _("Load game"));
 	act->setCustomEngineActionEvent(kActionLoad);
 	act->addDefaultInputMapping("l");
 	infoScreenKeyMap->addAction(act);
 
-	act = new Common::Action("QUIT", _("Quit Game"));
+	act = new Common::Action("QUIT", _("Quit game"));
 	act->setCustomEngineActionEvent(kActionEscape);
 	if (isSpectrum())
 		act->addDefaultInputMapping("1");
@@ -287,6 +312,7 @@ void EclipseEngine::gotoArea(uint16 areaID, int entranceID) {
 		playSound(_soundIndexStart, true);
 		if (isEclipse2()) {
 			_gameStateControl = kFreescapeGameStateStart;
+			_pitch = -10;
 		}
 
 	} if (areaID == _endArea && entranceID == _endEntrance) {
@@ -728,6 +754,13 @@ void EclipseEngine::updateTimeVariables() {
 	// This function only executes "on collision" room/global conditions
 	int seconds, minutes, hours;
 	getTimeFromCountdown(seconds, minutes, hours);
+
+
+	if (_lastFiveSeconds != seconds / 5) {
+		_lastFiveSeconds = seconds / 5;
+		executeLocalGlobalConditions(false, false, true);
+	}
+
 	if (_lastThirtySeconds != seconds / 30) {
 		_lastThirtySeconds = seconds / 30;
 
@@ -738,8 +771,6 @@ void EclipseEngine::updateTimeVariables() {
 		if (_gameStateVars[k8bitVariableShield] < _maxShield) {
 			_gameStateVars[k8bitVariableShield] += 1;
 		}
-
-		executeLocalGlobalConditions(false, false, true);
 	}
 
 	if (isEclipse() && isSpectrum() && _currentArea->getAreaID() == 42) {

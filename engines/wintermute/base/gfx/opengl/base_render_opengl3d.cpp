@@ -124,6 +124,13 @@ bool BaseRenderOpenGL3D::initRenderer(int width, int height, bool windowed) {
 
 bool BaseRenderOpenGL3D::flip() {
 	_lastTexture = nullptr;
+
+	// Store blend mode and cull face mode
+	GLboolean stateBlend, stateCullFace, stateAlpha;
+	glGetBooleanv(GL_BLEND, &stateBlend);
+	glGetBooleanv(GL_CULL_FACE, &stateCullFace);
+	glGetBooleanv(GL_ALPHA_TEST, &stateAlpha);
+
 	postfilter();
 
 	// Disable blend mode and cull face to prevent interfere with backend renderer
@@ -132,15 +139,31 @@ bool BaseRenderOpenGL3D::flip() {
 
 	g_system->updateScreen();
 
+	// Restore blend mode and cull face state
+	if (stateBlend)
+		glEnable(GL_BLEND);
+	else
+		glDisable(GL_BLEND);
+
+	if (stateCullFace)
+		glEnable(GL_CULL_FACE);
+	else
+		glDisable(GL_CULL_FACE);
+
+	if (stateAlpha)
+		glEnable(GL_ALPHA_TEST);
+	else
+		glDisable(GL_ALPHA_TEST);
+
 	_state = RSTATE_NONE;
 	return true;
 }
 
-bool BaseRenderOpenGL3D::fill(byte r, byte g, byte b, Common::Rect *rect) {
+bool BaseRenderOpenGL3D::clear() {
 	if(!_gameRef->_editorMode) {
 		glViewport(0, _height, _width, _height);
 	}
-	glClearColor(r / 255.0f, g / 255.0f, b / 255.0f, 1.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	return true;
 }
@@ -187,8 +210,6 @@ bool BaseRenderOpenGL3D::setup3D(Camera3D *camera, bool force) {
 		glAlphaFunc(GL_GEQUAL, 8 / 255.0f);
 
 		setAmbientLightRenderState();
-
-
 
 		if (camera)
 			_camera = camera;
@@ -363,7 +384,7 @@ bool BaseRenderOpenGL3D::drawSpriteEx(BaseSurface *tex, const Wintermute::Rect32
 	if (angle != 0) {
 		DXVector2 sc(1.0f, 1.0f);
 		DXVector2 rotation(rot.x, rot.y);
-		transformVertices(vertices, &rotation, &sc, degToRad(-angle));
+		transformVertices(vertices, &rotation, &sc, angle);
 	}
 
 	for (int i = 0; i < 4; i++) {
@@ -408,7 +429,6 @@ bool BaseRenderOpenGL3D::drawSpriteEx(BaseSurface *tex, const Wintermute::Rect32
 	glEnableClientState(GL_COLOR_ARRAY);
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
 
 	glVertexPointer(3, GL_FLOAT, sizeof(SpriteVertex), &vertices[0].x);
 	glTexCoordPointer(2, GL_FLOAT, sizeof(SpriteVertex), &vertices[0].u);
@@ -522,20 +542,26 @@ bool BaseRenderOpenGL3D::setProjection() {
 	return setProjectionTransform(matProj);
 }
 
-bool BaseRenderOpenGL3D::drawLine(int x1, int y1, int x2, int y2, uint32 color) {
-	x1 += _drawOffsetX;
-	x2 += _drawOffsetX;
-	y1 += _drawOffsetY;
-	y2 += _drawOffsetY;
+bool BaseRenderOpenGL3D::fillRect(int x, int y, int w, int h, uint32 color) {
+	setupLines();
+
+	x += _drawOffsetX;
+	y += _drawOffsetY;
 
 	// position coords
-	LineVertex vertices[2];
-	vertices[0].x = x1;
-	vertices[0].y = y1;
+	RectangleVertex vertices[4];
+	vertices[0].x = x;
+	vertices[0].y = y + h;
 	vertices[0].z = 0.9f;
-	vertices[1].x = x2;
-	vertices[1].y = y2;
+	vertices[1].x = x;
+	vertices[1].y = y;
 	vertices[1].z = 0.9f;
+	vertices[2].x = x + w;
+	vertices[2].y = y + h;
+	vertices[2].z = 0.9f;
+	vertices[3].x = x + w;
+	vertices[3].y = y;
+	vertices[3].z = 0.9f;
 
 	byte a = RGBCOLGetA(color);
 	byte r = RGBCOLGetR(color);
@@ -549,12 +575,13 @@ bool BaseRenderOpenGL3D::drawLine(int x1, int y1, int x2, int y2, uint32 color) 
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 
-	glVertexPointer(3, GL_FLOAT, sizeof(LineVertex), &vertices[0].x);
+	glVertexPointer(3, GL_FLOAT, sizeof(RectangleVertex), &vertices[0].x);
 
-	glDrawArrays(GL_LINES, 0, 2);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	glDisableClientState(GL_VERTEX_ARRAY);
 
+	setup2D();
 	return true;
 }
 
@@ -567,7 +594,7 @@ void BaseRenderOpenGL3D::fadeToColor(byte r, byte g, byte b, byte a) {
 	top = _viewportRect.top;
 
 	// position coords
-	LineVertex vertices[4];
+	RectangleVertex vertices[4];
 	vertices[0].x = left;
 	vertices[0].y = bottom;
 	vertices[0].z = 0.0f;
@@ -597,7 +624,7 @@ void BaseRenderOpenGL3D::fadeToColor(byte r, byte g, byte b, byte a) {
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 
-	glVertexPointer(3, GL_FLOAT, sizeof(LineVertex), &vertices[0].x);
+	glVertexPointer(3, GL_FLOAT, sizeof(RectangleVertex), &vertices[0].x);
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
@@ -606,24 +633,17 @@ void BaseRenderOpenGL3D::fadeToColor(byte r, byte g, byte b, byte a) {
 	setup2D(true);
 }
 
-BaseImage *BaseRenderOpenGL3D::takeScreenshot() {
+BaseImage *BaseRenderOpenGL3D::takeScreenshot(int newWidth, int newHeight) {
 	BaseImage *screenshot = new BaseImage();
 	Graphics::Surface *surface = new Graphics::Surface();
-#ifdef SCUMM_BIG_ENDIAN
-	Graphics::PixelFormat format(4, 8, 8, 8, 8, 24, 16, 8, 0);
-#else
-	Graphics::PixelFormat format(4, 8, 8, 8, 8, 0, 8, 16, 24);
-#endif
+	Graphics::PixelFormat format = Graphics::PixelFormat::createFormatRGBA32();
 	surface->create(_viewportRect.width(), _viewportRect.height(), format);
 
 	glReadPixels(_viewportRect.left, _viewportRect.height() - _viewportRect.bottom,
 	             _viewportRect.width(), _viewportRect.height(),
 	             GL_RGBA, GL_UNSIGNED_BYTE, surface->getPixels());
-	flipVertical(surface);
-	Graphics::Surface *converted = surface->convertTo(getPixelFormat());
-	screenshot->copyFrom(converted);
+	screenshot->copyFrom(surface, newWidth, newHeight, Graphics::FLIP_V);
 	delete surface;
-	delete converted;
 	return screenshot;
 }
 
@@ -999,6 +1019,20 @@ void BaseRenderOpenGL3D::postfilter() {
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
+	GLfloat vertices[] = {
+		-1.0f, -1.0f,
+		 1.0f, -1.0f,
+		 1.0f,  1.0f,
+		-1.0f,  1.0f
+	};
+	
+	GLfloat texCoords[] = {
+		0.0f, 0.0f,
+		1.0f, 0.0f,
+		1.0f, 1.0f,
+		0.0f, 1.0f
+	};
+
 	if (_postFilterMode == kPostFilterBlackAndWhite ||
 		_postFilterMode == kPostFilterSepia) {
 		glDisable(GL_BLEND);
@@ -1009,7 +1043,7 @@ void BaseRenderOpenGL3D::postfilter() {
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, _postfilterTexture);
 
-
+		g_system->presentBuffer();
 		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, _width, _height, 0);
 
 		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
@@ -1021,14 +1055,15 @@ void BaseRenderOpenGL3D::postfilter() {
 		glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_CONSTANT);
 		glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
 
-		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-		glTexCoord2f(1.0f, 0.0f); glVertex2f( 1.0f, -1.0f);
-		glTexCoord2f(1.0f, 1.0f); glVertex2f( 1.0f,  1.0f);
-		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f,  1.0f);
-		glEnd();
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glVertexPointer(2, GL_FLOAT, 0, vertices);
+		glTexCoordPointer(2, GL_FLOAT, 0, texCoords);
+		glDrawArrays(GL_QUADS, 0, 4);
+		glDisableClientState(GL_VERTEX_ARRAY);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
-
+		g_system->presentBuffer();
 		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, _width, _height, 0);
 
 		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
@@ -1040,13 +1075,15 @@ void BaseRenderOpenGL3D::postfilter() {
 		glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_TEXTURE);
 		glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
 
-		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-		glTexCoord2f(1.0f, 0.0f); glVertex2f( 1.0f, -1.0f);
-		glTexCoord2f(1.0f, 1.0f); glVertex2f( 1.0f,  1.0f);
-		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f,  1.0f);
-		glEnd();
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glVertexPointer(2, GL_FLOAT, 0, vertices);
+		glTexCoordPointer(2, GL_FLOAT, 0, texCoords);
+		glDrawArrays(GL_QUADS, 0, 4);
+		glDisableClientState(GL_VERTEX_ARRAY);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
+		g_system->presentBuffer();
 		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, _width, _height, 0);
 		
 		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
@@ -1058,14 +1095,16 @@ void BaseRenderOpenGL3D::postfilter() {
 		glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_CONSTANT);
 		glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
 
-		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-		glTexCoord2f(1.0f, 0.0f); glVertex2f( 1.0f, -1.0f);
-		glTexCoord2f(1.0f, 1.0f); glVertex2f( 1.0f,  1.0f);
-		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f,  1.0f);
-		glEnd();
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glVertexPointer(2, GL_FLOAT, 0, vertices);
+		glTexCoordPointer(2, GL_FLOAT, 0, texCoords);
+		glDrawArrays(GL_QUADS, 0, 4);
+		glDisableClientState(GL_VERTEX_ARRAY);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
 		if (_postFilterMode == kPostFilterSepia) {
+			g_system->presentBuffer();
 			glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, _width, _height, 0);
 
 			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
@@ -1077,16 +1116,17 @@ void BaseRenderOpenGL3D::postfilter() {
 			glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_CONSTANT);
 			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
 
-			glBegin(GL_QUADS);
-			glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-			glTexCoord2f(1.0f, 0.0f); glVertex2f( 1.0f, -1.0f);
-			glTexCoord2f(1.0f, 1.0f); glVertex2f( 1.0f,  1.0f);
-			glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f,  1.0f);
-			glEnd();
-
+			glEnableClientState(GL_VERTEX_ARRAY);
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			glVertexPointer(2, GL_FLOAT, 0, vertices);
+			glTexCoordPointer(2, GL_FLOAT, 0, texCoords);
+			glDrawArrays(GL_QUADS, 0, 4);
+			glDisableClientState(GL_VERTEX_ARRAY);
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
 
 		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		glBindTexture(GL_TEXTURE_2D, 0);
 		glDisable(GL_TEXTURE_2D);
 	}
 }

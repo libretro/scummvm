@@ -33,7 +33,8 @@ jobs:
       VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
-      GIT_VCPKG_COMMIT: b02e341c927f16d991edbd915d8ea43eac52096c
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/.github/vcpkg-ports
+      GIT_VCPKG_COMMIT: ef7dbf94b9198bc58f45951adcf1f041fcbc5ea0
     permissions:
       contents: write # For dependencygraph
     steps:
@@ -132,8 +133,8 @@ jobs:
             brewPackages: a52dec faad2 flac fluid-synth freetype fribidi giflib jpeg mad libmikmod libmpeg2 libogg libpng libvorbis libvpx sdl2 sdl2_net theora
           - platform: ios7
             buildFlags: -scheme ScummVM-iOS CODE_SIGN_IDENTITY="" CODE_SIGNING_ALLOWED=NO
-            configFlags: --use-xcframework --enable-faad --enable-gif --enable-mikmod --enable-mpeg2 --enable-vpx --disable-nasm --disable-taskbar --disable-tts
-            packagesUrl: https://downloads.scummvm.org/frs/build/scummvm-ios7-libs-v3.zip
+            configFlags: --use-xcframework --enable-faad --enable-gif --enable-mikmod --enable-vpx --enable-mpc --disable-nasm --disable-taskbar --disable-tts
+            packagesUrl: https://downloads.scummvm.org/frs/build/scummvm-ios7-libs-v4.zip
     defaults:
       run:
         # Must be explicit for proper pipefail support

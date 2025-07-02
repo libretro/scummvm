@@ -77,6 +77,7 @@ public:
 	int getDefaultStretchMode() const override final;
 	bool setStretchMode(int mode) override final;
 	int getStretchMode() const override final;
+	bool setRotationMode(Common::RotationMode rotation) override final;
 	uint getDefaultScaler() const override final;
 	uint getDefaultScaleFactor() const override final;
 	using BaseBackend::setScaler;
@@ -103,6 +104,7 @@ public:
 	void fillScreen(uint32 col) override final;
 	void fillScreen(const Common::Rect &r, uint32 col) override final;
 	void updateScreen() override final;
+	void presentBuffer() override final;
 	void setShakePos(int shakeXOffset, int shakeYOffset) override final;
 	void setFocusRectangle(const Common::Rect& rect) override final;
 	void clearFocusRectangle() override final;

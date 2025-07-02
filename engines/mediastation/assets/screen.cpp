@@ -24,10 +24,14 @@
 
 namespace MediaStation {
 
-ScriptValue Screen::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) {
-	switch (methodId) {
+void Screen::readParameter(Chunk &chunk, AssetHeaderSectionType paramType) {
+	switch (paramType) {
+	case kAssetHeaderCursorResourceId:
+		_cursorResourceId = chunk.readTypedUint16();
+		break;
+
 	default:
-		error("Screen::callMethod(): Got unimplemented method ID %s (%d)", builtInMethodToStr(methodId), static_cast<uint>(methodId));
+		Asset::readParameter(chunk, paramType);
 	}
 }
 

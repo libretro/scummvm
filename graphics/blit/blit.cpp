@@ -26,20 +26,28 @@
 namespace Graphics {
 
 // see graphics/blit/blit-atari.cpp
-#ifndef ATARI
+#ifdef ATARI
+extern void keyBlitLogicAtari(byte *dst, const byte *src, const uint w, const uint h,
+							  const uint srcDelta, const uint dstDelta, const uint32 key);
+#else
 // Function to blit a rect
 void copyBlit(byte *dst, const byte *src,
-			   const uint dstPitch, const uint srcPitch,
-			   const uint w, const uint h,
-			   const uint bytesPerPixel) {
+				const uint dstPitch, const uint srcPitch,
+				const uint w, const uint h,
+				const uint bytesPerPixel) {
 	if (dst == src)
 		return;
 
 	if (dstPitch == srcPitch && ((w * bytesPerPixel) == dstPitch)) {
+		// Buffers have equal line pitch AND total number of bytes per line matches that pitch
+		// Therefore we may copy a whole subset of h full-width raster lines in one go.
 		memcpy(dst, src, dstPitch * h);
 	} else {
+		// Not transferring whole width of either source or destination buffer, therefore must copy line-by-line
 		for (uint i = 0; i < h; ++i) {
+			// Copy sublength w of one full buffer raster line
 			memcpy(dst, src, w * bytesPerPixel);
+			// Iterate both buffer pointers by respective pitch, to horizontally align starting point of next raster line with that of the one just copied
 			dst += dstPitch;
 			src += srcPitch;
 		}
@@ -51,7 +59,7 @@ namespace {
 
 template<typename Color, int Size>
 inline void keyBlitLogic(byte *dst, const byte *src, const uint w, const uint h,
-						 const uint srcDelta, const uint dstDelta, const uint32 key) {
+						const uint srcDelta, const uint dstDelta, const uint32 key) {
 	const uint8 *col = (const uint8 *)&key;
 #ifdef SCUMM_BIG_ENDIAN
 	if (Size == 3)
@@ -78,13 +86,21 @@ inline void keyBlitLogic(byte *dst, const byte *src, const uint w, const uint h,
 	}
 }
 
+#ifdef ATARI
+template<>
+inline void keyBlitLogic<uint8, 1>(byte *dst, const byte *src, const uint w, const uint h,
+								   const uint srcDelta, const uint dstDelta, const uint32 key) {
+	keyBlitLogicAtari(dst, src, w, h, srcDelta, dstDelta, key);
+}
+#endif
+
 } // End of anonymous namespace
 
 // Function to blit a rect with a transparent color key
 bool keyBlit(byte *dst, const byte *src,
-			   const uint dstPitch, const uint srcPitch,
-			   const uint w, const uint h,
-			   const uint bytesPerPixel, const uint32 key) {
+				const uint dstPitch, const uint srcPitch,
+				const uint w, const uint h,
+				const uint bytesPerPixel, const uint32 key) {
 	if (dst == src)
 		return true;
 
@@ -111,7 +127,7 @@ namespace {
 
 template<typename Color, int Size>
 inline void maskBlitLogic(byte *dst, const byte *src, const byte *mask, const uint w, const uint h,
-						 const uint srcDelta, const uint dstDelta, const uint maskDelta) {
+						const uint srcDelta, const uint dstDelta, const uint maskDelta) {
 	for (uint y = 0; y < h; ++y) {
 		for (uint x = 0; x < w; ++x) {
 			if (*mask) {
@@ -137,9 +153,9 @@ inline void maskBlitLogic(byte *dst, const byte *src, const byte *mask, const ui
 
 // Function to blit a rect with a transparent color mask
 bool maskBlit(byte *dst, const byte *src, const byte *mask,
-			   const uint dstPitch, const uint srcPitch, const uint maskPitch,
-			   const uint w, const uint h,
-			   const uint bytesPerPixel) {
+				const uint dstPitch, const uint srcPitch, const uint maskPitch,
+				const uint w, const uint h,
+				const uint bytesPerPixel) {
 	if (dst == src)
 		return true;
 
@@ -167,9 +183,9 @@ namespace {
 
 template<typename SrcColor, int SrcSize, typename DstColor, int DstSize, bool backward, bool hasKey, bool hasMask>
 inline void crossBlitLogic(byte *dst, const byte *src, const byte *mask, const uint w, const uint h,
-						   const PixelFormat &srcFmt, const PixelFormat &dstFmt,
-						   const uint srcDelta, const uint dstDelta, const uint maskDelta,
-						   const uint32 key) {
+							const PixelFormat &srcFmt, const PixelFormat &dstFmt,
+							const uint srcDelta, const uint dstDelta, const uint maskDelta,
+							const uint32 key) {
 	uint32 color;
 	byte a, r, g, b;
 	uint8 *col = (uint8 *)&color;
@@ -224,9 +240,9 @@ inline void crossBlitLogic(byte *dst, const byte *src, const byte *mask, const u
 
 template<bool hasKey, bool hasMask>
 inline bool crossBlitHelper(byte *dst, const byte *src, const byte *mask, const uint w, const uint h,
-						   const PixelFormat &srcFmt, const PixelFormat &dstFmt,
-						   const uint srcPitch, const uint dstPitch, const uint maskPitch,
-						   const uint32 key) {
+							const PixelFormat &srcFmt, const PixelFormat &dstFmt,
+							const uint srcPitch, const uint dstPitch, const uint maskPitch,
+							const uint32 key) {
 	// Faster, but larger, to provide optimized handling for each case.
 	const uint srcDelta = (srcPitch - w * srcFmt.bytesPerPixel);
 	const uint dstDelta = (dstPitch - w * dstFmt.bytesPerPixel);
@@ -291,12 +307,12 @@ inline bool crossBlitHelper(byte *dst, const byte *src, const byte *mask, const 
 
 // Function to blit a rect from one color format to another
 bool crossBlit(byte *dst, const byte *src,
-			   const uint dstPitch, const uint srcPitch,
-			   const uint w, const uint h,
-			   const Graphics::PixelFormat &dstFmt, const Graphics::PixelFormat &srcFmt) {
+				const uint dstPitch, const uint srcPitch,
+				const uint w, const uint h,
+				const Graphics::PixelFormat &dstFmt, const Graphics::PixelFormat &srcFmt) {
 	// Error out if conversion is impossible
 	if ((srcFmt.bytesPerPixel == 1) || (dstFmt.bytesPerPixel == 1)
-			 || (!srcFmt.bytesPerPixel) || (!dstFmt.bytesPerPixel))
+			|| (!srcFmt.bytesPerPixel) || (!dstFmt.bytesPerPixel))
 		return false;
 
 	// Don't perform unnecessary conversion
@@ -310,12 +326,12 @@ bool crossBlit(byte *dst, const byte *src,
 
 // Function to blit a rect from one color format to another with a transparent color key
 bool crossKeyBlit(byte *dst, const byte *src,
-			   const uint dstPitch, const uint srcPitch,
-			   const uint w, const uint h,
-			   const Graphics::PixelFormat &dstFmt, const Graphics::PixelFormat &srcFmt, const uint32 key) {
+				const uint dstPitch, const uint srcPitch,
+				const uint w, const uint h,
+				const Graphics::PixelFormat &dstFmt, const Graphics::PixelFormat &srcFmt, const uint32 key) {
 	// Error out if conversion is impossible
 	if ((srcFmt.bytesPerPixel == 1) || (dstFmt.bytesPerPixel == 1)
-			 || (!srcFmt.bytesPerPixel) || (!dstFmt.bytesPerPixel))
+			|| (!srcFmt.bytesPerPixel) || (!dstFmt.bytesPerPixel))
 		return false;
 
 	// Don't perform unnecessary conversion
@@ -329,12 +345,12 @@ bool crossKeyBlit(byte *dst, const byte *src,
 
 // Function to blit a rect from one color format to another with a transparent color mask
 bool crossMaskBlit(byte *dst, const byte *src, const byte *mask,
-			   const uint dstPitch, const uint srcPitch, const uint maskPitch,
-			   const uint w, const uint h,
-			   const Graphics::PixelFormat &dstFmt, const Graphics::PixelFormat &srcFmt) {
+				const uint dstPitch, const uint srcPitch, const uint maskPitch,
+				const uint w, const uint h,
+				const Graphics::PixelFormat &dstFmt, const Graphics::PixelFormat &srcFmt) {
 	// Error out if conversion is impossible
 	if ((srcFmt.bytesPerPixel == 1) || (dstFmt.bytesPerPixel == 1)
-			 || (!srcFmt.bytesPerPixel) || (!dstFmt.bytesPerPixel))
+			|| (!srcFmt.bytesPerPixel) || (!dstFmt.bytesPerPixel))
 		return false;
 
 	// Don't perform unnecessary conversion
@@ -350,7 +366,7 @@ namespace {
 
 template<typename DstColor, int DstSize, bool backward, bool hasKey, bool hasMask>
 inline void crossBlitMapLogic(byte *dst, const byte *src, const byte *mask, const uint w, const uint h,
-									 const uint srcDelta, const uint dstDelta, const uint maskDelta, const uint32 *map, const uint32 key) {
+									const uint srcDelta, const uint dstDelta, const uint maskDelta, const uint32 *map, const uint32 key) {
 	for (uint y = 0; y < h; ++y) {
 		for (uint x = 0; x < w; ++x) {
 			const byte color = *src;
@@ -391,9 +407,9 @@ inline void crossBlitMapLogic(byte *dst, const byte *src, const byte *mask, cons
 
 template<bool hasKey, bool hasMask>
 inline bool crossBlitMapHelperLogic(byte *dst, const byte *src, const byte *mask, const uint w, const uint h,
-						   const uint bytesPerPixel, const uint32 *map,
-						   const uint srcPitch, const uint dstPitch, const uint maskPitch,
-						   const uint32 key) {
+							const uint bytesPerPixel, const uint32 *map,
+							const uint srcPitch, const uint dstPitch, const uint maskPitch,
+							const uint32 key) {
 	// Faster, but larger, to provide optimized handling for each case.
 	const uint srcDelta  = (srcPitch  - w);
 	const uint dstDelta  = (dstPitch  - w * bytesPerPixel);
@@ -441,9 +457,9 @@ inline bool crossBlitMapHelperLogic(byte *dst, const byte *src, const byte *mask
 
 // Function to blit a rect from one color format to another using a map
 bool crossBlitMap(byte *dst, const byte *src,
-			   const uint dstPitch, const uint srcPitch,
-			   const uint w, const uint h,
-			   const uint bytesPerPixel, const uint32 *map) {
+				const uint dstPitch, const uint srcPitch,
+				const uint w, const uint h,
+				const uint bytesPerPixel, const uint32 *map) {
 	// Error out if conversion is impossible
 	if (!bytesPerPixel)
 		return false;
@@ -453,9 +469,9 @@ bool crossBlitMap(byte *dst, const byte *src,
 
 // Function to blit a rect from one color format to another using a map with a transparent color key
 bool crossKeyBlitMap(byte *dst, const byte *src,
-			   const uint dstPitch, const uint srcPitch,
-			   const uint w, const uint h,
-			   const uint bytesPerPixel, const uint32 *map, const uint32 key) {
+				const uint dstPitch, const uint srcPitch,
+				const uint w, const uint h,
+				const uint bytesPerPixel, const uint32 *map, const uint32 key) {
 	// Error out if conversion is impossible
 	if (!bytesPerPixel)
 		return false;
@@ -465,9 +481,9 @@ bool crossKeyBlitMap(byte *dst, const byte *src,
 
 // Function to blit a rect from one color format to another using a map with a transparent color mask
 bool crossMaskBlitMap(byte *dst, const byte *src, const byte *mask,
-			   const uint dstPitch, const uint srcPitch, const uint maskPitch,
-			   const uint w, const uint h,
-			   const uint bytesPerPixel, const uint32 *map) {
+				const uint dstPitch, const uint srcPitch, const uint maskPitch,
+				const uint w, const uint h,
+				const uint bytesPerPixel, const uint32 *map) {
 	// Error out if conversion is impossible
 	if (!bytesPerPixel)
 		return false;

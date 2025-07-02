@@ -23,24 +23,52 @@
 #define AWE_SOUND_H
 
 #include "audio/mixer.h"
+#include "audio/audiostream.h"
 #include "awe/intern.h"
+#include "awe/sfx_player.h"
 
 namespace Awe {
 
 #define MAX_CHANNELS 8
 
+class SfxMusicStream : public Audio::AudioStream {
+private:
+	SfxPlayer *_player;
+
+public:
+	explicit SfxMusicStream(SfxPlayer *player) : _player(player) {}
+
+	bool isStereo() const override {
+		return true;
+	}
+
+	virtual int getRate() const override { return _player->_rate; }
+	virtual bool endOfData() const override { return false; }
+
+	int readBuffer(int16 *buffer, const int numSamples) override {
+		assert(_player != nullptr);
+		memset(buffer, 0, numSamples * sizeof(int16));
+		_player->readSamples(buffer, numSamples);
+
+		return numSamples;
+	}
+};
+
 class Sound {
 private:
 	Audio::Mixer *_mixer;
+	Audio::SoundHandle _musicHandle;
+	SfxPlayer *_sfx = nullptr;
+	SfxMusicStream *_sfxStream = nullptr;
 	Audio::SoundHandle _channels[MAX_CHANNELS];
 
 public:
-	Sound(Audio::Mixer *mixer) : _mixer(mixer) {
+	explicit Sound(Audio::Mixer *mixer) : _mixer(mixer) {
 	}
 
-	void stopAll() {
-		_mixer->stopAll();
-	}
+	void setPlayer(SfxPlayer *player);
+
+	void stopAll();
 	void playMusic(const char *path, int loops);
 	void playAifcMusic(const char *path, uint32 offset);
 	void playSfxMusic(int num);

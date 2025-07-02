@@ -133,6 +133,8 @@ Gui::Gui(WageEngine *engine) {
 	_consoleWindow = _wm->addTextWindow(font, kColorBlack, kColorWhite, maxWidth, Graphics::kTextAlignLeft, _menu);
 	_consoleWindow->setEditable(true);
 
+	_selectedMenuItem = -1;
+
 	loadBorders();
 }
 
@@ -252,6 +254,27 @@ bool Gui::processEvent(Common::Event &event) {
 		_menu->enableCommand(kMenuEdit, kMenuActionPaste, true);
 	}
 
+	if (event.type == Common::EVENT_MOUSEMOVE) {
+		bool mouseOnItem = false;
+		for (int i = 0; i < _menu->numberOfMenus(); i++) {
+			Graphics::MacMenuItem *menuItem = _menu->getMenuItem(i);
+
+			if (menuItem->enabled && menuItem->bbox.contains(event.mouse.x, event.mouse.y)) {
+				if (_selectedMenuItem != i) {
+					_engine->sayText(menuItem->text, Common::TextToSpeechManager::INTERRUPT);
+					_selectedMenuItem = i;
+				}
+				
+				mouseOnItem = true;
+				break;
+			}
+		}
+
+		if (!mouseOnItem) {
+			_selectedMenuItem = -1;
+		}
+	}
+
 	return _wm->processEvent(event);
 }
 
@@ -279,10 +302,8 @@ void Gui::executeMenuCommand(int action, Common::String &text) {
 		if (_engine->_defaultSaveSlot != -1) {
 			_engine->_isGameOver = false;
 
-			_engine->loadGameState(_engine->_defaultSaveSlot);
 			_engine->_world->_weaponMenuDisabled = false;
-			_engine->_gui->regenCommandsMenu();
-			_engine->_gui->regenWeaponsMenu();
+			_engine->loadGameState(_engine->_defaultSaveSlot);
 
 			_scene = nullptr; 	// To force current scene to be redrawn
 			_engine->redrawScene();
@@ -325,6 +346,8 @@ void Gui::executeMenuCommand(int action, Common::String &text) {
 	case kMenuActionCommand: {
 			_engine->_inputText = text;
 			Common::String inp = text + '\n';
+
+			_engine->sayText(text, Common::TextToSpeechManager::QUEUE);
 
 			appendText(inp.c_str());
 

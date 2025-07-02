@@ -478,11 +478,11 @@ void GfxTinyGL::startActorDraw(const Actor *actor) {
 		tglDisable(TGL_LIGHTING);
 		tglDisable(TGL_TEXTURE_2D);
 		if (g_grim->getGameType() == GType_GRIM) {
-			tglColor3ub(_shadowColorR, _shadowColorG, _shadowColorB);
+			tglColor4ub(_shadowColorR, _shadowColorG, _shadowColorB, 255);
 		} else {
-			tglColor3ub(_currentShadowArray->color.getRed(), _currentShadowArray->color.getGreen(), _currentShadowArray->color.getBlue());
+			tglColor4ub(_currentShadowArray->color.getRed(), _currentShadowArray->color.getGreen(), _currentShadowArray->color.getBlue(), 255);
 		}
-		//tglColor3f(0.0f, 1.0f, 0.0f); // debug draw color
+		//tglColor4f(0.0f, 1.0f, 0.0f, 1.0f); // debug draw color
 		shadowProjection(_currentShadowArray->pos, shadowSector->getVertices()[0], shadowSector->getNormal(), _currentShadowArray->dontNegate);
 	}
 
@@ -544,7 +544,7 @@ void GfxTinyGL::finishActorDraw() {
 
 	if (_currentShadowArray) {
 		tglEnable(TGL_LIGHTING);
-		tglColor3f(1.0f, 1.0f, 1.0f);
+		tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 		tglDisable(TGL_POLYGON_OFFSET_FILL);
 	}
 
@@ -556,7 +556,7 @@ void GfxTinyGL::finishActorDraw() {
 }
 
 void GfxTinyGL::drawShadowPlanes() {
-/*	tglColor3f(1.0f, 1.0f, 1.0f);
+/*	tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	_currentShadowArray->planeList.begin();
 	for (SectorListType::iterator i = _currentShadowArray->planeList.begin(); i != _currentShadowArray->planeList.end(); i++) {
 		Sector *shadowSector = i->sector;
@@ -678,7 +678,7 @@ void GfxTinyGL::drawEMIModelFace(const EMIModel *model, const EMIMeshFace *face)
 	tglEnd();
 
 	if (!_currentShadowArray) {
-		tglColor3f(1.0f, 1.0f, 1.0f);
+		tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	tglEnable(TGL_TEXTURE_2D);
@@ -908,7 +908,7 @@ void GfxTinyGL::createBitmap(BitmapData *bitmap) {
 	if (bitmap->_format != 1) {
 		for (int pic = 0; pic < bitmap->_numImages; pic++) {
 			Graphics::Surface buffer;
-			buffer.create(bitmap->_width, bitmap->_height, Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24));
+			buffer.create(bitmap->_width, bitmap->_height, Graphics::PixelFormat::createFormatRGBA32());
 			uint32 *buf = (uint32 *)buffer.getPixels();
 			const uint16 *bufPtr = (const uint16 *)(bitmap->getImageData(pic).getPixels());
 			for (int i = 0; i < (bitmap->_width * bitmap->_height); i++) {
@@ -939,7 +939,7 @@ void GfxTinyGL::drawBitmap(const Bitmap *bitmap, int x, int y, uint32 layer) {
 	if (g_grim->getGameType() == GType_MONKEY4 && bitmap->_data && bitmap->_data->_texc) {
 		tglEnable(TGL_BLEND);
 		tglBlendFunc(TGL_SRC_ALPHA, TGL_ONE_MINUS_SRC_ALPHA);
-		tglColor3f(1.0f, 1.0f, 1.0f);
+		tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 		BitmapData *data = bitmap->_data;
 		float *texc = data->_texc;
@@ -1167,7 +1167,7 @@ void GfxTinyGL::releaseMovieFrame() {
 
 void GfxTinyGL::loadEmergFont() {
 	Graphics::Surface characterSurface;
-	Graphics::PixelFormat textureFormat(4, 8, 8, 8, 8, 0, 8, 16, 24);
+	Graphics::PixelFormat textureFormat = Graphics::PixelFormat::createFormatRGBA32();
 	characterSurface.create(8, 13, textureFormat);
 	uint32 color = textureFormat.ARGBToColor(255, 255, 255, 255);
 	uint32 colorTransparent = textureFormat.ARGBToColor(0, 255, 255, 255);
@@ -1257,7 +1257,7 @@ void GfxTinyGL::dimRegion(int x, int y, int w, int h, float level) {
 	tglVertex2f(x, y + h);
 	tglEnd();
 
-	tglColor3f(1.0f, 1.0f, 1.0f);
+	tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 	tglDisable(TGL_BLEND);
 	tglDepthMask(TGL_TRUE);
@@ -1278,7 +1278,7 @@ void GfxTinyGL::irisAroundRegion(int x1, int y1, int x2, int y2) {
 	tglDisable(TGL_LIGHTING);
 	tglDepthMask(TGL_FALSE);
 
-	tglColor3f(0.0f, 0.0f, 0.0f);
+	tglColor4f(0.0f, 0.0f, 0.0f, 1.0f);
 
 	// Explicitly cast to avoid problems with C++11
 	float fx1 = x1;
@@ -1305,7 +1305,7 @@ void GfxTinyGL::irisAroundRegion(int x1, int y1, int x2, int y2) {
 	tglDrawArrays(TGL_TRIANGLE_STRIP, 0, 10);
 	tglDisableClientState(TGL_VERTEX_ARRAY);
 
-	tglColor3f(1.0f, 1.0f, 1.0f);
+	tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	tglEnable(TGL_DEPTH_TEST);
 	tglEnable(TGL_LIGHTING);
 	tglDepthMask(TGL_TRUE);
@@ -1328,7 +1328,7 @@ void GfxTinyGL::drawRectangle(const PrimitiveObject *primitive) {
 	tglDisable(TGL_DEPTH_TEST);
 	tglDepthMask(TGL_FALSE);
 
-	tglColor3ub(color.getRed(), color.getGreen(), color.getBlue());
+	tglColor4ub(color.getRed(), color.getGreen(), color.getBlue(), 255);
 
 	if (primitive->isFilled()) {
 		tglBegin(TGL_QUADS);
@@ -1347,7 +1347,7 @@ void GfxTinyGL::drawRectangle(const PrimitiveObject *primitive) {
 		tglEnd();
 	}
 
-	tglColor3f(1.0f, 1.0f, 1.0f);
+	tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 	tglDepthMask(TGL_TRUE);
 	tglEnable(TGL_DEPTH_TEST);
@@ -1372,7 +1372,7 @@ void GfxTinyGL::drawLine(const PrimitiveObject *primitive) {
 	tglDisable(TGL_DEPTH_TEST);
 	tglDepthMask(TGL_FALSE);
 
-	tglColor3ub(color.getRed(), color.getGreen(), color.getBlue());
+	tglColor4ub(color.getRed(), color.getGreen(), color.getBlue(), 255);
 
 	//tglLineWidth(_scaleW); // Not implemented in TinyGL
 
@@ -1381,7 +1381,7 @@ void GfxTinyGL::drawLine(const PrimitiveObject *primitive) {
 	tglVertex2f(x2, y2);
 	tglEnd();
 
-	tglColor3f(1.0f, 1.0f, 1.0f);
+	tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 	tglDepthMask(TGL_TRUE);
 	tglEnable(TGL_DEPTH_TEST);
@@ -1443,7 +1443,7 @@ void GfxTinyGL::drawPolygon(const PrimitiveObject *primitive) {
 	tglDisable(TGL_DEPTH_TEST);
 	tglDepthMask(TGL_FALSE);
 
-	tglColor3ub(color.getRed(), color.getGreen(), color.getBlue());
+	tglColor4ub(color.getRed(), color.getGreen(), color.getBlue(), 255);
 
 	tglBegin(TGL_LINES);
 	tglVertex2f(x1, y1);
@@ -1452,7 +1452,7 @@ void GfxTinyGL::drawPolygon(const PrimitiveObject *primitive) {
 	tglVertex2f(x4 + 1, y4);
 	tglEnd();
 
-	tglColor3f(1.0f, 1.0f, 1.0f);
+	tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 	tglDepthMask(TGL_TRUE);
 	tglEnable(TGL_DEPTH_TEST);

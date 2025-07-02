@@ -25,29 +25,29 @@
 #include "mediastation/asset.h"
 #include "mediastation/datafile.h"
 #include "mediastation/bitmap.h"
-#include "mediastation/assetheader.h"
 #include "mediastation/mediascript/scriptvalue.h"
 #include "mediastation/mediascript/scriptconstants.h"
 
 namespace MediaStation {
 
-class Image : public Asset {
+class Image : public SpatialEntity {
 friend class Context;
 
 public:
-	Image(AssetHeader *header);
+	Image() : SpatialEntity(kAssetTypeImage) {};
 	virtual ~Image() override;
 
 	virtual void readChunk(Chunk &chunk) override;
-
-	virtual void redraw(Common::Rect &rect) override;
-
+	virtual void readParameter(Chunk &chunk, AssetHeaderSectionType paramType) override;
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
+	virtual void redraw(Common::Rect &rect) override;
 
 private:
 	Bitmap *_bitmap = nullptr;
-	int _xAdjust = 0;
-	int _yAdjust = 0;
+	uint _loadType = 0;
+	double _dissolveFactor = 0.0;
+	int _xOffset = 0;
+	int _yOffset = 0;
 
 	// Script method implementations.
 	void spatialShow();

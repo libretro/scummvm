@@ -429,8 +429,11 @@ void LB::b_float(int nargs) {
 			// for some reason, float(str) will return str if it doesn't work
 			res = d;
 		}
-	} else {
+	} else if (d.type == INT || d.type == FLOAT) {
 		res = d.asFloat();
+	} else {
+		warning("b_float: Attempted to process invalid type %s, returning same value", d.type2str());
+		res = d;
 	}
 
 	g_lingo->push(res);
@@ -623,6 +626,7 @@ void LB::b_value(int nargs) {
 	}
 
 	Common::String expr = d.asString();
+	expr.trim();
 	if (expr.empty()) {
 		g_lingo->push(Datum(0));
 		return;
@@ -3670,8 +3674,20 @@ void LB::b_locVToLinePos(int nargs) {
 }
 
 void LB::b_scrollByLine(int nargs) {
-	g_lingo->printSTUBWithArglist("b_scrollByLine", nargs);
-	g_lingo->dropStack(nargs);
+	ARGNUMCHECK(2);
+	Datum count = g_lingo->pop();
+	Datum member = g_lingo->pop();
+	CastMemberID id = member.asMemberID();
+	Movie *movie = g_director->getCurrentMovie();
+	CastMember *cast = movie->getCastMember(id);
+	if (!cast) {
+		g_lingo->lingoError("b_scrollByLine: Could not resolve cast member %s", id.asString().c_str());
+	} else if (cast->_type != kCastText) {
+		g_lingo->lingoError("b_scrollByLine: Expected cast member %s to be text, got %s", id.asString().c_str(), castType2str(cast->_type));
+	} else {
+		((TextCastMember *)cast)->scrollByLine(count.asInt());
+	}
+
 }
 
 void LB::b_scrollByPage(int nargs) {

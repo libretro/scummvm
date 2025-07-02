@@ -96,11 +96,7 @@ cLowLevelGraphicsSDL::cLowLevelGraphicsSDL() {
 	mvVirtualSize.y = 600;
 	mfGammaCorrection = 1.0;
 	mpRenderTarget = nullptr;
-#ifdef SCUMM_BIG_ENDIAN
-	mpPixelFormat = Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0);
-#else
-	mpPixelFormat = Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24);
-#endif
+	mpPixelFormat = Graphics::PixelFormat::createFormatRGBA32();
 
 	Common::fill(mpCurrentTexture, mpCurrentTexture + MAX_TEXTUREUNITS, nullptr);
 
@@ -1361,6 +1357,7 @@ void cLowLevelGraphicsSDL::CopyContextToTexure(iTexture *apTex, const cVector2l 
 	// Log("ScreenOffset: %d %d (h: %d s: %d p: %d)\n",avPos.x,lScreenY,mvScreenSize.y,
 	//												avSize.y,avPos.y);
 
+	g_system->presentBuffer();
 	SetTexture(0, apTex);
 	GL_CHECK(glCopyTexSubImage2D(GetGLTextureTargetEnum(apTex->GetTarget()), 0,
 								 avTexOffset.x, lTexY, avPos.x, lScreenY, avSize.x, avSize.y));

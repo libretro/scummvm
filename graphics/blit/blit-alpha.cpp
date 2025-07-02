@@ -28,7 +28,7 @@ namespace Graphics {
 namespace {
 
 template<typename Size, bool overwriteAlpha>
-inline void applyColorKeyLogic(byte *dst, const byte *src, const uint w, const uint h,
+inline bool applyColorKeyLogic(byte *dst, const byte *src, const uint w, const uint h,
 							   const uint srcDelta, const uint dstDelta,
 							   const Graphics::PixelFormat &format,
 							   const uint8 rKey, const uint8 gKey, const uint8 bKey,
@@ -38,6 +38,7 @@ inline void applyColorKeyLogic(byte *dst, const byte *src, const uint w, const u
 	const uint32 newPix    = format.ARGBToColor(0,   rNew, gNew, bNew);
 	const uint32 rgbMask   = format.ARGBToColor(0,   255,  255,  255);
 	const uint32 alphaMask = format.ARGBToColor(255, 0,    0,    0);
+	bool applied = false;
 
 	for (uint y = 0; y < h; ++y) {
 		for (uint x = 0; x < w; ++x) {
@@ -45,6 +46,7 @@ inline void applyColorKeyLogic(byte *dst, const byte *src, const uint w, const u
 
 			if ((pix & rgbMask) == keyPix) {
 				*(Size *)dst = newPix;
+				applied = true;
 			} else if (overwriteAlpha) {
 				*(Size *)dst = pix | alphaMask;
 			}
@@ -56,6 +58,8 @@ inline void applyColorKeyLogic(byte *dst, const byte *src, const uint w, const u
 		src += srcDelta;
 		dst += dstDelta;
 	}
+
+	return applied;
 }
 
 template<typename Size, bool skipTransparent>
@@ -105,27 +109,25 @@ bool applyColorKey(byte *dst, const byte *src,
 
 	if (overwriteAlpha) {
 		if (format.bytesPerPixel == 1) {
-			applyColorKeyLogic<uint8, true>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
+			return applyColorKeyLogic<uint8, true>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
 		} else if (format.bytesPerPixel == 2) {
-			applyColorKeyLogic<uint16, true>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
+			return applyColorKeyLogic<uint16, true>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
 		} else if (format.bytesPerPixel == 4) {
-			applyColorKeyLogic<uint32, true>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
+			return applyColorKeyLogic<uint32, true>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
 		} else {
 			return false;
 		}
 	} else {
 		if (format.bytesPerPixel == 1) {
-			applyColorKeyLogic<uint8, false>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
+			return applyColorKeyLogic<uint8, false>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
 		} else if (format.bytesPerPixel == 2) {
-			applyColorKeyLogic<uint16, false>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
+			return applyColorKeyLogic<uint16, false>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
 		} else if (format.bytesPerPixel == 4) {
-			applyColorKeyLogic<uint32, false>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
+			return applyColorKeyLogic<uint32, false>(dst, src, w, h, srcDelta, dstDelta, format, rKey, gKey, bKey, rNew, gNew, bNew);
 		} else {
 			return false;
 		}
 	}
-
-	return true;
 }
 
 // Function to set the alpha channel for all pixels to the specified value
@@ -201,8 +203,9 @@ BlendBlit::Args::Args(byte *dst, const byte *src,
 	outo = dst + posY * _dstPitch + posX * 4;
 }
 
-// Initialize this to nullptr at the start
+// Initialize these to nullptr at the start
 BlendBlit::BlitFunc BlendBlit::blitFunc = nullptr;
+BlendBlit::FillFunc BlendBlit::fillFunc = nullptr;
 
 // Only blits to and from 32bpp images
 // So this function is just here to jump to whatever function is in
@@ -236,6 +239,27 @@ void BlendBlit::blit(byte *dst, const byte *src,
 	
 	Args args(dst, src, dstPitch, srcPitch, posX, posY, width, height, scaleX, scaleY, scaleXsrcOff, scaleYsrcOff, colorMod, flipping);
 	blitFunc(args, blendMode, alphaType);
+}
+
+// Only fills 32bpp images
+// So this function is just here to jump to whatever function is in
+// BlendBlit::fillFunc. This way, we can detect at runtime whether or not
+// the cpu has certain SIMD feature enabled or not.
+void BlendBlit::fill(byte *dst, const uint dstPitch,
+					 const uint width, const uint height,
+					 const uint32 colorMod,
+					 const TSpriteBlendMode blendMode) {
+	if (width == 0 || height == 0) return;
+
+	// If no function has been selected yet, detect and select
+	if (!fillFunc) {
+		// Get the correct blit function
+		// TODO: Add SIMD variants
+		fillFunc = fillGeneric;
+	}
+
+	Args args(dst, nullptr, dstPitch, 0, 0, 0, width, height, 0, 0, 0, 0, colorMod, 0);
+	fillFunc(args, blendMode);
 }
 
 } // End of namespace Graphics

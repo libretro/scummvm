@@ -109,6 +109,7 @@ public:
 	void fillScreen(const Common::Rect &r, uint32 col) override;
 
 	void updateScreen() override;
+	void presentBuffer() override;
 
 	Graphics::Surface *lockScreen() override;
 	void unlockScreen() override;
@@ -276,12 +277,11 @@ protected:
 	 *
 	 * @parma requestedWidth  This is the requested actual game screen width.
 	 * @param requestedHeight This is the requested actual game screen height.
-	 * @param format          This is the requested pixel format of the virtual game screen.
 	 * @param resizable       This indicates that the window should not be resized because we can't handle it.
 	 * @param antialiasing    This is the requested antialiasing level.
 	 * @return true on success, false otherwise
 	 */
-	virtual bool loadVideoMode(uint requestedWidth, uint requestedHeight, const Graphics::PixelFormat &format, bool resizable, int antialiasing) = 0;
+	virtual bool loadVideoMode(uint requestedWidth, uint requestedHeight, bool resizable, int antialiasing) = 0;
 
 	bool loadShader(const Common::Path &fileName);
 
@@ -336,7 +336,7 @@ protected:
 	void recalculateDisplayAreas() override;
 	void handleResizeImpl(const int width, const int height) override;
 
-	void updateLinearFiltering();
+	void updateTextureSettings();
 
 	Pipeline *getPipeline() const { return _pipeline; }
 

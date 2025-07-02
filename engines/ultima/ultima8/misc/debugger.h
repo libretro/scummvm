@@ -47,9 +47,9 @@ private:
 	bool cmdQuit(int argc, const char **argv);
 	bool cmdSetVideoMode(int argc, const char **argv);
 	bool cmdEngineStats(int argc, const char **argv);
-	bool cmdToggleAvatarInStasis(int argc, const char **argv);
-	bool cmdTogglePaintEditorItems(int argc, const char **argv);
-	bool cmdToggleShowTouchingItems(int argc, const char **argv);
+	bool cmdAvatarInStasis(int argc, const char **argv);
+	bool cmdShowEditorItems(int argc, const char **argv);
+	bool cmdShowTouchingItems(int argc, const char **argv);
 	bool cmdCloseItemGumps(int argc, const char **argv);
 
 	bool cmdCameraOnAvatar(int argc, const char **argv);
@@ -60,18 +60,17 @@ private:
 	bool cmdPlaySFX(int argc, const char **argv);
 
 	// Cheats
-	bool cmdToggleCheatMode(int argc, const char **argv);
+	bool cmdCheatMode(int argc, const char **argv);
 	bool cmdCheatItems(int argc, const char **argv);
 	bool cmdCheatEquip(int argc, const char **argv);
 	bool cmdMaxStats(int argc, const char **argv);
 	bool cmdHeal(int argc, const char **argv);
-	bool cmdToggleInvincibility(int argc, const char **argv);
+	bool cmdInvincibility(int argc, const char **argv);
 
 	// Game Map Gump
-	bool cmdStartHighlightItems(int argc, const char **argv);
-	bool cmdStopHighlightItems(int argc, const char **argv);
-	bool cmdToggleHighlightItems(int argc, const char **argv);
-	bool cmdToggleFootpads(int argc, const char **argv);
+	bool cmdHighlightItems(int argc, const char **argv);
+	bool cmdFootpads(int argc, const char **argv);
+	bool cmdGridlines(int argc, const char **argv);
 	bool cmdDumpMap(int argc, const char **argvv);
 	bool cmdDumpAllMaps(int argc, const char **argv);
 	bool cmdIncrementSortOrder(int argc, const char **argv);
@@ -81,7 +80,7 @@ private:
 	bool cmdProcessTypes(int argc, const char **argv);
 	bool cmdListProcesses(int argc, const char **argv);
 	bool cmdProcessInfo(int argc, const char **argv);
-	bool cmdToggleFrameByFrame(int argc, const char **argv);
+	bool cmdFrameByFrame(int argc, const char **argv);
 	bool cmdAdvanceFrame(int argc, const char **argv);
 
 	// Main Actor
@@ -97,7 +96,7 @@ private:
 	bool cmdUseKeyring(int argc, const char **argv);
 	bool cmdNextInventory(int argc, const char **argv);
 	bool cmdNextWeapon(int argc, const char **argv);
-	bool cmdToggleCombat(int argc, const char **argv);
+	bool cmdCombat(int argc, const char **argv);
 	bool cmdUseInventoryItem(int argc, const char **argv);
 	bool cmdUseMedikit(int argc, const char **argv);
 	bool cmdUseEnergyCube(int argc, const char **argv);
@@ -112,20 +111,8 @@ private:
 	bool cmdObjectInfo(int argc, const char **argv);
 
 	// Quick Avatar Mover Process
-	bool cmdStartQuickMoveUp(int argc, const char **argv);
-	bool cmdStartQuickMoveDown(int argc, const char **argv);
-	bool cmdStartQuickMoveLeft(int argc, const char **argv);
-	bool cmdStartQuickMoveRight(int argc, const char **argv);
-	bool cmdStartQuickMoveAscend(int argc, const char **argv);
-	bool cmdStartQuickMoveDescend(int argc, const char **argv);
-	bool cmdStopQuickMoveUp(int argc, const char **argv);
-	bool cmdStopQuickMoveDown(int argc, const char **argv);
-	bool cmdStopQuickMoveLeft(int argc, const char **argv);
-	bool cmdStopQuickMoveRight(int argc, const char **argv);
-	bool cmdStopQuickMoveAscend(int argc, const char **argv);
-	bool cmdStopQuickMoveDescend(int argc, const char **argv);
-	bool cmdToggleQuarterSpeed(int argc, const char **argv);
-	bool cmdToggleClipping(int argc, const char **argv);
+	bool cmdQuickMover(int argc, const char **argv);
+	bool cmdClipping(int argc, const char **argv);
 
 	// UCMachine
 	bool cmdGetGlobal(int argc, const char **argv);
@@ -155,9 +142,6 @@ private:
 public:
 	Debugger();
 	~Debugger() override;
-
-	void executeCommand(const Common::String &args);
-	void executeCommand(const Common::Array<Common::String> &argv);
 };
 
 extern Debugger *g_debugger;

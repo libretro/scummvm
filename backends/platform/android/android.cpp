@@ -47,6 +47,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/system_properties.h>
+#include <errno.h> // For remove error codes
 #include <time.h>
 #include <unistd.h>
 #include <dlfcn.h>
@@ -147,12 +148,12 @@ class AndroidSaveFileManager : public DefaultSaveFileManager {
 public:
 	AndroidSaveFileManager(const Common::Path &defaultSavepath) : DefaultSaveFileManager(defaultSavepath) {}
 
-	bool removeSavefile(const Common::String &filename) override {
-		Common::String path = getSavePath().join(filename).toString(Common::Path::kNativeSeparator);
+	Common::ErrorCode removeFile(const Common::FSNode &fileNode) override {
+		Common::String path(fileNode.getPath().toString(Common::Path::kNativeSeparator));
 		AbstractFSNode *node = AndroidFilesystemFactory::instance().makeFileNodePath(path);
 
 		if (!node) {
-			return false;
+			return Common::kPathDoesNotExist;
 		}
 
 		AndroidFSNode *anode = dynamic_cast<AndroidFSNode *>(node);
@@ -161,17 +162,22 @@ public:
 			// This should never happen
 			warning("Invalid node received");
 			delete node;
-			return false;
+			return Common::kUnknownError;
 		}
 
-		bool ret = anode->remove();
-
+		int err = anode->remove();
 		delete anode;
 
-		if (!ret) {
-			setError(Common::kUnknownError, Common::String::format("Couldn't delete the save file: %s", path.c_str()));
+		switch (err) {
+		case 0:
+			return Common::kNoError;
+		case EACCES:
+			return Common::kWritePermissionDenied;
+		case ENOENT:
+			return Common::kPathDoesNotExist;
+		default:
+			return Common::kUnknownError;
 		}
-		return ret;
 	}
 };
 

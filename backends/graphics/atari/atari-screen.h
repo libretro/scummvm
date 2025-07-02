@@ -23,12 +23,12 @@
 #define BACKENDS_GRAPHICS_ATARI_SCREEN_H
 
 #include <unordered_set>
-#include <mint/ostruct.h>
+#include <mint/ostruct.h>	// _RGB
 
-#include "common/rect.h"
-#include "graphics/surface.h"
+#include "common/ptr.h"
 
 #include "atari-cursor.h"
+#include "atari-surface.h"
 
 template<>
 struct std::hash<Common::Rect>
@@ -39,31 +39,28 @@ struct std::hash<Common::Rect>
 	}
 };
 
-class AtariGraphicsManager;
-
 class Palette {
 public:
 	void clear() {
-		memset(data, 0, sizeof(data));
+		memset(_data, 0, sizeof(_data));
 		entries = 0;
 	}
 
-	uint16 *const tt = reinterpret_cast<uint16*>(data);
-	_RGB *const falcon = reinterpret_cast<_RGB*>(data);
+	uint16 *const tt = reinterpret_cast<uint16*>(_data);
+	_RGB *const falcon = reinterpret_cast<_RGB*>(_data);
 
 	int entries = 0;
 
 private:
-	byte data[256*4] = {};
+	byte _data[256*4] = {};
 };
 
 struct Screen {
 	using DirtyRects = std::unordered_set<Common::Rect>;
 
-	Screen(AtariGraphicsManager *manager, int width, int height, const Graphics::PixelFormat &format, const Palette *palette);
-	~Screen();
+	Screen(bool tt, int width, int height, const Graphics::PixelFormat &format, const Palette *palette);
 
-	void reset(int width, int height, int bitsPerPixel, const Graphics::Surface &boundingSurf, int xOffset, bool resetCursorPosition);
+	void reset(int width, int height, const Graphics::Surface &boundingSurf);
 	// must be called before any rectangle drawing
 	void addDirtyRect(const Graphics::Surface &srcSurface, int x, int y, int w, int h, bool directRendering);
 
@@ -72,7 +69,7 @@ struct Screen {
 		fullRedraw = false;
 	}
 
-	Graphics::Surface surf;
+	Common::ScopedPtr<AtariSurface> surf;
 	const Palette *palette;
 	DirtyRects dirtyRects;
 	bool fullRedraw = false;
@@ -81,7 +78,7 @@ struct Screen {
 
 	int rez = -1;
 	int mode = -1;
-	Graphics::Surface *const offsettedSurf = &_offsettedSurf;
+	const Common::ScopedPtr<AtariSurface> &offsettedSurf = _offsettedSurf;
 
 private:
 	static constexpr size_t ALIGN = 16;	// 16 bytes
@@ -95,10 +92,8 @@ private:
 		kRezValueTTHigh = 6		// 1280x960@1bpp, TT palette
 	};
 
-	const AtariGraphicsManager *_manager;
-
-	Graphics::Surface _offsettedSurf;
-	int _xOffset = 0;
+	bool _tt;
+	Common::ScopedPtr<AtariSurface> _offsettedSurf;
 };
 
 #endif // BACKENDS_GRAPHICS_ATARI_SCREEN_H

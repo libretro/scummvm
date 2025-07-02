@@ -153,28 +153,32 @@ const char *builtInMethodToStr(BuiltInMethod method) {
 		return "MouseActivate";
 	case kMouseDeactivateMethod:
 		return "MouseDeactivate";
-	case kXPositionMethod:
-		return "XPosition";
-	case kYPositionMethod:
-		return "YPosition";
+	case kGetLeftXMethod:
+		return "GetLeftX";
+	case kGetTopYMethod:
+		return "GetTopY";
 	case kTriggerAbsXPositionMethod:
 		return "TriggerAbsXPosition";
 	case kTriggerAbsYPositionMethod:
 		return "TriggerAbsYPosition";
 	case kIsActiveMethod:
 		return "IsActive";
-	case kWidthMethod:
-		return "Width";
-	case kHeightMethod:
-		return "Height";
+	case kGetWidthMethod:
+		return "GetWidth";
+	case kGetHeightMethod:
+		return "GetHeight";
 	case kIsVisibleMethod:
 		return "IsVisible";
 	case kMovieResetMethod:
 		return "MovieReset";
-	case kSetSpriteFrameByIdMethod:
-		return "SetSpriteFrameById";
 	case kSetCurrentClipMethod:
 		return "SetCurrentClip";
+	case kIncrementFrameMethod:
+		return "IncrementFrame";
+	case kDecrementFrameMethod:
+		return "DecrementFrame";
+	case kGetCurrentClipIdMethod:
+		return "GetCurrentClipId";
 	case kSetWorldSpaceExtentMethod:
 		return "SetWorldSpaceExtent";
 	case kSetBoundsMethod:

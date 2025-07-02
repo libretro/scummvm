@@ -26,7 +26,7 @@
 #include "graphics/managed_surface.h"
 
 #include "mediastation/datafile.h"
-#include "mediastation/assetheader.h"
+#include "mediastation/asset.h"
 
 namespace MediaStation {
 
@@ -55,14 +55,14 @@ public:
 	Bitmap(Chunk &chunk, BitmapHeader *bitmapHeader);
 	virtual ~Bitmap();
 
-	uint16 width();
-	uint16 height();
+	int16 width();
+	int16 height();
 	Graphics::ManagedSurface _surface;
 
 private:
 	void decompress(Chunk &chunk);
 };
 
-}
+} // End of namespace MediaStation
 
 #endif

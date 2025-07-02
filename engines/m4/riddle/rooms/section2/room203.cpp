@@ -32,13 +32,9 @@ namespace Riddle {
 namespace Rooms {
 
 const int16 OFFICIAL_NORMAL_DIRS[] = { 200, 201, 202, -1 };
-const char *OFFICIAL_NORMAL_NAMES[] = {
-	"official walk pos11", "official walk pos9", "official walk pos7"
-};
+const char *OFFICIAL_NORMAL_NAMES[] = { "official walk pos11", "official walk pos9", "official walk pos7" };
 const int16 OFFICIAL_SHADOW_DIRS[] = { 210, 211, 212, -1 };
-const char *OFFICIAL_SHADOW_NAMES[] = {
-	"203of09s", "203of04s", "203of12s"
-};
+const char *OFFICIAL_SHADOW_NAMES[] = { "203of09s", "203of04s", "203of12s" };
 
 const int16 SNORMAL1_DIRS[] = { 200, -1 };
 const char *SNORMAL1_NAMES[] = { "203s01" };
@@ -605,7 +601,7 @@ void Room203::daemon() {
 		break;
 
 	case 66:
-		midi_play("HELMET", 255, 1, -1, 949);
+		midi_play("HELMET", 255, true, -1, 949);
 		break;
 
 	case 67:
@@ -669,7 +665,7 @@ void Room203::daemon() {
 	case 76:
 		digi_preload("203r21");
 		_stream1 = series_stream("old lady gives helmet", 5, 1, 79);
-		series_stream_break_on_frame(_stream1, 77, 62);
+		series_stream_break_on_frame(_stream1, 62, 77);
 		break;
 
 	case 77:
@@ -1557,7 +1553,7 @@ void Room203::daemon() {
 	case 126:
 		switch (_gkMode) {
 		case 3000:
-			if (_gkShould == 3000 && _gkMode == 3000 && _trigger1 != -1) {
+			if (_gkShould == 3000 && _trigger1 != -1) {
 				kernel_trigger_dispatchx(_trigger1);
 				_trigger1 = -1;
 			}

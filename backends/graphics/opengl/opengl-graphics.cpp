@@ -237,7 +237,12 @@ int OpenGLGraphicsManager::getGraphicsMode() const {
 
 #ifdef USE_RGB_COLOR
 Graphics::PixelFormat OpenGLGraphicsManager::getScreenFormat() const {
-	return _currentState.gameFormat;
+#if defined(USE_OPENGL_GAME) || defined(USE_OPENGL_SHADERS)
+	if (_renderer3d) {
+		return _defaultFormatAlpha;
+	} else
+#endif
+		return _currentState.gameFormat;
 }
 
 Common::List<Graphics::PixelFormat> OpenGLGraphicsManager::getSupportedFormats() const {
@@ -251,6 +256,16 @@ Common::List<Graphics::PixelFormat> OpenGLGraphicsManager::getSupportedFormats()
 
 	// ABGR8888/RGBA8888
 	formats.push_back(OpenGL::Texture::getRGBAPixelFormat());
+
+	if (OpenGLContext.bgraSupported) {
+		// ARGB8888/BGRA8888
+		formats.push_back(OpenGL::Texture::getBGRAPixelFormat());
+	}
+
+	// TODO: Limit these formats to implementations that support them -
+	// currently the Kyra, SCUMM and Trecision engines expect at least
+	// one 16bpp format in this list.
+
 	// RGB565
 	formats.push_back(Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0));
 	// RGBA5551
@@ -258,17 +273,36 @@ Common::List<Graphics::PixelFormat> OpenGLGraphicsManager::getSupportedFormats()
 	// RGBA4444
 	formats.push_back(Graphics::PixelFormat(2, 4, 4, 4, 4, 12, 8, 4, 0));
 
-	// These formats are not natively supported by OpenGL ES implementations,
-	// we convert the pixel format internally.
+#if !USE_FORCED_GLES && !USE_FORCED_GLES2
+	if (OpenGLContext.packedPixelsSupported && !isGLESContext()) {
 #ifdef SCUMM_LITTLE_ENDIAN
-	// RGBA8888
-	formats.push_back(Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0));
-#else
-	// ABGR8888
-	formats.push_back(Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24));
+		// RGBA8888
+		formats.push_back(Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0));
+		// BGRA8888
+		formats.push_back(Graphics::PixelFormat(4, 8, 8, 8, 8, 8, 16, 24, 0));
 #endif
-	// RGB555, this is used by SCUMM HE 16 bit games.
-	formats.push_back(Graphics::PixelFormat(2, 5, 5, 5, 0, 10, 5, 0, 0));
+#ifdef SCUMM_BIG_ENDIAN
+		// ABGR8888
+		formats.push_back(Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24));
+		// ARGB8888
+		formats.push_back(Graphics::PixelFormat(4, 8, 8, 8, 8, 16, 8, 0, 24));
+#endif
+		// BGR565
+		formats.push_back(Graphics::PixelFormat(2, 5, 6, 5, 0, 0, 5, 11, 0));
+		// ABGR1555
+		formats.push_back(Graphics::PixelFormat(2, 5, 5, 5, 1, 0, 5, 10, 15));
+		// ARGB1555
+		formats.push_back(Graphics::PixelFormat(2, 5, 5, 5, 1, 10, 5, 0, 15));
+		// BGRA5551
+		formats.push_back(Graphics::PixelFormat(2, 5, 5, 5, 1, 1, 6, 11, 0));
+		// ABGR4444
+		formats.push_back(Graphics::PixelFormat(2, 4, 4, 4, 4, 0, 4, 8, 12));
+		// ARGB4444
+		formats.push_back(Graphics::PixelFormat(2, 4, 4, 4, 4, 8, 4, 0, 12));
+		// BGRA4444
+		formats.push_back(Graphics::PixelFormat(2, 4, 4, 4, 4, 4, 8, 12, 0));
+	}
+#endif // !USE_FORCED_GLES && !USE_FORCED_GLES2
 
 	formats.push_back(Graphics::PixelFormat::createFormatCLUT8());
 
@@ -426,14 +460,6 @@ OSystem::TransactionError OpenGLGraphicsManager::endGFXTransaction() {
 	if (_oldState.gameFormat != _currentState.gameFormat) {
 		setupNewGameScreen = true;
 	}
-
-	// Check whether the requested format can actually be used.
-	Common::List<Graphics::PixelFormat> supportedFormats = getSupportedFormats();
-	// In case the requested format is not usable we will fall back to CLUT8.
-	if (Common::find(supportedFormats.begin(), supportedFormats.end(), _currentState.gameFormat) == supportedFormats.end()) {
-		_currentState.gameFormat = Graphics::PixelFormat::createFormatCLUT8();
-		transactionError |= OSystem::kTransactionFormatNotSupported;
-	}
 #endif
 
 #ifdef USE_SCALERS
@@ -482,21 +508,16 @@ OSystem::TransactionError OpenGLGraphicsManager::endGFXTransaction() {
 		// If loadVideoMode fails, we won't consider that shader was the error
 		bool shaderOK = true;
 
-		if (!loadVideoMode(requestedWidth, requestedHeight,
-#ifdef USE_RGB_COLOR
-		                   _currentState.gameFormat,
-#else
-		                   Graphics::PixelFormat::createFormatCLUT8(),
-#endif
-				  renderToFrameBuffer || engineSupportsArbitraryResolutions,
-		                  renderToFrameBuffer ? 0 : antialiasing)
-			|| !(shaderOK = loadShader(_currentState.shader))
+		if (  !loadVideoMode(requestedWidth, requestedHeight,
+		                     renderToFrameBuffer || engineSupportsArbitraryResolutions,
+		                     renderToFrameBuffer ? 0 : antialiasing)
+		   || !(shaderOK = loadShader(_currentState.shader))
 		   // HACK: This is really nasty but we don't have any guarantees of
 		   // a context existing before, which means we don't know the maximum
 		   // supported texture size before this. Thus, we check whether the
 		   // requested game resolution is supported over here.
 		   || (   _currentState.gameWidth  > (uint)OpenGLContext.maxTextureSize
-		       || _currentState.gameHeight > (uint)OpenGLContext.maxTextureSize)) {
+		   || _currentState.gameHeight > (uint)OpenGLContext.maxTextureSize)) {
 			if (_transactionMode == kTransactionActive) {
 				// If the shader failed, it means that loadVideoMode succeeded
 				// Mark the error and continue without it
@@ -611,7 +632,7 @@ OSystem::TransactionError OpenGLGraphicsManager::endGFXTransaction() {
 	// aspect ratio correction and game screen changes correctly.
 	recalculateDisplayAreas();
 	recalculateCursorScaling();
-	updateLinearFiltering();
+	updateTextureSettings();
 
 	// Something changed, so update the screen change ID.
 	++_screenChangeID;
@@ -701,15 +722,6 @@ void OpenGLGraphicsManager::renderCursor() {
 }
 
 void OpenGLGraphicsManager::updateScreen() {
-	int rotation = getRotationMode();
-	int rotatedWidth = _windowWidth;
-	int rotatedHeight = _windowHeight;
-
-	if (rotation == Common::kRotation90 || rotation == Common::kRotation270) {
-		rotatedWidth = _windowHeight;
-		rotatedHeight = _windowWidth;
-	}
-
 	if ((!_gameScreen
 #if defined(USE_OPENGL_GAME) || defined(USE_OPENGL_SHADERS)
 		&& !_renderer3d
@@ -831,8 +843,8 @@ void OpenGLGraphicsManager::updateScreen() {
 
 	// Third step: Draw the overlay if visible.
 	if (_overlayVisible) {
-		int dstX = (rotatedWidth - _overlayDrawRect.width()) / 2;
-		int dstY = (rotatedHeight - _overlayDrawRect.height()) / 2;
+		int dstX = (_windowWidth - _overlayDrawRect.width()) / 2;
+		int dstY = (_windowHeight - _overlayDrawRect.height()) / 2;
 		_targetBuffer->enableBlend(Framebuffer::kBlendModeTraditionalTransparency);
 		_pipeline->drawTexture(_overlay->getGLTexture(), dstX, dstY, _overlayDrawRect.width(), _overlayDrawRect.height());
 	}
@@ -867,12 +879,18 @@ void OpenGLGraphicsManager::updateScreen() {
 		// Set the OSD transparency.
 		_pipeline->setColor(1.0f, 1.0f, 1.0f, _osdMessageAlpha / 100.0f);
 
-		int dstX = (rotatedWidth - _osdMessageSurface->getWidth()) / 2;
-		int dstY = (rotatedHeight - _osdMessageSurface->getHeight()) / 2;
+		int osdWidth = _osdMessageSurface->getWidth(),
+		    osdHeight = _osdMessageSurface->getHeight();
+		if (_rotationMode == Common::kRotation90 || _rotationMode == Common::kRotation270) {
+			SWAP(osdWidth, osdHeight);
+		}
+
+		int dstX = (_windowWidth - osdWidth) / 2;
+		int dstY = (_windowHeight - osdHeight) / 2;
 
 		// Draw the OSD texture.
 		_pipeline->drawTexture(_osdMessageSurface->getGLTexture(),
-		                                           dstX, dstY, _osdMessageSurface->getWidth(), _osdMessageSurface->getHeight());
+		                                           dstX, dstY, osdWidth, osdHeight);
 
 		// Reset color.
 		_pipeline->setColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -888,12 +906,34 @@ void OpenGLGraphicsManager::updateScreen() {
 	}
 
 	if (_osdIconSurface) {
-		int dstX = rotatedWidth - _osdIconSurface->getWidth() - kOSDIconRightMargin;
-		int dstY = kOSDIconTopMargin;
+		int osdWidth = _osdIconSurface->getWidth(),
+		    osdHeight = _osdIconSurface->getHeight();
+		int dstX, dstY;
+		switch (_rotationMode) {
+		default:
+		case Common::kRotationNormal:
+			dstX = _windowWidth - osdWidth - kOSDIconRightMargin;
+			dstY = kOSDIconTopMargin;
+			break;
+		case Common::kRotation90:
+			SWAP(osdWidth, osdHeight);
+			dstX = _windowWidth - osdWidth - kOSDIconTopMargin;
+			dstY = _windowHeight - osdHeight - kOSDIconRightMargin;
+			break;
+		case Common::kRotation180:
+			dstX = kOSDIconRightMargin;
+			dstY = _windowHeight - osdHeight - kOSDIconTopMargin;
+			break;
+		case Common::kRotation270:
+			SWAP(osdWidth, osdHeight);
+			dstX = kOSDIconTopMargin;
+			dstY = kOSDIconRightMargin;
+			break;
+		}
 
 		// Draw the OSD icon texture.
 		_pipeline->drawTexture(_osdIconSurface->getGLTexture(),
-		                       dstX, dstY, _osdIconSurface->getWidth(), _osdIconSurface->getHeight());
+		                       dstX, dstY, osdWidth, osdHeight);
 	}
 #endif
 
@@ -905,6 +945,14 @@ void OpenGLGraphicsManager::updateScreen() {
 	if (_renderer3d) {
 		_renderer3d->enter3D();
 	}
+#endif
+}
+
+void OpenGLGraphicsManager::presentBuffer() {
+#if defined(USE_OPENGL_GAME) || defined(USE_OPENGL_SHADERS)
+	assert(_renderer3d);
+
+	_renderer3d->presentBuffer();
 #endif
 }
 
@@ -1073,7 +1121,7 @@ void OpenGLGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, int 
 		_cursor = createSurface(textureFormat, true, wantScaler, wantMask);
 		assert(_cursor);
 
-		updateLinearFiltering();
+		updateTextureSettings();
 
 #ifdef USE_SCALERS
 		if (wantScaler) {
@@ -1088,7 +1136,7 @@ void OpenGLGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, int 
 			_cursorMask = createSurface(maskFormat, true, wantScaler);
 			assert(_cursorMask);
 
-			updateLinearFiltering();
+			updateTextureSettings();
 
 #ifdef USE_SCALERS
 			if (wantScaler) {
@@ -1304,6 +1352,7 @@ void OpenGLGraphicsManager::osdMessageUpdateSurface() {
 	// readable in case it needs to be scaled and does not affect it
 	// otherwise.
 	_osdMessageSurface->enableLinearFiltering(true);
+	_osdMessageSurface->setRotation(_rotationMode);
 
 	_osdMessageSurface->allocate(width, height);
 
@@ -1362,6 +1411,7 @@ void OpenGLGraphicsManager::displayActivityIconOnOSD(const Graphics::Surface *ic
 		// readable in case it needs to be scaled and does not affect it
 		// otherwise.
 		_osdIconSurface->enableLinearFiltering(true);
+		_osdIconSurface->setRotation(_rotationMode);
 
 		_osdIconSurface->allocate(converted->w, converted->h);
 
@@ -1396,16 +1446,15 @@ void OpenGLGraphicsManager::grabPalette(byte *colors, uint start, uint num) cons
 
 void OpenGLGraphicsManager::handleResizeImpl(const int width, const int height) {
 	// Setup backbuffer size.
-	_targetBuffer->setSize(width, height, getRotationMode());
+	_targetBuffer->setSize(width, height);
 
-	int rotation = getRotationMode();
 	uint overlayWidth = width;
 	uint overlayHeight = height;
 
 	int rotatedWidth = _windowWidth;
 	int rotatedHeight = _windowHeight;
 
-	if (rotation == Common::kRotation90 || rotation == Common::kRotation270) {
+	if (_rotationMode == Common::kRotation90 || _rotationMode == Common::kRotation270) {
 		overlayWidth = height;
 		overlayHeight = width;
 		rotatedWidth = _windowHeight;
@@ -1451,7 +1500,7 @@ void OpenGLGraphicsManager::handleResizeImpl(const int width, const int height) 
 	// Re-setup the scaling and filtering for the screen and cursor
 	recalculateDisplayAreas();
 	recalculateCursorScaling();
-	updateLinearFiltering();
+	updateTextureSettings();
 
 	// Something changed, so update the screen change ID.
 	++_screenChangeID;
@@ -1653,11 +1702,7 @@ Surface *OpenGLGraphicsManager::createSurface(const Graphics::PixelFormat &forma
 		// hope for this to change anytime soon) we use pixel format
 		// conversion to a supported texture format.
 		return new TextureSurfaceRGB555();
-#ifdef SCUMM_LITTLE_ENDIAN
-	} else if (format == Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0)) { // RGBA8888
-#else
-	} else if (format == Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24)) { // ABGR8888
-#endif
+	} else if (format == Graphics::PixelFormat::createFormatABGR32()) {
 		return new TextureSurfaceRGBA8888Swap();
 	} else {
 		return new FakeTextureSurface(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, OpenGL::Texture::getRGBAPixelFormat(), format);
@@ -1673,6 +1718,11 @@ bool OpenGLGraphicsManager::getGLPixelFormat(const Graphics::PixelFormat &pixelF
 	} else if (pixelFormat == OpenGL::Texture::getRGBPixelFormat()) { // BGR888 / RGB888
 		glIntFormat = GL_RGB;
 		glFormat = GL_RGB;
+		glType = GL_UNSIGNED_BYTE;
+		return true;
+	} else if (OpenGLContext.bgraSupported && pixelFormat == OpenGL::Texture::getBGRAPixelFormat()) { // ARGB8888 / BGRA8888
+		glIntFormat = isGLESContext() ? GL_BGRA : GL_RGBA;
+		glFormat = GL_BGRA;
 		glType = GL_UNSIGNED_BYTE;
 		return true;
 	} else if (!OpenGLContext.packedPixelsSupported) {
@@ -1703,33 +1753,38 @@ bool OpenGLGraphicsManager::getGLPixelFormat(const Graphics::PixelFormat &pixelF
 		glFormat = GL_RGBA;
 		glType = GL_UNSIGNED_INT_8_8_8_8;
 		return true;
-#endif
-	} else if (pixelFormat == Graphics::PixelFormat(2, 5, 5, 5, 0, 10, 5, 0, 0)) { // RGB555
-		glIntFormat = GL_RGB;
-		glFormat = GL_BGRA;
-		glType = GL_UNSIGNED_SHORT_1_5_5_5_REV;
-		return true;
-	} else if (pixelFormat == Graphics::PixelFormat(2, 4, 4, 4, 4, 8, 4, 0, 12)) { // ARGB4444
+	} else if (pixelFormat == Graphics::PixelFormat(4, 8, 8, 8, 8, 8, 16, 24, 0)) { // BGRA8888
 		glIntFormat = GL_RGBA;
 		glFormat = GL_BGRA;
-		glType = GL_UNSIGNED_SHORT_4_4_4_4_REV;
+		glType = GL_UNSIGNED_INT_8_8_8_8;
 		return true;
+#endif
 #ifdef SCUMM_BIG_ENDIAN
 	} else if (pixelFormat == Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24)) { // ABGR8888
 		glIntFormat = GL_RGBA;
 		glFormat = GL_RGBA;
 		glType = GL_UNSIGNED_INT_8_8_8_8_REV;
 		return true;
-#endif
-	} else if (pixelFormat == Graphics::PixelFormat(4, 8, 8, 8, 8, 8, 16, 24, 0)) { // BGRA8888
+	} else if (pixelFormat == Graphics::PixelFormat(4, 8, 8, 8, 8, 16, 8, 0, 24)) { // ARGB8888
 		glIntFormat = GL_RGBA;
 		glFormat = GL_BGRA;
-		glType = GL_UNSIGNED_INT_8_8_8_8;
+		glType = GL_UNSIGNED_INT_8_8_8_8_REV;
 		return true;
+#endif
 	} else if (pixelFormat == Graphics::PixelFormat(2, 5, 6, 5, 0, 0, 5, 11, 0)) { // BGR565
 		glIntFormat = GL_RGB;
 		glFormat = GL_RGB;
 		glType = GL_UNSIGNED_SHORT_5_6_5_REV;
+		return true;
+	} else if (pixelFormat == Graphics::PixelFormat(2, 5, 5, 5, 1, 0, 5, 10, 15)) { // ABGR1555
+		glIntFormat = GL_RGB;
+		glFormat = GL_RGBA;
+		glType = GL_UNSIGNED_SHORT_1_5_5_5_REV;
+		return true;
+	} else if (pixelFormat == Graphics::PixelFormat(2, 5, 5, 5, 1, 10, 5, 0, 15)) { // ARGB1555
+		glIntFormat = GL_RGB;
+		glFormat = GL_BGRA;
+		glType = GL_UNSIGNED_SHORT_1_5_5_5_REV;
 		return true;
 	} else if (pixelFormat == Graphics::PixelFormat(2, 5, 5, 5, 1, 1, 6, 11, 0)) { // BGRA5551
 		glIntFormat = GL_RGBA;
@@ -1739,6 +1794,11 @@ bool OpenGLGraphicsManager::getGLPixelFormat(const Graphics::PixelFormat &pixelF
 	} else if (pixelFormat == Graphics::PixelFormat(2, 4, 4, 4, 4, 0, 4, 8, 12)) { // ABGR4444
 		glIntFormat = GL_RGBA;
 		glFormat = GL_RGBA;
+		glType = GL_UNSIGNED_SHORT_4_4_4_4_REV;
+		return true;
+	} else if (pixelFormat == Graphics::PixelFormat(2, 4, 4, 4, 4, 8, 4, 0, 12)) { // ARGB4444
+		glIntFormat = GL_RGBA;
+		glFormat = GL_BGRA;
 		glType = GL_UNSIGNED_SHORT_4_4_4_4_REV;
 		return true;
 	} else if (pixelFormat == Graphics::PixelFormat(2, 4, 4, 4, 4, 4, 8, 12, 0)) { // BGRA4444
@@ -1807,24 +1867,18 @@ void OpenGLGraphicsManager::recalculateDisplayAreas() {
 	// Setup drawing limitation for game graphics.
 	// This involves some trickery because OpenGL's viewport coordinate system
 	// is upside down compared to ours.
-	switch (getRotationMode()) {
-	case Common::kRotation90:
-	case Common::kRotation180:
-		_targetBuffer->setScissorBox(_gameDrawRect.top,
-					     _gameDrawRect.left,
-					     _gameDrawRect.height(),
-					     _gameDrawRect.width());
-		break;
-	default:
-		_targetBuffer->setScissorBox(_gameDrawRect.left,
-					     _windowHeight - _gameDrawRect.height() - _gameDrawRect.top,
-					     _gameDrawRect.width(),
-					     _gameDrawRect.height());
+	_targetBuffer->setScissorBox(_gameDrawRect.left,
+				     _windowHeight - _gameDrawRect.height() - _gameDrawRect.top,
+				     _gameDrawRect.width(),
+				     _gameDrawRect.height());
+
+	int rotatedWidth = _gameDrawRect.width();
+	int rotatedHeight = _gameDrawRect.height();
+	if (_rotationMode == Common::kRotation90 || _rotationMode == Common::kRotation270) {
+		SWAP(rotatedWidth, rotatedHeight);
 	}
-
-
-	_shakeOffsetScaled = Common::Point(_gameScreenShakeXOffset * _gameDrawRect.width() / (int)_currentState.gameWidth,
-		_gameScreenShakeYOffset * _gameDrawRect.height() / (int)_currentState.gameHeight);
+	_shakeOffsetScaled = Common::Point(_gameScreenShakeXOffset * rotatedWidth / (int)_currentState.gameWidth,
+	                                   _gameScreenShakeYOffset * rotatedHeight / (int)_currentState.gameHeight);
 
 	// Update the cursor position to adjust for new display area.
 	setMousePosition(_cursorX, _cursorY);
@@ -1870,8 +1924,14 @@ void OpenGLGraphicsManager::recalculateCursorScaling() {
 	// to the game screen.
 	// In 3D mode, there is no scaling
 	if (!_cursorDontScale && _gameScreen) {
-		const frac_t screenScaleFactorX = intToFrac(_gameDrawRect.width()) / _gameScreen->getWidth();
-		const frac_t screenScaleFactorY = intToFrac(_gameDrawRect.height()) / _gameScreen->getHeight();
+		int rotatedWidth = _gameDrawRect.width();
+		int rotatedHeight = _gameDrawRect.height();
+		if (_rotationMode == Common::kRotation90 || _rotationMode == Common::kRotation270) {
+			SWAP(rotatedWidth, rotatedHeight);
+		}
+
+		const frac_t screenScaleFactorX = intToFrac(rotatedWidth) / _gameScreen->getWidth();
+		const frac_t screenScaleFactorY = intToFrac(rotatedHeight) / _gameScreen->getHeight();
 
 		_cursorHotspotXScaled = fracToInt(_cursorHotspotXScaled * screenScaleFactorX);
 		_cursorWidthScaled    = fracToDouble(cursorWidth        * screenScaleFactorX);
@@ -1879,25 +1939,56 @@ void OpenGLGraphicsManager::recalculateCursorScaling() {
 		_cursorHotspotYScaled = fracToInt(_cursorHotspotYScaled * screenScaleFactorY);
 		_cursorHeightScaled   = fracToDouble(cursorHeight       * screenScaleFactorY);
 	}
+
+	switch (_rotationMode) {
+	default:
+	case Common::kRotationNormal:
+		// Nothing to do
+		break;
+	case Common::kRotation90:
+		_cursorHotspotYScaled = _cursorHeightScaled - _cursorHotspotYScaled;
+		SWAP(_cursorHotspotXScaled, _cursorHotspotYScaled);
+		SWAP(_cursorWidthScaled, _cursorHeightScaled);
+		break;
+	case Common::kRotation180:
+		_cursorHotspotYScaled = _cursorHeightScaled - _cursorHotspotYScaled;
+		_cursorHotspotXScaled = _cursorWidthScaled - _cursorHotspotXScaled;
+		break;
+	case Common::kRotation270:
+		_cursorHotspotXScaled = _cursorWidthScaled - _cursorHotspotXScaled;
+		SWAP(_cursorHotspotXScaled, _cursorHotspotYScaled);
+		SWAP(_cursorWidthScaled, _cursorHeightScaled);
+		break;
+	}
 }
 
-void OpenGLGraphicsManager::updateLinearFiltering() {
+void OpenGLGraphicsManager::updateTextureSettings() {
 #if !USE_FORCED_GLES
 	if (_libretroPipeline) {
 		_libretroPipeline->enableLinearFiltering(_currentState.filtering);
+		_libretroPipeline->setRotation(_rotationMode);
 	}
 #endif
 
 	if (_gameScreen) {
 		_gameScreen->enableLinearFiltering(_currentState.filtering);
+		_gameScreen->setRotation(_rotationMode);
 	}
+
+#if defined(USE_OPENGL_GAME) || defined(USE_OPENGL_SHADERS)
+	if (_renderer3d) {
+		_renderer3d->setRotation(_rotationMode);
+	}
+#endif
 
 	if (_cursor) {
 		_cursor->enableLinearFiltering(_currentState.filtering);
+		_cursor->setRotation(_rotationMode);
 	}
 
 	if (_cursorMask) {
 		_cursorMask->enableLinearFiltering(_currentState.filtering);
+		_cursorMask->setRotation(_rotationMode);
 	}
 
 	// The overlay UI should also obey the filtering choice (managed via the Filter Graphics checkbox in Graphics Tab).
@@ -1905,8 +1996,8 @@ void OpenGLGraphicsManager::updateLinearFiltering() {
 	// It may look crude, but it should be crispier and it's left to user choice to enable filtering.
 	if (_overlay) {
 		_overlay->enableLinearFiltering(_currentState.filtering);
+		_overlay->setRotation(_rotationMode);
 	}
-
 }
 
 #ifdef USE_OSD

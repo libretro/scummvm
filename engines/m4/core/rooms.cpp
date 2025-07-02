@@ -255,8 +255,6 @@ void Sections::get_ipl() {
 	}
 
 	_G(inverse_pal) = new InvPal(filename.c_str());
-	if (!_G(inverse_pal))
-		error_show(FL, 'OOM!', "loading ipl: %s", filename.c_str());
 }
 
 void Sections::get_walker() {
@@ -267,11 +265,10 @@ void Sections::get_walker() {
 }
 
 void Sections::game_control_cycle() {
-	int32 status;
-
 	while (_G(game).new_room == _G(game).room_id && _G(kernel).going && !_G(kernel).force_restart) {
 		krn_pal_game_task();
 
+		int32 status;
 		ScreenContext *screen = vmng_screen_find(_G(gameDrawBuff), &status);
 		if (!screen)
 			error_show(FL, 'BUF!');
@@ -368,7 +365,7 @@ void Sections::parse_player_command_now() {
 
 void Sections::pal_game_task() {
 	int32 status;
-	int delta = 0;
+	int delta;
 	Common::String line;
 
 	if (!player_commands_allowed())
@@ -378,7 +375,7 @@ void Sections::pal_game_task() {
 
 	if (!_G(kernel).pause) {
 		if (_G(toggle_cursor) != CURSCHANGE_NONE) {
-			CursorChange change = _G(toggle_cursor);
+			const CursorChange change = _G(toggle_cursor);
 			_G(toggle_cursor) = CURSCHANGE_NONE;
 			g_vars->getHotkeys()->toggle_through_cursors(change);
 		}

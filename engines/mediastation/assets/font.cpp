@@ -37,8 +37,15 @@ Font::~Font() {
 	_glyphs.clear();
 }
 
-ScriptValue Font::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) {
-	error("Font::callMethod(): Font does not have any callable methods");
+void Font::readParameter(Chunk &chunk, AssetHeaderSectionType paramType) {
+	switch (paramType) {
+	case kAssetHeaderChunkReference:
+		_chunkReference = chunk.readTypedChunkReference();
+		break;
+
+	default:
+		Asset::readParameter(chunk, paramType);
+	}
 }
 
 void Font::readChunk(Chunk &chunk) {

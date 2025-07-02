@@ -137,7 +137,7 @@ void Surface::drawEllipse(int x0, int y0, int x1, int y1, uint32 color, bool fil
 		error("Surface::drawEllipse: bytesPerPixel must be 1, 2, or 4, got %d", format.bytesPerPixel);
 }
 
-// see graphics/blit/blit-atari.cpp
+// see backends/graphics/atari/atari-surface.cpp
 #ifndef ATARI
 void Surface::create(int16 width, int16 height, const PixelFormat &f) {
 	assert(width >= 0 && height >= 0);
@@ -538,15 +538,15 @@ AlphaType Surface::detectAlpha() const {
 	return alphaType;
 }
 
-Graphics::Surface *Surface::scale(int16 newWidth, int16 newHeight, bool filtering) const {
+Graphics::Surface *Surface::scale(int16 newWidth, int16 newHeight, bool filtering, byte flip) const {
 	Graphics::Surface *target = new Graphics::Surface();
 
 	target->create(newWidth, newHeight, format);
 
 	if (filtering) {
-		scaleBlitBilinear((byte *)target->getPixels(), (const byte *)getPixels(), target->pitch, pitch, target->w, target->h, w, h, format);
+		scaleBlitBilinear((byte *)target->getPixels(), (const byte *)getPixels(), target->pitch, pitch, target->w, target->h, w, h, format, flip);
 	} else {
-		scaleBlit((byte *)target->getPixels(), (const byte *)getPixels(), target->pitch, pitch, target->w, target->h, w, h, format);
+		scaleBlit((byte *)target->getPixels(), (const byte *)getPixels(), target->pitch, pitch, target->w, target->h, w, h, format, flip);
 	}
 
 	return target;

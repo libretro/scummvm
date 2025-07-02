@@ -54,6 +54,9 @@ inline static void convertPaletteToMap(uint32 *dst, const byte *src, uint colors
 
 /**
  * Blits a rectangle.
+ * Cautions: 
+ *  source & destination buffers must have same bpp
+ *  blit function has no protection against buffer overruns; w.bpp & h must not exceed respective byte dimensions (pitch & height) of either buffer
  *
  * @param dst			the buffer which will receive the converted graphics data
  * @param src			the buffer containing the original graphics data
@@ -287,10 +290,17 @@ private:
 	static void blitGeneric(Args &args, const TSpriteBlendMode &blendMode, const AlphaType &alphaType);
 	template<class T>
 	static void blitT(Args &args, const TSpriteBlendMode &blendMode, const AlphaType &alphaType);
-#undef LOGIC_FUNCS_EXT
 
 	typedef void(*BlitFunc)(Args &, const TSpriteBlendMode &, const AlphaType &);
 	static BlitFunc blitFunc;
+
+	static void fillGeneric(Args &args, const TSpriteBlendMode &blendMode);
+	template<class T>
+	static void fillT(Args &args, const TSpriteBlendMode &blendMode);
+
+	typedef void(*FillFunc)(Args &, const TSpriteBlendMode &);
+	static FillFunc fillFunc;
+
 	friend class ::BlendBlitUnfilteredTestSuite;
 	friend class BlendBlitImpl_Default;
 	friend class BlendBlitImpl_NEON;
@@ -369,6 +379,21 @@ public:
 			  const uint32 colorMod, const uint flipping,
 			  const TSpriteBlendMode blendMode,
 			  const AlphaType alphaType);
+
+	/**
+	 * Optimized version of doFill to be used with alpha blended fills
+	 * NOTE: Can only be used with BlendBlit::getSupportedPixelFormat format
+	 * @param dst a pointer to the destination buffer (can be offseted by pixels)
+	 * @param dstPitch destination pitch
+	 * @param width width of the input surface
+	 * @param height height of the input surface
+	 * @param colorMod the color to multiply by. (0xffffffff does no multiplication and has 0 overhead usually)
+	 * @param blendMode the blending mode to be used
+	 */
+	static void fill(byte *dst, const uint dstPitch,
+			  const uint width, const uint height,
+			  const uint32 colorMod,
+			  const TSpriteBlendMode blendMode);
 
 }; // End of class BlendBlit
 

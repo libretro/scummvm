@@ -189,24 +189,21 @@ void GroupedListWidget::saveClosedGroups(const Common::U32String &groupName) {
 	ConfMan.flushToDisk();
 }
 
-void GroupedListWidget::setSelected(int item) {
-	// HACK/FIXME: If our _listIndex has a non zero size,
-	// we will need to look up, whether the user selected
-	// item is present in that list
-	if (!_filter.empty()) {
-		int filteredItem = -1;
-
-		for (uint i = 0; i < _listIndex.size(); ++i) {
-			if (_listIndex[i] == item) {
-				filteredItem = i;
-				break;
-			}
-		}
-
-		item = filteredItem;
+int GroupedListWidget::findDataIndex(int data_index) const {
+	// The given index is an index in the _dataList.
+	// We want the index in the current _listIndex (which may be filtered and sorted) for this data.
+	// Sanity check to avoid iterating on the _listIndex if we know the given index is invalid.
+	if (data_index < -1 || data_index >= (int)_dataList.size())
+		return -1;
+	for (uint i = 0; i < _listIndex.size(); ++i) {
+		if (_listIndex[i] == data_index)
+			return i;
 	}
+	return -1;
+}
 
-	if (item < -1 || item >= (int)_list.size())
+void GroupedListWidget::setSelected(int item) {
+	if (item < -1 || item >= (int)_dataList.size())
 		return;
 
 	// We only have to do something if the widget is enabled and the selection actually changes
@@ -214,23 +211,16 @@ void GroupedListWidget::setSelected(int item) {
 		if (_editMode)
 			abortEditMode();
 
-		if (!_filter.empty()) {
-			_selectedItem = item;
-		} else {
-			_selectedItem = -1;
-			for (uint i = 0; i < _listIndex.size(); ++i) {
-				if (_listIndex[i] == item) {
-					_selectedItem = i;
-					break;
-				}
-			}
-		}
+		_selectedItem = findDataIndex(item);
 
 		// Notify clients that the selection changed.
 		sendCommand(kListSelectionChangedCmd, _selectedItem);
 
-		_currentPos = _selectedItem - _entriesPerPage / 2;
-		scrollToCurrent();
+		if (_selectedItem != -1 && !isItemVisible(_selectedItem)) {
+			// scroll selected item to center if possible
+			_currentPos = _selectedItem - _entriesPerPage / 2;
+			scrollToCurrent();
+		}
 		markAsDirty();
 	}
 }
@@ -249,8 +239,14 @@ void GroupedListWidget::handleMouseDown(int x, int y, int button, int clickCount
 			sendCommand(kListSelectionChangedCmd, _selectedItem);
 		} else if (isGroupHeader(_listIndex[newSelectedItem])) {
 			int groupID = indexToGroupID(_listIndex[newSelectedItem]);
+			int oldSelection = getSelected();
 			_selectedItem = -1;
 			toggleGroup(groupID);
+			// Try to preserve the selection, but without scrolling
+			if (oldSelection != -1) {
+				_selectedItem = findDataIndex(oldSelection);
+				sendCommand(kListSelectionChangedCmd, _selectedItem);
+			}
 		}
 	}
 
@@ -294,14 +290,13 @@ void GroupedListWidget::handleCommand(CommandSender *sender, uint32 cmd, uint32 
 	}
 }
 
-int GroupedListWidget::getNextPos(int oldSel) {
+int GroupedListWidget::getItemPos(int item) {
 	int pos = 0;
 
-	// Find the position of the new selection in the list. 
 	for (uint i = 0; i < _listIndex.size(); i++) {
-		if (_listIndex[i] == oldSel) {
+		if (_listIndex[i] == item) {
 			return pos;
-		} else if (_listIndex[i] > 0) {
+		} else if (_listIndex[i] >= 0) { // skip headers
 			pos++;
 		}
 	}
@@ -433,6 +428,8 @@ void GroupedListWidget::setFilter(const Common::U32String &filter, bool redraw) 
 	if (_filter == filt) // Filter was not changed
 		return;
 
+	int selectedItem = getSelected();
+
 	_filter = filt;
 
 	if (_filter.empty()) {
@@ -470,6 +467,9 @@ void GroupedListWidget::setFilter(const Common::U32String &filter, bool redraw) 
 
 	_currentPos = 0;
 	_selectedItem = -1;
+	// Try to preserve the previous selection
+	if (selectedItem != -1)
+		setSelected(selectedItem);
 
 	if (redraw) {
 		scrollBarRecalc();

@@ -157,6 +157,7 @@ static const char *const selectorNameTable[] = {
 	"fade",         // Longbow, Shivers
 	"enable",       // Longbow, SQ6
 	"alterEgo",     // LSL5
+	"ticks",        // LSL6
 	"normalize",    // Pepper, GK1, QFG4
 	"delete",       // EcoQuest 1
 	"size",         // EcoQuest 1
@@ -302,6 +303,7 @@ enum ScriptPatcherSelectors {
 	SELECTOR_fade,
 	SELECTOR_enable,
 	SELECTOR_alterEgo,
+	SELECTOR_ticks,
 	SELECTOR_normalize,
 	SELECTOR_delete,
 	SELECTOR_size,
@@ -9799,13 +9801,79 @@ static const uint16 larry6Room680ExitsPatch[] = {
 	PATCH_END
 };
 
-//          script, description,                                      signature                   patch
+// After displaying a control panel help message and closing the control panel,
+//  the game can freeze for several seconds or until user input. Each message
+//  has a delay calculated by the Narrator class, even though these delays have
+//  no effect while the panel is displayed. If the panel is closed before the
+//  delay elapses then the game waits to close the hidden message.
+//
+// We fix this by resetting the help message's calculated delay to zero so that
+//  hidden messages are immediately closed as soon as the panel is closed.
+//
+// We make room for this patch by storing the result of a kScriptID call in an
+//  unused system global and overwriting a subsequent kScriptID call.
+//
+// Applies to: All versions
+// Responsible method: ll6ControlPanel:noClickMessage
+// Fixes bug: #14585
+static const uint16 larry6HelpMessageSignature[] = {
+	SIG_MAGICDWORD,
+	0x7a,                               // push2
+	0x38, SIG_UINT16(0x071d),           // pushi 071d
+	0x39, 0x20,                         // pushi 20
+	0x43, 0x02, 0x04,                   // callk ScriptID 04 [ talkTitleNar ]
+	0x4a, 0x12,                         // send 12
+	SIG_ADDTOOFFSET(+17),
+	0x7a,                               // push2
+	0x38, SIG_UINT16(0x071d),           // pushi 071d
+	0x39, 0x20,                         // pushi 20
+	0x43, 0x02, 0x04,                   // callk ScriptID 04 [ talkTitleNar ]
+	0x4a, 0x0c,                         // send 0c [ talkTitleNar x: -1 y: -1 ]
+	SIG_END
+};
+
+static const uint16 larry6HelpMessagePatch[] = {
+	PATCH_ADDTOOFFSET(+9),
+	0xa1, 0x03,                         // sag 03 [ global3 = talkTitleNar ]
+	PATCH_GETORIGINALBYTES(9, +19),
+	0x38, PATCH_SELECTOR16(ticks),      // pushi ticks
+	0x78,                               // push1
+	0x76,                               // push0
+	0x81, 0x03,                         // lag 03
+	0x4a, 0x12,                         // send 12 [ talkTitleNar x: -1 y: -1 ticks: 0 ]
+	PATCH_END
+};
+
+// There are six messages for clicking the hand cursor on Larry, but the script
+//  stops on the fifth. This appears to be an off-by-one bug in the script, so
+//  we patch the range check to include the final message.
+//
+// Applies to: All versions (including high-res versions)
+// Responsible method: ego:doVerb
+// Fixes bug: #15985
+static const uint16 larry6EgoHandMessageSignature[] = {
+	SIG_MAGICDWORD,
+	0x89, 0xa8,                         // lag a8
+	0x35, 0x05,                         // ldi 05
+	0x22,                               // lt?
+	SIG_END
+};
+
+static const uint16 larry6EgoHandMessagePatch[] = {
+	PATCH_ADDTOOFFSET(+4),
+	0x24,                               // le?
+	PATCH_END
+};
+
+//          script, description,                                      signature                      patch
 static const SciScriptPatcherEntry larry6Signatures[] = {
-	{  true,    75, "fix help cursor",                             1, larry6HelpCursorSignature,  larry6HelpCursorPatch },
-	{  true,    82, "death dialog memory corruption",              1, larry6DeathDialogSignature, larry6DeathDialogPatch },
-	{  true,    99, "disable speed test",                          1, sci11SpeedTestSignature,    sci11SpeedTestPatch },
-	{  true,   680, "room 680 exits",                              1, larry6Room680ExitsSignature,larry6Room680ExitsPatch },
-	{  true,   928, "Narrator lockup fix",                         1, sciNarratorLockupSignature, sciNarratorLockupPatch },
+	{  true,    75, "fix help cursor",                             1, larry6HelpCursorSignature,     larry6HelpCursorPatch },
+	{  true,    82, "death dialog memory corruption",              1, larry6DeathDialogSignature,    larry6DeathDialogPatch },
+	{  true,    90, "ego hand message",                            1, larry6EgoHandMessageSignature, larry6EgoHandMessagePatch },
+	{  true,    94, "help message",                                1, larry6HelpMessageSignature,    larry6HelpMessagePatch },
+	{  true,    99, "disable speed test",                          1, sci11SpeedTestSignature,       sci11SpeedTestPatch },
+	{  true,   680, "room 680 exits",                              1, larry6Room680ExitsSignature,   larry6Room680ExitsPatch },
+	{  true,   928, "Narrator lockup fix",                         1, sciNarratorLockupSignature,    sciNarratorLockupPatch },
 	SCI_SIGNATUREENTRY_TERMINATOR
 };
 
@@ -10159,6 +10227,7 @@ static const SciScriptPatcherEntry larry6HiresSignatures[] = {
 	{  true,    71, "disable volume reset on startup (2/2)",       1, larry6HiresVolumeResetSignature,      larry6HiresVolumeResetPatch },
 	{  true,    71, "disable video benchmarking",                  1, sci2BenchmarkSignature,               sci2BenchmarkPatch },
 	{  true,    75, "fix help cursor",                             1, larry6HiresHelpCursorSignature,       larry6HiresHelpCursorPatch },
+	{  true,    90, "ego hand message",                            1, larry6EgoHandMessageSignature,        larry6EgoHandMessagePatch },
 	{  true,   100, "fix plane width",                             1, larry6HiresPlaneWidthSignature,       larry6HiresPlaneWidthPatch },
 	{  true,   270, "fix incorrect setScale call",                 1, larry6HiresSetScaleSignature,         larry6HiresSetScalePatch },
 	{  true,   330, "fix whale oil lamp lockup",                   1, larry6HiresWhaleOilLampSignature,     larry6HiresWhaleOilLampPatch },
@@ -13958,6 +14027,33 @@ static const uint16 pepperPatchPuzzleBox[] = {
 	PATCH_END
 };
 
+// In Ben Franklin's workshop, clicking on the Special Edition immediately after
+//  entering from the attic causes Pepper to spin instead of walk. fromAtticScr
+//  initializes ego incorrectly by calling setLoop after normalize instead of
+//  setting the loop property. setLoop sets the kSignalDoesntTurn signal flag,
+//  and this prevents ego from cycling through loops.
+//
+// We fix this by replacing the setLoop selector with the loop selector.
+//
+// Applies to: All versions
+// Responsible method: fromAtticScr:changeState(0)
+// Fixes bug: #15247
+static const uint16 pepperSignatureWorkshopSpin[] = {
+	0x38, SIG_SELECTOR16(normalize), // pushi normalize
+	SIG_MAGICDWORD,
+	0x76,                            // push0
+	0x38, SIG_SELECTOR16(setLoop),   // pushi setLoop
+	0x78,                            // push1
+	0x7a,                            // push2
+	SIG_END
+};
+
+static const uint16 pepperPatchWorkshopSpin[] = {
+	PATCH_ADDTOOFFSET(+4),
+	0x38, PATCH_SELECTOR16(loop),    // pushi loop
+	PATCH_END
+};
+
 // In the maze, clicking on the dictionary word "musty" can display the wrong
 //  definition. The east doorway is missing a doVerb method, so unlike the
 //  other doorways, it does not update the dictionary word global.
@@ -14026,6 +14122,7 @@ static const uint16 pepperPatchKitchenLockup[] = {
 //          script, description,                                         signature                            patch
 static const SciScriptPatcherEntry pepperSignatures[] = {
 	{  true,   116, "puzzle box fix",                                 1, pepperSignaturePuzzleBox,            pepperPatchPuzzleBox },
+	{  true,   320, "workshop spin fix",                              1, pepperSignatureWorkshopSpin,         pepperPatchWorkshopSpin },
 	{  true,   380, "kitchen lockup fix",                             1, pepperSignatureKitchenLockup,        pepperPatchKitchenLockup },
 	{  true,   400, "musty message fix",                              1, pepperSignatureMustyMessage,         pepperPatchMustyMessage },
 	{  true,   894, "glass jar fix",                                  1, pepperSignatureGlassJar,             pepperPatchGlassJar },

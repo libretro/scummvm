@@ -214,6 +214,14 @@ public:
 	bool hasDataFork() const;
 
 	/**
+	 * Query whether the file is one of the Mac formats.
+	 * @return True if the file is in MacBinary format or has a resource fork
+	 */
+	bool isMacFile() const { return _mode != kResForkNone; }
+
+	int getMode() const { return _mode; }
+
+	/**
 	 * Read resource from the MacBinary file
 	 * @param typeID FourCC of the type
 	 * @param resID Resource ID to fetch
@@ -260,6 +268,18 @@ public:
 	 * @return The size of the data portion of the resource fork
 	 */
 	uint32 getResForkDataSize() const;
+
+	uint32 getResForkSize() const {
+		if (!hasResFork())
+			return 0;
+		return _resForkSize;
+	}
+
+	uint32 getDataForkSize() const {
+		if (!hasDataFork())
+			return 0;
+		return _dataLength;
+	}
 
 	/**
 	 * Calculate the MD5 checksum of the resource fork
@@ -315,6 +335,15 @@ public:
 	};
 	static MacVers *parseVers(SeekableReadStream *vvers);
 
+	enum {
+		kResForkNone = 0,
+		kResForkRaw,
+		kResForkMacBinary,
+		kResForkAppleDouble
+	} _mode;
+
+	static Path constructAppleDoubleName(const Path &name);
+
 private:
 	SeekableReadStream *_stream;
 	Path _baseFileName;
@@ -336,7 +365,6 @@ private:
 
 	static bool readAndValidateMacBinaryHeader(SeekableReadStream &stream, byte (&outMacBinaryHeader)[MBI_INFOHDR]);
 
-	static Path constructAppleDoubleName(const Path &name);
 	static Path disassembleAppleDoubleName(const Path &name, bool *isAppleDouble);
 
 	static SeekableReadStream *openAppleDoubleWithAppleOrOSXNaming(Archive& archive, const Path &fileName);
@@ -347,13 +375,6 @@ private:
 	 * @param stream Stream object to check. Will not preserve its position.
 	 */
 	static bool isRawFork(SeekableReadStream &stream);
-
-	enum {
-		kResForkNone = 0,
-		kResForkRaw,
-		kResForkMacBinary,
-		kResForkAppleDouble
-	} _mode;
 
 	void readMap();
 

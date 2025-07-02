@@ -23,19 +23,28 @@
 #define MEDIASTATION_HOTSPOT_H
 
 #include "mediastation/asset.h"
-#include "mediastation/assetheader.h"
 #include "mediastation/mediascript/scriptvalue.h"
 #include "mediastation/mediascript/scriptconstants.h"
 
 namespace MediaStation {
 
-class Hotspot : public Asset {
+class Hotspot : public SpatialEntity {
 public:
-	Hotspot(AssetHeader *header);
+	Hotspot() : SpatialEntity(kAssetTypeHotspot) {};
+	virtual ~Hotspot() { _mouseActiveArea.clear(); }
 
 	bool isInside(const Common::Point &pointToCheck);
+	virtual bool isVisible() const override { return false; }
+	bool isActive() const { return _isActive; }
 
+	virtual void readParameter(Chunk &chunk, AssetHeaderSectionType paramType) override;
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
+
+	uint _cursorResourceId = 0;
+	Common::Array<Common::Point> _mouseActiveArea;
+
+private:
+	bool _isActive = false;
 };
 
 } // End of namespace MediaStation

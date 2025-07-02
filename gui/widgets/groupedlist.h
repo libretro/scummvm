@@ -67,7 +67,7 @@ public:
 
 	void setGroupsVisibility(bool val) { _groupsVisible = val; }
 
-	int getNextPos(int oldSel);
+	int getItemPos(int item);
 	int getNewSel(int index);
 
 	void startEditMode() override { error("Edit mode is not supported for Grouped Lists"); }
@@ -76,6 +76,7 @@ protected:
 	void sortGroups();
 	void toggleGroup(int groupID);
 	void drawWidget() override;
+	int findDataIndex(int) const;
 };
 
 } // End of namespace GUI

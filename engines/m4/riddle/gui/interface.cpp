@@ -27,7 +27,6 @@
 #include "m4/adv_r/other.h"
 #include "m4/core/cstring.h"
 #include "m4/core/errors.h"
-#include "m4/graphics/gr_series.h"
 #include "m4/gui/gui_event.h"
 #include "m4/gui/gui_vmng.h"
 
@@ -132,12 +131,12 @@ void Interface::freshen_sentence() {
 
 bool Interface::set_interface_palette(RGB8 *myPalette) {
 	gr_pal_set_RGB8(&myPalette[0], 0, 0, 0);
-	gr_pal_set_RGB8(&myPalette[1], 0, 68, 0);
-	gr_pal_set_RGB8(&myPalette[2], 0, 0, 39);
-	gr_pal_set_RGB8(&myPalette[3], 0, 75, 71);
-	gr_pal_set_RGB8(&myPalette[4], 0, 107, 103);
-	gr_pal_set_RGB8(&myPalette[5], 0, 135, 131);
-	gr_pal_set_RGB8(&myPalette[6], 0, 171, 163);
+	gr_pal_set_RGB8(&myPalette[1], 0, 0, 0);
+	gr_pal_set_RGB8(&myPalette[2], 39, 39, 39);
+	gr_pal_set_RGB8(&myPalette[3], 71, 75, 71);
+	gr_pal_set_RGB8(&myPalette[4], 103, 107, 103);
+	gr_pal_set_RGB8(&myPalette[5], 131, 135, 131);
+	gr_pal_set_RGB8(&myPalette[6], 163, 171, 163);
 	gr_pal_set_RGB8(&myPalette[7], 199, 215, 207);
 	gr_pal_set_RGB8(&myPalette[8], 235, 247, 231);
 	gr_pal_set_RGB8(&myPalette[9], 131, 103, 63);
@@ -316,22 +315,19 @@ ControlStatus Interface::trackHotspots(int event, int x, int y) {
 		_G(player).click_x = x;
 		_G(player).click_y = y;
 
-		if (hotspot) {
-			if (hotspot->feet_x != 0x7fff)
-				_G(player).walk_x = hotspot->feet_x;
-			if (hotspot->feet_y != 0x7fff)
-				_G(player).walk_y = hotspot->feet_y;
-		}
+		if (hotspot->feet_x != 0x7fff)
+			_G(player).walk_x = hotspot->feet_x;
+
+		if (hotspot->feet_y != 0x7fff)
+			_G(player).walk_y = hotspot->feet_y;
 
 		_G(player).walk_facing = hotspot->facing;
 		_hotspot = nullptr;
 
 		return SELECTED;
-	} else {
-		return IN_CONTROL;
 	}
 
-	return ControlStatus::NOTHING;
+	return IN_CONTROL;
 }
 
 void Interface::dispatch_command() {
@@ -357,8 +353,8 @@ void Interface::dispatch_command() {
 }
 
 void Interface::handleState(ControlStatus status) {
-	int highlight = _inventory->_highlight;
-	int index = _inventory->_scroll + highlight;
+	const int highlight = _inventory->_highlight;
+	const int index = _inventory->_scroll + highlight;
 
 	switch (status) {
 	case NOTHING:

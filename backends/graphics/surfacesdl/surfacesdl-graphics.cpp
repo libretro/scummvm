@@ -302,9 +302,6 @@ void SurfaceSdlGraphicsManager::setFeatureState(OSystem::Feature f, bool enable)
 		if (enable)
 			_window->iconifyWindow();
 		break;
-	case OSystem::kFeatureRotationMode:
-		notifyResize(getWindowWidth(), getWindowHeight());
-		break;
 	default:
 		break;
 	}
@@ -3230,20 +3227,22 @@ void SurfaceSdlGraphicsManager::SDL_UpdateRects(SDL_Surface *screen, int numrect
 	SDL_Rect viewport;
 
 	Common::Rect &drawRect = (_overlayVisible) ? _overlayDrawRect : _gameDrawRect;
-	viewport.x = drawRect.left;
-	viewport.y = drawRect.top;
 
-	int rotation = getRotationMode();
-	int rotangle = 0;
-	if (rotation == Common::kRotation90 || rotation == Common::kRotation270) {
-		int delta = (drawRect.width() - drawRect.height()) / 2;
-		viewport.x = drawRect.top - delta;
-		viewport.y = drawRect.left + delta;
+	/* Destination rectangle represents the texture before rotation */
+	if (_rotationMode == Common::kRotation90 || _rotationMode == Common::kRotation270) {
+		viewport.w = drawRect.height();
+		viewport.h = drawRect.width();
+		int delta = (viewport.w - viewport.h) / 2;
+		viewport.x = drawRect.left - delta;
+		viewport.y = drawRect.top + delta;
+	} else {
+		viewport.w = drawRect.width();
+		viewport.h = drawRect.height();
+		viewport.x = drawRect.left;
+		viewport.y = drawRect.top;
 	}
-	rotangle = rotation;
 
-	viewport.w = drawRect.width();
-	viewport.h = drawRect.height();
+	int rotangle = (int)_rotationMode;
 
 	SDL_RenderClear(_renderer);
 
@@ -3327,13 +3326,13 @@ int SurfaceSdlGraphicsManager::SDL_SetColorKey(SDL_Surface *surface, Uint32 flag
 void *SurfaceSdlGraphicsManager::getImGuiTexture(const Graphics::Surface &image, const byte *palette, int palCount) {
 
 	// Upload pixels into texture
-	SDL_Texture *texture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
+	SDL_Texture *texture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
 	if (texture == nullptr) {
 		error("getImGuiTexture: errror creating tetxure: %s", SDL_GetError());
 		return nullptr;
 	}
 
-	Graphics::Surface *s = image.convertTo(Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24), palette, palCount);
+	Graphics::Surface *s = image.convertTo(Graphics::PixelFormat::createFormatRGBA32(), palette, palCount);
 	SDL_UpdateTexture(texture, nullptr, s->getPixels(), s->pitch);
 	SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
 #ifdef USE_IMGUI_SDLRENDERER3

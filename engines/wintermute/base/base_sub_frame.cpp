@@ -264,7 +264,7 @@ bool BaseSubFrame::draw(int x, int y, BaseObject *registerOwner, float zoomX, fl
 	}
 
 	if (rotate != Graphics::kDefaultAngle) {
-		res = _surface->displayTransRotate(x, y, (uint32)rotate, _hotspotX, _hotspotY, getRect(), zoomX, zoomY, alpha, blendMode, _mirrorX, _mirrorY);
+		res = _surface->displayTransRotate(x, y, rotate, _hotspotX, _hotspotY, getRect(), zoomX, zoomY, alpha, blendMode, _mirrorX, _mirrorY);
 	} else {
 		if (zoomX == Graphics::kDefaultZoomX && zoomY == Graphics::kDefaultZoomY) {
 			res = _surface->displayTrans(x - _hotspotX, y - _hotspotY, getRect(), alpha, blendMode, _mirrorX, _mirrorY);
@@ -463,9 +463,14 @@ bool BaseSubFrame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisS
 		int x = stack->pop()->getInt();
 		int y = stack->pop()->getInt();
 		byte r, g, b, a;
-		if (_surface && _surface->getPixel(x, y, &r, &g, &b, &a)) {
-			uint32 pixel = BYTETORGBA(r, g, b, a);
-			stack->pushInt(pixel);
+		if (_surface && _surface->startPixelOp()) {
+			if (_surface->getPixel(x, y, &r, &g, &b, &a)) {
+				uint32 pixel = BYTETORGBA(r, g, b, a);
+				stack->pushInt(pixel);
+			} else {
+				stack->pushNULL();
+			}
+			_surface->endPixelOp();
 		} else {
 			stack->pushNULL();
 		}

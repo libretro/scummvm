@@ -38,7 +38,8 @@ void Sound::playMusic(const char *path, int loops) {
 }
 
 void Sound::playSfxMusic(int num) {
-	warning("TODO: playSfxMusic");
+	_mixer->playStream(Audio::Mixer::kMusicSoundType, &_musicHandle, _sfxStream, -1, 255, 0, DisposeAfterUse::YES, true);
+	_sfx->play(_mixer->getOutputRate());
 }
 
 void Sound::playAifcMusic(const char *path, uint32 offset) {
@@ -53,8 +54,20 @@ void Sound::stopAifcMusic() {
 	warning("TODO: stopAifcMusic");
 }
 
+void Sound::stopAll() {
+	stopSfxMusic();
+	_mixer->stopAll();
+}
+
+void Sound::setPlayer(SfxPlayer *player) {
+	_sfx = player;
+	_sfxStream = new SfxMusicStream(player);
+}
+
 void Sound::stopSfxMusic() {
-	warning("TODO: stopSfxMusic");
+	if (_mixer->isSoundHandleActive(_musicHandle)) {
+		_mixer->stopHandle(_musicHandle);
+	}
 }
 
 void Sound::preloadSoundAiff(byte num, const byte *data) {
@@ -65,11 +78,15 @@ void Sound::playSoundRaw(byte channel, const byte *data, size_t size,
 		int freq, byte volume) {
 	assert(channel < MAX_CHANNELS);
 
+	// Used for looping sounds, e.g. the waterfall
+	// uint16 length = READ_BE_UINT16(data) * 2;
+	// uint16 loopLength = READ_BE_UINT16(data + 2) * 2;
+
 	Common::MemoryReadStream *stream =
-		new Common::MemoryReadStream(data, size);
+		new Common::MemoryReadStream(data + 8, size - 8);
 	Audio::AudioStream *sound =
 		Audio::makeRawStream(stream, freq,
-			Audio::FLAG_16BITS,
+			0,
 			DisposeAfterUse::YES);
 	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_channels[channel],
 		sound, -1, 255, 0, DisposeAfterUse::YES);
