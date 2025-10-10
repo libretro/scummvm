@@ -30,6 +30,7 @@
 #include "graphics/paletteman.h"
 
 #include "gob/gob.h"
+#include "gob/hotspots.h"
 #include "gob/util.h"
 #include "gob/global.h"
 #include "gob/dataio.h"
@@ -100,7 +101,7 @@ void Util::processInput(bool scroll) {
 	int16 x = 0, y = 0;
 	bool hasMove = false;
 
-	if (_vm->getGameType() != kGameTypeAdibou2)
+	if (_vm->getGameType() != kGameTypeAdibou2 && _vm->getGameType() != kGameTypeAdi4)
 		_vm->_vidPlayer->updateLive();
 
 	while (eventMan->pollEvent(event)) {
@@ -371,6 +372,10 @@ void Util::setMousePos(int16 x, int16 y) {
 	x = CLIP<int>(x + _vm->_video->_screenDeltaX, 0, _vm->_width - 1);
 	y = CLIP<int>(y + _vm->_video->_screenDeltaY, 0, _vm->_height - 1);
 	g_system->warpMouse(x, y);
+
+#ifdef USE_TTS
+	_vm->_game->_hotspots->voiceHotspotTTSText(x, y);
+#endif
 }
 
 void Util::waitMouseUp() {

@@ -294,11 +294,6 @@ void Draw_v2::printTotText(int16 id) {
 	_backColor = *ptr++;
 	_transparency = 1;
 
-	if ((_vm->getGameType() == kGameTypeAdibou2 ||
-		 _vm->getGameType() == kGameTypeAdi4) &&
-		_backColor == 16)
-		_backColor = -1;
-
 	spriteOperation(DRAW_CLEARRECT);
 
 	_backColor = 0;
@@ -395,6 +390,9 @@ void Draw_v2::printTotText(int16 id) {
 	_backColor = 0;
 	_transparency = 1;
 
+#ifdef USE_TTS
+	Common::String ttsMessage;
+#endif
 	while (true) {
 		if ((((*ptr >= 1) && (*ptr <= 7)) || (*ptr == 10)) && (strPos != 0)) {
 			str[MAX(strPos, strPos2)] = 0;
@@ -429,6 +427,10 @@ void Draw_v2::printTotText(int16 id) {
 				_fontIndex   = fontIndex;
 				_frontColor  = frontColor;
 				_textToPrint = str;
+#ifdef USE_TTS
+				ttsMessage += _textToPrint;
+				ttsMessage += " ";
+#endif
 
 				if (isSubtitle) {
 					_fontIndex  = _subtitleFont;
@@ -442,10 +444,10 @@ void Draw_v2::printTotText(int16 id) {
 							width -= _fonts[_fontIndex]->getCharWidth() / 2;
 							str[strlen(str) - 1] = '\0';
 						}
-						spriteOperation(DRAW_PRINTTEXT);
+						spriteOperation(DRAW_PRINTTEXT, false);
 					}
 				} else
-					spriteOperation(DRAW_PRINTTEXT);
+					spriteOperation(DRAW_PRINTTEXT, false);
 
 				width = strlen(str);
 				for (strPos = 0; strPos < width; strPos++) {
@@ -624,6 +626,18 @@ void Draw_v2::printTotText(int16 id) {
 		}
 	}
 
+#ifdef USE_TTS
+	if (_previousTot != ttsMessage && !isSubtitle) {
+		if (_vm->_game->_hotspots->hoveringOverHotspot()) {
+			_vm->sayText(ttsMessage);
+		} else {
+			_vm->sayText(ttsMessage, Common::TextToSpeechManager::QUEUE);
+		}
+
+		_previousTot = ttsMessage;
+	}
+#endif
+
 	delete textItem;
 	_renderFlags = savedFlags;
 
@@ -638,7 +652,7 @@ void Draw_v2::printTotText(int16 id) {
 	}
 }
 
-void Draw_v2::spriteOperation(int16 operation) {
+void Draw_v2::spriteOperation(int16 operation, bool ttsAddHotspotText) {
 	int16 len;
 	int16 x, y;
 	SurfacePtr sourceSurf, destSurf;
@@ -800,7 +814,7 @@ void Draw_v2::spriteOperation(int16 operation) {
 		if (_vm->_draw->_needAdjust == 3 || _vm->_draw->_needAdjust == 4)
 			adjustCoords(0, &_spriteRight, &_spriteBottom);
 
-		_vm->_video->drawPackedSprite(resource->getData(),
+		_vm->_video->drawPackedSprite(resource->getData(), resource->getSize(),
 				_spriteRight, _spriteBottom, _destSpriteX, _destSpriteY,
 				_transparency, *_spritesArray[_destSurface]);
 
@@ -867,6 +881,23 @@ void Draw_v2::spriteOperation(int16 operation) {
 				_destSpriteX += _fontToSprite[_fontIndex].width;
 			}
 		}
+
+#ifdef USE_TTS
+		// Ween's notepad displays 1 character at a time. Stopping speech as the characters are displayed prevents TTS from
+		// slowly voicing each character
+		if (_vm->getGameType() == kGameTypeWeen && _vm->isCurrentTot("edit.tot")) {
+			_vm->stopTextToSpeech();
+			
+			if (!_vm->_weenVoiceNotepad) {
+				ttsAddHotspotText = false;
+			}
+		}
+
+		if (ttsAddHotspotText) {
+			_vm->_game->_hotspots->addHotspotTTSText(_textToPrint, left, _destSpriteY,
+											_destSpriteX - 1, _destSpriteY + _fonts[_fontIndex]->getCharHeight() - 1, _destSurface);
+		}
+#endif
 
 		dirtiedRect(_destSurface, left, _destSpriteY,
 				_destSpriteX - 1, _destSpriteY + _fonts[_fontIndex]->getCharHeight() - 1);

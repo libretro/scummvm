@@ -139,7 +139,8 @@ Ultima8Engine::Ultima8Engine(OSystem *syst, const Ultima::UltimaGameDescription 
 		_world(nullptr), _desktopGump(nullptr), _gameMapGump(nullptr), _avatarMoverProcess(nullptr),
 		_frameSkip(false), _frameLimit(true), _interpolate(true), _animationRate(100),
 		_avatarInStasis(false), _cruStasis(false), _showEditorItems(false), _inversion(0),
-		_showTouching(false), _timeOffset(0), _hasCheated(false), _cheatsEnabled(false),
+		_showTouching(false), _hackMoverEnabled(false), _timeOffset(0),
+		_hasCheated(false), _cheatsEnabled(false),
 		_fontOverride(false), _fontAntialiasing(false), _audioMixer(0), _inverterGump(nullptr),
 		_lerpFactor(256), _inBetweenFrame(false), _crusaderTeleporting(false), _moveKeyFrame(0),
 		_highRes(false), _priorFrameCounterTime(0) {
@@ -501,6 +502,7 @@ bool Ultima8Engine::setupGame() {
 
 	if (info->_type == GameInfo::GAME_UNKNOWN) {
 		warning("%s: unknown, skipping", info->_name.c_str());
+		delete info;
 		return false;
 	}
 
@@ -719,8 +721,7 @@ void Ultima8Engine::paint() {
 	tpaint -= g_system->getMillis();
 #endif
 
-	Rect r;
-	_screen->GetSurfaceDims(r);
+	Common::Rect32 r = _screen->getSurfaceDims();
 	if (_highRes)
 		_screen->fill32(TEX32_PACK_RGB(0, 0, 0), r);
 
@@ -748,8 +749,7 @@ void Ultima8Engine::paint() {
 
 void Ultima8Engine::changeVideoMode(int width, int height) {
 	if (_screen) {
-		Rect old_dims;
-		_screen->GetSurfaceDims(old_dims);
+		Common::Rect32 old_dims = _screen->getSurfaceDims();
 		if (width == old_dims.width() && height == old_dims.height())
 			return;
 
@@ -788,7 +788,7 @@ void Ultima8Engine::changeVideoMode(int width, int height) {
 		_desktopGump->InitGump(0);
 		_desktopGump->MakeFocus();
 	} else {
-		_desktopGump->SetDims(Rect(0, 0, width, height));
+		_desktopGump->setDims(Common::Rect32(0, 0, width, height));
 		_desktopGump->RenderSurfaceChanged();
 	}
 
@@ -1346,8 +1346,7 @@ void Ultima8Engine::resetEngine() {
 void Ultima8Engine::setupCoreGumps() {
 	debug(1, "Setting up core game gumps...");
 
-	Rect dims;
-	_screen->GetSurfaceDims(dims);
+	Common::Rect32 dims = _screen->getSurfaceDims();
 
 	debug(1, "Creating Desktop...");
 	_desktopGump = new DesktopGump(0, 0, dims.width(), dims.height());
@@ -1892,7 +1891,7 @@ void Ultima8Engine::showSplashScreen() {
 		dest.moveTo((scr->w - dest.width()) / 2, (scr->h - dest.height()) / 2);
 	}
 
-	scr->transBlitFrom(*srcSurface, Common::Rect(0, 0, srcSurface->w, srcSurface->h), dest);
+	scr->blitFrom(*srcSurface, Common::Rect(0, 0, srcSurface->w, srcSurface->h), dest);
 	scr->update();
 	// Handle a single event to get the splash screen shown
 	Common::Event event;

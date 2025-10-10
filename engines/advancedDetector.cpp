@@ -162,6 +162,10 @@ static Common::String generatePreferredTarget(const ADGameDescription *desc, int
 		res = res + "-" + getLanguageCode(desc->language);
 	}
 
+	if (desc->flags & ADGF_ADDON) {
+		res = res + "-addon";
+	}
+
 	return res;
 }
 
@@ -208,8 +212,12 @@ DetectedGame AdvancedMetaEngineDetectionBase::toDetectedGame(const ADDetectedGam
 	else if (desc->flags & ADGF_WARNING)
 		game.gameSupportLevel = kWarningGame;
 
+	if (desc->flags & ADGF_ADDON)
+		game.isAddOn = true;
+
 	game.setGUIOptions(desc->guiOptions + _guiOptions);
 	game.appendGUIOptions(getGameGUIOptionsDescriptionLanguage(desc->language));
+	game.appendGUIOptions(Common::getGameGUIOptionsDescriptionPlatform(desc->platform));
 
 	if (desc->flags & ADGF_ADDENGLISH)
 		game.appendGUIOptions(getGameGUIOptionsDescriptionLanguage(Common::EN_ANY));
@@ -435,7 +443,7 @@ void AdvancedMetaEngineDetectionBase::composeFileHashMap(FileMap &allFiles, cons
 
 	for (const auto &file : fslist) {
 		Common::String efname = Common::punycode_encodefilename(file.getName());
-		Common::Path tstr = ((_flags & kADFlagMatchFullPaths) ? parentName : Common::Path()).appendComponent(efname);
+		Common::Path tstr = (_flags & kADFlagMatchFullPaths) ? parentName.appendComponent(efname) : Common::Path(efname, Common::Path::kNoSeparator);
 
 		if (file.isDirectory()) {
 			if (!_globsMap.contains(efname))
@@ -452,7 +460,7 @@ void AdvancedMetaEngineDetectionBase::composeFileHashMap(FileMap &allFiles, cons
 		// Strip any trailing dot
 		if (efname.lastChar() == '.') {
 			efname.deleteLastChar();
-			tstr = ((_flags & kADFlagMatchFullPaths) ? parentName : Common::Path()).appendComponent(efname);
+			tstr = (_flags & kADFlagMatchFullPaths) ? parentName.appendComponent(efname) : Common::Path(efname, Common::Path::kNoSeparator);
 		}
 
 		debugC(9, kDebugGlobalDetection, "$$ ['%s'] ['%s'] in '%s", tstr.toString().c_str(), efname.c_str(), firstPathComponents(fslist.front().getPath().toString(), '/').c_str());
@@ -679,7 +687,7 @@ void AdvancedMetaEngineDetectionBase::dumpDetectionEntries() const {
 		printf("\tlanguage \"%s\"\n", escapeString(getLanguageLocale(g->language)).c_str());
 		printf("\tplatform \"%s\"\n", escapeString(getPlatformCode(g->platform)).c_str());
 		printf("\tsourcefile \"%s\"\n", escapeString(getName()).c_str());
-		printf("\tengine \"%s\"\n", escapeString(getEngineName()).c_str());
+		printf("\tengine \"%s\"\n", escapeString(getName()).c_str());
 
 		for (auto fileDesc = g->filesDescriptions; fileDesc->fileName; fileDesc++) {
 			const char *fname = fileDesc->fileName;

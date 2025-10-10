@@ -188,9 +188,17 @@ static const BuiltinProto xlibBuiltins[] = {
 
 void FileIO::open(ObjectType type, const Common::Path &path) {
 	FileObject::initMethods(xlibMethods);
+	// manual override for game quirks
+	if (g_director->_fileIOType == kXtraObj && g_director->getVersion() >= 500) {
+		type = kXtraObj;
+	} else if (g_director->_fileIOType == kXObj) {
+		type = kXObj;
+	}
 	FileObject *xobj = new FileObject(type);
-	if (g_director->getVersion() >= 500)
+	if (type == kXtraObj) {
 		g_lingo->_openXtras.push_back(xlibName);
+		g_lingo->_openXtraObjects.push_back(xobj);
+	}
 	g_lingo->exposeXObject(xlibName, xobj);
 	g_lingo->initBuiltIns(xlibBuiltins);
 }
@@ -567,7 +575,10 @@ void FileIO::m_writeString(int nargs) {
 		return;
 	}
 
-	me->_outStream->writeString(d.asString());
+	Common::U32String unicodeString = Common::U32String(d.asString(), Common::kUtf8);
+	Common::String encodedString = unicodeString.encode(g_director->getPlatformEncoding());
+	me->_outStream->writeString(encodedString);
+
 	g_lingo->push(Datum(kErrorNone));
 }
 

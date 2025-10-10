@@ -30,6 +30,7 @@
 #include "engines/wintermute/base/gfx/base_image.h"
 #include "engines/wintermute/base/gfx/3dcamera.h"
 #include "engines/wintermute/base/gfx/3dlight.h"
+#include "engines/wintermute/platform_osystem.h"
 
 #include "graphics/opengl/system_headers.h"
 
@@ -51,7 +52,6 @@ BaseRenderer3D *makeOpenGL3DShaderRenderer(BaseGame *inGame) {
 }
 
 BaseRenderOpenGL3DShader::BaseRenderOpenGL3DShader(BaseGame *inGame) : BaseRenderer3D(inGame) {
-	setDefaultAmbientLightColor();
 	_alphaRef = 0;
 }
 
@@ -195,6 +195,8 @@ bool BaseRenderOpenGL3DShader::initRenderer(int width, int height, bool windowed
 	_width = width;
 	_height = height;
 
+	g_system->showMouse(false);
+
 	setViewport(0, 0, width, height);
 
 	setProjection();
@@ -202,6 +204,10 @@ bool BaseRenderOpenGL3DShader::initRenderer(int width, int height, bool windowed
 	_postFilterMode = kPostFilterOff;
 
 	_active = true;
+
+	_game->_supportsRealTimeShadows = true;
+
+	setDefaultAmbientLightColor();
 
 	return true;
 }
@@ -238,7 +244,7 @@ bool BaseRenderOpenGL3DShader::flip() {
 }
 
 bool BaseRenderOpenGL3DShader::clear() {
-	if(!_gameRef->_editorMode) {
+	if(!_game->_editorMode) {
 		glViewport(0, _height, _width, _height);
 	}
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -249,9 +255,6 @@ bool BaseRenderOpenGL3DShader::clear() {
 bool BaseRenderOpenGL3DShader::setup2D(bool force) {
 	if (_state != RSTATE_2D || force) {
 		_state = RSTATE_2D;
-
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
 		glDisable(GL_DEPTH_TEST);
 
@@ -271,9 +274,6 @@ bool BaseRenderOpenGL3DShader::setup2D(bool force) {
 bool BaseRenderOpenGL3DShader::setup3D(Camera3D *camera, bool force) {
 	if (_state != RSTATE_3D || force) {
 		_state = RSTATE_3D;
-
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
 		glEnable(GL_DEPTH_TEST);
 		// WME uses 8 as a reference value and Direct3D expects it to be in the range [0, 255]
@@ -310,7 +310,7 @@ bool BaseRenderOpenGL3DShader::setup3D(Camera3D *camera, bool force) {
 		uint32 fogColor;
 		float fogStart, fogEnd;
 
-		_gameRef->getFogParams(&fogEnabled, &fogColor, &fogStart, &fogEnd);
+		_game->getFogParams(&fogEnabled, &fogColor, &fogStart, &fogEnd);
 		if (fogEnabled) {
 			Math::Vector4d color;
 			color.x() = RGBCOLGetR(fogColor) / 255.0f;
@@ -371,7 +371,7 @@ void BaseRenderOpenGL3DShader::setAmbientLightRenderState() {
 		g = RGBCOLGetG(_ambientLightColor);
 		b = RGBCOLGetB(_ambientLightColor);
 	} else {
-		uint32 color = _gameRef->getAmbientLightColor();
+		uint32 color = _game->getAmbientLightColor();
 
 		a = RGBCOLGetA(color);
 		r = RGBCOLGetR(color);
@@ -411,9 +411,9 @@ bool BaseRenderOpenGL3DShader::setupLines() {
 	return true;
 }
 
-bool BaseRenderOpenGL3DShader::drawSpriteEx(BaseSurface *tex, const Wintermute::Rect32 &rect,
-	                                    const Wintermute::Vector2 &pos, const Wintermute::Vector2 &rot,
-	                                    const Wintermute::Vector2 &scale,
+bool BaseRenderOpenGL3DShader::drawSpriteEx(BaseSurface *tex, const Common::Rect32 &rect,
+	                                    const DXVector2 &pos, const DXVector2 &rot,
+	                                    const DXVector2 &scale,
 	                                    float angle, uint32 color, bool alphaDisable,
 	                                    Graphics::TSpriteBlendMode blendMode,
 	                                    bool mirrorX, bool mirrorY) {
@@ -425,8 +425,8 @@ bool BaseRenderOpenGL3DShader::drawSpriteEx(BaseSurface *tex, const Wintermute::
 		color = _forceAlphaColor;
 	}
 
-	float width = (rect.right - rect.left) * scale.x;
-	float height = (rect.bottom - rect.top) * scale.y;
+	float width = (rect.right - rect.left) * scale._x;
+	float height = (rect.bottom - rect.top) * scale._y;
 
 	int texWidth = texture->getGLTextureWidth();
 	int texHeight = texture->getGLTextureHeight();
@@ -460,25 +460,25 @@ bool BaseRenderOpenGL3DShader::drawSpriteEx(BaseSurface *tex, const Wintermute::
 	vertices[3].v = texTop;
 
 	// position coords
-	vertices[0].x = pos.x;
-	vertices[0].y = pos.y + height;
+	vertices[0].x = pos._x;
+	vertices[0].y = pos._y + height;
 	vertices[0].z = 0.9f;
 
-	vertices[1].x = pos.x;
-	vertices[1].y = pos.y;
+	vertices[1].x = pos._x;
+	vertices[1].y = pos._y;
 	vertices[1].z = 0.9f;
 
-	vertices[2].x = pos.x + width;
-	vertices[2].y = pos.y + height;
+	vertices[2].x = pos._x + width;
+	vertices[2].y = pos._y + height;
 	vertices[2].z = 0.9f;
 
-	vertices[3].x = pos.x + width;
-	vertices[3].y = pos.y;
+	vertices[3].x = pos._x + width;
+	vertices[3].y = pos._y;
 	vertices[3].z = 0.9f;
 
 	if (angle != 0) {
 		DXVector2 sc(1.0f, 1.0f);
-		DXVector2 rotation(rot.x, rot.y);
+		DXVector2 rotation(rot._x, rot._y);
 		transformVertices(vertices, &rotation, &sc, angle);
 	}
 
@@ -596,8 +596,8 @@ bool BaseRenderOpenGL3DShader::setProjection() {
 	bool customViewport;
 	getProjectionParams(&resWidth, &resHeight, &layerWidth, &layerHeight, &modWidth, &modHeight, &customViewport);
 
-	Rect32 rc;
-	_gameRef->getCurrentViewportRect(&rc);
+	Common::Rect32 rc;
+	_game->getCurrentViewportRect(&rc);
 	float viewportWidth = (float)rc.right - (float)rc.left;
 	float viewportHeight = (float)rc.bottom - (float)rc.top;
 
@@ -612,8 +612,8 @@ bool BaseRenderOpenGL3DShader::setProjection() {
 	float scaleMod = resHeight / viewportHeight;
 	float scaleRatio = MAX(layerWidth / resWidth, layerHeight / resHeight) /** 1.05*/;
 
-	float offsetX = (float)_gameRef->_offsetX;
-	float offsetY = (float)_gameRef->_offsetY;
+	float offsetX = (float)_game->_offsetX;
+	float offsetY = (float)_game->_offsetY;
 
 	if (!customViewport) {
 		offsetX -= _drawOffsetX;
@@ -626,6 +626,51 @@ bool BaseRenderOpenGL3DShader::setProjection() {
 	matProj.matrix._32 =  (offsetY + (mtop - mbottom) / 2 - modHeight) / viewportHeight * 2.0f;
 
 	return setProjectionTransform(matProj);
+}
+
+bool BaseRenderOpenGL3DShader::drawLine(int x1, int y1, int x2, int y2, uint32 color) {
+	setupLines();
+
+	x1 += _drawOffsetX;
+	x2 += _drawOffsetX;
+	y1 += _drawOffsetY;
+	y2 += _drawOffsetY;
+
+	// position coords
+	RectangleVertex vertices[2];
+	vertices[0].x = x1;
+	vertices[0].y = y1;
+	vertices[0].z = 0.9f;
+	vertices[1].x = x2;
+	vertices[1].y = y2;
+	vertices[1].z = 0.9f;
+
+	glBindBuffer(GL_ARRAY_BUFFER, _rectangleVBO);
+
+	glBufferSubData(GL_ARRAY_BUFFER, 0, 2 * sizeof(RectangleVertex), vertices);
+
+	byte a = RGBCOLGetA(color);
+	byte r = RGBCOLGetR(color);
+	byte g = RGBCOLGetG(color);
+	byte b = RGBCOLGetB(color);
+
+	Math::Vector4d colorValue;
+	colorValue.x() = r / 255.0f;
+	colorValue.y() = g / 255.0f;
+	colorValue.z() = b / 255.0f;
+	colorValue.w() = a / 255.0f;
+
+	_lineShader->use();
+	_lineShader->setUniform("color", colorValue);
+
+	glViewport(0, 0, _width, _height);
+
+	setProjection2D(_lineShader);
+
+	glDrawArrays(GL_LINES, 0, 2);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	return true;
 }
 
 bool BaseRenderOpenGL3DShader::fillRect(int x, int y, int w, int h, uint32 color) {
@@ -678,7 +723,7 @@ bool BaseRenderOpenGL3DShader::fillRect(int x, int y, int w, int h, uint32 color
 	return true;
 }
 
-void BaseRenderOpenGL3DShader::fadeToColor(byte r, byte g, byte b, byte a) {
+bool BaseRenderOpenGL3DShader::fadeToColor(byte r, byte g, byte b, byte a) {
 	float left, right, bottom, top;
 
 	left = _viewportRect.left;
@@ -729,6 +774,8 @@ void BaseRenderOpenGL3DShader::fadeToColor(byte r, byte g, byte b, byte a) {
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	
 	setup2D(true);
+
+	return true;
 }
 
 BaseImage *BaseRenderOpenGL3DShader::takeScreenshot(int newWidth, int newHeight) {
@@ -746,7 +793,6 @@ BaseImage *BaseRenderOpenGL3DShader::takeScreenshot(int newWidth, int newHeight)
 }
 
 bool BaseRenderOpenGL3DShader::enableShadows() {
-	_gameRef->_supportsRealTimeShadows = true;
 	return true;
 }
 
@@ -762,7 +808,7 @@ void BaseRenderOpenGL3DShader::displaySimpleShadow(BaseObject *object) {
 	if (object->_shadowImage) {
 		shadowImage = object->_shadowImage;
 	} else {
-		shadowImage = _gameRef->_shadowImage;
+		shadowImage = _game->_shadowImage;
 	}
 
 	if (!shadowImage) {
@@ -817,8 +863,7 @@ void BaseRenderOpenGL3DShader::setSpriteBlendMode(Graphics::TSpriteBlendMode ble
 	}
 }
 
-bool BaseRenderOpenGL3DShader::stencilSupported() {
-	// assume that we have a stencil buffer
+bool BaseRenderOpenGL3DShader::shadowVolumeSupported() {
 	return true;
 }
 
@@ -826,7 +871,7 @@ int BaseRenderOpenGL3DShader::getMaxActiveLights() {
 	return 8;
 }
 
-bool BaseRenderOpenGL3DShader::invalidateTexture(BaseSurfaceOpenGL3D *texture) {
+bool BaseRenderOpenGL3DShader::invalidateTexture(BaseSurface *texture) {
 	if (_lastTexture == texture)
 		_lastTexture = nullptr;
 
@@ -901,7 +946,7 @@ void BaseRenderOpenGL3DShader::renderSceneGeometry(const BaseArray<AdWalkplane *
 	DXMatrixIdentity(&matIdentity);
 
 	if (camera)
-		_gameRef->_renderer3D->setup3D(camera, true);
+		_game->_renderer3D->setup3D(camera, true);
 	
 	setWorldTransform(matIdentity);
 
@@ -911,28 +956,28 @@ void BaseRenderOpenGL3DShader::renderSceneGeometry(const BaseArray<AdWalkplane *
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 
-	for (uint i = 0; i < planes.size(); i++) {
+	for (int32 i = 0; i < planes.getSize(); i++) {
 		if (planes[i]->_active) {
 			planes[i]->_mesh->render(true);
 		}
 	}
 
 	// render blocks
-	for (uint i = 0; i < blocks.size(); i++) {
+	for (int32 i = 0; i < blocks.getSize(); i++) {
 		if (blocks[i]->_active) {
 			blocks[i]->_mesh->render(true);
 		}
 	}
 
 	// render generic objects
-	for (uint i = 0; i < generics.size(); i++) {
+	for (int32 i = 0; i < generics.getSize(); i++) {
 		if (generics[i]->_active) {
 			generics[i]->_mesh->render(true);
 		}
 	}
 
 	// render waypoints
-	AdScene *scene = ((AdGame *)_gameRef)->_scene;
+	AdScene *scene = ((AdGame *)_game)->_scene;
 	AdSceneGeometry *geom = scene->_geom;
 	if (geom && geom->_wptMarker) {
 		DXMatrix viewMat, projMat, worldMat;
@@ -946,8 +991,8 @@ void BaseRenderOpenGL3DShader::renderSceneGeometry(const BaseArray<AdWalkplane *
 
 		setup2D();
 
-		for (uint i = 0; i < geom->_waypointGroups.size(); i++) {
-			for (uint j = 0; j < geom->_waypointGroups[i]->_points.size(); j++) {
+		for (int32 i = 0; i < geom->_waypointGroups.getSize(); i++) {
+			for (int32 j = 0; j < geom->_waypointGroups[i]->_points.getSize(); j++) {
 				DXVec3Project(&vec2d, geom->_waypointGroups[i]->_points[j], &vport, &projMat, &viewMat, &worldMat);
 				geom->_wptMarker->display(vec2d._x + scene->getOffsetLeft() - _drawOffsetX, vec2d._y + scene->getOffsetTop() - _drawOffsetY);
 			}
@@ -962,7 +1007,7 @@ void BaseRenderOpenGL3DShader::renderShadowGeometry(const BaseArray<AdWalkplane 
 	DXMatrixIdentity(&matIdentity);
 
 	if (camera)
-		_gameRef->_renderer3D->setup3D(camera, true);
+		_game->_renderer3D->setup3D(camera, true);
 
 	setWorldTransform(matIdentity);
 
@@ -979,21 +1024,21 @@ void BaseRenderOpenGL3DShader::renderShadowGeometry(const BaseArray<AdWalkplane 
 	glFrontFace(GL_CW); // WME DX have CCW
 
 	// render blocks
-	for (uint i = 0; i < blocks.size(); i++) {
+	for (int32 i = 0; i < blocks.getSize(); i++) {
 		if (blocks[i]->_active && blocks[i]->_receiveShadows) {
 			blocks[i]->_mesh->render();
 		}
 	}
 
 	// render walk planes
-	for (uint i = 0; i < planes.size(); i++) {
+	for (int32 i = 0; i < planes.getSize(); i++) {
 		if (planes[i]->_active && planes[i]->_receiveShadows) {
 			planes[i]->_mesh->render();
 		}
 	}
 
 	// render generic objects
-	for (uint i = 0; i < generics.size(); i++) {
+	for (int32 i = 0; i < generics.getSize(); i++) {
 		if (generics[i]->_active && generics[i]->_receiveShadows) {
 			generics[i]->_mesh->render();
 		}
@@ -1016,7 +1061,7 @@ void BaseRenderOpenGL3DShader::disableCulling() {
 
 // implements D3D SetViewport() for 2D renderer
 bool BaseRenderOpenGL3DShader::setViewport(int left, int top, int right, int bottom) {
-	_viewportRect.setRect(left, top, right, bottom);
+	BasePlatform::setRect(&_viewportRect, left, top, right, bottom);
 	_viewport._x = left;
 	_viewport._y = top;
 	_viewport._width = right - left;
@@ -1138,19 +1183,19 @@ void BaseRenderOpenGL3DShader::postfilter() {
 }
 
 BaseSurface *BaseRenderOpenGL3DShader::createSurface() {
-	return new BaseSurfaceOpenGL3D(_gameRef, this);
+	return new BaseSurfaceOpenGL3D(_game, this);
 }
 
 Mesh3DS *BaseRenderOpenGL3DShader::createMesh3DS() {
-	return new Mesh3DSOpenGLShader(_gameRef, _geometryShader);
+	return new Mesh3DSOpenGLShader(_game, _geometryShader);
 }
 
 XMesh *BaseRenderOpenGL3DShader::createXMesh() {
-	return new XMeshOpenGLShader(_gameRef, _xmodelShader, _flatShadowShader);
+	return new XMeshOpenGLShader(_game, _xmodelShader, _flatShadowShader);
 }
 
 ShadowVolume *BaseRenderOpenGL3DShader::createShadowVolume() {
-	return new ShadowVolumeOpenGLShader(_gameRef, _shadowVolumeShader, _shadowMaskShader);
+	return new ShadowVolumeOpenGLShader(_game, _shadowVolumeShader, _shadowMaskShader);
 }
 
 // ScummVM specific ends <--

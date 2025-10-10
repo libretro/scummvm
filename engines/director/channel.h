@@ -95,6 +95,8 @@ public:
 	// used for film loops
 	bool hasSubChannels();
 	Common::Array<Channel> *getSubChannels();
+	CastMemberID getSubChannelSound1();
+	CastMemberID getSubChannelSound2();
 
 public:
 	Sprite *_sprite;
@@ -118,6 +120,10 @@ public:
 	uint _filmLoopFrame;
 
 	Common::Rect _rollOverBbox;
+
+	int _startFrame;
+	int _endFrame;
+	Common::Array<Datum> _scriptInstanceList;
 
 private:
 	Graphics::ManagedSurface *getSurface();

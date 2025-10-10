@@ -750,7 +750,8 @@ Datum LC::addData(Datum &d1, Datum &d2) {
 	} else if (alignedType == INT) {
 		res = Datum(d1.asInt() + d2.asInt());
 	} else {
-		g_lingo->lingoError("LC::addData(): not supported between types %s and %s", d1.type2str(), d2.type2str());
+		res = Datum(d1.asInt() + d2.asInt());
+		warning("LC::addData(): not supported between types %s and %s", d1.type2str(), d2.type2str());
 	}
 	return res;
 }
@@ -779,7 +780,8 @@ Datum LC::subData(Datum &d1, Datum &d2) {
 	} else if (alignedType == INT) {
 		res = Datum(d1.asInt() - d2.asInt());
 	} else {
-		g_lingo->lingoError("LC::subData(): not supported between types %s and %s", d1.type2str(), d2.type2str());
+		res = Datum(d1.asInt() - d2.asInt());
+		warning("LC::subData(): not supported between types %s and %s", d1.type2str(), d2.type2str());
 	}
 	return res;
 }
@@ -808,7 +810,8 @@ Datum LC::mulData(Datum &d1, Datum &d2) {
 	} else if (alignedType == INT) {
 		res = Datum(d1.asInt() * d2.asInt());
 	} else {
-		g_lingo->lingoError("LC::mulData(): not supported between types %s and %s", d1.type2str(), d2.type2str());
+		res = Datum(d1.asInt() * d2.asInt());
+		warning("LC::mulData(): not supported between types %s and %s", d1.type2str(), d2.type2str());
 	}
 	return res;
 }
@@ -831,7 +834,7 @@ Datum LC::divData(Datum &d1, Datum &d2) {
 
 	if ((d2.type == INT && d2.u.i == 0) ||
 			(d2.type == FLOAT && d2.u.f == 0.0)) {
-		warning("LC::divData(): division by zero");
+		g_lingo->lingoError("LC::divData(): division by zero");
 		d2 = Datum(1);
 	}
 
@@ -846,7 +849,12 @@ Datum LC::divData(Datum &d1, Datum &d2) {
 	} else if (alignedType == INT) {
 		res = Datum(d1.asInt() / d2.asInt());
 	} else {
-		g_lingo->lingoError("LC::divData(): not supported between types %s and %s", d1.type2str(), d2.type2str());
+		int denom = d2.asInt();
+		if (denom == 0) {
+			g_lingo->lingoError("LC::divData(): division by zero");
+		}
+		res = Datum(d1.asInt() / d2.asInt());
+		warning("LC::divData(): not supported between types %s and %s", d1.type2str(), d2.type2str());
 	}
 
 	return res;
@@ -866,8 +874,8 @@ Datum LC::modData(Datum &d1, Datum &d2) {
 	int i1 = d1.asInt();
 	int i2 = d2.asInt();
 	if (i2 == 0) {
-		g_lingo->lingoError("LC::modData(): division by zero");
-		i2 = 1;
+		warning("LC::modData(): division by zero");
+		return Datum(0);
 	}
 
 	Datum res(i1 % i2);
@@ -900,7 +908,8 @@ Datum LC::negateData(Datum &d) {
 	} else if (d.type == VOID) {
 		res = Datum(0);
 	} else {
-		g_lingo->lingoError("LC::negateData(): not supported for type %s", d.type2str());
+		warning("LC::negateData(): not supported for type %s", d.type2str());
+		res = Datum(-d.asInt());
 	}
 
 	return res;
@@ -1156,6 +1165,9 @@ Datum LC::chunkRef(ChunkType type, int startChunk, int endChunk, const Datum &sr
 	Datum res;
 	res.u.cref = new ChunkReference(src, type, startChunk, endChunk, exprStartIdx, exprEndIdx);
 	res.type = CHUNKREF;
+	if (debugChannelSet(5, kDebugLingoExec)) {
+		debugC(5, kDebugLingoExec, "LC::chunkRef: type: %d, startChunk: %d, endChunk: %d, exprStartIdx: %d, exprEndIdx: %d -> %s", type, startChunk, endChunk, exprStartIdx, exprEndIdx, res.asString(true).c_str());
+	}
 	return res;
 }
 
@@ -1844,10 +1856,15 @@ void LC::c_delete() {
 	Datum field;
 	int start, end;
 	if (d.type == CHUNKREF) {
+		// bail out if the chunk is invalid
+		if (d.u.cref->start == -1)
+			return;
 		start = d.u.cref->start;
 		end = d.u.cref->end;
 		field = d.u.cref->source;
 		while (field.type == CHUNKREF) {
+			if (field.u.cref->start == -1)
+				return;
 			start += field.u.cref->start;
 			end += field.u.cref->start;
 			field = field.u.cref->source;
@@ -1879,12 +1896,19 @@ void LC::c_delete() {
 			break;
 		case kChunkItem:
 		case kChunkLine:
-			// when deleting the first item, include the delimiter after the item
-			// deleting another item, remove the delimiter in front
-			if (start == 0) {
-				end++;
-			} else {
-				start--;
+			{
+				Common::u32char_type_t split = (d.u.cref->type == kChunkItem) ? g_lingo->_itemDelimiter : '\r';
+				bool isFirstItem = (start == 0) || ((start > 0) && (text[start-1] != split));
+				bool isLastItem = (end == ((int)text.size())) || ((end < ((int)text.size())) && (text[end] != split));
+				if (isFirstItem && isLastItem) {
+					// if the target is a whole line, change nothing
+				} else if (isFirstItem) {
+					// when deleting the first item, include the delimiter after the item
+					end++;
+				} else {
+					// deleting another item, remove the delimiter in front
+					start--;
+				}
 			}
 			break;
 		}

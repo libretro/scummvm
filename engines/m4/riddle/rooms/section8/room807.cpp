@@ -181,7 +181,7 @@ void Room807::init() {
 		break;
 	}
 
-	digi_play_loop("950_s29", 2, 127, -1, -1);
+	digi_play_loop("950_s29", 3, 127, -1, -1);
 }
 
 void Room807::pre_parser() {
@@ -796,7 +796,7 @@ void Room807::parser() {
 		if (player_said("slot")) {
 			switch (_G(kernel).trigger) {
 			case -1:
-				ws_walk(_G(my_walker), 476, 318, 0, 10, 11, true);
+				ws_walk(_G(my_walker), 476, 318, nullptr, 10, 11, true);
 				break;
 
 			case 10:
@@ -900,7 +900,7 @@ void Room807::parser() {
 		case 30:
 			terminateMachine(_807Mc01Mach);
 			_807Mc01Mach = series_play("807mc01", 0, 16, -1, 5, 0, 100, 0, 0, 22, 41);
-			ws_hide_walker(_807Mc01Mach);
+			ws_hide_walker(_G(my_walker));
 			_G(kernel).trigger_mode = KT_DAEMON;
 			series_play("807rp03", 4095, 16, 11, 5, 0, 100, 0, 0, 0, -1);
 			_G(kernel).trigger_mode = KT_PARSE;
@@ -1024,8 +1024,7 @@ void Room807::daemon() {
 		_field38 = 1;
 		_G(flags)[V274] = 0;
 		other_save_game_for_resurrection();
-		_G(game).new_section = 4;
-		_G(game).new_room = 413;
+		_G(game).setRoom(413);
 
 		break;
 

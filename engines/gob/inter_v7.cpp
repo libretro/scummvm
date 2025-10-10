@@ -150,13 +150,20 @@ void Inter_v7::setupOpcodesFunc() {
 }
 
 void Inter_v7::setupOpcodesGob() {
-	Inter_Playtoons::setupOpcodesGob();
+	OPCODEGOB(55, o7_writeUnknownChildDataToGameVariables);
+	OPCODEGOB(64, o7_writeUnknownAppChildDataToGameVariables);
+	OPCODEGOB(74, o7_writeUnknownChildUint16ToGameVariables);
 
+	OPCODEGOB(406, o7_startAdi4Application);
+	OPCODEGOB(407, o7_xorDeobfuscate);
+	OPCODEGOB(408, o7_xorObfuscate);
 	OPCODEGOB(420, o7_ansiToOEM);
 	OPCODEGOB(421, o7_oemToANSI);
 	OPCODEGOB(512, o7_setDBStringEncoding);
 	OPCODEGOB(513, o7_gob0x201);
 	OPCODEGOB(600, o7_getFreeDiskSpace);
+
+	OPCODEGOB(782, o7_dummy);
 }
 
 void Inter_v7::o7_draw0x0C() {
@@ -228,7 +235,7 @@ void Inter_v7::o7_loadCursor(OpFuncParams &params) {
 										 index * _vm->_draw->_cursorWidth + _vm->_draw->_cursorWidth - 1,
 										 _vm->_draw->_cursorHeight - 1, 0);
 
-	_vm->_video->drawPackedSprite(resource->getData(),
+	_vm->_video->drawPackedSprite(resource->getData(), resource->getSize(),
 								  resource->getWidth(), resource->getHeight(),
 								  index * _vm->_draw->_cursorWidth, 0, 0, *_vm->_draw->_cursorSprites);
 	_vm->_draw->_cursorAnimLow[index] = 0;
@@ -1451,28 +1458,28 @@ void Inter_v7::o7_draw0xE6() {
 	_vm->_game->_script->readVarIndex();
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_draw0xE6 (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_draw0xE7() {
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_draw0xE7 (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_draw0xE8() {
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_draw0xE8 (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_draw0xE9() {
 	_vm->_game->_script->readVarIndex();
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_draw0xE8 (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_draw0xF0() {
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_draw0xF0 (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_executeModAddEvent() {
 	_vm->_game->_script->readVarIndex();
@@ -1480,33 +1487,33 @@ void Inter_v7::o7_executeModAddEvent() {
 	_vm->_game->_script->readVarIndex();
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_executeModAddEvent (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_executeModSetLength() {
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_executeModSetLength (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_executeModStart() {
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_executeModSetLength (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_executeModGetPosition() {
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_executeModSetLength (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_vmdGetSoundBuffer() {
 	_vm->_game->_script->readValExpr();
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_vmdGetSoundBuffer (Adibou/Musique)");
-};
+}
 
 void Inter_v7::o7_vmdReleaseSoundBuffer() {
 	_vm->_game->_script->readVarIndex();
 	warning("STUB: o7_vmdReleaseSoundBuffer (Adibou/Musique)");
-};
+}
 
 
 void Inter_v7::o7_printText(OpFuncParams &params) {
@@ -1962,6 +1969,226 @@ Common::String Inter_v7::oemToANSI(Common::String string) {
 	return string.decode(Common::kDos850).encode(Common::kWindows1252);
 }
 
+void Inter_v7::xorObfuscate(byte *str, int len) {
+	if (len <= 1)
+		return;
+
+	for (int i = len - 1; i >= 1; --i)
+		str[i] = str[i] ^ str[i - 1];
+}
+
+void Inter_v7::xorDeobfuscate(byte *str, int len) {
+	if (len <= 1)
+		return;
+
+	for (int i = 1; i < len; ++i)
+		str[i] = str[i] ^ str[i - 1];
+}
+
+bool Inter_v7::readAdi4InfDataForChild(Common::Array<byte> &dest, uint32 childNumber, uint32 offset, uint32 size) {
+	uint32 totalOffset = childNumber * kAdi4InfChildDataSize + offset;
+	assert(size <= dest.size());
+
+	if (!_vm->_saveLoad->loadToRaw("ADI.INF", dest.data(), size, totalOffset))
+		return false;
+
+	xorDeobfuscate(dest.data(), size);
+	return true;
+}
+
+bool Inter_v7::readAdi4InstalledAppsData(Common::Array<byte> &generalChildData,
+										 Common::Array<byte> &appChildData,
+										 uint32 childNbr,
+										 uint32 appliNbr) {
+	if (!readAdi4InfDataForChild(generalChildData, childNbr, 0, kAdi4InfGeneralChildDataSize)) {
+		warning("readAdi4InstalledAppsData: Failed to read general data for child %d in ADI.INF", childNbr);
+		return false;
+	}
+
+	Common::Array<byte> appChildDataPacked(kAdi4InfAppChildDataSize);
+	if (!readAdi4InfDataForChild(appChildDataPacked,
+								 childNbr,
+								 kAdi4InfGeneralChildDataSize + appliNbr * kAdi4InfAppChildDataSize,
+								 kAdi4InfAppChildDataSize)) {
+		warning("readAdi4InstalledAppsData: Failed to read app-specific data for child %d in ADI.INF", childNbr);
+		return false;
+	}
+
+	for (uint32 i = 0; i < kAdi4InfAppChildDataSize; ++i) {
+		appChildData[i] = appChildDataPacked[i] & 3;
+		appChildData[i + kAdi4InfAppChildDataSize] = (appChildDataPacked[i] >> 2) & 3;
+		appChildData[i + 2 * kAdi4InfAppChildDataSize] = (appChildDataPacked[i] >> 4) & 3;
+	}
+
+	return true;
+}
+
+bool Inter_v7::writeAdi4InfDataForChild(const Common::Array<byte> &src, uint32 childNumber, uint32 offset, uint32 size) {
+	int adiInfSize = _vm->_saveLoad->getSize("ADI.INF");
+	if (adiInfSize < 0) {
+		warning("writeAdi4InfDataForChild: ADI.INF file not found");
+		return false;
+	}
+
+	Common::Array<byte> bytesToWrite(size);
+	memcpy(bytesToWrite.data(), src.data(), size);
+	xorObfuscate(bytesToWrite.data(), bytesToWrite.size());
+
+	uint32 totalOffset = childNumber * kAdi4InfChildDataSize + offset;
+	if (totalOffset > (uint32) adiInfSize) {
+		// Offset is past the current size, fill the gap with spaces
+		Common::Array<byte> emptySpace(totalOffset - adiInfSize, ' ');
+		if (!_vm->_saveLoad->saveFromRaw("ADI.INF", emptySpace.data(), emptySpace.size(), adiInfSize))
+			return false;
+	}
+
+	if (!_vm->_saveLoad->saveFromRaw("ADI.INF", bytesToWrite.data(), bytesToWrite.size(), totalOffset))
+		return false;
+
+	return true;
+}
+
+bool Inter_v7::writeAdi4InstalledAppsData(const Common::Array<byte> &generalChildData,
+										 const Common::Array<byte> &appChildData,
+										 uint32 childNbr,
+										 uint32 appliNbr) {
+	if (!writeAdi4InfDataForChild(generalChildData, childNbr, 0, kAdi4InfGeneralChildDataSize)) {
+		warning("wrAdi4InstalledAppsData: Failed to write general data for child %d in ADI.INF", childNbr);
+		return false;
+	}
+
+	Common::Array<byte> appChildDataPacked(kAdi4InfAppChildDataSize);
+	for (uint32 i = 0; i < kAdi4InfAppChildDataSize; ++i) {
+		appChildDataPacked[i] = (appChildData[i] & 3) |
+								((appChildData[i + kAdi4InfAppChildDataSize] & 3) << 2) |
+								((appChildData[i + 2 * kAdi4InfAppChildDataSize] & 3) << 4);
+	}
+
+	if (!readAdi4InfDataForChild(appChildDataPacked,
+								 childNbr,
+								 kAdi4InfGeneralChildDataSize + appliNbr * kAdi4InfAppChildDataSize,
+								 kAdi4InfAppChildDataSize)) {
+		warning("readAdi4InstalledAppsData: Failed to write app-specific data for child %d in ADI.INF", childNbr);
+		return false;
+								 }
+
+	return true;
+}
+
+void Inter_v7::o7_writeUnknownChildDataToGameVariables(OpGobParams &params) {
+	uint16 destVarIndex = _vm->_game->_script->readUint16();
+	_vm->_game->_script->skip(14);
+
+	if (_adi4GeneralChildData.empty())
+		return;
+
+	_vm->_inter->_variables->copyFrom(destVarIndex * 4, &_adi4GeneralChildData[3344], 40);
+	WRITE_VARO_UINT16(destVarIndex * 4 + 39, _adi4CurrentChildNbr);
+}
+
+void Inter_v7::o7_writeUnknownAppChildDataToGameVariables(OpGobParams &params) {
+	uint16 destVarIndex = _vm->_game->_script->readUint16();
+	if (_adi4GeneralChildData.empty())
+		return;
+
+	for (uint32 i = 0; i < kAdi4InfAppChildDataSize; ++i) {
+		WRITE_VARO_UINT8(destVarIndex * 4 + i,
+						_adi4CurrentAppChildData[i + _adi4CurrentSectionInAppChildData * kAdi4InfAppChildDataSize] & 3);
+	}
+}
+
+void Inter_v7::o7_writeUnknownChildUint16ToGameVariables(OpGobParams &params) {
+	uint16 varIndex = _vm->_game->_script->readUint16();
+	if (_adi4GeneralChildData.empty())
+		return;
+
+	WRITE_VAR(varIndex, READ_LE_UINT16(&_adi4GeneralChildData[3241]));
+}
+
+void Inter_v7::o7_startAdi4Application(OpGobParams &params) {
+	uint16 varIndexAppNbr = _vm->_game->_script->readUint16();
+	uint16 varIndexChildNbr = _vm->_game->_script->readUint16();
+
+	_adi4CurrentAppNbr = VAR(varIndexAppNbr);
+	_adi4CurrentChildNbr = VAR(varIndexChildNbr);
+
+	_adi4GeneralChildData.resize(kAdi4InfGeneralChildDataSize);
+	_adi4CurrentAppChildData.resize(3 * kAdi4InfAppChildDataSize, ' ');
+
+	readAdi4InstalledAppsData(_adi4GeneralChildData,
+							  _adi4CurrentAppChildData,
+							  _adi4CurrentChildNbr,
+							  _adi4CurrentAppNbr);
+
+	char appliAbbreviationBuf[4];
+	appliAbbreviationBuf[0] = static_cast<char>(_adi4GeneralChildData[_adi4CurrentAppNbr * 4 + 55]);
+	appliAbbreviationBuf[1] = static_cast<char>(_adi4GeneralChildData[_adi4CurrentAppNbr * 4 + 56]);
+	appliAbbreviationBuf[2] = static_cast<char>(_adi4GeneralChildData[_adi4CurrentAppNbr * 4 + 57]);
+	appliAbbreviationBuf[3] = '\0';
+
+	Common::String appliAbbreviation(appliAbbreviationBuf);
+	byte c = _adi4GeneralChildData[_adi4CurrentAppNbr * 4 + 58];
+
+	Common::String appliDescFilename = "<CD>DESC" + appliAbbreviation;
+	if (c != 0) {
+		appliDescFilename.push_back(static_cast<char>(c));
+	}
+
+	appliDescFilename += ".ADI";
+
+	Common::String appliDescFile = getFile(appliDescFilename.c_str());
+
+	// Ensure the desc file is found
+	if (!_vm->_dataIO->hasFile(appliDescFile)) {
+		warning("o7_startAdi4Application: desc file '%s' not found (application %d, child %d)",
+				appliDescFile.c_str(),
+				_adi4CurrentAppNbr,
+				_adi4CurrentChildNbr);
+		return;
+	}
+
+	if (c == 0) {
+		// Ensure the ADIVMD.TIK file is found
+		if (!_vm->_dataIO->hasFile(getFile("<CD>ADIVMD.TIK"))) {
+			warning("o7_startAdi4Application: desc file '%s' not found (application %d, child %d)",
+					appliDescFile.c_str(),
+					_adi4CurrentAppNbr,
+					_adi4CurrentChildNbr);
+			return;
+		}
+
+		warning("o7_startAdi4Application: c = 0 case stub");
+	} else {
+		Common::String appliStkFile = "ADI" + appliAbbreviation + ".STK";
+		_vm->_dataIO->openArchive(appliStkFile, false);
+
+		Common::String appliIntroTotFile = appliAbbreviation + "INTRO";
+		_vm->_draw->_colorOffset = 10;
+		_vm->_game->totSub(1, appliIntroTotFile);
+		_vm->_draw->_colorOffset = 0;
+
+		_vm->_dataIO->closeArchive(false);
+	}
+
+	_adi4CurrentSectionInAppChildData = 0;
+	_adi4GeneralChildData.clear();
+	_adi4CurrentAppChildData.clear();
+}
+
+void Inter_v7::o7_xorDeobfuscate(OpGobParams &params) {
+	uint16 varIndex = _vm->_game->_script->readUint16();
+	uint16 size = _vm->_game->_script->readUint16();
+	byte *data = _vm->_inter->_variables->getAddressVar8(varIndex);
+	xorDeobfuscate(data, size);
+}
+
+void Inter_v7::o7_xorObfuscate(OpGobParams &params) {
+	uint16 varIndex = _vm->_game->_script->readUint16();
+	byte *data = _vm->_inter->_variables->getAddressVar8(varIndex);
+	uint16 size = _vm->_game->_script->readUint16();
+	xorObfuscate(data, size);
+}
+
 void Inter_v7::o7_ansiToOEM(OpGobParams &params) {
 	uint16 varIndex = _vm->_game->_script->readUint16();
 	char *str = GET_VAR_STR(varIndex);
@@ -2003,6 +2230,10 @@ void Inter_v7::o7_getFreeDiskSpace(OpGobParams &params) {
 	// Those copies are a no-op in ScummVM, so we just return a value high enough to make the game scripts happy.
 	uint16 varIndex = _vm->_game->_script->readUint16();
 	WRITE_VAR(varIndex, 1000000000); // HACK
+}
+
+void Inter_v7::o7_dummy(OpGobParams &params) {
+	_vm->_game->_script->skip(4);
 }
 
 

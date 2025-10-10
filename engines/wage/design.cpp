@@ -548,6 +548,18 @@ void Design::drawOval(Graphics::ManagedSurface *surface, Common::ReadStream &in,
 
 void Design::drawBitmap(Graphics::ManagedSurface *surface, Common::SeekableReadStream &in) {
 	int numBytes = in.readSint16BE();
+
+	// Check for broken bitmap data
+	if (numBytes < 10) {
+		if (numBytes > 2) {
+			warning("Design::drawBitmap(): Broken bitmap data");
+			in.seek(numBytes - 2, SEEK_CUR);
+		} else {
+			warning("Design::drawBitmap(): Completely broken bitmap data");
+		}
+		return;
+	}
+
 	int y1 = in.readSint16BE();
 	int x1 = in.readSint16BE();
 	int y2 = in.readSint16BE();
@@ -609,10 +621,18 @@ void Design::drawBitmap(Graphics::ManagedSurface *surface, Common::SeekableReadS
 					break;
 				}
 			}
+
+			if (numBytes < 0 && (i + 1 < count) && (y < h)) {
+				warning("Design::drawBitmap(): Bitmap data ended prematurely");
+				break;
+			}
 		}
 	}
 
-	in.skip(numBytes);
+	if (numBytes > 0)
+		in.seek(numBytes, SEEK_CUR);
+	else if (numBytes < 0)
+		warning("Design::drawBitmap(): Read past the end of bitmap data (%d bytes)", numBytes);
 
 	if (!_boundsCalculationMode) {
 		Graphics::FloodFill ff(&tmp, kColorWhite, kColorGreen);
@@ -632,10 +652,15 @@ void Design::drawBitmap(Graphics::ManagedSurface *surface, Common::SeekableReadS
 			y = -y1;
 
 		for (; y < h && y1 + y < surface->h; y++) {
+			x = 0;
+			if (x1 < 0)
+				x = -x1;
+
 			byte *src = (byte *)tmp.getBasePtr(0, y);
-			byte *dst = (byte *)surface->getBasePtr(x1, y1 + y);
-			byte *mask = (byte *)_maskImage->getBasePtr(x1, y1 + y);
-			for (x = 0; x < w; x++) {
+			byte *dst = (byte *)surface->getBasePtr(x1 + x, y1 + y);
+			byte *mask = (byte *)_maskImage->getBasePtr(x1 + x, y1 + y);
+
+			for (; x < w && x1 + x < surface->w; x++) {
 				if (*src != kColorGreen) {
 					*dst = *src;
 					*mask = kColorBlack;

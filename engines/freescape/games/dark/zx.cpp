@@ -32,10 +32,10 @@ void DarkEngine::initZX() {
 	_maxEnergy = 63;
 	_maxShield = 63;
 
-	_soundIndexShoot = 5;
+	_soundIndexShoot = 1;
 	_soundIndexCollide = -1; // Scripted
-	_soundIndexFall = 3;
-	_soundIndexClimb = 4;
+	_soundIndexStepDown = 3;
+	_soundIndexStepUp = 4;
 	_soundIndexMenu = 25;
 	_soundIndexStart = 11;
 	_soundIndexAreaChange = 0x1c;
@@ -140,6 +140,9 @@ void DarkEngine::drawZXUI(Graphics::Surface *surface) {
 	uint32 back = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 	uint32 transparent = _gfx->_texturePixelFormat.ARGBToColor(0x00, 0x00, 0x00, 0x00);
 
+	// Drawing the horizontal compass should be done first, so that the background is properly filled
+	drawHorizontalCompass(192, 141, _yaw, front, back, surface);
+
 	int score = _gameStateVars[k8bitVariableScore];
 	int ecds = _gameStateVars[kVariableActiveECDs];
 	surface->fillRect(Common::Rect(193, 140, 223, 163), back);
@@ -191,6 +194,7 @@ void DarkEngine::drawZXUI(Graphics::Surface *surface) {
 	uint32 clockColor = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0xFF, 0x00, 0x00);
 	drawBinaryClock(surface, 273, 128, clockColor, back);
 	drawIndicator(surface, 152, 140);
+	drawVerticalCompass(surface, 47, 79, _pitch, front);
 }
 
 } // End of namespace Freescape

@@ -25,8 +25,6 @@
 #include "engines/wintermute/base/gfx/base_renderer.h"
 #include "engines/wintermute/coll_templ.h"
 #include "engines/wintermute/dctypes.h"
-#include "engines/wintermute/math/rect32.h"
-#include "engines/wintermute/math/vector2.h"
 
 #include "graphics/transform_struct.h"
 #include "graphics/surface.h"
@@ -78,19 +76,18 @@ public:
 	bool setup3DCustom(DXMatrix &viewMat, DXMatrix &projMat);
 	virtual bool enableShadows() = 0;
 	virtual bool disableShadows() = 0;
-	virtual bool stencilSupported() = 0;
-	virtual bool invalidateTexture(BaseSurfaceOpenGL3D *texture) = 0;
+	virtual bool shadowVolumeSupported() = 0;
+	virtual bool invalidateTexture(BaseSurface *texture) = 0;
 
-	Graphics::TSpriteBlendMode _blendMode;
 	virtual void setSpriteBlendMode(Graphics::TSpriteBlendMode blendMode, bool forceChange = false) = 0;
 
 	virtual bool invalidateDeviceObjects() = 0;
 	virtual bool restoreDeviceObjects() = 0;
-	BaseSurfaceOpenGL3D *_lastTexture;
-	void fade(uint16 alpha) override;
-	bool drawSprite(BaseSurface *texture, const Rect32 &rect, float zoomX, float zoomY, const Vector2 &pos,
+	BaseSurface *_lastTexture;
+	bool fade(uint16 alpha) override;
+	bool drawSprite(BaseSurface *texture, const Common::Rect32 &rect, float zoomX, float zoomY, const DXVector2 &pos,
 	                uint32 color, bool alphaDisable, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY);
-	virtual bool drawSpriteEx(BaseSurface *texture, const Rect32 &rect, const Vector2 &pos, const Vector2 &rot, const Vector2 &scale,
+	virtual bool drawSpriteEx(BaseSurface *texture, const Common::Rect32 &rect, const DXVector2 &pos, const DXVector2 &rot, const DXVector2 &scale,
 	                float angle, uint32 color, bool alphaDisable, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY) = 0;
 	Camera3D *_camera;
 	virtual bool resetDevice() = 0;
@@ -148,9 +145,15 @@ public:
 	virtual void postfilter() = 0;
 	virtual void setPostfilter(PostFilter postFilter) = 0;
 	bool flip() override;
-	bool indicatorFlip() override;
+	bool indicatorFlip(int32 x, int32 y, int32 width, int32 height) override;
 	bool forcedFlip() override;
 	virtual bool setViewport3D(DXViewport *viewport) = 0;
+
+	void invalidateLastTexture() {
+		_lastTexture = nullptr;
+	}
+
+	void endSaveLoad() override;
 
 	// ScummVM specific methods <--
 
@@ -164,6 +167,7 @@ protected:
 	float _farClipPlane;
 	TRendererState _state;
 	PostFilter _postFilterMode;
+	bool _flipInProgress;
 
 	virtual void setAmbientLightRenderState() = 0;
 };

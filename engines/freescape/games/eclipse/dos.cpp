@@ -35,6 +35,12 @@ extern byte kCGAPalettePinkBlue[4][3];
 void EclipseEngine::initDOS() {
 	_viewArea = Common::Rect(40, 33, 280, 133);
 	_soundIndexShoot = 18;
+	_soundIndexCollide = 1;
+	_soundIndexStepDown = 3;
+	_soundIndexStepUp = 3;
+	_soundIndexMenu = -1;
+	_soundIndexStart = 9;
+	_soundIndexAreaChange = 5;
 }
 
 void EclipseEngine::loadAssetsDOSFullGame() {
@@ -53,7 +59,7 @@ void EclipseEngine::loadAssetsDOSFullGame() {
 
 		loadMessagesFixedSize(&file, 0x710f, 16, 20);
 		loadSoundsFx(&file, 0xd670, 5);
-		loadSpeakerFxDOS(&file, 0x7396 + 0x200, 0x72a1 + 0x200);
+		loadSpeakerFxDOS(&file, 0x7396 + 0x200, 0x72a1 + 0x200, 20);
 		loadFonts(&file, 0xd403);
 		load8bitBinary(&file, 0x3ce0, 16);
 

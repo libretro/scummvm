@@ -49,6 +49,7 @@ public:
 	Graphics::ManagedSurface *_menuFxOffIndicator;
 	Graphics::ManagedSurface *_menu;
 
+	void beforeStarting() override;
 	void initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *infoScreenKeyMap, const char *target) override;
 	void initGameState() override;
 	void endGame() override;
@@ -73,9 +74,12 @@ public:
 	void drawCPCUI(Graphics::Surface *surface) override;
 	void drawAmigaAtariSTUI(Graphics::Surface *surface) override;
 	void drawEnergyMeter(Graphics::Surface *surface, Common::Point origin);
+	void drawLiftingGate(Graphics::Surface *surface);
+	void drawDroppingGate(Graphics::Surface *surface);
 	void pressedKey(const int keycode) override;
 	void checkSensors() override;
 	void updateTimeVariables() override;
+	void drawBackground() override;
 
 	bool checkIfGameEnded() override;
 	void drawSensorShoot(Sensor *sensor) override;
@@ -114,7 +118,8 @@ public:
 	Graphics::ManagedSurface *_strenghtBarFrame;
 	Common::Array<Graphics::ManagedSurface *> _strenghtWeightsFrames;
 	Common::Array<Graphics::ManagedSurface *> _flagFrames;
-	Graphics::ManagedSurface *_thunderFrame;
+	Common::Array<Graphics::ManagedSurface *> _thunderFrames;
+
 	Graphics::ManagedSurface *_riddleTopFrame;
 	Graphics::ManagedSurface *_riddleBackgroundFrame;
 	Graphics::ManagedSurface *_riddleBottomFrame;
@@ -131,6 +136,7 @@ public:
 	int _spiritsToKill;
 
 	int _lastTenSeconds;
+	int _soundIndexStartFalling;
 
 private:
 	Common::SeekableReadStream *decryptFile(const Common::Path &filename);
@@ -143,8 +149,16 @@ private:
 	void tryToCollectKey();
 	void addGhosts();
 	bool ghostInArea();
+	void updateThunder();
+
+	Audio::SoundHandle _soundFxGhostHandle;
 	Texture *_optionTexture;
 	Font _fontRiddle;
+	int _droppingGateStartTicks;
+	int _thunderTicks;
+	int _thunderFrameDuration;
+	Math::Vector3d _thunderOffset;
+	Common::Array<Texture *>_thunderTextures;
 };
 
 }

@@ -113,6 +113,9 @@ void DarkEngine::drawCPCUI(Graphics::Surface *surface) {
 	_gfx->readFromPalette(color, r, g, b);
 	uint32 back = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 
+	// Drawing the horizontal compass should be done first, so that the background is properly filled
+	drawHorizontalCompass(200, 143, _yaw, front, back, surface);
+
 	int score = _gameStateVars[k8bitVariableScore];
 	int ecds = _gameStateVars[kVariableActiveECDs];
 	drawStringInSurface(Common::String::format("%04d", int(2 * _position.x())), 200, 137, front, back, surface);
@@ -162,6 +165,7 @@ void DarkEngine::drawCPCUI(Graphics::Surface *surface) {
 	}
 	drawBinaryClock(surface, 300, 124, front, back);
 	drawIndicator(surface, 160, 136);
+	drawVerticalCompass(surface, 24, 76, _pitch, front);
 }
 
 } // End of namespace Freescape

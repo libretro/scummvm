@@ -24,9 +24,13 @@
 namespace Freescape {
 
 void FreescapeEngine::waitInLoop(int maxWait) {
-	for (int i = 0; i < maxWait; i++) {
+	long int startTick = _ticks;
+	while (_ticks <= startTick + maxWait) {
 		Common::Event event;
 		while (_eventManager->pollEvent(event)) {
+			if (_ticks > startTick + maxWait)
+				break;
+
 			Common::Point mousePos;
 			switch (event.type) {
 			case Common::EVENT_QUIT:
@@ -81,7 +85,7 @@ void FreescapeEngine::waitInLoop(int maxWait) {
 		_gfx->positionCamera(_position, _position + _cameraFront, _roll);
 
 		drawBackground();
-		_currentArea->draw(_gfx, _ticks / 10, _position, _cameraFront);
+		_currentArea->draw(_gfx, _ticks / 10, _position, _cameraFront, true);
 		drawBorder();
 		drawUI();
 
@@ -90,6 +94,8 @@ void FreescapeEngine::waitInLoop(int maxWait) {
 		g_system->delayMillis(15); // try to target ~60 FPS
 	}
 	_gfx->clear(0, 0, 0, true);
+	_eventManager->purgeMouseEvents();
+	_eventManager->purgeKeyboardEvents();
 }
 
 void FreescapeEngine::titleScreen() {
@@ -345,7 +351,7 @@ void FreescapeEngine::drawBorderScreenAndWait(Graphics::Surface *surface, int ma
 		g_system->updateScreen();
 		g_system->delayMillis(15); // try to target ~60 FPS
 	}
-	playSound(_soundIndexMenu, false);
+	playSound(_soundIndexMenu, false, _soundFxHandle);
 	_gfx->clear(0, 0, 0, true);
 }
 

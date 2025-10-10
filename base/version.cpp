@@ -85,12 +85,7 @@ const char gScummVMFeatures[] = ""
 #endif
 
 #ifdef USE_TREMOR
-#  ifdef USE_TREMOLO
-	// libTremolo is used on WinCE for better ogg performance
-	"Tremolo "
-#  else
 	"Tremor "
-#  endif
 #elif defined(USE_VORBIS)
 	"Vorbis "
 #endif
@@ -202,22 +197,13 @@ const char gScummVMFeatures[] = ""
 #endif
 
 #ifdef USE_CLOUD
-	"cloud ("
-#  ifdef USE_LIBCURL
-	"servers"
-#    ifdef USE_SDL_NET
-	", local) "
-#    else
-	") "
-#    endif
-#  endif
-#else
-#  ifdef USE_LIBCURL
+	"cloud "
+#endif
+#ifdef USE_LIBCURL
 	"libcurl "
-#  endif
-#  ifdef USE_SDL_NET
+#endif
+#ifdef USE_SDL_NET
 	"SDL_net "
-#  endif
 #endif
 
 #ifdef USE_ENET

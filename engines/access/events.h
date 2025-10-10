@@ -48,6 +48,7 @@ private:
 	uint32 _priorFrameTime;
 	uint32 _priorTimerTime;
 	Common::KeyCode _keyCode;
+	Common::CustomEventType _action;
 
 	Graphics::Surface _invCursor;
 	bool checkForNextFrameCounter();
@@ -55,6 +56,7 @@ private:
 	void nextFrame();
 	void nextTimer();
 	void keyControl(Common::KeyCode keycode, bool isKeyDown);
+	void actionControl(Common::CustomEventType action, bool isKeyDown);
 public:
 	CursorType _cursorId;
 	CursorType _normalMouse;
@@ -79,7 +81,7 @@ public:
 	/**
 	 * Return frame counter
 	 */
-	uint32 getFrameCounter() { return _frameCounter; }
+	uint32 getFrameCounter() const { return _frameCounter; }
 
 	/**
 	 * Sets the cursor and reset the normal cursor
@@ -125,27 +127,33 @@ public:
 
 	void pollEventsAndWait();
 
-	void zeroKeys();
+	void zeroKeysActions();
 
-	bool getKey(Common::KeyState &key);
+	bool getAction(Common::CustomEventType &action);
 
-	bool isKeyPending() const;
+	Common::CustomEventType peekAction() const { return _action; }
+
+	Common::KeyCode peekKeyCode() const { return _keyCode; }
+
+	bool isKeyActionPending() const;
 
 	void delay(int time = 5);
+
+	void delayUntilNextFrame();
 
 	void debounceLeft();
 
 	void clearEvents();
 
-	void waitKeyMouse();
+	void waitKeyActionMouse();
 
-	Common::Point &getMousePos() { return _mousePos; }
+	const Common::Point &getMousePos() const { return _mousePos; }
 
 	Common::Point calcRawMouse();
 
-	int checkMouseBox1(Common::Array<Common::Rect> &rects);
+	int checkMouseBox1(const Common::Array<Common::Rect> &rects);
 
-	bool isKeyMousePressed();
+	bool isKeyActionMousePressed();
 
 	void centerMousePos();
 	void restrictMouse();

@@ -88,6 +88,13 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	if (!Common::parseBool(ConfMan.get("invert_y"), _invertY))
 		error("Failed to parse bool from invert_y option");
 
+	_smoothMovement = false;
+	if (!Common::parseBool(ConfMan.get("smooth_movement"), _smoothMovement))
+		error("Failed to parse bool from smooth_movement option");
+
+	if (isDriller() || isSpaceStationOblivion() || isDark())
+		_smoothMovement = false;
+
 	_gameStateControl = kFreescapeGameStateStart;
 	_startArea = 0;
 	_startEntrance = 0;
@@ -99,6 +106,9 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_position = Math::Vector3d(0, 0, 0);
 	_lastPosition = Math::Vector3d(0, 0, 0);
 	_hasFallen = false;
+	_isCollidingWithWall = false;
+	_isSteppingUp = false;
+	_isFalling = false;
 	_maxFallingDistance = 64;
 	_velocity = Math::Vector3d(0, 0, 0);
 	_cameraFront = Math::Vector3d(0, 0, 0);
@@ -116,6 +126,12 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_currentDemoMousePosition = _crossairPosition;
 	_flyMode = false;
 	_noClipMode = false;
+	_moveForward = false;
+	_moveBackward = false;
+	_strafeLeft = false;
+	_strafeRight = false;
+	_moveUp = false;
+	_moveDown = false;
 	_playerWasCrushed = false;
 	_forceEndGame = false;
 	_syncSound = false;
@@ -159,7 +175,8 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_soundIndexShoot = 1;
 	_soundIndexCollide = -1;
 	_soundIndexFall = -1;
-	_soundIndexClimb = -1;
+	_soundIndexStepUp = -1;
+	_soundIndexStepDown = -1;
 	_soundIndexMenu = -1;
 	_soundIndexStart = -1;
 	_soundIndexAreaChange = -1;
@@ -410,12 +427,6 @@ void FreescapeEngine::clearBackground() {
 void FreescapeEngine::drawBackground() {
 	clearBackground();
 	_gfx->drawBackground(_currentArea->_skyColor);
-
-	if (isCastle() && _background) {
-		if (!_skyTexture)
-			_skyTexture = _gfx->createTexture(_background->surfacePtr(), true);
-		_gfx->drawSkybox(_skyTexture, _position);
-	}
 }
 
 void FreescapeEngine::drawFrame() {
@@ -445,7 +456,7 @@ void FreescapeEngine::drawFrame() {
 
 	drawBackground();
 	if (_avoidRenderingFrames == 0) { // Avoid rendering inside objects
-		_currentArea->draw(_gfx, _ticks / 10, _position, _cameraFront);
+		_currentArea->draw(_gfx, _ticks / 10, _position, _cameraFront, false);
 		if (_gameStateControl == kFreescapeGameStatePlaying &&
 		    _currentArea->hasActiveGroups() && _ticks % 50 == 0) {
 			executeMovementConditions();
@@ -518,8 +529,8 @@ void FreescapeEngine::warpMouseToCrossair() {
 
 void FreescapeEngine::processInput() {
 	float currentFrame = g_system->getMillis();
-	float deltaTime = 20.0;
 	_lastFrame = currentFrame;
+
 	Common::Event event;
 	Common::Point mousePos;
 
@@ -550,17 +561,23 @@ void FreescapeEngine::processInput() {
 			if (_hasFallen || _playerWasCrushed)
 				break;
 			switch (event.customType) {
-			case kActionMoveUp:
-				move(kForwardMovement, _scaleVector.x(), deltaTime);
+				case kActionMoveUp:
+				_moveForward = true;
 				break;
 			case kActionMoveDown:
-				move(kBackwardMovement, _scaleVector.x(), deltaTime);
+				_moveBackward = true;
 				break;
 			case kActionMoveLeft:
-				move(kLeftMovement, _scaleVector.y(), deltaTime);
+				_strafeLeft = true;
 				break;
 			case kActionMoveRight:
-				move(kRightMovement, _scaleVector.y(), deltaTime);
+				_strafeRight = true;
+				break;
+			case kActionRiseOrFlyUp:
+				_moveUp = true;
+				break;
+			case kActionLowerOrFlyDown:
+				_moveDown = true;
 				break;
 			case kActionShoot:
 				shoot();
@@ -594,6 +611,7 @@ void FreescapeEngine::processInput() {
 				_savedScreen = nullptr;
 				break;
 			case kActionChangeMode:
+				playSound(_soundIndexCollide, false, _movementSoundHandle);
 				_shootMode = !_shootMode;
 				centerCrossair();
 				if (!_shootMode) {
@@ -613,6 +631,41 @@ void FreescapeEngine::processInput() {
 				break;
 			}
 			break;
+
+		case Common::EVENT_CUSTOM_ENGINE_ACTION_END:
+			if (_hasFallen || _playerWasCrushed)
+				break;
+			switch (event.customType) {
+			case kActionMoveUp:
+				_moveForward = false;
+				break;
+			case kActionMoveDown:
+				_moveBackward = false;
+				break;
+			case kActionMoveLeft:
+				_strafeLeft = false;
+				break;
+			case kActionMoveRight:
+				_strafeRight = false;
+				break;
+			case kActionRiseOrFlyUp:
+				if (!_flyMode)
+					rise();
+				else
+					_moveUp = false;
+				break;
+			case kActionLowerOrFlyDown:
+				if (!_flyMode)
+					lower();
+				else
+					_moveDown = false;
+				break;
+			default:
+				releasedKey(event.customType);
+				break;
+			}
+			break;
+
 		case Common::EVENT_KEYDOWN:
 			if (_hasFallen || _playerWasCrushed)
 				break;
@@ -722,6 +775,8 @@ void FreescapeEngine::executeMovementConditions() {
 
 void FreescapeEngine::updateTimeVariables() {}
 
+void FreescapeEngine::beforeStarting() {}
+
 Common::Error FreescapeEngine::run() {
 	_vsyncEnabled = g_system->getFeatureState(OSystem::kFeatureVSync);
 	_frameLimiter = new Graphics::FrameLimiter(g_system, ConfMan.getInt("engine_speed"));
@@ -744,7 +799,6 @@ Common::Error FreescapeEngine::run() {
 	// Load game data and init game state
 	loadDataBundle();
 	loadAssets();
-	initGameState();
 	loadColorPalette();
 
 	if (g_system->getFeatureState(OSystem::kFeatureTouchscreen)) {
@@ -765,30 +819,32 @@ Common::Error FreescapeEngine::run() {
 	processBorder(); // Border is processed to use during the game
 
 	if (saveSlot >= 0) { // load the savegame
+		initGameState();
 		loadGameState(saveSlot);
-	} else
-		gotoArea(_startArea, _startEntrance);
-
-	debugC(1, kFreescapeDebugMove, "Starting area %d", _currentArea->getAreaID());
-	// Draw first frame
+	} 
 
 	g_system->showMouse(false);
 	g_system->lockMouse(true);
 	resetInput();
-	_gfx->computeScreenViewport();
-	_gfx->clear(0, 0, 0, true);
-	_gfx->flipBuffer();
-	g_system->updateScreen();
 
 	while (!shouldQuit()) {
-		updateTimeVariables();
-		if (_gameStateControl == kFreescapeGameStateRestart) {
+		float currentFrame = g_system->getMillis();
+		float deltaTime = (currentFrame - _lastFrame) / 1000.0f;
+		_lastFrame = currentFrame;
+
+		if (_gameStateControl == kFreescapeGameStateRestart || _gameStateControl == kFreescapeGameStateStart) {
 			initGameState();
 			gotoArea(_startArea, _startEntrance);
+			g_system->updateScreen();
+			debugC(1, kFreescapeDebugMove, "Starting area %d", _currentArea->getAreaID());
+			beforeStarting();
+			_gameStateControl = kFreescapeGameStatePlaying;
 		} else if (_gameStateControl == kFreescapeGameStateEnd)
 			endGame();
 
+		updateTimeVariables();
 		processInput();
+		updatePlayerMovement(deltaTime);
 		if (_demoMode)
 			generateDemoInput();
 
@@ -883,32 +939,32 @@ bool FreescapeEngine::checkIfGameEnded() {
 		return false;
 
 	if (_gameStateVars[k8bitVariableShield] == 0) {
-		playSound(_soundIndexNoShield, true);
+		playSound(_soundIndexNoShield, true, _soundFxHandle);
 
 		if (!_noShieldMessage.empty())
 			insertTemporaryMessage(_noShieldMessage, _countdown - 2);
 		_gameStateControl = kFreescapeGameStateEnd;
 	} else if (_gameStateVars[k8bitVariableEnergy] == 0 && isDriller()) {
-		playSound(_soundIndexNoEnergy, true);
+		playSound(_soundIndexNoEnergy, true, _soundFxHandle);
 
 		if (!_noEnergyMessage.empty())
 			insertTemporaryMessage(_noEnergyMessage, _countdown - 2);
 		_gameStateControl = kFreescapeGameStateEnd;
 	} else if (_hasFallen) {
 		_hasFallen = false;
-		playSound(_soundIndexFallen, false);
+		playSound(_soundIndexFallen, false, _soundFxHandle);
 
 		if (!_fallenMessage.empty())
 			insertTemporaryMessage(_fallenMessage, _countdown - 4);
 		_gameStateControl = kFreescapeGameStateEnd;
 	} else if (_countdown <= 0) {
-		playSound(_soundIndexTimeout, false);
+		playSound(_soundIndexTimeout, false, _soundFxHandle);
 
 		if (!_timeoutMessage.empty())
 			insertTemporaryMessage(_timeoutMessage, _countdown - 4);
 		_gameStateControl = kFreescapeGameStateEnd;
 	} else if (_playerWasCrushed) {
-		playSound(_soundIndexCrushed, true);
+		playSound(_soundIndexCrushed, true, _soundFxHandle);
 
 		_playerWasCrushed = false;
 		if (!_crushedMessage.empty())
@@ -918,7 +974,7 @@ bool FreescapeEngine::checkIfGameEnded() {
 		// so no need to wait for the end of the game
 		_endGameDelayTicks = 0;
 	} else if (_forceEndGame) {
-		playSound(_soundIndexForceEndGame, true);
+		playSound(_soundIndexForceEndGame, true, _soundFxHandle);
 
 		_forceEndGame = false;
 		if (!_forceEndGameMessage.empty())
@@ -953,7 +1009,6 @@ uint16 FreescapeEngine::getGameBit(int index) {
 }
 
 void FreescapeEngine::initGameState() {
-	_gameStateControl = kFreescapeGameStatePlaying;
 	_endGameDelayTicks = int(2 * 60); // 2.5 seconds at 60 frames per second
 
 	for (int i = 0; i < k8bitMaxVariable; i++) // TODO: check maximum variable
@@ -974,6 +1029,14 @@ void FreescapeEngine::initGameState() {
 	_yaw = 0;
 	_pitch = 0;
 	_roll = 0;
+
+	_moveForward = false;
+	_moveBackward = false;
+	_strafeLeft = false;
+	_strafeRight = false;
+	_moveUp = false;
+	_moveDown = false;
+
 	_endGameKeyPressed = false;
 	_endGamePlayerEndArea = false;
 
@@ -995,10 +1058,18 @@ void FreescapeEngine::rotate(float xoffset, float yoffset, float zoffset) {
 	_roll += zoffset;
 
 	// Make sure that when pitch is out of bounds, screen doesn't get flipped
-	if (_pitch > 360.0f)
-		_pitch -= 360.0f;
-	if (_pitch < 0.0f)
-		_pitch += 360.0f;
+	if (!isDriller()) {
+		if (_pitch > 90.0f)
+			_pitch = 90.0f;
+		else if (_pitch < -89.9f)
+			_pitch = -89.9f;
+	} else {
+		// Driller allowed to rotate pitch up to 360 degrees
+		if (_pitch > 360.0f)
+			_pitch -= 360.0f;
+		if (_pitch < 0.0f)
+			_pitch += 360.0f;
+	}
 
 	if (_yaw > 360.0f)
 		_yaw -= 360.0f;
@@ -1068,6 +1139,7 @@ Common::Error FreescapeEngine::loadGameStream(Common::SeekableReadStream *stream
 		gotoArea(areaID, -1); // Do not change position nor rotation
 
 	_playerHeight = 32 * (_playerHeightNumber + 1) - 16 / float(_currentArea->_scale);
+	_gameStateControl = kFreescapeGameStatePlaying;
 	return loadGameStreamExtended(stream);
 }
 

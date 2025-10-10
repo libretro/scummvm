@@ -35,7 +35,7 @@ static const AccessGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO1(GUIO_NONE)
 		},
-		GType_Amazon,
+		kGameAmazon,
 		0
 	},
 
@@ -51,7 +51,7 @@ static const AccessGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO1(GUIO_NONE)
 		},
-		GType_Amazon,
+		kGameAmazon,
 		0
 	},
 
@@ -66,7 +66,7 @@ static const AccessGameDescription gameDescriptions[] = {
 			ADGF_DEMO,
 			GUIO1(GUIO_NONE)
 		},
-		GType_Amazon,
+		kGameAmazon,
 		0
 	},
 
@@ -81,7 +81,7 @@ static const AccessGameDescription gameDescriptions[] = {
 			ADGF_CD,
 			GUIO1(GUIO_NONE)
 		},
-		GType_Amazon,
+		kGameAmazon,
 		0
 	},
 
@@ -93,10 +93,25 @@ static const AccessGameDescription gameDescriptions[] = {
 			AD_ENTRY1s("r01.ap", "c081daca9b0cfd710157cf946e343df6", 39352),
 			Common::EN_ANY,
 			Common::kPlatformDOS,
-			ADGF_UNSTABLE,
+			ADGF_TESTING,
 			GUIO1(GUIO_NONE)
 		},
-		GType_MartianMemorandum,
+		kGameMartianMemorandum,
+		0
+	},
+
+	{
+		// Martian Memorandum from "Lasersoft Top Tracks Vol 1" CD
+		{
+			"martian",
+			nullptr,
+			AD_ENTRY1s("r01.ap", "1052fc0e5bd979ae2e18b03ed58fda8e", 39349),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_TESTING,
+			GUIO1(GUIO_NONE)
+		},
+		kGameMartianMemorandum,
 		0
 	},
 
@@ -111,7 +126,7 @@ static const AccessGameDescription gameDescriptions[] = {
 			ADGF_DEMO | ADGF_UNSTABLE,
 			GUIO1(GUIO_NONE)
 		},
-		GType_MartianMemorandum,
+		kGameMartianMemorandum,
 		0
 	},
 

@@ -5,6 +5,43 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  emscripten:
+    name: Emscripten
+    runs-on: ubuntu-latest
+    strategy: 
+      fail-fast: false
+      matrix:
+        include:
+          - name: emscripten
+            configFlags: --enable-gif --enable-jpeg --enable-ogg --enable-png --enable-vorbis --enable-zlib --enable-freetype2
+          - name: emscripten (extra libs)
+            configFlags: --enable-gif --enable-jpeg --enable-ogg --enable-png --enable-vorbis --enable-zlib  --enable-freetype2 --enable-a52 --enable-faad --enable-fluidlite --enable-fribidi --enable-mad --enable-mpcdec --enable-mpeg2 --enable-mpeg2 --enable-mikmod --enable-retrowave --enable-theoradec --enable-vpx
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build cache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.platform }}
+          max-size: 1G
+          create-symlink: true
+      - name: Restore libs cache
+        uses: actions/cache/restore@v4
+        with:
+          key: ${{ matrix.configFlags }}
+          path: |
+            dists/emscripten/libs/
+      - name: Call configure
+        run: |
+          CXX='ccache emcc' dists/emscripten/build.sh configure --enable-all-engines ${{ matrix.configFlags }}
+      - name: Save libs cache
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ matrix.configFlags }}
+          path: |
+            dists/emscripten/libs/
+      - name: Build scummvm
+        run: |
+          dists/emscripten/build.sh make 
   windows:
     name: Windows
     runs-on: windows-latest
@@ -43,10 +80,6 @@ jobs:
       - name: Setup nasm
         uses: ilammy/setup-nasm@v1
         if: matrix.useNasm == 'true'
-      - name: Force CMake < 4.0 usage
-        uses: jwlawson/actions-setup-cmake@v2
-        with:
-          cmake-version: '3.31'
       - name: Install vcpkg
         uses: lukka/run-vcpkg@v11
         id: runvcpkg
@@ -89,12 +122,6 @@ jobs:
           cd build-scummvm
           ls
           msbuild scummvm.sln /m /p:VcpkgEnableManifest=true /p:BuildInParallel=true /p:Configuration=${{ env.CONFIGURATION }} /p:PreferredToolArchitecture=x64 /p:Platform=${{ matrix.platform }} /v:minimal
-      - name: Upload libs
-        uses: actions/upload-artifact@v4
-        if: matrix.buildArtifacts == 'true'
-        with:
-          name: libs-${{ matrix.triplet }}
-          path: ${{ env.VCPKG_INSTALLED_DIR }}\\${{ matrix.triplet }}
       - name: Upload scummvm
         uses: actions/upload-artifact@v4
         if: matrix.buildArtifacts == 'true'
@@ -105,19 +132,19 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.buildArtifacts == 'true'
         with:
-          name: scummvm-${{ matrix.arch }}
+          name: libs-${{ matrix.arch }}
           path: ${{ env.VCPKG_INSTALLED_DIR }}\\${{ matrix.triplet }}\\bin\\*.dll
       - name: Upload scummvm symbols
         uses: actions/upload-artifact@v4
-        if: matrix.buildArtifacts == 'true'
+        if: matrix.buildArtifacts == 'true' && env.CONFIGURATION == 'Debug'
         with:
           name: symbols-${{ matrix.arch }}
           path: build-scummvm/${{ env.CONFIGURATION }}${{ matrix.arch }}/*.pdb
       - name: Upload scummvm libs symbols
         uses: actions/upload-artifact@v4
-        if: matrix.buildArtifacts == 'true'
+        if: matrix.buildArtifacts == 'true' && env.CONFIGURATION == 'Debug'
         with:
-          name: symbols-${{ matrix.arch }}
+          name: lib-symbols-${{ matrix.arch }}
           path: ${{ env.VCPKG_INSTALLED_DIR }}\\${{ matrix.triplet }}\\bin\\*.pdb
   xcode:
     name: Xcode

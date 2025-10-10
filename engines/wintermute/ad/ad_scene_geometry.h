@@ -29,7 +29,6 @@
 #define WINTERMUTE_AD_SCENE_GEOMETRY_H
 
 #include "engines/wintermute/base/base_object.h"
-#include "engines/wintermute/math/rect32.h"
 
 namespace Wintermute {
 
@@ -71,7 +70,7 @@ public:
 
 	bool createLights();
 	bool enableLights(DXVector3 Point, BaseArray<char *> &IgnoreLights);
-	static int compareLights(const void *obj1, const void *obj2);
+	static int32 compareLights(const void *obj1, const void *obj2);
 
 	bool initLoop();
 	float getPointsDist(DXVector3 p1, DXVector3 p2);
@@ -99,7 +98,7 @@ public:
 	int32 _activeCamera;
 
 	bool setActiveLight(char *light);
-	bool setActiveLight(int light);
+	bool setActiveLight(int32 light);
 	int32 _activeLight;
 
 	void cleanup();

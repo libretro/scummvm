@@ -27,6 +27,8 @@
 #include "hypno/grammar.h"
 #include "hypno/hypno.h"
 
+#include "backends/keymapper/keymapper.h"
+
 namespace Hypno {
 
 extern int parse_arc(const char *);
@@ -309,12 +311,15 @@ void HypnoEngine::runArcade(ArcadeShooting *arc) {
 			case Common::EVENT_QUIT:
 			case Common::EVENT_RETURN_TO_LAUNCHER:
 				break;
+			case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
+				pressedKey(event.customType);
+				if (event.customType == kActionPrimaryShoot)
+					if (clickedPrimaryShoot(mousePos))
+						shootingPrimary = true;
+				break;
 
 			case Common::EVENT_KEYDOWN:
 				pressedKey(event.kbd.keycode);
-				if (event.kbd.keycode == Common::KEYCODE_LCTRL)
-					if (clickedPrimaryShoot(mousePos))
-						shootingPrimary = true;
 				break;
 
 			case Common::EVENT_LBUTTONDOWN:
@@ -520,7 +525,7 @@ void HypnoEngine::runArcade(ArcadeShooting *arc) {
 				} else if (frame > 0 && frame >= (int)(it->lastFrame)) {
 					skipVideo(*it->video);
 					shootsToRemove.push_back(i);
-				} else if (it->video->decoder->needsUpdate() && needsUpdate) {
+				} else if (it->video->decoder->needsUpdate() || needsUpdate) {
 					updateScreen(*it->video);
 				}
 			} else if (!it->video && it->bodyFrames.size() > 0) {
@@ -545,11 +550,8 @@ void HypnoEngine::runArcade(ArcadeShooting *arc) {
 			}
 		}
 
-		if (_music.empty() && !arc->music.empty()) {
-			_music = _soundPath + arc->music;
-			_musicRate = arc->musicRate;
-			_musicStereo = arc->musicStereo;
-			playSound(_music, 0, _musicRate, _musicStereo); // music loop forever
+		if (!isMusicActive() && !arc->music.empty()) {
+			playMusic(_soundPath + arc->music, arc->musicRate, arc->musicStereo);
 		}
 
 		if (needsUpdate) {
@@ -604,7 +606,7 @@ void HypnoEngine::runArcade(ArcadeShooting *arc) {
 	_timerStarted = false;
 	removeTimers();
 	stopSound();
-	_music.clear();
+	stopMusic();
 }
 
 Common::Point HypnoEngine::computeTargetPosition(const Common::Point &mousePos) {
@@ -715,8 +717,6 @@ bool HypnoEngine::shoot(const Common::Point &mousePos, ArcadeShooting *arc, bool
 				_background->decoder->pauseVideo(false);
 				updateScreen(*_background);
 				drawScreen();
-				if (!_music.empty())
-					playSound(_music, 0, _musicRate, _musicStereo); // restore music
 			} else if (_objIdx == 1 && !arc->hitBoss2Video.empty()) {
 				_background->decoder->pauseVideo(true);
 				MVideo video(arc->hitBoss2Video, Common::Point(0, 0), false, true, false);
@@ -727,8 +727,6 @@ bool HypnoEngine::shoot(const Common::Point &mousePos, ArcadeShooting *arc, bool
 				updateScreen(*_background);
 				drawScreen();
 				drawCursorArcade(mousePos);
-				if (!_music.empty())
-					playSound(_music, 0, _musicRate, _musicStereo); // restore music
 			}
 			byte p[3] = {0x00, 0x00, 0x00}; // Always black?
 			assert(_shoots[i].paletteSize == 1 || _shoots[i].paletteSize == 0);
@@ -747,7 +745,7 @@ bool HypnoEngine::shoot(const Common::Point &mousePos, ArcadeShooting *arc, bool
 			setRButtonUp(false);
 			return false;
 		}
-		
+
 		return clickedSecondaryShoot(mousePos);
 	} else {
 		drawShoot(mousePos);
@@ -823,5 +821,16 @@ bool HypnoEngine::checkRButtonUp() {
 void HypnoEngine::setRButtonUp(const bool val) {
 	return;
 }
+
+void HypnoEngine::disableGameKeymaps() {
+	Common::Keymapper *keymapper = g_system->getEventManager()->getKeymapper();
+	keymapper->getKeymap("game-shortcuts")->setEnabled(false);
+}
+
+void HypnoEngine::enableGameKeymaps() {
+	Common::Keymapper *keymapper = g_system->getEventManager()->getKeymapper();
+	keymapper->getKeymap("game-shortcuts")->setEnabled(true);
+}
+
 } // End of namespace Hypno
 

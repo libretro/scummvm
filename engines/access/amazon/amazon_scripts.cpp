@@ -393,7 +393,7 @@ void AmazonScripts::executeCommand(int commandIndex) {
 }
 
 void AmazonScripts::cmdHelp_v2() {
-	Common::String helpMessage = readString();
+	Common::String helpMessage = _data->readString();
 
 	if (_game->_helpLevel == 0) {
 		_game->_timers.saveTimers();
@@ -459,7 +459,7 @@ void AmazonScripts::cmdHelp_v2() {
 			break;
 		} else {
 			// More button selected
-			if ((_game->_moreHelp == 0) || (choice != 0))
+			if (_game->_moreHelp == 0)
 				continue;
 			++_game->_helpLevel;
 			_game->_useItem = 1;

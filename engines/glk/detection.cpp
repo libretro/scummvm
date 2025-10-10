@@ -345,10 +345,12 @@ void GlkMetaEngineDetection::dumpDetectionEntries() const {
         { Glk::Quest::QuestMetaEngine::getDetectionEntries(), EngineName::OTHER },
         { Glk::Scott::ScottMetaEngine::getDetectionEntries(), EngineName::OTHER },
         { Glk::ZCode::ZCodeMetaEngine::getDetectionEntries(), EngineName::OTHER },
+#ifndef RELEASE_BUILD
         { Glk::TADS::TADSMetaEngine::getDetectionEntries(), EngineName::OTHER },
+#endif
         { nullptr, EngineName::OTHER }
     };
-   
+
 	for (const Detection *detection = detectionEntries; detection->entries; ++detection) {
 		EngineName engineName =	detection->engineName;
 
@@ -364,21 +366,21 @@ void GlkMetaEngineDetection::dumpDetectionEntries() const {
 			printf("\tlanguage \"%s\"\n", escapeString(getLanguageLocale(entry->_language)).c_str());
 			printf("\tplatform \"%s\"\n", escapeString(getPlatformCode(entry->_platform)).c_str());
 			printf("\tsourcefile \"%s\"\n", escapeString(getName()).c_str());
-			printf("\tengine \"%s\"\n", escapeString(getEngineName()).c_str());
+			printf("\tengine \"%s\"\n", escapeString(getName()).c_str());
 
 			Common::String checksum = entry->_md5;
 
-			// Filename for Comprehend Engine's md5 is stored in the extra field. 
+			// Filename for Comprehend Engine's md5 is stored in the extra field.
 			// For other engines, filename is not available, so it has been kept as the gameId
 			const char *fname = engineName == EngineName::COMPREHEND ? entry->_extra : entry->_gameId;
 
-			// Level9 engine does not use md5 checksums, so checksums are not printed. 
+			// Level9 engine does not use md5 checksums, so checksums are not printed.
 			if (engineName == EngineName::LEVEL9) {
 				printf("\trom ( name \"%s\" size %lld )\n", escapeString(fname).c_str(), static_cast<long long int>(entry->_filesize));
 			} else {
 				printf("\trom ( name \"%s\" size %lld md5-%d %s )\n", escapeString(fname).c_str(), static_cast<long long int>(entry->_filesize), getMD5Bytes(), checksum.c_str());
 			}
-			
+
 			printf(")\n\n");
 		}
 	}

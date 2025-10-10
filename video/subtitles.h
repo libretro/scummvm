@@ -24,6 +24,7 @@
 
 #include "common/str.h"
 #include "common/array.h"
+#include "common/hashmap.h"
 #include "common/rect.h"
 
 namespace Graphics {
@@ -33,15 +34,28 @@ struct Surface;
 
 namespace Video {
 
+struct SubtitlePart {
+	Common::String text;
+	Common::String tag;
+
+	SubtitlePart(const Common::String &text_, const Common::String &tag_) : text(text_), tag(tag_) {}
+};
+
 struct SRTEntry {
 	uint seq;
 	uint32 start;
 	uint32 end;
 
-	Common::String text;
+	Common::Array<SubtitlePart> parts;
 
-	SRTEntry(uint seq_, uint32 start_, uint32 end_, Common::String text_) {
-		seq = seq_; start = start_; end = end_; text = text_;
+	SRTEntry(uint seq_, uint32 start_, uint32 end_, const Common::Array<SubtitlePart> &parts_) {
+		seq = seq_; start = start_; end = end_; parts = parts_;
+	}
+
+	// Dummy constructor for bsearch
+	SRTEntry(uint seq_, uint32 start_, uint32 end_, const Common::String &text, const Common::String &tag = "") {
+		seq = seq_; start = start_; end = end_;
+		parts.push_back(SubtitlePart(text, tag));
 	}
 };
 
@@ -52,6 +66,8 @@ public:
 
 	void cleanup();
 	bool parseFile(const Common::Path &fname);
+	void parseTextAndTags(const Common::String &text, Common::Array<SubtitlePart> &parts) const;
+	const Common::Array<SubtitlePart> *getSubtitleParts(uint32 timestamp) const;
 	Common::String getSubtitle(uint32 timestamp) const;
 
 private:
@@ -65,11 +81,11 @@ public:
 
 	void loadSRTFile(const Common::Path &fname);
 	void close() { _loaded = false; _subtitle.clear(); _fname.clear(); _srtParser.cleanup(); }
-	void setFont(const char *fontname, int height = 18);
+	void setFont(const char *fontname, int height = 18, Common::String type = "regular");
 	void setBBox(const Common::Rect &bbox);
 	void setColor(byte r, byte g, byte b);
 	void setPadding(uint16 horizontal, uint16 vertical);
-	bool drawSubtitle(uint32 timestamp, bool force = false) const;
+	bool drawSubtitle(uint32 timestamp, bool force = false, bool showSFX = false);
 	bool isLoaded() const { return _loaded || _subtitleDev; }
 
 private:
@@ -80,7 +96,7 @@ private:
 	bool _subtitleDev;
 	bool _overlayHasAlpha;
 
-	const Graphics::Font *_font;
+	Common::HashMap<Common::String, const Graphics::Font *> _fonts;
 	int _fontHeight;
 
 	Graphics::Surface *_surface;
@@ -92,6 +108,7 @@ private:
 
 	Common::Path _fname;
 	mutable Common::String _subtitle;
+	mutable const Common::Array<SubtitlePart> *_parts;
 	uint32 _color;
 	uint32 _blackColor;
 	uint32 _transparentColor;

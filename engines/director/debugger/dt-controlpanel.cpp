@@ -24,16 +24,19 @@
 
 #include "director/archive.h"
 #include "director/movie.h"
+#include "director/window.h"
 #include "director/score.h"
 
 namespace Director {
 namespace DT {
 
 static uint32 getLineFromPC() {
+	ScriptData *scriptData = &_state->_functions._windowScriptData.getOrCreateVal(g_director->getCurrentWindow());
+
 	const uint pc = g_lingo->_state->pc;
-	if (_state->_functions._scripts.empty())
+	if (scriptData->_scripts.empty())
 		return 0;
-	const Common::Array<uint> &offsets = _state->_functions._scripts[_state->_functions._current].startOffsets;
+	const Common::Array<uint> &offsets = scriptData->_scripts[scriptData->_current].startOffsets;
 	for (uint i = 0; i < offsets.size(); i++) {
 		if (pc <= offsets[i])
 			return i;
@@ -50,6 +53,7 @@ static bool stepOverShouldPauseDebugger() {
 	if (((g_lingo->_state->callstack.size() == _state->_dbg._callstackSize) && (line != _state->_dbg._lastLinePC)) ||
 		 (g_lingo->_state->callstack.size() < _state->_dbg._callstackSize)) {
 		_state->_dbg._lastLinePC = line;
+		_state->_dbg._isScriptDirty = true;
 		return true;
 	}
 
@@ -64,8 +68,10 @@ static bool stepInShouldPauseDebugger() {
 	// - OR when the callstack level change
 	if ((g_lingo->_state->callstack.size() != _state->_dbg._callstackSize) || (_state->_dbg._lastLinePC != line)) {
 		_state->_dbg._lastLinePC = line;
+		_state->_dbg._isScriptDirty = true;
 		return true;
 	}
+
 	return false;
 }
 
@@ -73,10 +79,10 @@ static bool stepOutShouldPause() {
 	const uint32 line = getLineFromPC();
 
 	// we stop when:
-	// - the statement line is different
 	// - OR we go up in the callstack
 	if (g_lingo->_state->callstack.size() < _state->_dbg._callstackSize) {
 		_state->_dbg._lastLinePC = line;
+		_state->_dbg._isScriptDirty = true;
 		return true;
 	}
 
@@ -121,7 +127,7 @@ void showControlPanel() {
 	ImGui::SetNextWindowPos(ImVec2(vp.x - 220.0f, 20.0f), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(200, 103), ImGuiCond_FirstUseEver);
 
-	if (ImGui::Begin("Control Panel", &_state->_w.controlPanel)) {
+	if (ImGui::Begin("Control Panel", &_state->_w.controlPanel, ImGuiWindowFlags_NoDocking)) {
 		Movie *movie = g_director->getCurrentMovie();
 		Score *score = movie->getScore();
 		ImDrawList *dl = ImGui::GetWindowDrawList();

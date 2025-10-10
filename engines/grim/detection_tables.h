@@ -68,6 +68,34 @@ static const GrimGameDescription gameDescriptions[] = {
 		GType_GRIM
 	},
 	{
+		// Grim Fandango English version (unpatched) + Polish Fan translation
+		{
+			"grim",
+			"Fanmade",
+			AD_ENTRY2s("VOX0001.LAB", "8b12ed530195c6c577436df27df62ecb", 58011176,
+					   "GRIM.TAB", "2b99efd92f782b791a464b1b8a16187a", 351510),
+			Common::PL_POL,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUI_OPTIONS_GRIME
+		},
+		GType_GRIM
+	},
+	{
+		// Grim Fandango English version (patched) + Polish Fan translation
+		{
+			"grim",
+			"Fanmade",
+			AD_ENTRY2s("VOX0001.LAB", "444f05f2af689c1bffd179b8b6a632bd", 57993159,
+					   "GRIM.TAB", "2b99efd92f782b791a464b1b8a16187a", 351510),
+			Common::PL_POL,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUI_OPTIONS_GRIME
+		},
+		GType_GRIM
+	},
+	{
 		// Grim Fandango English version (unpatched) + Russian Enpy translation
 		{
 			"grim",
@@ -497,6 +525,19 @@ static const GrimGameDescription gameDescriptions[] = {
 		GType_MONKEY4
 	},
 	{
+		// Escape from Monkey Island Polish fanmade
+		{
+			"monkey4",
+			"Fanmade",
+			AD_ENTRY1s("artAll.m4b", "451332012f4d947ef12da4f7d7f0e560", 18751712),
+			Common::PL_POL,
+			Common::kPlatformWindows,
+			ADGF_UNSTABLE,
+			GUI_OPTIONS_GRIME
+		},
+		GType_MONKEY4
+	},
+	{
 		// Escape from Monkey Island English (Mac)
 		{
 			"monkey4",
@@ -539,7 +580,6 @@ static const GrimGameDescription gameDescriptions[] = {
 		GType_MONKEY4
 	},
 
-#if defined(USE_MPEG2)
 	{
 		// Escape from Monkey Island English PS2
 		{
@@ -605,7 +645,6 @@ static const GrimGameDescription gameDescriptions[] = {
 		},
 		GType_MONKEY4
 	},
-#endif
 
 	{
 		// Escape from Monkey Island CD demo (English)

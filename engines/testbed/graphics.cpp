@@ -65,7 +65,7 @@ GFXTestSuite::GFXTestSuite() {
 	addTest("ScaledCursors", &GFXtests::scaledCursors);
 
 	// Effects
-	addTest("shakingEffect", &GFXtests::shakingEffect);
+	addTest("ShakingEffect", &GFXtests::shakingEffect);
 	// addTest("focusRectangle", &GFXtests::focusRectangle);
 
 	// Overlay
@@ -1324,14 +1324,14 @@ TestExitStatus GFXtests::shakingEffect() {
 			break;
 		}
 
-		Testsuite::writeOnScreen(Common::String::format("If Shaking Effect works, this should shake %s", direction.c_str()), pt);
-		int times = 15;
+		Testsuite::writeOnScreen(Common::String::format("If Shaking Effect works, this should shake %s", direction.c_str()), pt, kWriteDrawFrame);
+		int times = 8;
 		while (times--) {
 			g_system->setShakePos(shakeXOffset, shakeYOffset);
-			g_system->delayMillis(50);
+			g_system->delayMillis(100);
 			g_system->updateScreen();
 			g_system->setShakePos(0, 0);
-			g_system->delayMillis(50);
+			g_system->delayMillis(100);
 			g_system->updateScreen();
 			shakeXOffset = -shakeXOffset;
 			shakeYOffset = -shakeYOffset;
@@ -1340,10 +1340,12 @@ TestExitStatus GFXtests::shakingEffect() {
 
 		if (Testsuite::handleInteractiveInput("Did the Shaking test work as you were expecting?", "Yes", "No", kOptionRight)) {
 			Testsuite::logDetailedPrintf("Shaking Effect didn't work");
+			Testsuite::clearEntireScreen();
 			return kTestFailed;
 		}
 	}
 
+	Testsuite::clearEntireScreen();
 	return kTestPassed;
 }
 
@@ -1621,7 +1623,7 @@ TestExitStatus GFXtests::pixelFormats(Common::List<Graphics::PixelFormat> &pfLis
 			showPixelFormat(Graphics::PixelFormat::createFormatCLUT8(), iter->aLoss);
 
 			Common::Point pt(0, 170);
-			Testsuite::writeOnScreen("Example displayed with Pixel Format CLUT8", pt, false);
+			Testsuite::writeOnScreen("Example displayed with Pixel Format CLUT8", pt, kWriteNoFlag);
 
 			Common::String tutorial;
 			tutorial = Common::String::format("Testing a group of Pixel Formats with %d-bit alpha channel.\nPlease, memorize the pattern displayed in the frame above.", 8 - iter->aLoss);
@@ -1645,7 +1647,7 @@ TestExitStatus GFXtests::pixelFormats(Common::List<Graphics::PixelFormat> &pfLis
 		Common::Point pt(0, 170);
 		Common::String msg;
 		msg = Common::String::format("Testing Pixel Format %s, %d of %d", iter->toString().c_str(), numFormatsTested, pfList.size());
-		Testsuite::writeOnScreen(msg, pt, true);
+		Testsuite::writeOnScreen(msg, pt, kWriteRGBColors);
 
 		g_system->delayMillis(500);
 

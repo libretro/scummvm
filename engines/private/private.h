@@ -29,6 +29,7 @@
 #include "graphics/managed_surface.h"
 #include "graphics/wincursor.h"
 #include "video/smk_decoder.h"
+#include "video/subtitles.h"
 
 #include "private/grammar.h"
 
@@ -43,6 +44,10 @@ class ManagedSurface;
 struct ADGameDescription;
 
 namespace Private {
+
+enum PRIVATEActions {
+	kActionSkip,
+};
 
 // debug channels
 enum {
@@ -217,6 +222,12 @@ public:
 	Common::Path convertPath(const Common::String &);
 	void playVideo(const Common::String &);
 	void skipVideo();
+
+	void loadSubtitles(const Common::Path &path);
+	void adjustSubtitleSize();
+	Video::Subtitles *_subtitles;
+	bool _useSubtitles;
+	bool _sfxSubtitles;
 
 	Graphics::Surface *decodeImage(const Common::String &file, byte **palette);
 	//byte *decodePalette(const Common::String &name);

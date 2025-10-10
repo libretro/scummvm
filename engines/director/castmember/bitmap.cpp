@@ -20,6 +20,7 @@
  */
 
 #include "common/config-manager.h"
+#include "common/stream.h"
 #include "common/macresman.h"
 #include "graphics/surface.h"
 #include "graphics/macgui/macwidget.h"
@@ -56,6 +57,9 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, Common::SeekableRe
 	_ditheredTargetClut = CastMemberID(0, 0);
 	_bitsPerPixel = 0;
 	_external = false;
+	_editVersion = 0;
+	_updateFlags = 0;
+	_version = version;
 
 	if (debugChannelSet(5, kDebugLoading)) {
 		stream.hexdump(stream.size());
@@ -63,6 +67,9 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, Common::SeekableRe
 
 	if (version < kFileVer400) {
 		_flags1 = flags1;	// region: 0 - auto, 1 - matte, 2 - disabled
+
+		_updateFlags |= (_flags1 & kFlagCenterRegPointD4) ? kFlagCenterRegPoint : 0;
+		_updateFlags |= (_flags1 & kFlagMatteD4) ? kFlagMatte : 0;
 
 		_bytes = stream.readUint16();
 		// A little context about how bitmap bounding boxes are stored.
@@ -101,6 +108,10 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, Common::SeekableRe
 
 	} else if (version >= kFileVer400 && version < kFileVer600) {
 		_flags1 = flags1;
+
+		_updateFlags |= (_flags1 & kFlagCenterRegPointD4) ? kFlagCenterRegPoint : 0;
+		_updateFlags |= (_flags1 & kFlagMatteD4) ? kFlagMatte : 0;
+
 		_pitch = stream.readUint16();
 		_pitch &= 0x0fff;
 
@@ -130,7 +141,7 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, Common::SeekableRe
 				_clut = CastMemberID(clutId, clutCastLib);
 			}
 			if (stream.pos() < stream.size()) {
-				// castSize > 28 bytes on D4, > 30 bytes on D5
+				// castSize > 26 bytes on D4, > 28 bytes on D5
 				stream.readUint16();
 				/* uint16 unk1 = */ stream.readUint16();
 				stream.readUint16();
@@ -156,9 +167,70 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, Common::SeekableRe
 				Common::hexdump(buf, tail);
 			}
 		}
+	} else if (version >= kFileVer600 && version < kFileVer1100) {
+		_flags1 = flags1;
+		_pitch = stream.readUint16();
+
+		_initialRect = Movie::readRect(stream);
+
+		if (version >= kFileVer700) {
+			_alphaThreshold = stream.readByte();
+			stream.readByte(); // padding
+		} else {
+			stream.readUint16(); // padding
+		}
+
+		_editVersion = stream.readUint16();
+
+		_scrollPoint.y = stream.readSint16();
+		_scrollPoint.x = stream.readSint16();
+
+		_regY = stream.readUint16();
+		_regX = stream.readUint16();
+
+		_updateFlags = stream.readByte();
+
+		// 22 bytes
+		// This is color image flag
+		if (_pitch & 0x8000) {
+			_pitch &= 0x0fff;
+
+			_bitsPerPixel = stream.readByte();
+
+			int clutCastLib = -1;
+			if (version >= kFileVer500) {
+				clutCastLib = stream.readSint16();
+			}
+			int clutId = stream.readSint16();
+
+			if (clutId <= 0) // builtin palette
+				_clut = CastMemberID(clutId - 1, -1);
+			else if (clutId > 0) {
+				if (clutCastLib == -1) {
+					clutCastLib = _cast->_castLibID;
+				}
+				_clut = CastMemberID(clutId, clutCastLib);
+			}
+		} else {
+			_bitsPerPixel = 1;
+		}
+
+		int tail = stream.size() - stream.pos();
+		if (tail > 0) {
+			warning("BUILDBOT: BitmapCastMember: %d bytes left", tail);
+			if (debugChannelSet(2, kDebugLoading)) {
+				byte buf[256];
+				tail = MIN(256, tail);
+				stream.read(buf, tail);
+				debug("BitmapCastMember: tail");
+				Common::hexdump(buf, tail);
+			}
+		}
 	} else {
-		warning("STUB: BitmapCastMember::BitmapCastMember(): Bitmaps not yet supported for version %d", version);
+		warning("STUB: BitmapCastMember::BitmapCastMember(): Bitmaps not yet supported for version v%d (%d)", humanVersion(version), version);
 	}
+
+	debugC(3, kDebugLoading, "  BitmapCastMember: %s", formatInfo().c_str());
 
 	_tag = castTag;
 }
@@ -184,6 +256,10 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, Image::ImageDecode
 	_flags2 = 0;
 	_tag = 0;
 	_external = false;
+	_editVersion = 0;
+	_updateFlags = 0;
+
+	_version = g_director->getVersion();
 }
 
 BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, BitmapCastMember &source)
@@ -209,12 +285,17 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, BitmapCastMember &
 	_bytes = source._bytes;
 	_clut = source._clut;
 	_ditheredTargetClut = source._ditheredTargetClut;
+	_editVersion = source._editVersion;
+	_updateFlags = source._updateFlags;
+	_scrollPoint = source._scrollPoint;
 
 	_bitsPerPixel = source._bitsPerPixel;
 
 	_tag = source._tag;
 	_noMatte = source._noMatte;
 	_external = source._external;
+
+	_version = source._version;
 
 	warning("BitmapCastMember(): Duplicating source %d to target %d! This is unlikely to work properly, as the resource loader is based on the cast ID", source._castId, castId);
 }
@@ -225,11 +306,13 @@ BitmapCastMember::~BitmapCastMember() {
 	if (_ditheredImg) {
 		_ditheredImg->free();
 		delete _ditheredImg;
+		_ditheredImg = nullptr;
 	}
 
 	if (_matte) {
 		_matte->free();
 		delete _matte;
+		_matte = nullptr;
 	}
 }
 
@@ -302,7 +385,7 @@ Graphics::MacWidget *BitmapCastMember::createWidget(Common::Rect &bbox, Channel 
 		}
 	}
 
-	Graphics::MacWidget *widget = new Graphics::MacWidget(g_director->getCurrentWindow(), bbox.left, bbox.top, bbox.width(), bbox.height(), g_director->_wm, false);
+	Graphics::MacWidget *widget = new Graphics::MacWidget(g_director->getCurrentWindow()->getMacWindow(), bbox.left, bbox.top, bbox.width(), bbox.height(), g_director->_wm, false);
 
 	Graphics::Surface *srcSurface = _ditheredImg ? _ditheredImg : &_picture->_surface;
 	if ((srcSurface->w <= 0) || (srcSurface->h <= 0)) {
@@ -386,7 +469,7 @@ Graphics::Surface *BitmapCastMember::getDitherImg() {
 		// If we're in 32-bit mode, and not in puppet palette mode, then "redither" as well.
 		if (targetBpp == 4 && score->_puppetPalette && !_external)
 			break;
-		if (_external || (castPaletteId != currentPaletteId && !isColorCycling)) {
+		if (_external || (targetBpp == 4) || (castPaletteId != currentPaletteId && !isColorCycling)) {
 			const auto pals = g_director->getLoadedPalettes();
 			CastMemberID palIndex = pals.contains(castPaletteId) ? castPaletteId : CastMemberID(kClutSystemMac, -1);
 			const PaletteV4 &srcPal = pals.getVal(palIndex);
@@ -499,6 +582,7 @@ void BitmapCastMember::createMatte(const Common::Rect &bbox) {
 		if (_matte) {
 			_matte->free();
 			delete _matte;
+			_matte = nullptr;
 		}
 
 		Graphics::FloodFill matteFill(&tmp, whiteColor, 0, true);
@@ -545,20 +629,39 @@ Graphics::Surface *BitmapCastMember::getMatte(const Common::Rect &bbox) {
 }
 
 Common::String BitmapCastMember::formatInfo() {
-	return Common::String::format(
-		"initialRect: %dx%d@%d,%d, boundingRect: %dx%d@%d,%d, foreColor: %d, backColor: %d, regX: %d, regY: %d, pitch: %d, bitsPerPixel: %d, palette: %s",
-		_initialRect.width(), _initialRect.height(),
-		_initialRect.left, _initialRect.top,
-		_boundingRect.width(), _boundingRect.height(),
-		_boundingRect.left, _boundingRect.top,
-		getForeColor(), getBackColor(),
-		_regX, _regY, _pitch, _bitsPerPixel, _clut.asString().c_str()
-	);
+	if (_version < kFileVer600) {
+		return Common::String::format(
+			"initialRect: %dx%d@%d,%d, boundingRect: %dx%d@%d,%d, foreColor: %d, backColor: %d, regX: %d, regY: %d, pitch: %d, bitsPerPixel: %d, palette: %s",
+			_initialRect.width(), _initialRect.height(),
+			_initialRect.left, _initialRect.top,
+			_boundingRect.width(), _boundingRect.height(),
+			_boundingRect.left, _boundingRect.top,
+			getForeColor(), getBackColor(),
+			_regX, _regY, _pitch, _bitsPerPixel, _clut.asString().c_str()
+		);
+	} else {
+		return Common::String::format(
+			"initialRect: %dx%d@%d,%d, scrollPoint: %d,%d, alphaThreshold: %d, foreColor: %d, backColor: %d, regX: %d, regY: %d, pitch: %d, bitsPerPixel: %d, palette: %s, editVersion: %d, updateFlags: 0x%02x",
+			_initialRect.width(), _initialRect.height(),
+			_initialRect.left, _initialRect.top,
+			_scrollPoint.x, _scrollPoint.y,
+			_alphaThreshold,
+			getForeColor(), getBackColor(),
+			_regX, _regY, _pitch, _bitsPerPixel, _clut.asString().c_str(),
+			_editVersion, _updateFlags
+		);
+	}
 }
 
 void BitmapCastMember::load() {
 	if (_loaded && !_needsReload)
 		return;
+
+	if (_ditheredImg) {
+		_ditheredImg->free();
+		delete _ditheredImg;
+		_ditheredImg = nullptr;
+	}
 
 	_needsReload = false;
 
@@ -644,6 +747,12 @@ void BitmapCastMember::load() {
 			} else {
 				warning("BitmapCastMember::load(): cannot open external picture '%s'", location.toString(Common::Path::kNativeSeparator).c_str());
 			}
+		} else if ((!pic || (pic->size() == 0)) && (_initialRect.width() == 0) && (_initialRect.height() == 0)) {
+			// If an image is 0x0, it doesn't matter if we don't have any data.
+			_picture->_surface.create(0, 0, g_director->_wm->_pixelformat);
+			delete pic;
+			_loaded = true;
+			return;
 		}
 	} else {
 		realId = imgId + _cast->_castIDoffset;
@@ -668,11 +777,7 @@ void BitmapCastMember::load() {
 		debugC(2, kDebugLoading, "****** Loading 'BITD' id: %d (%d), %d bytes", imgId, realId, (int)pic->size());
 
 		if (w > 0 && h > 0) {
-			if (_cast->_version < kFileVer600) {
-				img = new BITDDecoder(w, h, _bitsPerPixel, _pitch, g_director->getPalette(), _cast->_version);
-			} else {
-				img = new Image::BitmapDecoder();
-			}
+			img = new BITDDecoder(w, h, _bitsPerPixel, _pitch, g_director->getPalette(), _cast->_version);
 		} else if (pic->size() == 0) {
 			// zero-length bitmap
 		} else {
@@ -686,12 +791,19 @@ void BitmapCastMember::load() {
 		break;
 	}
 
+	if (debugChannelSet(7, kDebugLoading)) {
+		debug("BitmapCastMember::load(): Bitmap data:");
+		pic->hexdump(MIN((int)pic->size(), 512));
+	}
+
 	if (!img || !img->loadStream(*pic)) {
 		warning("BitmapCastMember::load(): Unable to load id: %d", imgId);
 		delete pic;
 		delete img;
 		return;
 	}
+
+	// dumpFile("LoadedBitmap", _castId, MKTAG('B', 'I', 'T', 'D'), (byte *)img->getSurface()->getPixels(), img->getSurface()->h * img->getSurface()->w);
 
 	setPicture(*img, true);
 
@@ -722,8 +834,11 @@ void BitmapCastMember::unload() {
 	delete _picture;
 	_picture = new Picture();
 
-	delete _ditheredImg;
-	_ditheredImg = nullptr;
+	if (_ditheredImg) {
+		_ditheredImg->free();
+		delete _ditheredImg;
+		_ditheredImg = nullptr;
+	}
 
 	_loaded = false;
 }
@@ -744,8 +859,11 @@ void BitmapCastMember::setPicture(PictureReference &picture) {
 	_picture = new Picture(*picture._picture);
 
 	// Force redither
-	delete _ditheredImg;
-	_ditheredImg = nullptr;
+	if (_ditheredImg) {
+		_ditheredImg->free();
+		delete _ditheredImg;
+		_ditheredImg = nullptr;
+	}
 
 	// Make sure we get redrawn
 	setModified(true);
@@ -876,11 +994,11 @@ Datum BitmapCastMember::getField(int field) {
 	return d;
 }
 
-bool BitmapCastMember::setField(int field, const Datum &d) {
+void BitmapCastMember::setField(int field, const Datum &d) {
 	switch (field) {
 	case kTheDepth:
 		warning("BitmapCastMember::setField(): Attempt to set read-only field %s of cast %d", g_lingo->field2str(field), _castId);
-		return false;
+		return;
 	case kTheRegPoint:
 		if (d.type == POINT || (d.type == ARRAY && d.u.farr->arr.size() >= 2)) {
 			Score *score = g_director->getCurrentMovie()->getScore();
@@ -890,9 +1008,8 @@ bool BitmapCastMember::setField(int field, const Datum &d) {
 			_modified = true;
 		} else {
 			warning("BitmapCastMember::setField(): Wrong Datum type %d for kTheRegPoint", d.type);
-			return false;
 		}
-		return true;
+		return;
 	case kThePalette:
 		{
 			CastMemberID newClut;
@@ -916,7 +1033,7 @@ bool BitmapCastMember::setField(int field, const Datum &d) {
 				_clut = newClut;
 				_modified = true;
 			}
-			return true;
+			return;
 		}
 	case kThePaletteRef:
 		{
@@ -950,7 +1067,7 @@ bool BitmapCastMember::setField(int field, const Datum &d) {
 				_modified = true;
 			}
 		}
-		return true;
+		return;
 	case kThePicture:
 		if (d.type == PICTUREREF && d.u.picture != nullptr) {
 			setPicture(*d.u.picture);
@@ -961,16 +1078,189 @@ bool BitmapCastMember::setField(int field, const Datum &d) {
 			_regX -= _initialRect.left;
 			_regY -= _initialRect.top;
 			_initialRect = Common::Rect(_picture->_surface.w, _picture->_surface.h);
-			return true;
 		} else {
 			warning("BitmapCastMember::setField(): Wrong Datum type %d for kThePicture (or nullptr)", d.type);
 		}
-		return false;
+		return;
 	default:
 		break;
 	}
 
-	return CastMember::setField(field, d);
+	CastMember::setField(field, d);
+}
+
+uint32 BitmapCastMember::getCastDataSize() {
+	// _pitch : 2 bytes
+	// _initialRect : 8 bytes
+	// _boundingRect : 8 bytes
+	// _regY : 2 bytes
+	// _regX : 2 bytes
+	// Total: 22 bytes
+	// For Director 4 : 2 byte extra for casttype and flags (See Cast::loadCastData())
+	uint32 dataSize = 22 + 2;
+
+	if (_bitsPerPixel != 0) {
+		dataSize += 4;
+		// if (_cast->_version >= kFileVer500) {
+		// 	dataSize += 2;		// Added two bytes for _clut.member
+		// 	dataSize -= 2;		// Removed two bytes for _castType and _flags (See Cast::loadCastData())
+		// }
+
+		if (_flags2 != 0) {
+			dataSize += 16;
+		}
+	}
+	return dataSize;
+}
+
+void BitmapCastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
+	writeStream->writeUint16BE(_pitch);
+
+	Movie::writeRect(writeStream, _initialRect);
+	Movie::writeRect(writeStream, _boundingRect);
+
+	writeStream->writeUint16BE(_regY);
+	writeStream->writeUint16BE(_regX);
+
+	warning("BitmapCastMember::writeCastData(): TODO process D6+");
+
+	if (_bitsPerPixel != 0) {
+		writeStream->writeByte(0);		// Skip one byte (not stored)
+		writeStream->writeByte(_bitsPerPixel);
+
+		if (_cast->_version >= kFileVer500) {
+			if (_clut.castLib == _cast->_castLibID) {
+				writeStream->writeSint16BE(-1);
+			} else {
+				writeStream->writeSint16BE(_clut.castLib);
+			}
+		}
+
+		if (_clut.member > 0) {
+			writeStream->writeSint16BE(_clut.member);
+		} else {	// builtin palette
+			writeStream->writeSint16BE(_clut.member + 1);
+		}
+
+		if (_flags2 != 0) {
+			// Skipping 14 bytes because they are not stored in ScummVM Director
+			// May need to save in the future, see BitCastMember::BitCastMember constructor
+			writeStream->writeUint64BE(0);
+			writeStream->writeUint32BE(0);
+			writeStream->writeUint16BE(0);
+			writeStream->writeUint16BE(_flags2);
+		}
+	}
+	// Ignoring the tail during loading as well as saving
+}
+
+uint32 BitmapCastMember::writeBITDResource(Common::SeekableWriteStream *writeStream, uint32 offset) {
+	// Load it before writing
+	if (!_loaded) {
+		load();
+	}
+
+	writeStream->seek(offset);
+
+	writeStream->writeUint32LE(MKTAG('B', 'I', 'T', 'D'));
+	writeStream->writeUint32LE(getBITDResourceSize());
+
+	if (_external) {
+		warning("BitmapCastMember::writeBITDResource: the bitmap is external, ignoring for now");
+		return 8;		// 8 for the tag and size
+	}
+
+	// No compression for now
+	// pixels.size() == bytes needed
+	Graphics::Surface pixels;
+	Graphics::PixelFormat format;
+
+	if (_bitsPerPixel >> 3) {
+		format.bytesPerPixel = _bitsPerPixel >> 3;
+		pixels.create(_picture->_surface.w, _picture->_surface.h, format);
+	} else {
+		format.bytesPerPixel = 1;
+		pixels.create(_pitch, _picture->_surface.h, format);
+	}
+
+	offset = 0;
+
+	if (_bitsPerPixel == 8 && _picture->_surface.w < (int)(_pitch * _picture->_surface.h / _picture->_surface.h)) {
+		offset = (_pitch - _picture->_surface.w) % 2;
+	}
+
+	debugC(5, kDebugSaving, "BitmapCastMember::writeBITDResource: Saving 'BITD' Resource: bitsPerPixel: %d, castId: %d", _bitsPerPixel, _castId);
+	for (int y = 0; y < _picture->_surface.h; y++) {
+		byte *ptr = (byte *)pixels.getBasePtr(0, y);
+
+		for (int x = 0; x < _picture->_surface.w;) {
+			uint32 color = 0;
+
+			switch (_bitsPerPixel) {
+			case 1:
+				for (int c = 0; c < 8 && x < _picture->_surface.w; c++, x++) {
+					color += (*((byte *)_picture->_surface.getBasePtr(x, y))) & (1 << (7 - c));
+				}
+				*ptr = color; ptr++;
+				break;
+
+			case 2:
+				for (int c = 0; c < 4 && x < _picture->_surface.w; c++, x++) {
+					color += (*((byte *)_picture->_surface.getBasePtr(x, y)) & 0x3) << (2 * (3 - c));
+				}
+				*ptr = color; ptr++;
+				break;
+
+			case 4:
+				for (int c = 0; c < 2 && x < _picture->_surface.w; c++, x++) {
+					color += (*((byte *)_picture->_surface.getBasePtr(x, y)) & 0xF) << (4 * (1 - c));
+				}
+				*ptr = color; ptr++;
+				break;
+
+			case 8:
+				*(ptr + (y * offset)) = *((byte *)_picture->_surface.getBasePtr(x, y));
+				ptr++; x++;
+				break;
+
+			case 16:
+				color = *((uint16 *)_picture->_surface.getBasePtr(x, y));
+				*ptr = color >> 8; ptr++;
+				*ptr = color & 0xFF; ptr++;
+				x++;
+				break;
+
+			case 32:
+				color = *((uint32 *)_picture->_surface.getBasePtr(x, y));
+				ptr++;		// Ignore the Alpha value
+				*ptr = (color >> 16) & 0xFF; ptr++;
+				*ptr = (color >> 8) & 0xFF; ptr++;
+				*ptr = color & 0xFF; ptr++;
+				x++;
+				break;
+
+			default:
+				x++;
+				break;
+			}
+		}
+	}
+
+	writeStream->write(pixels.getPixels(), _picture->_surface.h * _pitch);
+
+	if (debugChannelSet(7, kDebugSaving)) {
+		dumpFile("BitmapData", _castId, MKTAG('B', 'I', 'T', 'D'), (byte *)pixels.getPixels(), _picture->_surface.h * _pitch);
+	}
+	return 0;
+}
+
+uint32 BitmapCastMember::getBITDResourceSize() {
+	if (_external) {
+		return 0;
+	}
+
+	// No compression for now
+	return _pitch * _picture->_surface.h;
 }
 
 } // End of namespace Director

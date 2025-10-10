@@ -54,13 +54,14 @@ BaseSurfaceOSystem::BaseSurfaceOSystem(BaseGame *inGame) : BaseSurface(inGame) {
 	_alphaType = Graphics::ALPHA_FULL;
 	_alphaMaskType = Graphics::ALPHA_OPAQUE;
 	_rotation = 0;
+	_surfaceModified = false;
 }
 
 //////////////////////////////////////////////////////////////////////////
 BaseSurfaceOSystem::~BaseSurfaceOSystem() {
 	if (_surface) {
 		if (_valid)
-			_gameRef->addMem(-_width * _height * 4);
+			_game->addMem(-_width * _height * 4);
 		_surface->free();
 		delete _surface;
 		_surface = nullptr;
@@ -72,24 +73,35 @@ BaseSurfaceOSystem::~BaseSurfaceOSystem() {
 		_alphaMask = nullptr;
 	}
 
-	BaseRenderOSystem *renderer = static_cast<BaseRenderOSystem *>(_gameRef->_renderer);
+	BaseRenderOSystem *renderer = static_cast<BaseRenderOSystem *>(_game->_renderer);
 	renderer->invalidateTicketsFromSurface(this);
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSurfaceOSystem::create(const Common::String &filename, bool defaultCK, byte ckRed, byte ckGreen, byte ckBlue, int lifeTime, bool keepLoaded) {
-	_filename = filename;
-
+bool BaseSurfaceOSystem::create(const char *filename, bool texture2D, bool defaultCK, byte ckRed, byte ckGreen, byte ckBlue, int lifeTime, bool keepLoaded) {
 	if (defaultCK) {
 		ckRed   = 255;
 		ckGreen = 0;
 		ckBlue  = 255;
 	}
 
+	BaseImage img = BaseImage();
+	if (!img.getImageInfo(filename, _width, _height)) {
+		return false;
+	}
+
+	if (lifeTime != -1 && _lifeTime == 0) {
+		_valid = false;
+	}
+
 	_ckDefault = defaultCK;
 	_ckRed = ckRed;
 	_ckGreen = ckGreen;
 	_ckBlue = ckBlue;
+
+	if (!_filename || scumm_stricmp(_filename, filename) != 0) {
+		setFilename(filename);
+	}
 
 	if (_lifeTime == 0 || lifeTime == -1 || lifeTime > _lifeTime) {
 		_lifeTime = lifeTime;
@@ -103,16 +115,21 @@ bool BaseSurfaceOSystem::create(const Common::String &filename, bool defaultCK, 
 	return STATUS_OK;
 }
 
-bool BaseSurfaceOSystem::finishLoad() {
+bool BaseSurfaceOSystem::loadImage() {
+	if (!_filename || !_filename[0]) {
+		return false;
+	}
+	Common::String filename = _filename;
+
 	BaseImage *image = new BaseImage();
-	if (!image->loadFile(_filename)) {
+	if (!image->loadFile(filename)) {
 		delete image;
 		return false;
 	}
 
 	if (_surface) {
 		if (_valid)
-			_gameRef->addMem(-_width * _height * 4);
+			_game->addMem(-_width * _height * 4);
 		_surface->free();
 		delete _surface;
 		_surface = nullptr;
@@ -125,7 +142,7 @@ bool BaseSurfaceOSystem::finishLoad() {
 	bool replaceAlpha = true;
 	if (image->getSurface()->format.bytesPerPixel == 1) {
 		if (!image->getPalette()) {
-			error("Missing palette while loading 8bit image %s", _filename.c_str());
+			error("Missing palette while loading 8bit image %s", _filename);
 		}
 		_surface = image->getSurface()->convertTo(g_system->getScreenFormat(), image->getPalette(), image->getPaletteCount());
 	} else if (image->getSurface()->format != g_system->getScreenFormat()) {
@@ -135,9 +152,9 @@ bool BaseSurfaceOSystem::finishLoad() {
 		_surface->copyFrom(*image->getSurface());
 	}
 
-	_gameRef->addMem(_width * _height * 4);
+	_game->addMem(_width * _height * 4);
 
-	if (_filename.matchString("savegame:*g", true)) {
+	if (filename.matchString("savegame:*g", true)) {
 		uint8 r, g, b, a;
 		for (int x = 0; x < _surface->w; x++) {
 			for (int y = 0; y < _surface->h; y++) {
@@ -147,11 +164,11 @@ bool BaseSurfaceOSystem::finishLoad() {
 			}
 		}
 	}
-	
-	if (_filename.hasSuffix(".bmp")) {
+
+	if (filename.hasSuffix(".bmp")) {
 		// Ignores alpha channel for BMPs
 		needsColorKey = true;
-	} else if (_filename.hasSuffix(".jpg")) {
+	} else if (filename.hasSuffix(".jpg")) {
 		// Ignores alpha channel for JPEGs
 		needsColorKey = true;
 	} else if (BaseEngine::instance().getTargetExecutable() < WME_LITE) {
@@ -187,7 +204,7 @@ bool BaseSurfaceOSystem::finishLoad() {
 	// Some Rosemary sprites have non-fully transparent pixels
 	// In original WME it wasn't seen because sprites were downscaled
 	// Let's set alpha to 0 if it is smaller then some treshold
-	if (BaseEngine::instance().getGameId() == "rosemary" && _filename.hasPrefix("actors") &&
+	if (BaseEngine::instance().getGameId() == "rosemary" && filename.hasPrefix("actors") &&
 	    _alphaType == Graphics::ALPHA_FULL && _surface->format.aBits() > 4) {
 		uint32 mask = _surface->format.ARGBToColor(255, 0, 0, 0);
 		uint32 treshold = _surface->format.ARGBToColor(16, 0, 0, 0);
@@ -203,21 +220,20 @@ bool BaseSurfaceOSystem::finishLoad() {
 		}
 	}
 
-
 	return true;
 }
 
 //////////////////////////////////////////////////////////////////////////
 bool BaseSurfaceOSystem::create(int width, int height) {
 	if (_valid)
-		_gameRef->addMem(-_width * _height * 4);
+		_game->addMem(-_width * _height * 4);
 	_surface->free();
 
 	_width = width;
 	_height = height;
 
 	_surface->create(_width, _height, g_system->getScreenFormat());
-	_gameRef->addMem(_width * _height * 4);
+	_game->addMem(_width * _height * 4);
 
 	_valid = true;
 
@@ -231,7 +247,7 @@ bool BaseSurfaceOSystem::invalidate() {
 	}
 
 	if (_valid) {
-		_gameRef->addMem(-_width * _height * 4);
+		_game->addMem(-_width * _height * 4);
 		_surface->free();
 		_valid = false;
 	}
@@ -262,7 +278,7 @@ bool BaseSurfaceOSystem::isTransparentAtLite(int x, int y) const {
 //////////////////////////////////////////////////////////////////////////
 bool BaseSurfaceOSystem::startPixelOp() {
 	if (!_valid) {
-		if (DID_FAIL(finishLoad())) {
+		if (DID_FAIL(loadImage())) {
 			return STATUS_FAILED;
 		}
 	}
@@ -272,35 +288,41 @@ bool BaseSurfaceOSystem::startPixelOp() {
 
 //////////////////////////////////////////////////////////////////////////
 bool BaseSurfaceOSystem::endPixelOp() {
-	_lastUsedTime = _gameRef->getLiveTimer()->getTime();
+	_lastUsedTime = _game->_liveTimer;
 	_pixelOpReady = false;
+	if (_surfaceModified) {
+		BaseRenderOSystem *renderer = static_cast<BaseRenderOSystem *>(_game->_renderer);
+		renderer->invalidateTicketsFromSurface(this);
+		_surfaceModified = false;
+	}
 	return STATUS_OK;
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSurfaceOSystem::display(int x, int y, Rect32 rect, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY) {
+bool BaseSurfaceOSystem::display(int x, int y, Common::Rect32 rect, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY) {
 	_rotation = 0;
 	return drawSprite(x, y, &rect, nullptr, Graphics::TransformStruct(Graphics::kDefaultZoomX, Graphics::kDefaultZoomY,  mirrorX, mirrorY));
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSurfaceOSystem::displayTrans(int x, int y, Rect32 rect, uint32 alpha, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY, int offsetX, int offsetY) {
+bool BaseSurfaceOSystem::displayTrans(int x, int y, Common::Rect32 rect, uint32 alpha, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY, int offsetX, int offsetY) {
 	_rotation = 0;
 	return drawSprite(x, y, &rect, nullptr,  Graphics::TransformStruct(Graphics::kDefaultZoomX, Graphics::kDefaultZoomY, Graphics::kDefaultAngle, Graphics::kDefaultHotspotX, Graphics::kDefaultHotspotY, blendMode, TS_COLOR(alpha), mirrorX, mirrorY, offsetX, offsetY));
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSurfaceOSystem::displayTransZoom(int x, int y, Rect32 rect, float zoomX, float zoomY, uint32 alpha, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY) {
+bool BaseSurfaceOSystem::displayTransZoom(int x, int y, Common::Rect32 rect, float zoomX, float zoomY, uint32 alpha, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY) {
 	_rotation = 0;
 	return drawSprite(x, y, &rect, nullptr, Graphics::TransformStruct((int32)zoomX, (int32)zoomY, blendMode, TS_COLOR(alpha), mirrorX, mirrorY));
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSurfaceOSystem::displayTransRotate(int x, int y, float rotate, int32 hotspotX, int32 hotspotY, Rect32 rect, float zoomX, float zoomY, uint32 alpha, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY) {
+bool BaseSurfaceOSystem::displayTransRotate(int x, int y, float rotate, int32 hotspotX, int32 hotspotY, Common::Rect32 rect, float zoomX, float zoomY, uint32 alpha, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY) {
 	Common::Point newHotspot;
 	Common::Rect oldRect(rect.left, rect.top, rect.right, rect.bottom);
 	Graphics::TransformStruct transform = Graphics::TransformStruct(zoomX, zoomY, rotate, hotspotX, hotspotY, blendMode, TS_COLOR(alpha), mirrorX, mirrorY, 0, 0);
-	Rect32 newRect = Graphics::TransformTools::newRect(oldRect, transform, &newHotspot);
+	Common::Rect newRect = Graphics::TransformTools::newRect(oldRect, transform, &newHotspot);
+	Common::Rect32 newRect32(newRect.left, newRect.top, newRect.right, newRect.bottom);
 
 	x -= newHotspot.x;
 	y -= newHotspot.y;
@@ -311,25 +333,25 @@ bool BaseSurfaceOSystem::displayTransRotate(int x, int y, float rotate, int32 ho
 		_rotation = 360.0f + transform._angle;
 		warning("Negative post rotation: %d %d", (int32)transform._angle, (int32)_rotation);
 	}
-	return drawSprite(x, y, &rect, &newRect, transform);
+	return drawSprite(x, y, &rect, &newRect32, transform);
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSurfaceOSystem::displayTiled(int x, int y, Rect32 rect, int numTimesX, int numTimesY) {
+bool BaseSurfaceOSystem::displayTiled(int x, int y, Common::Rect32 rect, int numTimesX, int numTimesY) {
 	assert(numTimesX > 0 && numTimesY > 0);
 	Graphics::TransformStruct transform(numTimesX, numTimesY);
 	return drawSprite(x, y, &rect, nullptr, transform);
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSurfaceOSystem::drawSprite(int x, int y, Rect32 *rect, Rect32 *newRect, Graphics::TransformStruct transform) {
-	BaseRenderOSystem *renderer = static_cast<BaseRenderOSystem *>(_gameRef->_renderer);
+bool BaseSurfaceOSystem::drawSprite(int x, int y, Common::Rect32 *rect, Common::Rect32 *newRect, Graphics::TransformStruct transform) {
+	BaseRenderOSystem *renderer = static_cast<BaseRenderOSystem *>(_game->_renderer);
 
-	_lastUsedTime = _gameRef->getLiveTimer()->getTime();
+	_lastUsedTime = _game->_liveTimer;
 
 	// TODO: Skip this check if we can reuse an existing ticket?
 	if (!_valid) {
-		finishLoad();
+		loadImage();
 	}
 
 	if (renderer->_forceAlphaColor != 0) {
@@ -391,14 +413,14 @@ bool BaseSurfaceOSystem::putSurface(const Graphics::Surface &surface, bool hasAl
 	} else {
 		_alphaType = _alphaMaskType;
 	}
-	BaseRenderOSystem *renderer = static_cast<BaseRenderOSystem *>(_gameRef->_renderer);
+	BaseRenderOSystem *renderer = static_cast<BaseRenderOSystem *>(_game->_renderer);
 	renderer->invalidateTicketsFromSurface(this);
 
 	return STATUS_OK;
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSurfaceOSystem::setAlphaImage(const Common::String &filename) {
+bool BaseSurfaceOSystem::setAlphaImage(const char *filename) {
 	BaseImage *alphaImage = new BaseImage();
 	if (!alphaImage->loadFile(filename)) {
 		delete alphaImage;

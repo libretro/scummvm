@@ -34,9 +34,9 @@
 #include "engines/wintermute/base/gfx/3deffect.h"
 #include "engines/wintermute/base/gfx/3deffect_params.h"
 #include "engines/wintermute/coll_templ.h"
-#include "engines/wintermute/math/rect32.h"
 #include "engines/wintermute/video/video_theora_player.h"
 #include "engines/wintermute/utils/utils.h"
+#include "engines/wintermute/dcgf.h"
 
 namespace Wintermute {
 
@@ -102,41 +102,32 @@ private:
 		}
 
 		~XModelMatSprite() {
-			delete[] _matName;
-			_matName = nullptr;
-			delete _effectFile;
-			_effectFile = nullptr;
-			delete _sprite;
-			_sprite = nullptr;
-			delete _theora;
-			_theora = nullptr;
-			delete _effect;
-			_effect = nullptr;
-			delete _effectParams;
-			_effectParams = nullptr;
+			SAFE_DELETE_ARRAY(_matName);
+			SAFE_DELETE_ARRAY(_effectFile);
+			SAFE_DELETE(_sprite);
+			SAFE_DELETE(_theora);
+			SAFE_DELETE(_effect);
+			SAFE_DELETE(_effectParams);
 		}
 
 		bool setSprite(BaseSprite *sprite) {
-			delete _theora;
-			_theora = nullptr;
-			delete _sprite;
+			SAFE_DELETE(_theora);
+			SAFE_DELETE(_sprite);
 			_sprite = sprite;
 
 			return true;
 		}
 
 		bool setTheora(VideoTheoraPlayer *theora) {
-			delete _theora;
-			_theora = nullptr;
-			delete _sprite;
-			_sprite = nullptr;
+			SAFE_DELETE(_theora);
+			SAFE_DELETE(_sprite);
 			_theora = theora;
 
 			return true;
 		}
 
 		bool setEffect(Effect3D *effect) {
-			delete _effect;
+			SAFE_DELETE(_effect);
 			_effect = effect;
 
 			if (!_effectParams)
@@ -161,7 +152,7 @@ private:
 					effectFileName = nullptr;
 
 				persistMgr->transferCharPtr(TMEMBER(effectFileName));
-				delete[] effectFileName;
+				SAFE_DELETE_ARRAY(effectFileName);
 			} else {
 				persistMgr->transferCharPtr(TMEMBER(_effectFile));
 			}
@@ -198,11 +189,11 @@ public:
 
 	XModel *_parentModel{};
 
-	bool loadFromFile(const Common::String &filename, XModel *parentModel = nullptr);
-	bool mergeFromFile(const Common::String &filename);
+	bool loadFromFile(const char *filename, XModel *parentModel = nullptr);
+	bool mergeFromFile(const char *filename);
 
-	bool loadAnimationSet(const Common::String &filename, XFileData *xobj);
-	bool loadAnimation(const Common::String &filename, XFileData *xobj, AnimationSet *parentAnimSet = nullptr);
+	bool loadAnimationSet(const char *filename, XFileData *xobj);
+	bool loadAnimation(const char *filename, XFileData *xobj, AnimationSet *parentAnimSet = nullptr);
 
 	bool update() override;
 	bool render();
@@ -211,7 +202,7 @@ public:
 
 	bool updateShadowVol(ShadowVolume *shadow, DXMatrix *modelMat, DXVector3 *light, float extrusionDepth);
 
-	bool playAnim(int channel, const Common::String &anim, uint32 transitionTime = 0, bool forceReset = false, uint32 stopTransitionTime = 0);
+	bool playAnim(int channel, const char *anim, uint32 transitionTime = 0, bool forceReset = false, uint32 stopTransitionTime = 0);
 	bool isAnimPending(char *animName = nullptr);
 	bool isAnimPending(int channel, const char *animName = nullptr);
 
@@ -220,12 +211,12 @@ public:
 	static bool loadName(BaseNamedObject *obj, XFileData *data);
 	static bool loadName(Common::String &targetStr, XFileData *data);
 
-	Rect32 _boundingRect;
+	Common::Rect32 _boundingRect;
 	BaseObject *_owner{};
 
 	bool parseAnim(char *buffer);
 	bool parseEvent(AnimationSet *anim, char *buffer);
-	AnimationSet *getAnimationSetByName(const Common::String &name);
+	AnimationSet *getAnimationSetByName(const char *name);
 
 	bool stopAnim(int channel, uint32 transitionTime);
 	bool stopAnim(uint32 transitionTime);
@@ -255,7 +246,7 @@ private:
 	bool findBones(bool animOnly = false, XModel *parentModel = nullptr);
 
 	void updateBoundingRect();
-	void static inline updateRect(Rect32 *rc, DXVector3 *vec);
+	void static inline updateRect(Common::Rect32 *rc, DXVector3 *vec);
 	DXViewport _drawingViewport{};
 	DXMatrix _lastWorldMat;
 	DXMatrix _lastViewMat;

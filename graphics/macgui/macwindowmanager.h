@@ -179,8 +179,8 @@ public:
 	 * @return Pointer to the newly created window.
 	 */
 	MacWindow *addWindow(bool scrollable, bool resizable, bool editable);
-	MacTextWindow *addTextWindow(const MacFont *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, bool cursorHandler = true);
-	MacTextWindow *addTextWindow(const Font *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, bool cursorHandler = true);
+	MacTextWindow *addTextWindow(const MacFont *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, int padding = 0);
+	MacTextWindow *addTextWindow(const Font *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, int padding = 0);
 	void resizeScreen(int w, int h);
 
 	/**
@@ -233,6 +233,8 @@ public:
 	 */
 	void setActiveWindow(int id);
 
+	int getActiveWindow() { return _activeWindow; }
+
 	/**
 	 * Return Top Window containing a point
 	 * @param x x coordinate of point
@@ -280,7 +282,11 @@ public:
 	 * @param id The id of the desired window.
 	 * @return Pointer to the requested window, if it exists.
 	 */
-	BaseMacWindow *getWindow(int id) { return _windows[id]; }
+	BaseMacWindow *getWindow(int id) {
+		if (id >= 0 && id < (int)_windows.size())
+			return _windows[id];
+		return nullptr;
+	}
 
 	/**
 	 * Retrieve the patterns used to fill surfaces.
@@ -363,7 +369,7 @@ public:
 	void cleanupDataBundle();
 	void cleanupDesktopBmp();
 
-	BorderOffsets getBorderOffsets(uint32 windowType);
+	const BorderOffsets &getBorderOffsets(uint32 windowType);
 	Common::SeekableReadStream *getBorderFile(uint32 windowType, uint32 flags);
 	Common::SeekableReadStream *getFile(const Common::Path &filename);
 

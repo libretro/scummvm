@@ -148,7 +148,7 @@ void FreescapeEngine::loadSpeakerFxZX(Common::SeekableReadStream *file, int sfxT
 				} while (soundSize != 0);
 			} else if ((soundType & 0x7f) == 2) {
 				repetitions = SFXtempStruct[1] | (SFXtempStruct[0] << 8);
-				debugC(1, kFreescapeDebugParser, "Repetitions: %x", repetitions);
+				debugC(1, kFreescapeDebugParser, "Raw sound, repetitions: %x", repetitions);
 				uint16 sVar7 = SFXtempStruct[3];
 				soundType = 0;
 				soundSize = SFXtempStruct[2];
@@ -162,7 +162,7 @@ void FreescapeEngine::loadSpeakerFxZX(Common::SeekableReadStream *file, int sfxT
 					soundUnitZX soundUnit;
 					soundUnit.isRaw = true;
 					int totalSize = soundSize + sVar7;
-					soundUnit.rawFreq = 1.0;
+					soundUnit.rawFreq = 0.1f;
 					soundUnit.rawLengthus = totalSize;
 					_soundsSpeakerFxZX[i]->push_back(soundUnit);
 					//debugN("%x ", silenceSize);
@@ -231,9 +231,9 @@ void FreescapeEngine::loadSpeakerFxZX(Common::SeekableReadStream *file, int sfxT
 	//assert(0);
 }
 
-void FreescapeEngine::loadSpeakerFxDOS(Common::SeekableReadStream *file, int offsetFreq, int offsetTable) {
+void FreescapeEngine::loadSpeakerFxDOS(Common::SeekableReadStream *file, int offsetFreq, int offsetTable, int numberSounds) {
 	debugC(1, kFreescapeDebugParser, "Reading PC speaker sound table for DOS");
-	for (int i = 1; i < 20; i++) {
+	for (int i = 1; i <= numberSounds; i++) {
 		debugC(1, kFreescapeDebugParser, "Reading sound table entry: %d ", i);
 		int soundIdx = (i - 1) * 4;
 		file->seek(offsetFreq + soundIdx);
@@ -299,7 +299,7 @@ void FreescapeEngine::loadSpeakerFxDOS(Common::SeekableReadStream *file, int off
 	}
 }
 
-void FreescapeEngine::playSound(int index, bool sync) {
+void FreescapeEngine::playSound(int index, bool sync, Audio::SoundHandle &handle) {
 	if (index < 0) {
 		debugC(1, kFreescapeDebugMedia, "Sound not specified");
 		return;
@@ -319,13 +319,13 @@ void FreescapeEngine::playSound(int index, bool sync) {
 	if (isDOS()) {
 		soundSpeakerFx *speakerFxInfo = _soundsSpeakerFx[index];
 		if (speakerFxInfo)
-			playSoundDOS(speakerFxInfo, sync);
+			playSoundDOS(speakerFxInfo, sync, handle);
 		else
 			debugC(1, kFreescapeDebugMedia, "WARNING: Sound %d is not available", index);
 
 		return;
 	} else if (isSpectrum() && !isDriller()) {
-		playSoundZX(_soundsSpeakerFxZX[index]);
+		playSoundZX(_soundsSpeakerFxZX[index], handle);
 		return;
 	}
 
@@ -416,7 +416,6 @@ void FreescapeEngine::playMusic(const Common::Path &filename) {
 		_mixer->stopHandle(_musicHandle);
 		Audio::LoopingAudioStream *loop = new Audio::LoopingAudioStream(stream, 0);
 		_mixer->playStream(Audio::Mixer::kMusicSoundType, &_musicHandle, loop);
-		_mixer->setVolumeForSoundType(Audio::Mixer::kMusicSoundType, Audio::Mixer::kMaxChannelVolume / 10);
 	}
 }
 
@@ -433,33 +432,29 @@ void FreescapeEngine::playSoundFx(int index, bool sync) {
 
 	int size = _soundsFx[index]->size;
 	int sampleRate = _soundsFx[index]->sampleRate;
+	int repetitions = _soundsFx[index]->repetitions;
 	byte *data = _soundsFx[index]->data;
-	int loops = 1;
-
-	if (index == 10)
-		loops = 5;
-	else if (index == 15)
-		loops = 50;
 
 	if (size > 4) {
 		Audio::SeekableAudioStream *s = Audio::makeRawStream(data, size, sampleRate, Audio::FLAG_16BITS, DisposeAfterUse::NO);
-		Audio::AudioStream *stream = new Audio::LoopingAudioStream(s, loops);
+		Audio::AudioStream *stream = new Audio::LoopingAudioStream(s, repetitions);
 		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, stream);
-	}
+	} else
+		debugC(1, kFreescapeDebugMedia, "WARNING: Sound %d is empty", index);
 }
 
-void FreescapeEngine::stopAllSounds() {
-	_speaker->stop();
-	_mixer->stopHandle(_soundFxHandle);
+void FreescapeEngine::stopAllSounds(Audio::SoundHandle &handle) {
+	debugC(1, kFreescapeDebugMedia, "Stopping sound");
+	_mixer->stopHandle(handle);
 }
 
 void FreescapeEngine::waitForSounds() {
 	if (_usePrerecordedSounds || isAmiga() || isAtariST())
 		while (_mixer->isSoundHandleActive(_soundFxHandle))
-			g_system->delayMillis(10);
+			waitInLoop(10);
 	else {
 		while (!_speaker->endOfStream())
-			g_system->delayMillis(10);
+			waitInLoop(10);
 	}
 }
 
@@ -504,17 +499,17 @@ uint16 FreescapeEngine::playSoundDOSSpeaker(uint16 frequencyStart, soundSpeakerF
 	return freq;
 }
 
-void FreescapeEngine::playSoundZX(Common::Array<soundUnitZX> *data) {
+void FreescapeEngine::playSoundZX(Common::Array<soundUnitZX> *data, Audio::SoundHandle &handle) {
 	for (auto &it : *data) {
 		soundUnitZX value = it;
 
 		if (value.isRaw) {
-			debugC(1, kFreescapeDebugMedia, "hz: %f, duration: %d", value.rawFreq, value.rawLengthus);
+			debugC(1, kFreescapeDebugMedia, "raw hz: %f, duration: %d", value.rawFreq, value.rawLengthus);
 			if (value.rawFreq == 0) {
-				_speaker->playQueue(Audio::PCSpeaker::kWaveFormSilence, 0, value.rawLengthus);
+				_speaker->playQueue(Audio::PCSpeaker::kWaveFormSilence, 0, 5 * value.rawLengthus);
 				continue;
 			}
-			_speaker->playQueue(Audio::PCSpeaker::kWaveFormSquare, value.rawFreq, value.rawLengthus);
+			_speaker->playQueue(Audio::PCSpeaker::kWaveFormSquare, value.rawFreq, 5 * value.rawLengthus);
 		} else {
 			if (value.freqTimesSeconds == 0 && value.tStates == 0) {
 				_speaker->playQueue(Audio::PCSpeaker::kWaveFormSilence, 0, 1000 * value.multiplier);
@@ -524,16 +519,16 @@ void FreescapeEngine::playSoundZX(Common::Array<soundUnitZX> *data) {
 			float hzFreq = 1 / ((value.tStates + 30.125) / 437500.0);
 			float waveDuration = value.freqTimesSeconds / hzFreq;
 			waveDuration = value.multiplier * 1000 * (waveDuration + 1);
-			debugC(1, kFreescapeDebugMedia, "hz: %f, duration: %f", hzFreq, waveDuration);
+			debugC(1, kFreescapeDebugMedia, "non raw hz: %f, duration: %f", hzFreq, waveDuration);
 			_speaker->playQueue(Audio::PCSpeaker::kWaveFormSquare, hzFreq, waveDuration);
 		}
 	}
 
 	_mixer->stopHandle(_soundFxHandle);
-	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, _speaker, -1, kFreescapeDefaultVolume, 0, DisposeAfterUse::NO);
+	_mixer->playStream(Audio::Mixer::kSFXSoundType, &handle, _speaker, -1, kFreescapeDefaultVolume, 0, DisposeAfterUse::NO);
 }
 
-void FreescapeEngine::playSoundDOS(soundSpeakerFx *speakerFxInfo, bool sync) {
+void FreescapeEngine::playSoundDOS(soundSpeakerFx *speakerFxInfo, bool sync, Audio::SoundHandle &handle) {
 	uint freq = speakerFxInfo->frequencyStart;
 
 	for (int i = 0; i < speakerFxInfo->repetitions; i++) {
@@ -545,8 +540,8 @@ void FreescapeEngine::playSoundDOS(soundSpeakerFx *speakerFxInfo, bool sync) {
 		}
 	}
 
-	_mixer->stopHandle(_soundFxHandle);
-	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, _speaker, -1, kFreescapeDefaultVolume / 2, 0, DisposeAfterUse::NO);
+	_mixer->stopHandle(handle);
+	_mixer->playStream(Audio::Mixer::kSFXSoundType, &handle, _speaker, -1, kFreescapeDefaultVolume / 2, 0, DisposeAfterUse::NO);
 }
 
 void FreescapeEngine::loadSoundsFx(Common::SeekableReadStream *file, int offset, int number) {
@@ -558,13 +553,14 @@ void FreescapeEngine::loadSoundsFx(Common::SeekableReadStream *file, int offset,
 		int zero = file->readUint16BE();
 		assert(zero == 0);
 		int size = file->readUint16BE();
-		int sampleRate = file->readUint16BE();
-		debugC(1, kFreescapeDebugParser, "Loading sound: %d (size: %d, sample rate: %d) at %" PRIx64, i, size, sampleRate, file->pos());
+		float sampleRate = float(file->readUint16BE()) / 2;
+		debugC(1, kFreescapeDebugParser, "Loading sound: %d (size: %d, sample rate: %f) at %" PRIx64, i, size, sampleRate, file->pos());
 		byte *data = (byte *)malloc(size * sizeof(byte));
 		file->read(data, size);
 		sound->sampleRate = sampleRate;
 		sound->size = size;
 		sound->data = (byte *)data;
+		sound->repetitions = 1;
 		_soundsFx[i] = sound;
 	}
 }

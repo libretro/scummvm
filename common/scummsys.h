@@ -35,6 +35,10 @@
 	#define GCC_ATLEAST(major, minor) 0
 #endif
 
+#if defined(_MSC_VER) && _MSC_VER < 1900
+	#error MSVC support requires MSVC 2015 or newer
+#endif
+
 #if defined(NONSTANDARD_PORT)
 
 	// Ports which need to perform #includes and #defines visible in
@@ -45,45 +49,6 @@
 #else // defined(NONSTANDARD_PORT)
 
 	#if defined(WIN32)
-
-		#if defined(_MSC_VER) && _MSC_VER <= 1800
-
-		// FIXME: The placement of the workaround functions for MSVC below
-		// require us to include stdio.h and stdarg.h for MSVC here. This
-		// is not exactly nice...
-		// We should think of a better way of doing this.
-		#include <stdio.h>
-		#include <stdarg.h>
-
-		// MSVC's vsnprintf is either non-existent (2003) or bugged since it
-		// does not always include a terminating NULL (2005+). To work around
-		// that we fix up the _vsnprintf included. Note that the return value
-		// will still not match C99's specs!
-		inline int vsnprintf_msvc(char *str, size_t size, const char *format, va_list args) {
-			// We do not pass size - 1 here, to ensure we would get the same
-			// return value as when we would use _vsnprintf directly, since
-			// for example Common::String::format relies on this.
-			int retValue = _vsnprintf(str, size, format, args);
-			str[size - 1] = 0;
-			return retValue;
-		}
-
-		#define vsnprintf vsnprintf_msvc
-
-		// Visual Studio does not include snprintf in its standard C library.
-		// Instead it includes a function called _snprintf with somewhat
-		// similar semantics. The minor difference is that the return value in
-		// case the formatted string exceeds the buffer size is different.
-		// A much more dangerous one is that _snprintf does not always include
-		// a terminating null (Whoops!). Instead we map to our fixed vsnprintf.
-		inline int snprintf(char *str, size_t size, const char *format, ...) {
-			va_list args;
-			va_start(args, format);
-			int len = vsnprintf(str, size, format, args);
-			va_end(args);
-			return len;
-		}
-		#endif
 
 		#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 		#define NOGDICAPMASKS
@@ -124,11 +89,10 @@
 	#include <assert.h>
 	#include <ctype.h>
 
-	// The C++11 standard removed the C99 requirement that some <inttypes.h>
-	// features should only be available when the following macros are defined.
-	// But on some systems (such as RISC OS or macOS < 10.7), the system headers
-	// are not necessarily up to date with this change. So, continue defining
-	// them, in order to avoid build failures on some environments.
+	// In C99, the following macros were necessary to get some <inttypes.h>
+	// features we want. The C++11 standard removed this requirement, but in
+	// practice, some systems (such as RISC OS or macOS < 10.7) are not fully
+	// compliant, and still require the old defines.
 	#define __STDC_CONSTANT_MACROS
 	#define __STDC_FORMAT_MACROS
 	#define __STDC_LIMIT_MACROS
@@ -145,6 +109,7 @@
 	#endif
 
 	#include <limits.h>
+
 	// MSVC does not define M_PI, M_SQRT2 and other math defines by default.
 	// _USE_MATH_DEFINES must be defined in order to have these defined, thus
 	// we enable it here. For more information, check:
@@ -166,7 +131,7 @@
 #endif
 
 #ifndef STATIC_ASSERT
-#if __cplusplus >= 201103L || (defined(_MSC_VER) && _MSC_VER > 1600)
+#if __cplusplus >= 201103L || defined(_MSC_VER)
 	/**
 	 * Generates a compile-time assertion.
 	 *
@@ -269,6 +234,15 @@
 //    - ...
 // ...
 
+//
+// If -fsanitize=alignment is in use (or UBSan enabled it), and the compiler
+// happens to report it, make sure SCUMM_NEED_ALIGNMENT is defined, in order
+// to avoid false positives. `alignment_sanitizer` may not be reported in
+// earlier releases though, so look for the UBSan flag in that case.
+//
+#if __has_feature(alignment_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+	#define SCUMM_NEED_ALIGNMENT
+#endif
 
 //
 // By default we try to use pragma push/pop to ensure various structs we use
@@ -287,14 +261,6 @@
 // Determine the host endianess and whether memory alignment is required.
 //
 #if !defined(HAVE_CONFIG_H)
-
-	// If -fsanitize=undefined or -fsanitize=alignment is in use, and the
-	// compiler happens to report it, make sure SCUMM_NEED_ALIGNMENT is
-	// defined, in order to avoid false positives when not using the
-	// "configure" script to enable UBSan.
-	#if __has_feature(undefined_behavior_sanitizer)
-		#define SCUMM_NEED_ALIGNMENT
-	#endif
 
 	#if defined(__DC__) || \
 		  defined(__DS__) || \
@@ -377,7 +343,7 @@
 #endif
 
 #ifndef MSVC_PRINTF
-	#if defined(_MSC_VER) && _MSC_VER > 1400
+	#if defined(_MSC_VER)
 		#define MSVC_PRINTF _Printf_format_string_
 	#else
 		#define MSVC_PRINTF
@@ -516,7 +482,8 @@
 #endif
 
 //
-// std::nullptr_t when this type is not available
+// std::nullptr_t when unavailable (e.g. the compiler supports C++11,
+// but the standard library is older and has incomplete C++11 support)
 //
 #if defined(NO_CXX11_NULLPTR_T)
 namespace std {
@@ -525,8 +492,8 @@ namespace std {
 #endif
 
 //
-// std::initializer_list
-// Provide replacement when not available
+// std::initializer_list when unavailable (e.g. the compiler supports C++11,
+// but the standard library is older and has incomplete C++11 support)
 //
 #if defined(NO_CXX11_INITIALIZER_LIST)
 namespace std {

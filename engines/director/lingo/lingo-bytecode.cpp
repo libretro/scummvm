@@ -214,11 +214,11 @@ static const LingoV4TheEntity lingoV4TheEntity[] = {
 	{ 0x06, 0x23, kTheSprite,			kTheMemberNum,		true, kTEAItemId }, // D5
 	{ 0x06, 0x24, kTheSprite, 			kTheCastLibNum, 	true, kTEAItemId }, // D5
 	{ 0x06, 0x25, kTheSprite,			kTheMember,			true, kTEAItemId }, // D5
-	// scriptInstanceList
-	// currentTime
-	// mostRecentCuePoint
-	// tweened
-	// name
+	{ 0x06, 0x26, kTheSprite,			kTheScriptInstanceList,	true, kTEAItemId }, // D6
+	{ 0x06, 0x27, kTheSprite,			kTheCurrentTime,	true, kTEAItemId }, // D6
+	{ 0x06, 0x28, kTheSprite,			kTheMostRecentCuePoint,	true, kTEAItemId }, // D6
+	{ 0x06, 0x29, kTheSprite,			kTheTweened,		true, kTEAItemId }, // D6
+	{ 0x06, 0x2a, kTheSprite,			kTheName,			true, kTEAItemId }, // D6
 
 	{ 0x07, 0x01, kTheBeepOn,			kTheNOField,		true, kTEANOArgs },
 	{ 0x07, 0x02, kTheButtonStyle,		kTheNOField,		true, kTEANOArgs },
@@ -1032,7 +1032,10 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 	uint16 scriptId = lctxIndex;
 
 	// unk2
-	for (uint32 i = 0; i < 0x10; i++) {
+	stream.readSint16BE();
+	uint16 parentNumber = stream.readSint16BE();
+
+	for (uint32 i = 0; i < 0xC; i++) {
 		stream.readByte();
 	}
 
@@ -1098,7 +1101,7 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 			castName = info->name;
 	} else {
 		warning("Script %d has no associated cast member", scriptId);
-		scriptType = kNoneScript;
+		scriptType = kMovieScript;
 	}
 
 	_assemblyArchive = archive;
@@ -1114,12 +1117,12 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 		}
 		debugC(1, kDebugCompile, "Add V4 script %d: factory '%s'", scriptId, factoryName.c_str());
 
-		sc = _assemblyContext = new ScriptContext(factoryName, scriptType, _assemblyId);
+		sc = _assemblyContext = new ScriptContext(factoryName, scriptType, _assemblyId, parentNumber, scriptId);
 		registerFactory(factoryName);
 	} else {
 		debugC(1, kDebugCompile, "Add V4 script %d: %s %d", scriptId, scriptType2str(scriptType), _assemblyId);
 
-		sc = _assemblyContext = new ScriptContext(!castName.empty() ? castName : Common::String::format("%d", _assemblyId), scriptType, _assemblyId, archive->cast->_castLibID);
+		sc = _assemblyContext = new ScriptContext(!castName.empty() ? castName : Common::String::format("%d", _assemblyId), scriptType, _assemblyId, archive->cast->_castLibID, parentNumber, scriptId);
 	}
 
 	// initialise each property

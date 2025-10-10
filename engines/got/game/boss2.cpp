@@ -178,7 +178,7 @@ void boss2CheckHit(Actor *actor) {
 
 			_G(actor[3])._i1 = 1;
 			_G(actor[3])._i2 = 0;
-			memset(expf, 0, 60);
+			memset(expf, 0, sizeof(expf));
 
 			for (int rep = 7; rep < MAX_ACTORS; rep++) {
 				if (_G(actor[rep])._active)
@@ -411,6 +411,10 @@ void boss2ClosingSequence4() {
 	_G(scrn)._music = 6;
 
 	showLevel(BOSS_LEVEL2);
+
+#ifdef USE_TTS
+	_G(thorInfo)._previousScore = -1;
+#endif
 
 	playSound(ANGEL, true);
 	placeTile(18, 10, 152);

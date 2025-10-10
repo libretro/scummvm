@@ -954,9 +954,6 @@ void Room604::killRipley() {
 		digi_play("dooropn2", 3);
 
 		switch (_G(flags)[V189]) {
-		case 1:
-			_shedDoor = series_play("SHED DOOR OPENS", 0x300, 16, 1, 11);
-			break;
 		case 2:
 			terminateMachineAndNull(_doorWireGone);
 			terminateMachineAndNull(_cord);
@@ -968,6 +965,7 @@ void Room604::killRipley() {
 			_shedDoor = series_play("604 DOOR OPEN PLUG IN", 0x300, 0, 556, 5, 0, 100, 0, 0, 0, 1);
 			break;
 		default:
+			_shedDoor = series_play("SHED DOOR OPENS", 0x300, 16, 1, 11);
 			break;
 		}
 		break;
@@ -1148,7 +1146,7 @@ void Room604::daemon1() {
 	if (_suppressChatter)
 		return;
 
-	static const char *DIGI[3] = { "610_s03a", "610_s03b", "610_s03" };
+	static const char *DIGI[3] = { "610_s03", "610_s03a", "610_s03b" };
 
 	switch (_G(kernel).trigger) {
 	case 126:
@@ -1160,7 +1158,7 @@ void Room604::daemon1() {
 		if (++_val1 >= 8)
 			_val1 = 1;
 
-		digi_play(Common::String::format("610k%.2d", _val1 + 6).c_str(), 3, 130, 136);
+		digi_play(Common::String::format("610k%.2d", _val1 + 6).c_str(), 3, 130, (_val1 == 6) ? 137 : 136);
 		break;
 
 	case 136:

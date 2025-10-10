@@ -1138,6 +1138,8 @@ void Scene560::SafeInset::postInit(SceneObjectList *OwnerList) {
 void Scene560::SafeInset::remove() {
 	Scene560 *scene = (Scene560 *)BF_GLOBALS._sceneManager._scene;
 
+	scene->_sceneMode = 0;
+
 	_item1.remove();
 	_item2.remove();
 	_item3.remove();
@@ -2553,7 +2555,7 @@ void Scene590::postInit(SceneObjectList *OwnerList) {
 }
 
 void Scene590::signal() {
-	static uint32 black = 0;
+	static byte black[3] = { 0, 0, 0 };
 
 	switch (_sceneMode) {
 	case 1:
@@ -2575,7 +2577,7 @@ void Scene590::signal() {
 		ADD_MOVER_NULL(_laura, 0, 170);
 
 		_sceneMode = 1;
-		addFader((byte *)&black, 2, this);
+		addFader(black, 2, this);
 		break;
 	default:
 		BF_GLOBALS._player.enableControl();

@@ -60,7 +60,7 @@ class MidiDriver_BASE;
  */
 struct Tracker {
 	struct SubtrackStatus {
-		byte * _playPos;        ///< A pointer to the next event to be parsed
+		const byte * _playPos;        ///< A pointer to the next event to be parsed
 		uint32 _lastEventTime;  ///< The time, in microseconds, of the last event that was parsed
 		uint32 _lastEventTick;  ///< The tick at which the last parsed event occurs
 		byte   _runningStatus;  ///< Cached MIDI command, for MIDI streams that rely on implied event codes
@@ -133,7 +133,7 @@ struct Tracker {
  * of MidiParser::parseNextEvent() each time another event is needed.
  */
 struct EventInfo {
-	byte * start;    ///< Position in the MIDI stream where the event starts.
+	const byte * start; ///< Position in the MIDI stream where the event starts.
 	                 ///< For delta-based MIDI streams (e.g. SMF and XMIDI), this points to the delta.
 	uint8  subtrack; ///< The subtrack containing this event.
 	uint32 delta;    ///< The number of ticks after the previous event that this event should occur.
@@ -146,7 +146,7 @@ struct EventInfo {
 		} basic;
 		struct {
 			byte   type; ///< For META events, this indicates the META type.
-			byte * data; ///< For META and SysEx events, this points to the start of the data.
+			const byte * data; ///< For META and SysEx events, this points to the start of the data.
 		} ext;
 	};
 	uint32 length; ///< For META and SysEx blocks, this indicates the length of the data.
@@ -368,12 +368,16 @@ protected:
 	uint32 _psecPerTick;  ///< Microseconds per tick (_tempo / _ppqn).
 	uint32 _sysExDelay;     ///< Number of microseconds until the next SysEx event can be sent.
 	bool   _autoLoop;       ///< For lightweight clients that don't provide their own flow control.
+	uint32 _loopStartPoint;   ///< Start point (in ticks) of the looping section of the track.
+	uint32 _loopEndPoint;     ///< End point (in ticks) of the looping section of the track.
+	uint32 _loopStartPointMs; ///< Start point (in microseconds) of the looping section of the track.
+	uint32 _loopEndPointMs;   ///< End point (in microseconds) of the looping section of the track.
 	bool   _smartJump;      ///< Support smart expiration of hanging notes when jumping
 	bool   _centerPitchWheelOnUnload;  ///< Center the pitch wheels when unloading a song
 	bool   _sendSustainOffOnNotesOff;   ///< Send a sustain off on a notes off event, stopping hanging notes
 	bool   _disableAllNotesOffMidiEvents;   ///< Don't send All Notes Off MIDI messages
 	bool   _disableAutoStartPlayback;  ///< Do not automatically start playback after parsing MIDI data or setting the track
-	byte  *_tracks[MAXIMUM_TRACKS][MAXIMUM_SUBTRACKS]; ///< Multi-track MIDI formats are supported, up to 120 tracks with 20 subtracks each.
+	const byte  *_tracks[MAXIMUM_TRACKS][MAXIMUM_SUBTRACKS]; ///< Multi-track MIDI formats are supported, up to 120 tracks with 20 subtracks each.
 	byte   _numTracks;     ///< Count of total tracks for multi-track MIDI formats. 1 for single-track formats.
 	byte   _numSubtracks[MAXIMUM_TRACKS]; ///< The number of subtracks for each track.
 	byte   _activeTrack;   ///< Keeps track of the currently active track, in multi-track formats.
@@ -401,7 +405,7 @@ protected:
 	int8   _source;
 
 protected:
-	static uint32 readVLQ(byte * &data);
+	static uint32 readVLQ(const byte * &data);
 	virtual void resetTracking();
 	virtual void allNotesOff();
 	virtual void parseNextEvent(EventInfo &info) = 0;
@@ -434,7 +438,7 @@ protected:
 	void sendToDriver(byte status, byte firstOp, byte secondOp) {
 		sendToDriver(status | ((uint32)firstOp << 8) | ((uint32)secondOp << 16));
 	}
-	virtual void sendMetaEventToDriver(byte type, byte *data, uint16 length);
+	virtual void sendMetaEventToDriver(byte type, const byte *data, uint16 length);
 
 	/**
 	 * Platform independent BE uint32 read-and-advance.
@@ -442,7 +446,7 @@ protected:
 	 * from a memory pointer, at the same time advancing
 	 * the pointer.
 	 */
-	uint32 read4high(byte * &data) {
+	uint32 read4high(const byte * &data) {
 		uint32 val = READ_BE_UINT32(data);
 		data += 4;
 		return val;
@@ -454,7 +458,7 @@ protected:
 	 * from a memory pointer, at the same time advancing
 	 * the pointer.
 	 */
-	uint16 read2low(byte * &data) {
+	uint16 read2low(const byte * &data) {
 		uint16 val = READ_LE_UINT16(data);
 		data += 2;
 		return val;
@@ -515,7 +519,7 @@ public:
 	MidiParser(int8 source = -1);
 	virtual ~MidiParser() { stopPlaying(); }
 
-	virtual bool loadMusic(byte *data, uint32 size) = 0;
+	virtual bool loadMusic(const byte *data, uint32 size) = 0;
 	virtual void unloadMusic();
 	virtual void property(int prop, int value);
 	/**
@@ -563,6 +567,7 @@ public:
 	void resumePlaying();
 
 	bool setTrack(int track);
+	byte getActiveTrack() { return _activeTrack; }
 	bool jumpToTick(uint32 tick, bool fireEvents = false, bool stopNotes = true, bool dontSendNoteOn = false);
 	/**
 	 * Returns true if the active track has a jump point defined for the
@@ -578,6 +583,10 @@ public:
 	 * points.
 	 */
 	virtual bool jumpToIndex(uint8 index, bool stopNotes = true) { return false; }
+
+	void setLoopSection(uint32 startPoint, uint32 endPoint = 0);
+	void setLoopSectionMicroseconds(uint32 startPoint, uint32 endPoint = 0);
+	void clearLoopSection();
 
 	uint32 getPPQN() { return _ppqn; }
 	virtual uint32 getTick() { return _position._playTick; }

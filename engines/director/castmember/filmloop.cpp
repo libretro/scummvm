@@ -19,7 +19,7 @@
  *
  */
 
-#include "common/stream.h"
+#include "common/memstream.h"
 #include "graphics/surface.h"
 #include "graphics/macgui/macwidget.h"
 
@@ -36,6 +36,7 @@
 #include "director/castmember/bitmap.h"
 #include "director/castmember/filmloop.h"
 
+
 namespace Director {
 
 FilmLoopCastMember::FilmLoopCastMember(Cast *cast, uint16 castId, Common::SeekableReadStreamEndian &stream, uint16 version)
@@ -45,7 +46,9 @@ FilmLoopCastMember::FilmLoopCastMember(Cast *cast, uint16 castId, Common::Seekab
 	_enableSound = true;
 	_crop = false;
 	_center = false;
+	_index = -1;
 
+	// We are ignoring some of the bits in the flags
 	if (cast->_version >= kFileVer400 && cast->_version < kFileVer500) {
 		_initialRect = Movie::readRect(stream);
 		uint32 flags = stream.readUint32BE();
@@ -84,6 +87,7 @@ FilmLoopCastMember::FilmLoopCastMember(Cast *cast, uint16 castId, FilmLoopCastMe
 	_center = source._center;
 	_frames = source._frames;
 	_subchannels = source._subchannels;
+	_looping = source._looping;
 }
 
 FilmLoopCastMember::~FilmLoopCastMember() {
@@ -100,25 +104,27 @@ bool FilmLoopCastMember::isModified() {
 	return false;
 }
 
-Common::Array<Channel> *FilmLoopCastMember::getSubChannels(Common::Rect &bbox, Channel *channel) {
+Common::Array<Channel> *FilmLoopCastMember::getSubChannels(Common::Rect &bbox, uint frame) {
 	Common::Rect widgetRect(bbox.width() ? bbox.width() : _initialRect.width(), bbox.height() ? bbox.height() : _initialRect.height());
 
 	_subchannels.clear();
 
-	if (channel->_filmLoopFrame >= _frames.size()) {
-		warning("FilmLoopCastMember::getSubChannels(): Film loop frame %d requested, only %d available", channel->_filmLoopFrame, _frames.size());
+	if (frame >= _frames.size()) {
+		warning("FilmLoopCastMember::getSubChannels(): Film loop frame %d requested, only %d available", frame, _frames.size());
 		return &_subchannels;
 	}
 
 	// get the list of sprite IDs for this frame
 	Common::Array<int> spriteIds;
-	for (auto &iter : _frames[channel->_filmLoopFrame].sprites) {
-		spriteIds.push_back(iter._key);
+	for (auto &iter : _frames[frame].sprites) {
+		// channels 0 and 1 are used for audio
+		if (iter._key >= 2)
+			spriteIds.push_back(iter._key);
 	}
 	Common::sort(spriteIds.begin(), spriteIds.end());
 
 	debugC(5, kDebugImages, "FilmLoopCastMember::getSubChannels(): castId: %d, frame: %d, count: %d, initRect: %d,%d %dx%d, bbox: %d,%d %dx%d",
-			_castId, channel->_filmLoopFrame, spriteIds.size(),
+			_castId, frame, spriteIds.size(),
 			_initialRect.left + _initialRect.width()/2,
 			_initialRect.top + _initialRect.height()/2,
 			_initialRect.width(), _initialRect.height(),
@@ -128,7 +134,7 @@ Common::Array<Channel> *FilmLoopCastMember::getSubChannels(Common::Rect &bbox, C
 
 	// copy the sprites in order to the list
 	for (auto &iter : spriteIds) {
-		Sprite src = _frames[channel->_filmLoopFrame].sprites[iter];
+		Sprite src = _frames[frame].sprites[iter];
 		if (!src._cast)
 			continue;
 		// translate sprite relative to the global bounding box
@@ -166,6 +172,30 @@ Common::Array<Channel> *FilmLoopCastMember::getSubChannels(Common::Rect &bbox, C
 	}
 
 	return &_subchannels;
+}
+
+CastMemberID FilmLoopCastMember::getSubChannelSound1(uint frame) {
+	if (frame >= _frames.size()) {
+		warning("FilmLoopCastMember::getSubChannelSound1(): Film loop frame %d requested, only %d available", frame, _frames.size());
+		return CastMemberID();
+	}
+
+	if (_frames[frame].sprites.contains(0)) {
+		return _frames[frame].sprites[0]._castId;
+	}
+	return CastMemberID();
+}
+
+CastMemberID FilmLoopCastMember::getSubChannelSound2(uint frame) {
+	if (frame >= _frames.size()) {
+		warning("FilmLoopCastMember::getSubChannelSound2(): Film loop frame %d requested, only %d available", frame, _frames.size());
+		return CastMemberID();
+	}
+
+	if (_frames[frame].sprites.contains(1)) {
+		return _frames[frame].sprites[1]._castId;
+	}
+	return CastMemberID();
 }
 
 void FilmLoopCastMember::loadFilmLoopDataD2(Common::SeekableReadStreamEndian &stream) {
@@ -274,16 +304,16 @@ void FilmLoopCastMember::loadFilmLoopDataD4(Common::SeekableReadStreamEndian &st
 	_frames.clear();
 
 	uint32 size = stream.readUint32BE();
-	if (debugChannelSet(5, kDebugLoading)) {
-		debugC(5, kDebugLoading, "loadFilmLoopDataD4: SCVW body:");
+	if (debugChannelSet(8, kDebugLoading)) {
+		debugC(8, kDebugLoading, "loadFilmLoopDataD4: SCVW body of size: %d", size);
 		uint32 pos = stream.pos();
 		stream.seek(0);
 		stream.hexdump(size);
 		stream.seek(pos);
 	}
 	uint32 framesOffset = stream.readUint32BE();
-	if (debugChannelSet(5, kDebugLoading)) {
-		debugC(5, kDebugLoading, "loadFilmLoopDataD4: SCVW header:");
+	if (debugChannelSet(8, kDebugLoading)) {
+		debugC(8, kDebugLoading, "loadFilmLoopDataD4: SCVW header of size: %d", framesOffset - 8);
 		stream.hexdump(framesOffset - 8);
 	}
 	stream.skip(6);
@@ -299,8 +329,8 @@ void FilmLoopCastMember::loadFilmLoopDataD4(Common::SeekableReadStreamEndian &st
 			continue;
 		}
 		frameSize -= 2;
-		if (debugChannelSet(5, kDebugLoading)) {
-			debugC(5, kDebugLoading, "loadFilmLoopDataD4: Frame entry:");
+		if (debugChannelSet(8, kDebugLoading)) {
+			debugC(8, kDebugLoading, "loadFilmLoopDataD4: Frame entry: %d", frameSize);
 			stream.hexdump(frameSize);
 		}
 
@@ -313,7 +343,7 @@ void FilmLoopCastMember::loadFilmLoopDataD4(Common::SeekableReadStreamEndian &st
 			int channelOffset = order % channelSize;
 			int offset = order;
 
-			debugC(8, kDebugLoading, "loadFilmLoopDataD4: Message: msgWidth %d, channel %d, channelOffset %d", msgWidth, channel, channelOffset);
+			debugC(8, kDebugLoading, "loadFilmLoopDataD4: Message: msgWidth %d, order: %d, channel %d, channelOffset %d", msgWidth, order, channel, channelOffset);
 			if (debugChannelSet(8, kDebugLoading)) {
 				stream.hexdump(msgWidth);
 			}
@@ -346,12 +376,12 @@ void FilmLoopCastMember::loadFilmLoopDataD4(Common::SeekableReadStreamEndian &st
 		}
 
 		for (auto &s : newFrame.sprites) {
-			debugC(5, kDebugLoading, "loadFilmLoopDataD4: Sprite: channel %d, castId %s, bbox %d %d %d %d", s._key,
+			debugC(8, kDebugLoading, "loadFilmLoopDataD4: Sprite: channel %d, castId %s, bbox %d %d %d %d", s._key,
 					s._value._castId.asString().c_str(), s._value._startPoint.x, s._value._startPoint.y,
 					s._value._width, s._value._height);
 
 			if (s._key == -1) {
-				debugC(5, kDebugLoading, "loadFilmLoopDataD4: Skipping channel -1");
+				debugC(8, kDebugLoading, "loadFilmLoopDataD4: Skipping channel -1");
 				if (s._value._startPoint.x != 0 || s._value._startPoint.y != 0 || s._value._width != 0 ||
 						 (s._value._height != -256 && s._value._height != 0))
 					warning("BUILDBOT: loadFilmLoopDataD4: Malformed VWSC resource: Sprite: channel %d, castId %s, bbox %d %d %d %d", s._key,
@@ -694,7 +724,7 @@ void FilmLoopCastMember::load() {
 			warning("FilmLoopCastMember::load(): No SCVW resource found in %d children", _children.size());
 		}
 	} else {
-		warning("STUB: FilmLoopCastMember::load(): Film loops not yet supported for version %d", _cast->_version);
+		warning("STUB: FilmLoopCastMember::load(): Film loops not yet supported for version v%d (%d)", humanVersion(_cast->_version), _cast->_version);
 	}
 
 	_loaded = true;
@@ -710,6 +740,156 @@ Common::Point FilmLoopCastMember::getRegistrationOffset() {
 
 Common::Point FilmLoopCastMember::getRegistrationOffset(int16 currentWidth, int16 currentHeight) {
 	return Common::Point(currentWidth / 2, currentHeight / 2);
+}
+
+uint32 FilmLoopCastMember::getCastDataSize() {
+	// We're only reading the _initialRect and _vflags from the Cast Data
+	// _initialRect : 8 bytes + flags : 4 bytes + 2 bytes unk1 + 2 bytes (castType and _flags1 (see Cast::loadCastData() for Director 4 only)
+	if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		// It has been observed that the FilmCastMember has _flags as 0x00
+		return 8 + 4 + 2 + 2;
+	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		return 8 + 4 + 2;
+	}
+
+	warning("FilmLoopCastMember::getCastDataSize(): unhandled or invalid cast version: %d", _cast->_version);
+	return 0;
+}
+
+void FilmLoopCastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
+	Movie::writeRect(writeStream, _initialRect);
+
+	uint32 flags = 0;
+	if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		flags |= (_looping) ? 0 : 64;
+		flags |= (_enableSound) ? 8 : 0;
+		flags |= (_crop) ? 0 : 2;
+		flags |= (_center) ? 1 : 0;
+	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		flags |= (_looping) ? 0 : 32;
+		flags |= (_enableSound) ? 8 : 0;
+		flags |= (_crop) ? 0 : 2;
+		flags |= (_center) ? 1 : 0;
+	}
+
+	writeStream->writeUint32LE(flags);
+	writeStream->writeUint16LE(0);		// May need to save proper value in the future, currently ignored
+}
+
+void FilmLoopCastMember::writeSCVWResource(Common::SeekableWriteStream *writeStream, uint32 offset) {
+	// Load it before writing
+	if (!_loaded) {
+		load();
+	}
+
+	uint32 channelSize = 0;
+	if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		channelSize = kSprChannelSizeD4;
+	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		channelSize = kSprChannelSizeD5;
+	} else {
+		warning("FilmLoopCastMember::writeSCVWResource: Writing Director Version 6+ not supported yet");
+		return;
+	}
+
+	// Go to the desired offset put in the memory map
+	writeStream->seek(offset);
+
+	uint32 filmloopSize = getSCVWResourceSize();
+	debugC(5, kDebugSaving, "FilmLoopCastmember::writeSCVWResource: Saving FilmLoop 'SCVW' data of size: %d", filmloopSize);
+
+	writeStream->writeUint32LE(MKTAG('S', 'C', 'V', 'W'));
+	writeStream->writeUint32LE(filmloopSize);	// Size of the resource
+
+	writeStream->writeUint32BE(filmloopSize);
+
+	uint32 frameOffset = 20;							// Should be greater than 20
+	writeStream->writeUint32BE(frameOffset);			// framesOffset
+	writeStream->seek(6, SEEK_CUR);						// Ignored data
+	writeStream->writeUint16BE(channelSize);
+	writeStream->seek(frameOffset - 16, SEEK_CUR);				// Ignored data
+
+	// The structure of the filmloop 'SCVW' data is as follows
+	// The 'SCVW' tag -> the size of the resource ->
+	// frameoffset (This offset is where the frame date actually starts) ->
+	// Some headers which we ignore except the Sprite Channel Size (which we also ignore during loading) ->
+
+	// until there are no more frames
+		// size of the frame ->
+		// until there are no more channels in the frame
+			// width of message (One chunk of data) (This is the size of data for the sprite that needs to be read) ->
+			// order of message (this order tells us the channel we're reading) ->
+			// 1-20 bytes of Sprite data
+
+	for (FilmLoopFrame frame : _frames) {
+		writeStream->writeUint16BE(frame.sprites.size() * (channelSize + 4) + 2);					// Frame Size
+
+		for (auto it : frame.sprites) {
+			int channel = it._key;
+			// TODO: For now writing the order considering that each sprite will have 20 bytes of data
+			// In the future, for optimization, we can actually calculate the data of each sprite
+			// And write the order accordingly
+			// But for this we'll need a way to find how many data values (out of 20) of a sprite are valid, i.e. determine message width
+			// this means while loading, the channelOffset will always be 0, order will always be multiple of 20
+			// And message width will always be 20
+			// Channel indexes start with 0
+			writeStream->writeUint16BE(channelSize);						// message width
+			writeStream->writeUint16BE(channel * channelSize);
+
+			Sprite sprite = it._value;
+
+			if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+				writeSpriteDataD4(writeStream, sprite);
+			} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+				writeSpriteDataD5(writeStream, sprite);
+			}
+		}
+
+	}
+
+	if (debugChannelSet(7, kDebugSaving)) {
+		// Adding +8 because the stream doesn't include the header and the entry for the size itself
+		byte *dumpData = (byte *)calloc(filmloopSize + 8, sizeof(byte));
+
+		Common::SeekableMemoryWriteStream *dumpStream = new Common::SeekableMemoryWriteStream(dumpData, filmloopSize + 8);
+
+		uint32 currentPos = writeStream->pos();
+		writeStream->seek(offset);
+		dumpStream->write(writeStream, filmloopSize + 8);
+		writeStream->seek(currentPos);
+
+		dumpFile("FilmLoopData", 0, MKTAG('V', 'W', 'C', 'F'), dumpData, filmloopSize);
+		free(dumpData);
+		delete dumpStream;
+	}
+}
+
+uint32 FilmLoopCastMember::getSCVWResourceSize() {
+	uint32 channelSize = 0;
+	if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		channelSize = kSprChannelSizeD4;
+	} else if (_cast->_version >= kFileVer500) {
+		channelSize = kSprChannelSizeD5;
+	} else {
+		warning("FilmLoopCastMember::getSCVWResourceSize: Director version unsupported");
+	}
+
+	uint32 framesSize = 0;
+	for (FilmLoopFrame frame : _frames) {
+		// Frame size
+		framesSize += 2;
+		for (auto it : frame.sprites) {
+			// message width: 2 bytes
+			// order: 2 bytes
+			// Sprite data: 20 bytes
+			framesSize += 2 + 2 + channelSize;
+		}
+	}
+
+	// Size: 4 bytes
+	// frameoffset: 4 bytes
+	// Header (Ignored data): 16 bytes
+	return 4 + 4 + 16 + framesSize;
 }
 
 } // End of namespace Director

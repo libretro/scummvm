@@ -99,6 +99,22 @@ QTVRXObject::QTVRXObject(ObjectType ObjectType) :Object<QTVRXObject>("QTVR") {
 	_objType = ObjectType;
 }
 
+QTVRXObject::~QTVRXObject() {
+	close();
+}
+
+void QTVRXObject::close() {
+	if (_video) {
+		_video->close();
+		delete _video;
+		_video = nullptr;
+	}
+	if (_widget) {
+		delete _widget;
+		_widget = nullptr;
+	}
+}
+
 void QTVR::open(ObjectType type, const Common::Path &path) {
 	if (type == kXObj) {
 		QTVRXObject::initMethods(xlibMethods);
@@ -125,11 +141,7 @@ void QTVR::m_dispose(int nargs) {
 	ARGNUMCHECK(0);
 
 	QTVRXObject *me = (QTVRXObject *)g_lingo->_state->me.u.obj;
-
-	if (me->_video) {
-		me->_video->close();
-		delete me->_video;
-	}
+	me->close();
 }
 
 void QTVR::m_getHPanAngle(int nargs) {
@@ -333,7 +345,7 @@ void QTVR::m_openMovie(int nargs) {
 	me->_rect = Common::Rect(left, top, left + me->_video->getWidth(), top + me->_video->getHeight());
 
 
-	me->_widget = new QtvrWidget(me, g_director->getCurrentWindow(),
+	me->_widget = new QtvrWidget(me, g_director->getCurrentWindow()->getMacWindow(),
 			me->_rect.left, me->_rect.top, me->_rect.width(), me->_rect.height(),
 			g_director->getMacWindowManager());
 

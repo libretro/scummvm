@@ -83,7 +83,7 @@ bool SXBlackAndWhite::scCallMethod(ScScript *script, ScStack *stack, ScStack *th
 		stack->correctParams(0);
 
 		_postFilterMode = kPostFilterSepia;
-		_gameRef->_renderer3D->setPostfilter(_postFilterMode);
+		_game->_renderer3D->setPostfilter(_postFilterMode);
 
 		stack->pushBool(true);
 		return STATUS_OK;
@@ -96,7 +96,7 @@ bool SXBlackAndWhite::scCallMethod(ScScript *script, ScStack *stack, ScStack *th
 		stack->correctParams(0);
 
 		_postFilterMode = kPostFilterBlackAndWhite;
-		_gameRef->_renderer3D->setPostfilter(_postFilterMode);
+		_game->_renderer3D->setPostfilter(_postFilterMode);
 
 		stack->pushBool(true);
 		return STATUS_OK;
@@ -109,7 +109,7 @@ bool SXBlackAndWhite::scCallMethod(ScScript *script, ScStack *stack, ScStack *th
 		stack->correctParams(0);
 
 		_postFilterMode = kPostFilterOff;
-		_gameRef->_renderer3D->setPostfilter(_postFilterMode);
+		_game->_renderer3D->setPostfilter(_postFilterMode);
 
 		stack->pushBool(true);
 		return STATUS_OK;
@@ -158,13 +158,13 @@ bool SXBlackAndWhite::scCallMethod(ScScript *script, ScStack *stack, ScStack *th
 
 
 //////////////////////////////////////////////////////////////////////////
-ScValue *SXBlackAndWhite::scGetProperty(const Common::String &name) {
+ScValue *SXBlackAndWhite::scGetProperty(const char *name) {
 	_scValue->setNULL();
 
 	//////////////////////////////////////////////////////////////////////////
 	// Weight
 	//////////////////////////////////////////////////////////////////////////
-	if (name == "Weight") {
+	if (strcmp(name, "Weight") == 0) {
 		// nothing todo
 		return _scValue;
 	}
@@ -172,7 +172,7 @@ ScValue *SXBlackAndWhite::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// AllShadersAvailable
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "AllShadersAvailable") {
+	else if (strcmp(name, "AllShadersAvailable") == 0) {
 		_scValue->setBool(false);
 		return _scValue;
 	}
@@ -180,7 +180,7 @@ ScValue *SXBlackAndWhite::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// BlackAndWhiteAvailable
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "BlackAndWhiteAvailable") {
+	else if (strcmp(name, "BlackAndWhiteAvailable") == 0) {
 		_scValue->setBool(true);
 		return _scValue;
 	}
@@ -188,7 +188,7 @@ ScValue *SXBlackAndWhite::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// SepiaAvailable
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "SepiaAvailable") {
+	else if (strcmp(name, "SepiaAvailable") == 0) {
 		_scValue->setBool(true);
 		return _scValue;
 	}
@@ -196,7 +196,7 @@ ScValue *SXBlackAndWhite::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// WeightedBlackAndWhiteAvailable
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "WeightedBlackAndWhiteAvailable") {
+	else if (strcmp(name, "WeightedBlackAndWhiteAvailable") == 0) {
 		_scValue->setBool(false);
 		return _scValue;
 	}
@@ -204,7 +204,7 @@ ScValue *SXBlackAndWhite::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// WeightedSepiaAvailable
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "WeightedSepiaAvailable") {
+	else if (strcmp(name, "WeightedSepiaAvailable") == 0) {
 		_scValue->setBool(false);
 		return _scValue;
 	}
@@ -212,7 +212,7 @@ ScValue *SXBlackAndWhite::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// SepiaBlackAndWhiteAvailable
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "SepiaBlackAndWhiteAvailable") {
+	else if (strcmp(name, "SepiaBlackAndWhiteAvailable") == 0) {
 		_scValue->setBool(false);
 		return _scValue;
 	}
@@ -241,7 +241,7 @@ bool SXBlackAndWhite::persist(BasePersistenceManager *persistMgr) {
 
 	persistMgr->transferSint32(TMEMBER_INT(_postFilterMode));
 	if (!persistMgr->getIsSaving()) {
-		_gameRef->_renderer3D->setPostfilter(_postFilterMode);
+		_game->_renderer3D->setPostfilter(_postFilterMode);
 	}
 
 	return STATUS_OK;

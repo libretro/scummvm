@@ -324,6 +324,7 @@ struct GLContext {
 	int texture_min_filter;
 	uint texture_wrap_s;
 	uint texture_wrap_t;
+	GLTextureEnv _texEnv;
 	Common::Array<struct tglColorAssociation> colorAssociationList;
 
 	// shared state
@@ -433,9 +434,9 @@ struct GLContext {
 	bool stencil_buffer_supported;
 	bool stencil_test_enabled;
 	int stencil_test_func;
-	int stencil_ref_val;
-	uint stencil_mask;
-	uint stencil_write_mask;
+	byte stencil_ref_val;
+	byte stencil_mask;
+	byte stencil_write_mask;
 	int stencil_sfail;
 	int stencil_dpfail;
 	int stencil_dppass;

@@ -34,23 +34,24 @@ namespace Freescape {
 
 DarkEngine::DarkEngine(OSystem *syst, const ADGameDescription *gd) : FreescapeEngine(syst, gd) {
 	// These sounds can be overriden by the class of each platform
-	_soundIndexShoot = 8;
+	_soundIndexShoot = 1;
 	_soundIndexCollide = -1;
-	_soundIndexFall = 3;
-	_soundIndexClimb = 4;
+	_soundIndexStepDown = 3;
+	_soundIndexStepUp = 4;
 	_soundIndexMenu = -1;
 	_soundIndexStart = 9;
 	_soundIndexAreaChange = 5;
 	_soundIndexHit = 2;
+	_soundIndexFall = 14;
 	_soundIndexRestoreECD = 19;
 	_soundIndexDestroyECD = -1;
 
-	_soundIndexNoShield = -1;
-	_soundIndexNoEnergy = -1;
-	_soundIndexFallen = -1;
-	_soundIndexTimeout = -1;
-	_soundIndexForceEndGame = -1;
-	_soundIndexCrushed = -1;
+	_soundIndexNoShield = 20;
+	_soundIndexNoEnergy = 20;
+	_soundIndexFallen = 20;
+	_soundIndexTimeout = 20;
+	_soundIndexForceEndGame = 20;
+	_soundIndexCrushed = 20;
 	_soundIndexMissionComplete = -1;
 
 	if (isDOS())
@@ -510,8 +511,8 @@ bool DarkEngine::checkIfGameEnded() {
 		} else {
 			restoreECD(*_currentArea, index);
 			insertTemporaryMessage(_messagesList[1], _countdown - 2);
-			stopAllSounds();
-			playSound(_soundIndexRestoreECD, false);
+			stopAllSounds(_movementSoundHandle);
+			playSound(_soundIndexRestoreECD, false, _soundFxHandle);
 		}
 		_gameStateVars[kVariableDarkECD] = 0;
 
@@ -644,11 +645,11 @@ void DarkEngine::gotoArea(uint16 areaID, int entranceID) {
 	_gameStateVars[0x1f] = 0;
 
 	if (areaID == _startArea && entranceID == _startEntrance) {
-		playSound(_soundIndexStart, true);
+		playSound(_soundIndexStart, true, _soundFxHandle);
 	} else if (areaID == _endArea && entranceID == _endEntrance) {
 		_pitch = 10;
 	} else {
-		playSound(_soundIndexAreaChange, false);
+		playSound(_soundIndexAreaChange, false, _soundFxHandle);
 	}
 
 	debugC(1, kFreescapeDebugMove, "starting player position: %f, %f, %f", _position.x(), _position.y(), _position.z());
@@ -818,6 +819,33 @@ void DarkEngine::drawBinaryClock(Graphics::Surface *surface, int xPosition, int 
 	}
 }
 
+void DarkEngine::drawVerticalCompass(Graphics::Surface *surface, int x, int y, float angle, uint32 color) {
+	int pitch = int(angle / 1.65);
+	Common::Array<int> xpoints;
+	Common::Array<int> ypoints;
+
+	xpoints.push_back(x);
+	xpoints.push_back(x + 3);
+	xpoints.push_back(x + 3);
+	xpoints.push_back(x);
+
+	ypoints.push_back(y - pitch);
+	ypoints.push_back(y + 3 - pitch);
+	ypoints.push_back(y - 4 - pitch);
+	ypoints.push_back(y - pitch);
+
+	surface->drawPolygonScan(xpoints.data(), ypoints.data(), 4, Common::Rect(0, 0, surface->w, surface->h), color);
+}
+
+void DarkEngine::drawHorizontalCompass(int x, int y, float angle, uint32 front, uint32 back, Graphics::Surface *surface) {
+	// TODO implement different compass styles for C64, Amiga and Atari ST
+	uint32 transparent = _gfx->_texturePixelFormat.ARGBToColor(0x00, 0x00, 0x00, 0x00);
+	int delta = (angle - 180) / 5.5;
+	drawStringInSurface("-N-E-S-W-N-E-S", delta + x, y, front, back, surface);
+	surface->fillRect(Common::Rect(x - 20, y - 5, x + 40, y + 10), transparent);
+	surface->fillRect(Common::Rect(x + 80, y - 5, 320, y + 10), transparent);
+}
+
 void DarkEngine::drawIndicator(Graphics::Surface *surface, int xPosition, int yPosition) {
 	if (_indicators.size() == 0)
 		return;
@@ -834,7 +862,7 @@ void DarkEngine::drawIndicator(Graphics::Surface *surface, int xPosition, int yP
 void DarkEngine::drawSensorShoot(Sensor *sensor) {
 	if (_gameStateControl == kFreescapeGameStatePlaying) {
 		// Avoid playing new sounds, so the endgame can progress
-		playSound(_soundIndexHit, true);
+		playSound(_soundIndexHit, true, _soundFxHandle);
 	}
 
 	Math::Vector3d target;
@@ -924,7 +952,7 @@ void DarkEngine::drawInfoMenu() {
 					saveGameDialog();
 					_gfx->setViewport(_viewArea);
 				} else if (isDOS() && event.customType == kActionToggleSound) {
-					playSound(6, true);
+					playSound(6, true, _soundFxHandle);
 				} else if (event.customType == kActionEscape) {
 					_forceEndGame = true;
 					cont = false;

@@ -214,6 +214,8 @@ void WageEngine::performAttack(Chr *attacker, Chr *victim, Obj *weapon) {
 		appendText(buf);
 	}
 
+	debugC(1, kDebugSound, "** Weapon sound: %s", weapon->_sound.c_str());
+
 	playSound(weapon->_sound);
 
 	bool usesDecremented = false;
@@ -271,8 +273,10 @@ bool WageEngine::attackHit(Chr *attacker, Chr *victim, Obj *weapon, int targetIn
 			snprintf(buf, 512, "A hit to the %s!", targets[targetIndex]);
 			appendText(buf);
 		}
+		debugC(1, kDebugSound, "** Attacker hit sound: %s", attacker->_scoresHitSound.c_str());
 		playSound(attacker->_scoresHitSound);
 		appendText(attacker->_scoresHitComment.c_str());
+		debugC(1, kDebugSound, "** Victim receives sound: %s", victim->_receivesHitSound.c_str());
 		playSound(victim->_receivesHitSound);
 		appendText(victim->_receivesHitComment.c_str());
 		receivedHitTextPrinted = true;
@@ -296,20 +300,21 @@ bool WageEngine::attackHit(Chr *attacker, Chr *victim, Obj *weapon, int targetIn
 	}
 
 	if (causesPhysicalDamage) {
-		victim->_context._userVariables[PHYS_HIT_CUR] -= weapon->_damage;
+		victim->_context._statVariables[PHYS_HIT_CUR] -= weapon->_damage;
 
 		/* Do it here to get the right order of messages in case of death. */
 		decrementUses(weapon);
 		usesDecremented = true;
 
-		if (victim->_context._userVariables[PHYS_HIT_CUR] < 0) {
+		if (victim->_context._statVariables[PHYS_HIT_CUR] < 0) {
+			debugC(1, kDebugSound, "** Victim dying sound: %s", victim->_dyingSound.c_str());
 			playSound(victim->_dyingSound);
 			appendText(victim->_dyingWords.c_str());
 			snprintf(buf, 512, "%s%s is dead!", victim->getDefiniteArticle(true), victim->_name.c_str());
 			appendText(buf);
 
 			attacker->_context._kills++;
-			attacker->_context._experience += victim->_context._userVariables[SPIR_HIT_CUR] + victim->_context._userVariables[PHYS_HIT_CUR];
+			attacker->_context._experience += victim->_context._statVariables[SPIR_HIT_CUR] + victim->_context._statVariables[PHYS_HIT_CUR];
 
 			if (!victim->_playerCharacter && !victim->_inventory.empty()) {
 				Scene *currentScene = victim->_currentScene;
@@ -324,8 +329,8 @@ bool WageEngine::attackHit(Chr *attacker, Chr *victim, Obj *weapon, int targetIn
 			}
 			_world->move(victim, _world->_storageScene);
 		} else if (attacker->_playerCharacter && !receivedHitTextPrinted) {
-			double physicalPercent = (double)victim->_context._userVariables[SPIR_HIT_CUR] /
-					victim->_context._userVariables[SPIR_HIT_BAS];
+			double physicalPercent = (double)victim->_context._statVariables[SPIR_HIT_CUR] /
+					victim->_context._statVariables[SPIR_HIT_BAS];
 			snprintf(buf, 512, "%s%s's condition appears to be %s.",
 				victim->getDefiniteArticle(true), victim->_name.c_str(),
 				getPercentMessage(physicalPercent));
@@ -379,6 +384,7 @@ void WageEngine::performHealingMagic(Chr *chr, Obj *magicalObject) {
 		if (type == Obj::HEALS_SPIRITUAL_DAMAGE || type == Obj::HEALS_PHYSICAL_AND_SPIRITUAL_DAMAGE)
 			chr->_context._statVariables[SPIR_HIT_CUR] += magicalObject->_damage;
 
+		debugC(1, kDebugSound, "** Magical object sound: %s", magicalObject->_sound.c_str());
 		playSound(magicalObject->_sound);
 		appendText(magicalObject->_useMessage.c_str());
 

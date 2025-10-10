@@ -41,7 +41,7 @@ ManagedSurface::ManagedSurface(const ManagedSurface &surf) :
 		w(_innerSurface.w), h(_innerSurface.h), pitch(_innerSurface.pitch), format(_innerSurface.format),
 		_disposeAfterUse(DisposeAfterUse::NO), _owner(nullptr),
 		_transparentColor(0), _transparentColorSet(false), _palette(nullptr) {
-	*this = surf;
+	(*this).copyFrom(surf);
 }
 
 ManagedSurface::ManagedSurface(ManagedSurface &&surf) :
@@ -293,6 +293,12 @@ Graphics::ManagedSurface *ManagedSurface::scale(int16 newWidth, int16 newHeight,
 		scaleBlit((byte *)target->getPixels(), (const byte *)getPixels(), target->pitch, pitch, target->w, target->h, w, h, format);
 	}
 
+	// Copy miscellaneous properties
+	if (hasTransparentColor())
+		target->setTransparentColor(getTransparentColor());
+	if (hasPalette())
+		target->setPalette(_palette->data(), 0, _palette->size());
+
 	return target;
 }
 
@@ -310,6 +316,12 @@ Graphics::ManagedSurface *ManagedSurface::rotoscale(const TransformStruct &trans
 	} else {
 		rotoscaleBlit((byte *)target->getPixels(), (const byte *)getPixels(), target->pitch, pitch, target->w, target->h, w, h, format, transform, newHotspot);
 	}
+
+	// Copy miscellaneous properties
+	if (hasTransparentColor())
+		target->setTransparentColor(getTransparentColor());
+	if (hasPalette())
+		target->setPalette(_palette->data(), 0, _palette->size());
 
 	return target;
 }
@@ -1034,7 +1046,7 @@ Common::Rect ManagedSurface::blendBlitTo(Surface &target,
 										 const AlphaType alphaType) {
 	Common::Rect srcArea = srcRect ? *srcRect : Common::Rect(0, 0, w, h);
 	Common::Rect dstArea(posX, posY, posX + (width == -1 ? srcArea.width() : width), posY + (height == -1 ? srcArea.height() : height));
-	
+
 	if (!isBlendBlitPixelFormatSupported(format, target.format)) {
 		warning("ManagedSurface::blendBlitTo only accepts RGBA32!");
 		return Common::Rect(0, 0, 0, 0);

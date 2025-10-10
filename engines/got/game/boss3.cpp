@@ -548,6 +548,10 @@ void boss3ClosingSequence3() {
 	_G(scrn)._music = 6;
 	showLevel(BOSS_LEVEL3);
 
+#ifdef USE_TTS
+	_G(thorInfo)._previousScore = -1;
+#endif
+
 	_G(exitFlag) = 0;
 	musicPause();
 
@@ -563,7 +567,7 @@ void endingScreen() {
 	
 	musicPlay(6, true);
 
-	memset(explosionFlag, 0, 4 * 8);
+	memset(explosionFlag, 0, sizeof(explosionFlag));
 	_G(endGame) = 1;
 
 	_G(explosionRow) = 0;
@@ -652,7 +656,7 @@ int endGameMovement() {
 		_G(explosionRow++);
 		explosionCounter++;
 		if (explosionCounter > 3) {
-			memset(explosionFlag, 0, 32);
+			memset(explosionFlag, 0, sizeof(explosionFlag));
 		}
 	}
 

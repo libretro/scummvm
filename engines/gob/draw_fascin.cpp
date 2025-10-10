@@ -28,6 +28,7 @@
 #include "gob/draw.h"
 #include "gob/game.h"
 #include "gob/global.h"
+#include "gob/hotspots.h"
 #include "gob/inter.h"
 #include "gob/resources.h"
 
@@ -36,7 +37,7 @@ namespace Gob {
 Draw_Fascination::Draw_Fascination(GobEngine *vm) : Draw_v2(vm) {
 }
 
-void Draw_Fascination::spriteOperation(int16 operation) {
+void Draw_Fascination::spriteOperation(int16 operation, bool ttsAddHotspotText) {
 	int16 len;
 	int16 x, y;
 	SurfacePtr sourceSurf, destSurf;
@@ -195,7 +196,7 @@ void Draw_Fascination::spriteOperation(int16 operation) {
 		if (!resource)
 			break;
 
-		_vm->_video->drawPackedSprite(resource->getData(),
+		_vm->_video->drawPackedSprite(resource->getData(), resource->getSize(),
 				_spriteRight, _spriteBottom, _destSpriteX, _destSpriteY,
 				_transparency, *_spritesArray[_destSurface]);
 
@@ -256,6 +257,13 @@ void Draw_Fascination::spriteOperation(int16 operation) {
 				_destSpriteX += _fontToSprite[_fontIndex].width;
 			}
 		}
+
+#ifdef USE_TTS
+		if (ttsAddHotspotText) {
+			_vm->_game->_hotspots->addHotspotTTSText(_textToPrint, left, _destSpriteY,
+											_destSpriteX - 1, _destSpriteY + _fonts[_fontIndex]->getCharHeight() - 1, _destSurface);
+		}
+#endif
 
 		dirtiedRect(_destSurface, left, _destSpriteY,
 				_destSpriteX - 1, _destSpriteY + _fonts[_fontIndex]->getCharHeight() - 1);
@@ -422,7 +430,7 @@ void Draw_Fascination::drawWin(int16 fct) {
 			break;
 		}
 
-		_vm->_video->drawPackedSprite(resource->getData(),
+		_vm->_video->drawPackedSprite(resource->getData(), resource->getSize(),
 				_spriteRight, _spriteBottom, _destSpriteX, _destSpriteY,
 				_transparency, *_spritesArray[_destSurface]);
 
@@ -542,6 +550,12 @@ void Draw_Fascination::drawWin(int16 fct) {
 				_fonts[_fontIndex]->drawLetter(*tempSrf, _textToPrint[j],
 						j * _fonts[_fontIndex]->getCharWidth(), 0, _frontColor, _backColor, _transparency);
 			_destSpriteX += len * _fonts[_fontIndex]->getCharWidth();
+
+#ifdef USE_TTS
+			_vm->_game->_hotspots->addHotspotTTSText(_textToPrint, left, _destSpriteY,
+											_destSpriteX - 1, _destSpriteY + _fonts[_fontIndex]->getCharHeight() - 1, _destSurface);
+#endif
+
 			break;
 
 		case DRAW_DRAWBAR:     // 7 - draw border
@@ -660,6 +674,12 @@ void Draw_Fascination::drawWin(int16 fct) {
 						_destSpriteX + j * _fonts[_fontIndex]->getCharWidth(), _destSpriteY,
 						_frontColor, _backColor, _transparency);
 			_destSpriteX += len * _fonts[_fontIndex]->getCharWidth();
+
+#ifdef USE_TTS
+			_vm->_game->_hotspots->addHotspotTTSText(_textToPrint, left, _destSpriteY,
+											_destSpriteX - 1, _destSpriteY + _fonts[_fontIndex]->getCharHeight() - 1, _destSurface);
+#endif
+
 			break;
 
 		case DRAW_DRAWBAR:     // 7 - draw border
@@ -727,7 +747,7 @@ void Draw_Fascination::decompWin(int16 x, int16 y, SurfacePtr destPtr) {
 	if (!resource)
 		return;
 
-	_vm->_video->drawPackedSprite(resource->getData(),
+	_vm->_video->drawPackedSprite(resource->getData(), resource->getSize(),
 			_spriteRight, _spriteBottom, x, y, _transparency, *destPtr);
 
 	delete resource;

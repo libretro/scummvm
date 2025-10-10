@@ -277,9 +277,11 @@ void DarkseedEngine::gameLoop() {
 			}
 			if ((_room->_roomNumber < 10 || _room->_roomNumber == 61 || _room->_roomNumber == 62) && _currentTimeInSeconds % 3600 == 0) {
 				if (_room->_roomNumber == 7) {
-					playSound(45, 5, -1);
+					if (!_sound->isPlayingSfx(45))
+						playSound(45, 5, -1);
 				} else {
-					playSound(46, 5, -1);
+					if (!_sound->isPlayingSfx(46))
+						playSound(46, 5, -1);
 				}
 			}
 			_room->darkenSky();
@@ -392,6 +394,9 @@ void DarkseedEngine::updateEvents() {
 				}
 			} else if (event.customType == kDarkseedActionQuit) {
 				quitGame();
+			} else if (event.customType == kDarkseedActionSkipCutscene) {
+				// TODO Implement properly
+				_isRightMouseClicked = true;
 			}
 			break;
 		default:
@@ -545,11 +550,11 @@ void DarkseedEngine::handleInput() {
 			_counter_2c85_888b = 0;
 			_player->_playerWalkFrameIdx = (_player->_playerWalkFrameIdx + 1) % 8;
 			if ((_player->_playerWalkFrameIdx == 0 || _player->_playerWalkFrameIdx == 4)
-				&& currentRoomNumber != 0x22 && currentRoomNumber != 0x13
-				&& currentRoomNumber != 0x14 && currentRoomNumber != 0x15
-				&& currentRoomNumber != 16) {
-				//TODO
-			//							FUN_1208_0dac_sound_related(0x5c,CONCAT11((char)(uVar7 >> 8),5));
+					&& currentRoomNumber != 0x22 && currentRoomNumber != 0x13
+					&& currentRoomNumber != 0x14 && currentRoomNumber != 0x15
+					&& currentRoomNumber != 16) {
+				// Footstep
+				playSound(52, 5, -1);
 			}
 		}
 		_player->updateSprite();
@@ -780,7 +785,6 @@ void DarkseedEngine::handleInput() {
 						) {
 						_player->loadAnimations("opendoor.nsp");
 						_animation->setupOtherNspAnimation(0, 14);
-						// FUN_1208_0dac_sound_related(10,CONCAT11(extraout_AH,5));
 						playSound(1, 5, -1);
 						return;
 					}
@@ -794,7 +798,6 @@ void DarkseedEngine::handleInput() {
 					if (currentRoomNumber == 33 && roomExit.roomNumber == 34 && bVar) {
 						_player->loadAnimations("opendoor.nsp");
 						_animation->setupOtherNspAnimation(0, 25);
-						// FUN_1208_0dac_sound_related(24,CONCAT11(extraout_AH,5));
 						playSound(15, 5, -1); //open car door
 						return;
 					}
@@ -1952,13 +1955,16 @@ void DarkseedEngine::lookCode(int objNum) {
 
 void DarkseedEngine::printTime() {
 	_console->printTosText(958);
-	int hour = g_engine->_currentTimeInSeconds / 60 / 60 + 1;
-
+	int hour = g_engine->_currentTimeInSeconds / 3600;
+	bool isAm = hour < 12;
+	if (hour > 12) {
+		hour -= 12;
+	}
 	if (g_engine->getLanguage() == Common::ZH_ANY) {
-		_console->addToCurrentLineU32(convertToU32String(hour < 12 ? "\xa4\x57\xa4\xc8" : "\xa4\x55\xa4\xc8", Common::ZH_ANY));
-		_console->addToCurrentLine(Common::String::format("%d:%02d", hour % 12, (g_engine->_currentTimeInSeconds / 60) % 60));
+		_console->addToCurrentLineU32(convertToU32String(isAm ? "\xa4\x57\xa4\xc8" : "\xa4\x55\xa4\xc8", Common::ZH_ANY));
+		_console->addToCurrentLine(Common::String::format("%d:%02d", hour, (g_engine->_currentTimeInSeconds / 60) % 60));
 	} else {
-		_console->addToCurrentLine(Common::String::format("%d: %02d %s", hour % 12, (g_engine->_currentTimeInSeconds / 60) % 60, hour < 12 ? "a.m." : "p.m."));
+		_console->addToCurrentLine(Common::String::format("%d: %02d %s", hour, (g_engine->_currentTimeInSeconds / 60) % 60, isAm ? "a.m." : "p.m."));
 	}
 }
 
@@ -2001,9 +2007,9 @@ void DarkseedEngine::getPackageObj(int packageType) {
 	}
 }
 
-void DarkseedEngine::playSound(uint8 sfxId, uint8 unk1, int16 unk2) {
+void DarkseedEngine::playSound(uint8 sfxId, uint8 priority, int16 unk2) {
 	debug("Play SFX: %d", sfxId);
-	_sound->playSfx(sfxId, unk1, unk2);
+	_sound->playSfx(sfxId, priority, unk2);
 }
 
 void DarkseedEngine::nextFrame(int nspAminIdx) {
@@ -2113,6 +2119,9 @@ void DarkseedEngine::throwmikeinjail() {
 }
 
 void DarkseedEngine::runObjects() {
+	// FIXME This was missing; not sure where it is supposed to go
+	_soundTimer++;
+
 	if (((g_engine->_objectVar[44] != 0) && (g_engine->_objectVar[71] == 2))) {
 		g_engine->_objectVar[44] -= 2;
 		if (g_engine->_objectVar[44] == 0) {
@@ -2125,19 +2134,33 @@ void DarkseedEngine::runObjects() {
 	}
 	if (((_room->_roomNumber == 46) || (_room->_roomNumber == 60)) &&
 		(((_soundTimer & 15) == 0 && (g_engine->_objectVar[57] == 1)))) {
+		// Spaceship engine
 		playSound(9, 5, -1);
 	}
-	if ((_room->_roomNumber == 12) && (_soundTimer > 5)) {
+	// FIXME Changed the timer value from 5 to 4 because it more closely matches
+	// how the floppy version sounds. Maybe soundTimer is increased too slowly?
+	if ((_room->_roomNumber == 12) && (_soundTimer > 4)) {
+		// Library fountain
+		playSound(55, 5, -1);
 		_soundTimer = 0;
 	}
-	if (((_room->_roomNumber == 8) && (_soundTimer > 5)) && (g_engine->_objectVar[110] != 0)) {
+	if (((_room->_roomNumber == 8) && (_soundTimer > 4)) && (g_engine->_objectVar[110] != 0)) {
+		// Kitchen faucet
+		playSound(55, 5, -1);
 		_soundTimer = 0;
 	}
 	if ((_room->_roomNumber == 38) && ((_soundTimer & 31) == 0)) {
+		// Cocoon
 		playSound(23, 5, -1);
 	}
 	if ((_room->_roomNumber == 45) && ((_soundTimer & 63) == 0)) {
+		// Leech
 		playSound(10, 5, -1);
+	}
+	if ((_room->_roomNumber == 33 || _room->_roomNumber == 34) && _objectVar[71] == 2 && _soundTimer > 11) {
+		// Car engine running
+		playSound(51, 5, -1);
+		_soundTimer = 0;
 	}
 
 	int16 delbertSpriteIdx = 0;
@@ -2498,11 +2521,11 @@ void DarkseedEngine::runObjects() {
 		case 721:
 			if (((_room->_roomNumber < 10) || (_room->_roomNumber == 61)) || (_room->_roomNumber == 62)) {
 				if (_room->_roomNumber == 6) {
-//					FUN_1208_0dac_sound_related(93,5); TODO floppy sound
+					// Doorbell (loud)
 					playSound(27, 5, -1);
 				} else {
+					// Doorbell (quiet)
 					playSound(29, 5, -1);
-//					FUN_1208_0dac_sound_related(95,5); TODO floppy sound
 				}
 				_console->addI18NText(kI18N_TheDoorbellIsRingingText);
 			}
@@ -2619,21 +2642,28 @@ void DarkseedEngine::doCircles() {
 		updateDisplay();
 		_sprites.drawSprites();
 	} else {
-		_player->loadAnimations("bedsleep.nsp");
-		_player->_position.x = 0x87;
-		_player->_position.y = 0x5b;
-		_player->_frameIdx = 0;
-		_player->_direction = 1;
-		_animation->setupOtherNspAnimation(0, 1);
+		if (_room->_roomNumber == 0) {
+			_player->loadAnimations("bedsleep.nsp");
+			_player->_position.x = 0x87;
+			_player->_position.y = 0x5b;
+			_player->_frameIdx = 0;
+			_player->_direction = 1;
+			_animation->setupOtherNspAnimation(0, 1);
+		} else {
+			_player->_direction = 0;
+			updateDisplay();
+		}
 
 		_frame.draw();
 		_room->draw();
 		_console->draw(true);
 
-		// setup & draw Mike in bed.
-		_sprites.clearSpriteDrawList();
-		const Sprite &animSprite = _player->_animations.getSpriteAt(_player->_frameIdx);
-		_sprites.addSpriteToDrawList(0x75, 0x71, &animSprite, 240 - _player->_position.y, animSprite._width, animSprite._height, _player->_flipSprite);
+		if (_room->_roomNumber == 0) {
+			// setup & draw Mike in bed.
+			_sprites.clearSpriteDrawList();
+			const Sprite &animSprite = _player->_animations.getSpriteAt(_player->_frameIdx);
+			_sprites.addSpriteToDrawList(0x75, 0x71, &animSprite, 240 - _player->_position.y, animSprite._width, animSprite._height, _player->_flipSprite);
+		}
 		_sprites.drawSprites();
 	}
 

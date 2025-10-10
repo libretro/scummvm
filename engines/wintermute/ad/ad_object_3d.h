@@ -57,7 +57,7 @@ public:
 	bool _hasAmbientLightColor;
 
 	// scripting interface
-	ScValue *scGetProperty(const Common::String &name) override;
+	ScValue *scGetProperty(const char *name) override;
 	bool scSetProperty(const char *name, ScValue *value) override;
 	bool scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, const char *name) override;
 	const char *scToString() override;
@@ -68,8 +68,8 @@ private:
 	ShadowVolume *_shadowVolume;
 	BaseArray<char *> _ignoredLights;
 	void clearIgnoredLights();
-	bool addIgnoredLight(char *lightName);
-	bool removeIgnoredLight(char *lightName);
+	bool addIgnoredLight(const char *lightName);
+	bool removeIgnoredLight(const char *lightName);
 };
 
 } // namespace Wintermute

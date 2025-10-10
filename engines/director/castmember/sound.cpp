@@ -27,6 +27,13 @@
 
 namespace Director {
 
+SoundCastMember::SoundCastMember(Cast *cast, uint16 castId)
+		: CastMember(cast, castId) {
+	_type = kCastSound;
+	_audio = nullptr;
+	_looping = 0;
+}
+
 SoundCastMember::SoundCastMember(Cast *cast, uint16 castId, Common::SeekableReadStreamEndian &stream, uint16 version)
 		: CastMember(cast, castId, stream) {
 	_type = kCastSound;
@@ -63,6 +70,8 @@ void SoundCastMember::load() {
 	uint32 tag = 0;
 	uint16 sndId = 0;
 
+	MoaSoundFormatDecoder *sndFormat = nullptr;
+
 	if (_cast->_version < kFileVer400) {
 		tag = MKTAG('S', 'N', 'D', ' ');
 		sndId = (uint16)(_castId + _cast->_castIDoffset);
@@ -79,8 +88,39 @@ void SoundCastMember::load() {
 			tag = MKTAG('S', 'N', 'D', ' ');
 			sndId = (uint16)(_castId + _cast->_castIDoffset);
 		}
+	} else if (_cast->_version >= kFileVer600 && _cast->_version < kFileVer700) {
+		for (auto &it : _children) {
+			if (it.tag == MKTAG('s', 'n', 'd', ' ')) {
+				sndId = it.index;
+				tag = it.tag;
+			} else if (it.tag == MKTAG('s', 'n', 'd', 'H')) {
+				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
+				if (!sndFormat)
+					sndFormat = new MoaSoundFormatDecoder();
+				sndFormat->loadHeaderStream(*sndData);
+				delete sndData;
+			} else if (it.tag == MKTAG('s', 'n', 'd', 'S')) {
+				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
+				if (!sndFormat)
+					sndFormat = new MoaSoundFormatDecoder();
+				sndFormat->loadSampleStream(*sndData);
+				delete sndData;
+			} else if (it.tag == MKTAG('e', 'd', 'i', 'M')) {
+				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
+				warning("SoundCastMember::load(): STUB: ediM resource in sound cast member %d", _castId);
+				delete sndData;
+			}
+		}
+
 	} else {
-		warning("STUB: SoundCastMember::SoundCastMember(): Sounds not yet supported for version %d", _cast->_version);
+		warning("STUB: SoundCastMember::SoundCastMember(): Sounds not yet supported for version v%d (%d)", humanVersion(_cast->_version), _cast->_version);
+	}
+
+
+	if (sndFormat) {
+		_audio = sndFormat;
+		_loaded = true;
+		return;
 	}
 
 	Common::SeekableReadStreamEndian *sndData = _cast->getResource(tag, sndId);
@@ -151,6 +191,9 @@ void SoundCastMember::unload() {
 bool SoundCastMember::hasField(int field) {
 	switch (field) {
 	case kTheChannelCount:
+	case kTheCuePointNames:		// D6
+	case kTheCuePointTimes:		// D6
+	case kTheCurrentTime:		// D6
 	case kTheSampleRate:
 	case kTheSampleSize:
 		return true;
@@ -185,20 +228,35 @@ Datum SoundCastMember::getField(int field) {
 	return d;
 }
 
-bool SoundCastMember::setField(int field, const Datum &d) {
+void SoundCastMember::setField(int field, const Datum &d) {
 	switch (field) {
 	case kTheChannelCount:
 	case kTheSampleRate:
 	case kTheSampleSize:
 		warning("SoundCastMember::setField(): Attempt to set read-only field %s of cast %d", g_lingo->field2str(field), _castId);
-		return false;
+		return;
 	default:
 		break;
 	}
 
-	return CastMember::setField(field, d);
+	CastMember::setField(field, d);
 }
 
+// Similar to PaletteCastMember, SoundCastMember has no data in the 'CASt' resource or is ignored
+// This is the data in 'CASt' resource
+uint32 SoundCastMember::getCastDataSize() {
+	if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		return 0;
+	} else if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		// (castType (see Cast::loadCastData() for Director 4 only) 1 byte
+		return 1;		// Since SoundCastMember doesn't have any flags
+	}
+	return 0;
+}
 
+void SoundCastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
+	// This should never get triggered
+	// since there is no data to write
+}
 
 } // End of namespace Director

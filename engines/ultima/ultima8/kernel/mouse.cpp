@@ -157,9 +157,8 @@ int Mouse::getMouseLength(int mx, int my) const {
 			return 2;
 	}
 
-	Rect dims;
 	RenderSurface *screen = engine->getRenderScreen();
-	screen->GetSurfaceDims(dims);
+	Common::Rect32 dims = screen->getSurfaceDims();
 
 	// Reference point is the center of the screen
 	int dx = abs(mx - dims.width() / 2);
@@ -182,9 +181,8 @@ int Mouse::getMouseLength(int mx, int my) const {
 }
 
 Direction Mouse::getMouseDirectionWorld(int mx, int my) const {
-	Rect dims;
 	RenderSurface *screen = Ultima8Engine::get_instance()->getRenderScreen();
-	screen->GetSurfaceDims(dims);
+	Common::Rect32 dims = screen->getSurfaceDims();
 
 	// For now, reference point is (near) the center of the screen
 	int dx = mx - dims.width() / 2;
@@ -289,9 +287,8 @@ int Mouse::mouseFrameForDir(Direction mousedir) const {
 }
 
 void Mouse::setMouseCoords(int mx, int my) {
-	Rect dims;
 	RenderSurface *screen = Ultima8Engine::get_instance()->getRenderScreen();
-	screen->GetSurfaceDims(dims);
+	Common::Rect32 dims = screen->getSurfaceDims();
 
 	if (mx < dims.left)
 		mx = dims.left;

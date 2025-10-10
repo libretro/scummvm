@@ -53,8 +53,9 @@
 #include "engines/wintermute/base/base_transition_manager.h"
 #include "engines/wintermute/base/base_sprite.h"
 #include "engines/wintermute/base/base_viewport.h"
+#include "engines/wintermute/base/base_access_mgr.h"
 #include "engines/wintermute/base/particles/part_emitter.h"
-#include "engines/wintermute/base/saveload.h"
+#include "engines/wintermute/base/save_thumb_helper.h"
 #include "engines/wintermute/base/gfx/base_renderer.h"
 #include "engines/wintermute/base/scriptables/script_engine.h"
 #include "engines/wintermute/base/scriptables/script.h"
@@ -67,6 +68,7 @@
 #include "engines/wintermute/video/video_player.h"
 #include "engines/wintermute/video/video_theora_player.h"
 #include "engines/wintermute/platform_osystem.h"
+#include "engines/wintermute/dcgf.h"
 
 #include "common/config-manager.h"
 #include "common/str.h"
@@ -80,7 +82,7 @@ AdGame::AdGame(const Common::String &gameId) : BaseGame(gameId) {
 	_responseBox = nullptr;
 	_inventoryBox = nullptr;
 
-	_scene = new AdScene(_gameRef);
+	_scene = new AdScene(_game);
 	_scene->setName("");
 	registerObject(_scene);
 
@@ -129,83 +131,76 @@ AdGame::~AdGame() {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::cleanup() {
-	for (uint32 i = 0; i < _objects.size(); i++) {
+	for (int32 i = 0; i < _objects.getSize(); i++) {
 		unregisterObject(_objects[i]);
 		_objects[i] = nullptr;
 	}
-	_objects.clear();
+	_objects.removeAll();
 
 
-	for (uint32 i = 0; i < _dlgPendingBranches.size(); i++) {
+	for (int32 i = 0; i < _dlgPendingBranches.getSize(); i++) {
 		delete[] _dlgPendingBranches[i];
 	}
-	_dlgPendingBranches.clear();
+	_dlgPendingBranches.removeAll();
 
-	for (uint32 i = 0; i < _speechDirs.size(); i++) {
+	for (int32 i = 0; i < _speechDirs.getSize(); i++) {
 		delete[] _speechDirs[i];
 	}
-	_speechDirs.clear();
+	_speechDirs.removeAll();
 
 
 	unregisterObject(_scene);
 	_scene = nullptr;
 
 	// remove items
-	for (uint32 i = 0; i < _items.size(); i++) {
-		_gameRef->unregisterObject(_items[i]);
+	for (int32 i = 0; i < _items.getSize(); i++) {
+		_game->unregisterObject(_items[i]);
 	}
-	_items.clear();
+	_items.removeAll();
 
 
 	// clear remaining inventories
-	delete _invObject;
-	_invObject = nullptr;
+	SAFE_DELETE(_invObject);
 
-	for (uint32 i = 0; i < _inventories.size(); i++) {
+	for (int32 i = 0; i < _inventories.getSize(); i++) {
 		delete _inventories[i];
 	}
-	_inventories.clear();
+	_inventories.removeAll();
 
 
 	if (_responseBox) {
-		_gameRef->unregisterObject(_responseBox);
+		_game->unregisterObject(_responseBox);
 		_responseBox = nullptr;
 	}
 
 	if (_inventoryBox) {
-		_gameRef->unregisterObject(_inventoryBox);
+		_game->unregisterObject(_inventoryBox);
 		_inventoryBox = nullptr;
 	}
 
-	delete[] _prevSceneName;
-	delete[] _prevSceneFilename;
-	delete[] _scheduledScene;
-	delete[] _debugStartupScene;
-	delete[] _itemsFile;
-	_prevSceneName = nullptr;
-	_prevSceneFilename = nullptr;
-	_scheduledScene = nullptr;
-	_debugStartupScene = nullptr;
-	_startupScene = nullptr;
-	_itemsFile = nullptr;
+	SAFE_DELETE_ARRAY(_prevSceneName);
+	SAFE_DELETE_ARRAY(_prevSceneFilename);
+	SAFE_DELETE_ARRAY(_scheduledScene);
+	SAFE_DELETE_ARRAY(_debugStartupScene);
+	SAFE_DELETE_ARRAY(_startupScene);
+	SAFE_DELETE_ARRAY(_itemsFile);
 
-	delete _sceneViewport;
-	_sceneViewport = nullptr;
+	SAFE_DELETE(_sceneViewport);
 
-	for (uint32 i = 0; i < _sceneStates.size(); i++) {
+	for (int32 i = 0; i < _sceneStates.getSize(); i++) {
 		delete _sceneStates[i];
 	}
-	_sceneStates.clear();
+	_sceneStates.removeAll();
 
-	for (uint32 i = 0; i < _responsesBranch.size(); i++) {
+	for (int32 i = 0; i < _responsesBranch.getSize(); i++) {
 		delete _responsesBranch[i];
 	}
-	_responsesBranch.clear();
+	_responsesBranch.removeAll();
 
-	for (uint32 i = 0; i < _responsesGame.size(); i++) {
+	for (int32 i = 0; i < _responsesGame.getSize(); i++) {
 		delete _responsesGame[i];
 	}
-	_responsesGame.clear();
+	_responsesGame.removeAll();
 
 	return BaseGame::cleanup();
 }
@@ -213,12 +208,11 @@ bool AdGame::cleanup() {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::initLoop() {
-	if (_scheduledScene && _transMgr->isReady()) {
+	if (_scheduledScene && _scheduledScene[0] && _transMgr->isReady()) {
 		changeScene(_scheduledScene, _scheduledFadeIn);
-		delete[] _scheduledScene;
-		_scheduledScene = nullptr;
+		SAFE_DELETE_ARRAY(_scheduledScene);
 
-		_gameRef->_activeObject = nullptr;
+		_game->_activeObject = nullptr;
 	}
 
 
@@ -232,7 +226,7 @@ bool AdGame::initLoop() {
 		res = _scene->initLoop();
 	}
 
-	_sentences.clear();
+	_sentences.removeAll();
 
 	return res;
 }
@@ -247,6 +241,16 @@ bool AdGame::addObject(AdObject *object) {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::removeObject(AdObject *object) {
+	// Below condition code is not present in Lite up to (Feb 8, 2012) (SVN repo)
+	// Not present in Lite up to (Nov 1, 2015) (Git repo)
+	// Not present up to 1.9.1 (Jan 1, 2010)
+	// Seems added into 1.10.1 beta (July 19, 2012)
+	// or later but before Mar 21, 2013 (import into Git repo)
+	//
+	// is it inventory object?
+	if (_inventoryOwner == object)
+		_inventoryOwner = nullptr;
+
 	// in case the user called Scene.CreateXXX() and Game.DeleteXXX()
 	if (_scene) {
 		bool res = _scene->removeObject(object);
@@ -255,9 +259,9 @@ bool AdGame::removeObject(AdObject *object) {
 		}
 	}
 
-	for (uint32 i = 0; i < _objects.size(); i++) {
+	for (int32 i = 0; i < _objects.getSize(); i++) {
 		if (_objects[i] == object) {
-			_objects.remove_at(i);
+			_objects.removeAt(i);
 			break;
 		}
 	}
@@ -268,14 +272,14 @@ bool AdGame::removeObject(AdObject *object) {
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::changeScene(const char *filename, bool fadeIn) {
 	if (_scene == nullptr) {
-		_scene = new AdScene(_gameRef);
+		_scene = new AdScene(_game);
 		registerObject(_scene);
 	} else {
-		_gameRef->pluginEvents().applyEvent(WME_EVENT_SCENE_SHUTDOWN, _scene);
+		_game->pluginEvents().applyEvent(WME_EVENT_SCENE_SHUTDOWN, _scene);
 		_scene->applyEvent("SceneShutdown", true);
 
-		setPrevSceneName(_scene->getName());
-		setPrevSceneFilename(_scene->getFilename());
+		setPrevSceneName(_scene->_name);
+		setPrevSceneFilename(_scene->_filename);
 
 		if (!_tempDisableSaveState) {
 			_scene->saveState();
@@ -285,7 +289,7 @@ bool AdGame::changeScene(const char *filename, bool fadeIn) {
 
 	if (_scene) {
 		// reset objects
-		for (uint32 i = 0; i < _objects.size(); i++) {
+		for (int32 i = 0; i < _objects.getSize(); i++) {
 			_objects[i]->reset();
 		}
 
@@ -296,7 +300,7 @@ bool AdGame::changeScene(const char *filename, bool fadeIn) {
 		}
 
 		bool ret;
-		if (_initialScene && _debugDebugMode && _debugStartupScene) {
+		if (_initialScene && _debugMode && _debugStartupScene && _debugStartupScene[0]) {
 			_initialScene = false;
 			ret = _scene->loadFile(_debugStartupScene);
 		} else {
@@ -305,16 +309,16 @@ bool AdGame::changeScene(const char *filename, bool fadeIn) {
 
 		if (DID_SUCCEED(ret)) {
 			// invalidate references to the original scene
-			for (uint32 i = 0; i < _objects.size(); i++) {
+			for (int32 i = 0; i < _objects.getSize(); i++) {
 				_objects[i]->invalidateCurrRegions();
 				_objects[i]->_stickRegion = nullptr;
 			}
 
 			_scene->loadState();
-			_gameRef->pluginEvents().applyEvent(WME_EVENT_SCENE_INIT, _scene);
+			_game->pluginEvents().applyEvent(WME_EVENT_SCENE_INIT, _scene);
 		}
 		if (fadeIn) {
-			_gameRef->_transMgr->start(TRANSITION_FADE_IN);
+			_game->_transMgr->start(TRANSITION_FADE_IN);
 		}
 		return ret;
 	} else {
@@ -331,7 +335,7 @@ void AdGame::addSentence(AdSentence *sentence) {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::displaySentences(bool frozen) {
-	for (uint32 i = 0; i < _sentences.size(); i++) {
+	for (int32 i = 0; i < _sentences.getSize(); i++) {
 		if (frozen && _sentences[i]->_freezable) {
 			continue;
 		} else {
@@ -344,7 +348,7 @@ bool AdGame::displaySentences(bool frozen) {
 
 //////////////////////////////////////////////////////////////////////////
 void AdGame::finishSentences() {
-	for (uint32 i = 0; i < _sentences.size(); i++) {
+	for (int32 i = 0; i < _sentences.getSize(); i++) {
 		if (_sentences[i]->canSkip()) {
 			_sentences[i]->_duration = 0;
 			if (_sentences[i]->_sound) {
@@ -352,6 +356,7 @@ void AdGame::finishSentences() {
 			}
 		}
 	}
+	_game->_accessMgr->stop();
 }
 
 
@@ -389,13 +394,12 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "LoadActor") == 0) {
 		stack->correctParams(1);
-		AdActor *act = new AdActor(_gameRef);
+		AdActor *act = new AdActor(_game);
 		if (act && DID_SUCCEED(act->loadFile(stack->pop()->getString()))) {
 			addObject(act);
 			stack->pushNative(act, true);
 		} else {
-			delete act;
-			act = nullptr;
+			SAFE_DELETE(act);
 			stack->pushNULL();
 		}
 		return STATUS_OK;
@@ -410,13 +414,12 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		// assume that we have an .X model here
 		// wme3d has also support for .ms3d files
 		// but they are deprecated
-		AdActor3DX *act = new AdActor3DX(_gameRef);
+		AdActor3DX *act = new AdActor3DX(_game);
 		if (act && DID_SUCCEED(act->loadFile(stack->pop()->getString()))) {
 			addObject(act);
 			stack->pushNative(act, true);
 		} else {
-			delete act;
-			act = nullptr;
+			SAFE_DELETE(act);
 			stack->pushNULL();
 		}
 		return STATUS_OK;
@@ -428,13 +431,12 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "LoadEntity") == 0) {
 		stack->correctParams(1);
-		AdEntity *ent = new AdEntity(_gameRef);
+		AdEntity *ent = new AdEntity(_game);
 		if (ent && DID_SUCCEED(ent->loadFile(stack->pop()->getString()))) {
 			addObject(ent);
 			stack->pushNative(ent, true);
 		} else {
-			delete ent;
-			ent = nullptr;
+			SAFE_DELETE(ent);
 			stack->pushNULL();
 		}
 		return STATUS_OK;
@@ -456,9 +458,9 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		// Unused screenshots must be deleted, after main menu is closed
 		if (obj && BaseEngine::instance().getGameId() == "corrosion") {
 			const char *mm = "interface\\system\\mainmenu.window";
-			const char *fn = obj->getFilename();
+			const char *fn = obj->_filename;
 			if (fn && strcmp(fn, mm) == 0) {
-				deleteSaveThumbnail();
+				SAFE_DELETE(_cachedThumbnail);
 			}
 		}
 
@@ -478,7 +480,7 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		stack->correctParams(1);
 		ScValue *val = stack->pop();
 
-		AdEntity *ent = new AdEntity(_gameRef);
+		AdEntity *ent = new AdEntity(_game);
 		addObject(ent);
 		if (!val->isNULL()) {
 			ent->setName(val->getString());
@@ -494,7 +496,7 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		stack->correctParams(1);
 		ScValue *val = stack->pop();
 
-		AdItem *item = new AdItem(_gameRef);
+		AdItem *item = new AdItem(_game);
 		addItem(item);
 		if (!val->isNULL()) {
 			item->setName(val->getString());
@@ -534,8 +536,8 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 
 		AdItem *item = nullptr;
 		if (val->isInt()) {
-			int index = val->getInt();
-			if (index >= 0 && index < (int32)_items.size()) {
+			int32 index = val->getInt();
+			if (index >= 0 && index < _items.getSize()) {
 				item = _items[index];
 			}
 		} else {
@@ -565,15 +567,11 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		ScValue *val4 = stack->pop();
 
 		if (_responseBox) {
-			AdResponse *res = new AdResponse(_gameRef);
+			AdResponse *res = new AdResponse(_game);
 			if (res) {
-				res->setID(id);
-
-				char *expandedText = new char[strlen(text) + 1];
-				Common::strlcpy(expandedText, text, strlen(text) + 1);
-				expandStringByStringTable(&expandedText);
-				res->setText(expandedText);
-				delete[] expandedText;
+				res->_id = id;
+				res->setText(text);
+				_stringTable->expand(&res->_text);
 
 				if (!val1->isNULL()) {
 					res->setIcon(val1->getString());
@@ -594,7 +592,7 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 					res->_responseType = RESPONSE_ONCE_GAME;
 				}
 
-				_responseBox->addResponse(res);
+				_responseBox->_responses.add(res);
 			}
 		} else {
 			script->runtimeError("Game.AddResponse: response box is not defined");
@@ -636,15 +634,15 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		if (_responseBox) {
 			_responseBox->weedResponses();
 
-			if (_responseBox->getNumResponses() == 0) {
+			if (_responseBox->_responses.getSize() == 0) {
 				stack->pushNULL();
 				return STATUS_OK;
 			}
 
 
-			if (_responseBox->getNumResponses() == 1 && autoSelectLast) {
-				stack->pushInt(_responseBox->getIdForResponseNum(0));
-				_responseBox->handleResponseNum(0);
+			if (_responseBox->_responses.getSize() == 1 && autoSelectLast) {
+				stack->pushInt(_responseBox->_responses[0]->_id);
+				_responseBox->handleResponse(_responseBox->_responses[0]);
 				_responseBox->clearResponses();
 				return STATUS_OK;
 			}
@@ -669,7 +667,7 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		stack->correctParams(0);
 		if (_responseBox) {
 			_responseBox->weedResponses();
-			stack->pushInt(_responseBox->getNumResponses());
+			stack->pushInt(_responseBox->_responses.getSize());
 		} else {
 			script->runtimeError("Game.GetNumResponses: response box is not defined");
 			stack->pushNULL();
@@ -721,8 +719,8 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 	else if (strcmp(name, "GetCurrentDlgBranch") == 0) {
 		stack->correctParams(0);
 
-		if (_dlgPendingBranches.size() > 0) {
-			stack->pushString(_dlgPendingBranches[_dlgPendingBranches.size() - 1]);
+		if (_dlgPendingBranches.getSize() > 0) {
+			stack->pushString(_dlgPendingBranches[_dlgPendingBranches.getSize() - 1]);
 		} else {
 			stack->pushNULL();
 		}
@@ -766,14 +764,14 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 
 		ScValue *val = stack->pop();
 		if (!val->isNULL()) {
-			for (uint32 i = 0; i < _inventories.size(); i++) {
+			for (int32 i = 0; i < _inventories.getSize(); i++) {
 				AdInventory *inv = _inventories[i];
 
-				for (uint32 j = 0; j < inv->_takenItems.size(); j++) {
+				for (int32 j = 0; j < inv->_takenItems.getSize(); j++) {
 					if (val->getNative() == inv->_takenItems[j]) {
 						stack->pushBool(true);
 						return STATUS_OK;
-					} else if (scumm_stricmp(val->getString(), inv->_takenItems[j]->getName()) == 0) {
+					} else if (scumm_stricmp(val->getString(), inv->_takenItems[j]->_name) == 0) {
 						stack->pushBool(true);
 						return STATUS_OK;
 					}
@@ -806,8 +804,8 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "GetResponsesWindow") == 0 || strcmp(name, "GetResponseWindow") == 0) {
 		stack->correctParams(0);
-		if (_responseBox && _responseBox->getResponseWindow()) {
-			stack->pushNative(_responseBox->getResponseWindow(), true);
+		if (_responseBox && _responseBox->_window) {
+			stack->pushNative(_responseBox->_window, true);
 		} else {
 			stack->pushNULL();
 		}
@@ -822,14 +820,13 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		stack->correctParams(1);
 		const char *filename = stack->pop()->getString();
 
-		_gameRef->unregisterObject(_responseBox);
-		_responseBox = new AdResponseBox(_gameRef);
+		_game->unregisterObject(_responseBox);
+		_responseBox = new AdResponseBox(_game);
 		if (_responseBox && !DID_FAIL(_responseBox->loadFile(filename))) {
 			registerObject(_responseBox);
 			stack->pushBool(true);
 		} else {
-			delete _responseBox;
-			_responseBox = nullptr;
+			SAFE_DELETE(_responseBox);
 			stack->pushBool(false);
 		}
 		return STATUS_OK;
@@ -842,14 +839,13 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		stack->correctParams(1);
 		const char *filename = stack->pop()->getString();
 
-		_gameRef->unregisterObject(_inventoryBox);
-		_inventoryBox = new AdInventoryBox(_gameRef);
+		_game->unregisterObject(_inventoryBox);
+		_inventoryBox = new AdInventoryBox(_game);
 		if (_inventoryBox && !DID_FAIL(_inventoryBox->loadFile(filename))) {
 			registerObject(_inventoryBox);
 			stack->pushBool(true);
 		} else {
-			delete _inventoryBox;
-			_inventoryBox = nullptr;
+			SAFE_DELETE(_inventoryBox);
 			stack->pushBool(false);
 		}
 		return STATUS_OK;
@@ -909,7 +905,7 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		}
 
 		if (!_sceneViewport) {
-			_sceneViewport = new BaseViewport(_gameRef);
+			_sceneViewport = new BaseViewport(_game);
 		}
 		if (_sceneViewport) {
 			_sceneViewport->setRect(x, y, x + width, y + height);
@@ -941,20 +937,20 @@ bool AdGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 
 
 //////////////////////////////////////////////////////////////////////////
-ScValue *AdGame::scGetProperty(const Common::String &name) {
+ScValue *AdGame::scGetProperty(const char *name) {
 	_scValue->setNULL();
 
 	//////////////////////////////////////////////////////////////////////////
 	// Type
 	//////////////////////////////////////////////////////////////////////////
-	if (name == "Type") {
+	if (strcmp(name, "Type") == 0) {
 		_scValue->setString("game");
 		return _scValue;
 	}
 	//////////////////////////////////////////////////////////////////////////
 	// Scene
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "Scene") {
+	else if (strcmp(name, "Scene") == 0) {
 		if (_scene) {
 			_scValue->setNative(_scene, true);
 		} else {
@@ -966,7 +962,7 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// SelectedItem
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "SelectedItem") {
+	else if (strcmp(name, "SelectedItem") == 0) {
 		//if (_selectedItem) _scValue->setString(_selectedItem->_name);
 		if (_selectedItem) {
 			_scValue->setNative(_selectedItem, true);
@@ -979,14 +975,14 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// NumItems
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "NumItems") {
+	else if (strcmp(name, "NumItems") == 0) {
 		return _invObject->scGetProperty(name);
 	}
 
 	//////////////////////////////////////////////////////////////////////////
 	// SmartItemCursor
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "SmartItemCursor") {
+	else if (strcmp(name, "SmartItemCursor") == 0) {
 		_scValue->setBool(_smartItemCursor);
 		return _scValue;
 	}
@@ -994,7 +990,7 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// InventoryVisible
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "InventoryVisible") {
+	else if (strcmp(name, "InventoryVisible") == 0) {
 		_scValue->setBool(_inventoryBox && _inventoryBox->_visible);
 		return _scValue;
 	}
@@ -1002,7 +998,7 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// InventoryScrollOffset
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "InventoryScrollOffset") {
+	else if (strcmp(name, "InventoryScrollOffset") == 0) {
 		if (_inventoryBox) {
 			_scValue->setInt(_inventoryBox->_scrollOffset);
 		} else {
@@ -1015,7 +1011,7 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// ResponsesVisible (RO)
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "ResponsesVisible") {
+	else if (strcmp(name, "ResponsesVisible") == 0) {
 		_scValue->setBool(_stateEx == GAME_WAITING_RESPONSE);
 		return _scValue;
 	}
@@ -1023,7 +1019,7 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// PrevScene / PreviousScene (RO)
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "PrevScene" || name == "PreviousScene") {
+	else if (strcmp(name, "PrevScene") == 0 || strcmp(name, "PreviousScene") == 0) {
 		if (!_prevSceneName) {
 			_scValue->setString("");
 		} else {
@@ -1035,8 +1031,8 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// PrevSceneFilename / PreviousSceneFilename (RO)
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "PrevSceneFilename" || name == "PreviousSceneFilename") {
-		if (!_prevSceneFilename) {
+	else if (strcmp(name, "PrevSceneFilename") == 0 || strcmp(name, "PreviousSceneFilename") == 0) {
+		if (!_prevSceneFilename || !_prevSceneFilename[0]) {
 			_scValue->setString("");
 		} else {
 			_scValue->setString(_prevSceneFilename);
@@ -1047,11 +1043,11 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// LastResponse (RO)
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "LastResponse") {
-		if (!_responseBox || !_responseBox->getLastResponseText()) {
+	else if (strcmp(name, "LastResponse") == 0) {
+		if (!_responseBox || !_responseBox->_lastResponseText|| !_responseBox->_lastResponseText[0]) {
 			_scValue->setString("");
 		} else {
-			_scValue->setString(_responseBox->getLastResponseText());
+			_scValue->setString(_responseBox->_lastResponseText);
 		}
 		return _scValue;
 	}
@@ -1059,11 +1055,11 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// LastResponseOrig (RO)
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "LastResponseOrig") {
-		if (!_responseBox || !_responseBox->getLastResponseTextOrig()) {
+	else if (strcmp(name, "LastResponseOrig") == 0) {
+		if (!_responseBox || !_responseBox->_lastResponseTextOrig || !_responseBox->_lastResponseTextOrig[0]) {
 			_scValue->setString("");
 		} else {
-			_scValue->setString(_responseBox->getLastResponseTextOrig());
+			_scValue->setString(_responseBox->_lastResponseTextOrig);
 		}
 		return _scValue;
 	}
@@ -1071,7 +1067,7 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// InventoryObject
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "InventoryObject") {
+	else if (strcmp(name, "InventoryObject") == 0) {
 		if (_inventoryOwner == _invObject) {
 			_scValue->setNative(this, true);
 		} else {
@@ -1084,15 +1080,15 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// TotalNumItems
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "TotalNumItems") {
-		_scValue->setInt(_items.size());
+	else if (strcmp(name, "TotalNumItems") == 0) {
+		_scValue->setInt(_items.getSize());
 		return _scValue;
 	}
 
 	//////////////////////////////////////////////////////////////////////////
 	// TalkSkipButton
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "TalkSkipButton") {
+	else if (strcmp(name, "TalkSkipButton") == 0) {
 		_scValue->setInt(_talkSkipButton);
 		return _scValue;
 	}
@@ -1100,7 +1096,7 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// VideoSkipButton
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "VideoSkipButton") {
+	else if (strcmp(name, "VideoSkipButton") == 0) {
 		_scValue->setInt(_videoSkipButton);
 		return _scValue;
 	}
@@ -1108,7 +1104,7 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// ChangingScene
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "ChangingScene") {
+	else if (strcmp(name, "ChangingScene") == 0) {
 		_scValue->setBool(_scheduledScene != nullptr);
 		return _scValue;
 	}
@@ -1116,8 +1112,8 @@ ScValue *AdGame::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// StartupScene
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "StartupScene") {
-		if (!_startupScene) {
+	else if (strcmp(name, "StartupScene") == 0) {
+		if (!_startupScene || !_startupScene[0]) {
 			_scValue->setNULL();
 		} else {
 			_scValue->setString(_startupScene);
@@ -1143,7 +1139,7 @@ bool AdGame::scSetProperty(const char *name, ScValue *value) {
 		} else {
 			if (value->isNative()) {
 				_selectedItem = nullptr;
-				for (uint32 i = 0; i < _items.size(); i++) {
+				for (int32 i = 0; i < _items.getSize(); i++) {
 					if (_items[i] == value->getNative()) {
 						_selectedItem = (AdItem *)value->getNative();
 						break;
@@ -1190,7 +1186,7 @@ bool AdGame::scSetProperty(const char *name, ScValue *value) {
 			BaseObject *obj = (BaseObject *)value->getNative();
 			if (obj == this) {
 				_inventoryOwner = _invObject;
-			} else if (_gameRef->validObject(obj)) {
+			} else if (_game->validObject(obj)) {
 				_inventoryOwner = (AdObject *)obj;
 			}
 		}
@@ -1247,8 +1243,7 @@ bool AdGame::scSetProperty(const char *name, ScValue *value) {
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "StartupScene") == 0) {
 		if (value == nullptr) {
-			delete[] _startupScene;
-			_startupScene = nullptr;
+			SAFE_DELETE_ARRAY(_startupScene);
 		} else {
 			BaseUtils::setString(&_startupScene, value->getString());
 		}
@@ -1273,7 +1268,7 @@ bool AdGame::externalCall(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		stack->correctParams(0);
 		thisObj = thisStack->getTop();
 
-		thisObj->setNative(new AdActor(_gameRef));
+		thisObj->setNative(new AdActor(_game));
 		stack->pushNULL();
 	}
 
@@ -1284,7 +1279,7 @@ bool AdGame::externalCall(ScScript *script, ScStack *stack, ScStack *thisStack, 
 		stack->correctParams(0);
 		thisObj = thisStack->getTop();
 
-		thisObj->setNative(new AdEntity(_gameRef));
+		thisObj->setNative(new AdEntity(_game));
 		stack->pushNULL();
 	}
 
@@ -1306,14 +1301,14 @@ bool AdGame::showCursor() {
 		return STATUS_OK;
 	}
 
-	if (_selectedItem && _gameRef->_state == GAME_RUNNING && _stateEx == GAME_NORMAL && _interactive) {
+	if (_selectedItem && _game->_state == GAME_RUNNING && _stateEx == GAME_NORMAL && _interactive) {
 		if (_selectedItem->_cursorCombined) {
 			BaseSprite *origLastCursor = _lastCursor;
 			BaseGame::showCursor();
 			_lastCursor = origLastCursor;
 		}
 		if (_activeObject && _selectedItem->_cursorHover && _activeObject->getExtendedFlag("usable")) {
-			if (!_smartItemCursor || _activeObject->canHandleEvent(_selectedItem->getName())) {
+			if (!_smartItemCursor || _activeObject->canHandleEvent(_selectedItem->_name)) {
 				return drawCursor(_selectedItem->_cursorHover);
 			} else {
 				return drawCursor(_selectedItem->_cursorNormal);
@@ -1329,9 +1324,9 @@ bool AdGame::showCursor() {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::loadFile(const char *filename) {
-	char *buffer = (char *)BaseFileManager::getEngineInstance()->readWholeFile(filename);
+	char *buffer = (char *)_fileManager->readWholeFile(filename);
 	if (buffer == nullptr) {
-		_gameRef->LOG(0, "AdGame::LoadFile failed for file '%s'", filename);
+		_game->LOG(0, "AdGame::loadFile failed for file '%s'", filename);
 		return STATUS_FAILED;
 	}
 
@@ -1340,7 +1335,7 @@ bool AdGame::loadFile(const char *filename) {
 	setFilename(filename);
 
 	if (DID_FAIL(ret = loadBuffer(buffer, true))) {
-		_gameRef->LOG(0, "Error parsing GAME file '%s'", filename);
+		_game->LOG(0, "Error parsing GAME file '%s'", filename);
 	}
 
 
@@ -1374,6 +1369,7 @@ bool AdGame::loadBuffer(char *buffer, bool complete) {
 	TOKEN_TABLE(INVENTORY_BOX)
 	TOKEN_TABLE(ITEMS)
 	TOKEN_TABLE(TALK_SKIP_BUTTON)
+	TOKEN_TABLE(VIDEO_SKIP_BUTTON)
 	TOKEN_TABLE(SCENE_VIEWPORT)
 	TOKEN_TABLE(EDITOR_PROPERTY)
 	TOKEN_TABLE(STARTUP_SCENE)
@@ -1383,7 +1379,7 @@ bool AdGame::loadBuffer(char *buffer, bool complete) {
 	char *params;
 	char *params2;
 	int cmd = 1;
-	BaseParser parser;
+	BaseParser parser(_game);
 
 	bool itemFound = false, itemsFound = false;
 
@@ -1399,25 +1395,23 @@ bool AdGame::loadBuffer(char *buffer, bool complete) {
 			while (cmd > 0 && (cmd = parser.getCommand(&params, commands, &params2)) > 0) {
 				switch (cmd) {
 				case TOKEN_RESPONSE_BOX:
-					delete _responseBox;
-					_responseBox = new AdResponseBox(_gameRef);
+					SAFE_DELETE(_responseBox);
+					_responseBox = new AdResponseBox(_game);
 					if (_responseBox && !DID_FAIL(_responseBox->loadFile(params2))) {
 						registerObject(_responseBox);
 					} else {
-						delete _responseBox;
-						_responseBox = nullptr;
+						SAFE_DELETE(_responseBox);
 						cmd = PARSERR_GENERIC;
 					}
 					break;
 
 				case TOKEN_INVENTORY_BOX:
-					delete _inventoryBox;
-					_inventoryBox = new AdInventoryBox(_gameRef);
+					SAFE_DELETE(_inventoryBox);
+					_inventoryBox = new AdInventoryBox(_game);
 					if (_inventoryBox && !DID_FAIL(_inventoryBox->loadFile(params2))) {
 						registerObject(_inventoryBox);
 					} else {
-						delete _inventoryBox;
-						_inventoryBox = nullptr;
+						SAFE_DELETE(_inventoryBox);
 						cmd = PARSERR_GENERIC;
 					}
 					break;
@@ -1426,8 +1420,7 @@ bool AdGame::loadBuffer(char *buffer, bool complete) {
 					itemsFound = true;
 					BaseUtils::setString(&_itemsFile, params2);
 					if (DID_FAIL(loadItemsFile(_itemsFile))) {
-						delete[] _itemsFile;
-						_itemsFile = nullptr;
+						SAFE_DELETE_ARRAY(_itemsFile);
 						cmd = PARSERR_GENERIC;
 					}
 					break;
@@ -1443,19 +1436,20 @@ bool AdGame::loadBuffer(char *buffer, bool complete) {
 					break;
 
 				case TOKEN_VIDEO_SKIP_BUTTON:
-					if (scumm_stricmp(params2, "right") == 0)
+					if (scumm_stricmp(params2, "right") == 0) {
 						_videoSkipButton = VIDEO_SKIP_RIGHT;
-					else if (scumm_stricmp(params2, "both") == 0)
+					} else if (scumm_stricmp(params2, "both") == 0) {
 						_videoSkipButton = VIDEO_SKIP_BOTH;
-					else
+					} else {
 						_videoSkipButton = VIDEO_SKIP_LEFT;
+					}
 					break;
 
 				case TOKEN_SCENE_VIEWPORT: {
-					Rect32 rc;
+					Common::Rect32 rc;
 					parser.scanStr(params2, "%d,%d,%d,%d", &rc.left, &rc.top, &rc.right, &rc.bottom);
 					if (!_sceneViewport) {
-						_sceneViewport = new BaseViewport(_gameRef);
+						_sceneViewport = new BaseViewport(_game);
 					}
 					if (_sceneViewport) {
 						_sceneViewport->setRect(rc.left, rc.top, rc.right, rc.bottom);
@@ -1487,16 +1481,16 @@ bool AdGame::loadBuffer(char *buffer, bool complete) {
 	}
 
 	if (cmd == PARSERR_TOKENNOTFOUND) {
-		_gameRef->LOG(0, "Syntax error in GAME definition");
+		_game->LOG(0, "Syntax error in GAME definition");
 		return STATUS_FAILED;
 	}
 	if (cmd == PARSERR_GENERIC) {
-		_gameRef->LOG(0, "Error loading GAME definition");
+		_game->LOG(0, "Error loading GAME definition");
 		return STATUS_FAILED;
 	}
 
 	if (itemFound && !itemsFound) {
-		_gameRef->LOG(0, "**Warning** Please put the items definition to a separate file.");
+		_game->LOG(0, "**Warning** Please put the items definition to a separate file.");
 	}
 
 	return STATUS_OK;
@@ -1553,14 +1547,18 @@ bool AdGame::persist(BasePersistenceManager *persistMgr) {
 
 	persistMgr->transferCharPtr(TMEMBER(_startupScene));
 
+	if (persistMgr->checkVersion(1, 9, 1)) {
+		persistMgr->transferSint32(TMEMBER_INT(_videoSkipButton));
+	} else if (!persistMgr->getIsSaving()) {
+		_videoSkipButton = VIDEO_SKIP_LEFT;
+	}
 
 	return STATUS_OK;
 }
 
 //////////////////////////////////////////////////////////////////////////
 void AdGame::setPrevSceneName(const char *name) {
-	delete[] _prevSceneName;
-	_prevSceneName = nullptr;
+	SAFE_DELETE_ARRAY(_prevSceneName);
 	if (name) {
 		size_t nameSize = strlen(name) + 1;
 		_prevSceneName = new char[nameSize];
@@ -1571,8 +1569,7 @@ void AdGame::setPrevSceneName(const char *name) {
 
 //////////////////////////////////////////////////////////////////////////
 void AdGame::setPrevSceneFilename(const char *name) {
-	delete[] _prevSceneFilename;
-	_prevSceneFilename = nullptr;
+	SAFE_DELETE_ARRAY(_prevSceneFilename);
 	if (name) {
 		size_t nameSize = strlen(name) + 1;
 		_prevSceneFilename = new char[nameSize];
@@ -1583,8 +1580,7 @@ void AdGame::setPrevSceneFilename(const char *name) {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::scheduleChangeScene(const char *filename, bool fadeIn) {
-	delete[] _scheduledScene;
-	_scheduledScene = nullptr;
+	SAFE_DELETE_ARRAY(_scheduledScene);
 
 	if (_scene && !_scene->_initialized) {
 		return changeScene(filename, fadeIn);
@@ -1601,120 +1597,7 @@ bool AdGame::scheduleChangeScene(const char *filename, bool fadeIn) {
 
 
 //////////////////////////////////////////////////////////////////////////
-bool AdGame::handleCustomActionStart(BaseGameCustomAction action) {
-	bool isCorrosion = BaseEngine::instance().getGameId() == "corrosion";
-
-	if (isCorrosion) {
-		// Corrosion Enhanced Edition contain city map screen, which is
-		// mouse controlled and conflicts with those custom actions
-		const char *m = "items\\street_map\\windows\\street_map_window.script";
-		if (_scEngine->isRunningScript(m)) {
-			return false;
-		}
-	}
-
-	int xLeft   = 30;
-	int xCenter = _renderer->getWidth() / 2;
-	int xRight  = _renderer->getWidth() - 30;
-
-	int yTop    = 35;
-	int yCenter = _renderer->getHeight() / 2;
-	int yBottom = _renderer->getHeight() - 35;
-	if (isCorrosion && !(ConfMan.get("extra").contains("Enhanced"))) {
-		// original version of Corrosion has a toolbar under the game screen
-		yBottom -= 60;
-	}
-
-	BaseArray<AdObject *> objects;
-
-	Point32 p;
-	int distance = xCenter * xCenter + yCenter * yCenter;
-
-	switch (action) {
-	case kClickAtCenter:
-		p.x = xCenter;
-		p.y = yCenter;
-		break;
-	case kClickAtLeft:
-		p.x = xLeft;
-		p.y = yCenter;
-		break;
-	case kClickAtRight:
-		p.x = xRight;
-		p.y = yCenter;
-		break;
-	case kClickAtTop:
-		p.x = xCenter;
-		p.y = yTop;
-		break;
-	case kClickAtBottom:
-		p.x = xCenter;
-		p.y = yBottom;
-		break;
-	case kClickAtEntityNearestToCenter:
-		p.x = xCenter;
-		p.y = yCenter;
-		// Looking through all objects for entities near to the center
-		if (_scene && _scene->getSceneObjects(objects, true)) {
-			for (uint32 i = 0; i < objects.size(); i++) {
-				BaseRegion *region;
-				if (objects[i]->getType() != OBJECT_ENTITY ||
-					!objects[i]->_active ||
-					!objects[i]->_registrable ||
-					(!(region = ((AdEntity *)objects[i])->_region))
-				) {
-					continue;
-				}
-
-				// Something exactly at center? Great!
-				if (region->pointInRegion(xCenter, yCenter)) {
-					distance = 0;
-					p.x = xCenter;
-					p.y = yCenter;
-					break;
-				}
-
-				// Something at the edge? Available with other actions.
-				if (region->pointInRegion(xLeft, yCenter) ||
-					region->pointInRegion(xRight, yCenter) ||
-					region->pointInRegion(xCenter, yBottom) ||
-					region->pointInRegion(xCenter, yTop)
-				) {
-					continue;
-				}
-
-				// Keep entities that has less distance to center
-				int x = ((AdEntity *)objects[i])->_posX;
-				int y = ((AdEntity *)objects[i])->_posY - ((AdEntity *)objects[i])->getHeight() / 2;
-				int d = (x - xCenter) * (x - xCenter) + (y - yCenter) * (y - yCenter);
-				if (distance > d) {
-					distance = d;
-					p.x = x;
-					p.y = y;
-				}
-			}
-		}
-		break;
-	default:
-		return false;
-	}
-
-	BasePlatform::setCursorPos(p.x, p.y);
-	setActiveObject(_gameRef->_renderer->getObjectAt(p.x, p.y));
-	onMouseLeftDown();
-	onMouseLeftUp();
-	return true;
-}
-
-
-//////////////////////////////////////////////////////////////////////////
-bool AdGame::handleCustomActionEnd(BaseGameCustomAction action) {
-	return false;
-}
-
-
-//////////////////////////////////////////////////////////////////////////
-bool AdGame::getVersion(byte *verMajor, byte *verMinor, byte *extMajor, byte *extMinor) const {
+bool AdGame::getVersion(byte *verMajor, byte *verMinor, byte *extMajor, byte *extMinor) {
 	BaseGame::getVersion(verMajor, verMinor, nullptr, nullptr);
 
 	if (extMajor) {
@@ -1730,9 +1613,9 @@ bool AdGame::getVersion(byte *verMajor, byte *verMinor, byte *extMajor, byte *ex
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::loadItemsFile(const char *filename, bool merge) {
-	char *buffer = (char *)BaseFileManager::getEngineInstance()->readWholeFile(filename);
+	char *buffer = (char *)_game->_fileManager->readWholeFile(filename);
 	if (buffer == nullptr) {
-		_gameRef->LOG(0, "AdGame::LoadItemsFile failed for file '%s'", filename);
+		_game->LOG(0, "AdGame::LoadItemsFile failed for file '%s'", filename);
 		return STATUS_FAILED;
 	}
 
@@ -1743,7 +1626,7 @@ bool AdGame::loadItemsFile(const char *filename, bool merge) {
 	//Common::strcpy_s(_filename, filenameSize, filename);
 
 	if (DID_FAIL(ret = loadItemsBuffer(buffer, merge))) {
-		_gameRef->LOG(0, "Error parsing ITEMS file '%s'", filename);
+		_game->LOG(0, "Error parsing ITEMS file '%s'", filename);
 	}
 
 
@@ -1761,10 +1644,10 @@ bool AdGame::loadItemsBuffer(char *buffer, bool merge) {
 
 	char *params;
 	int cmd;
-	BaseParser parser;
+	BaseParser parser(_game);
 
 	if (!merge) {
-		while (_items.size() > 0) {
+		while (_items.getSize() > 0) {
 			deleteItem(_items[0]);
 		}
 	}
@@ -1772,19 +1655,18 @@ bool AdGame::loadItemsBuffer(char *buffer, bool merge) {
 	while ((cmd = parser.getCommand(&buffer, commands, &params)) > 0) {
 		switch (cmd) {
 		case TOKEN_ITEM: {
-			AdItem *item = new AdItem(_gameRef);
+			AdItem *item = new AdItem(_game);
 			if (item && !DID_FAIL(item->loadBuffer(params, false))) {
 				// delete item with the same name, if exists
 				if (merge) {
-					AdItem *prevItem = getItemByName(item->getName());
+					AdItem *prevItem = getItemByName(item->_name);
 					if (prevItem) {
 						deleteItem(prevItem);
 					}
 				}
 				addItem(item);
 			} else {
-				delete item;
-				item = nullptr;
+				SAFE_DELETE(item);
 				cmd = PARSERR_GENERIC;
 			}
 		}
@@ -1796,11 +1678,11 @@ bool AdGame::loadItemsBuffer(char *buffer, bool merge) {
 	}
 
 	if (cmd == PARSERR_TOKENNOTFOUND) {
-		_gameRef->LOG(0, "Syntax error in ITEMS definition");
+		_game->LOG(0, "Syntax error in ITEMS definition");
 		return STATUS_FAILED;
 	}
 	if (cmd == PARSERR_GENERIC) {
-		_gameRef->LOG(0, "Error loading ITEMS definition");
+		_game->LOG(0, "Error loading ITEMS definition");
 		return STATUS_FAILED;
 	}
 
@@ -1819,15 +1701,15 @@ AdSceneState *AdGame::getSceneState(const char *filename, bool saving) {
 		}
 	}
 
-	for (uint32 i = 0; i < _sceneStates.size(); i++) {
-		if (scumm_stricmp(_sceneStates[i]->getFilename(), filenameCor) == 0) {
+	for (int32 i = 0; i < _sceneStates.getSize(); i++) {
+		if (scumm_stricmp(_sceneStates[i]->_filename, filenameCor) == 0) {
 			delete[] filenameCor;
 			return _sceneStates[i];
 		}
 	}
 
 	if (saving) {
-		AdSceneState *ret = new AdSceneState(_gameRef);
+		AdSceneState *ret = new AdSceneState(_game);
 		ret->setFilename(filenameCor);
 
 		_sceneStates.add(ret);
@@ -1848,15 +1730,14 @@ bool AdGame::windowLoadHook(UIWindow *win, char **buffer, char **params) {
 	TOKEN_TABLE_END
 
 	int cmd = PARSERR_GENERIC;
-	BaseParser parser;
+	BaseParser parser(_game);
 
 	cmd = parser.getCommand(buffer, commands, params);
 	switch (cmd) {
 	case TOKEN_ENTITY_CONTAINER: {
-		UIEntity *ent = new UIEntity(_gameRef);
+		UIEntity *ent = new UIEntity(_game);
 		if (!ent || DID_FAIL(ent->loadBuffer(*params, false))) {
-			delete ent;
-			ent = nullptr;
+			SAFE_DELETE(ent);
 			cmd = PARSERR_GENERIC;
 		} else {
 			ent->_parent = win;
@@ -1884,7 +1765,7 @@ bool AdGame::windowScriptMethodHook(UIWindow *win, ScScript *script, ScStack *st
 		stack->correctParams(1);
 		ScValue *val = stack->pop();
 
-		UIEntity *ent = new UIEntity(_gameRef);
+		UIEntity *ent = new UIEntity(_game);
 		if (!val->isNULL()) {
 			ent->setName(val->getString());
 		}
@@ -1914,8 +1795,8 @@ bool AdGame::startDlgBranch(const char *branchName, const char *scriptName, cons
 bool AdGame::endDlgBranch(const char *branchName, const char *scriptName, const char *eventName) {
 	char *name = nullptr;
 	bool deleteName = false;
-	if (branchName == nullptr && _dlgPendingBranches.size() > 0) {
-		name = _dlgPendingBranches[_dlgPendingBranches.size() - 1];
+	if (branchName == nullptr && _dlgPendingBranches.getSize() > 0) {
+		name = _dlgPendingBranches[_dlgPendingBranches.getSize() - 1];
 	} else {
 		if (branchName != nullptr) {
 			size_t sz = strlen(branchName) + 1 + strlen(scriptName) + 1 + strlen(eventName) + 1;
@@ -1931,27 +1812,27 @@ bool AdGame::endDlgBranch(const char *branchName, const char *scriptName, const 
 
 
 	int startIndex = -1;
-	for (int i = _dlgPendingBranches.size() - 1; i >= 0; i--) {
+	for (int32 i = _dlgPendingBranches.getSize() - 1; i >= 0; i--) {
 		if (scumm_stricmp(name, _dlgPendingBranches[i]) == 0) {
 			startIndex = i;
 			break;
 		}
 	}
 	if (startIndex >= 0) {
-		for (uint32 i = startIndex; i < _dlgPendingBranches.size(); i++) {
-			//ClearBranchResponses(_dlgPendingBranches[i]);
+		for (int32 i = startIndex; i < _dlgPendingBranches.getSize(); i++) {
+			// clearBranchResponses(_dlgPendingBranches[i]);
 			delete[] _dlgPendingBranches[i];
 			_dlgPendingBranches[i] = nullptr;
 		}
-		_dlgPendingBranches.remove_at(startIndex, _dlgPendingBranches.size() - startIndex);
+		_dlgPendingBranches.removeAt(startIndex, _dlgPendingBranches.getSize() - startIndex);
 	}
 
 	// dialogue is over, forget selected responses
-	if (_dlgPendingBranches.size() == 0) {
-		for (uint32 i = 0; i < _responsesBranch.size(); i++) {
+	if (_dlgPendingBranches.getSize() == 0) {
+		for (int32 i = 0; i < _responsesBranch.getSize(); i++) {
 			delete _responsesBranch[i];
 		}
-		_responsesBranch.clear();
+		_responsesBranch.removeAll();
 	}
 
 	if (deleteName) {
@@ -1964,10 +1845,10 @@ bool AdGame::endDlgBranch(const char *branchName, const char *scriptName, const 
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::clearBranchResponses(char *name) {
-	for (int32 i = 0; i < (int32)_responsesBranch.size(); i++) {
-		if (scumm_stricmp(name, _responsesBranch[i]->getContext()) == 0) {
+	for (int32 i = 0; i < _responsesBranch.getSize(); i++) {
+		if (scumm_stricmp(name, _responsesBranch[i]->_context) == 0) {
 			delete _responsesBranch[i];
-			_responsesBranch.remove_at(i);
+			_responsesBranch.removeAt(i);
 			i--;
 		}
 	}
@@ -1980,9 +1861,9 @@ bool AdGame::addBranchResponse(int id) {
 	if (branchResponseUsed(id)) {
 		return STATUS_OK;
 	}
-	AdResponseContext *r = new AdResponseContext(_gameRef);
+	AdResponseContext *r = new AdResponseContext(_game);
 	r->_id = id;
-	r->setContext(_dlgPendingBranches.size() > 0 ? _dlgPendingBranches[_dlgPendingBranches.size() - 1] : nullptr);
+	r->setContext(_dlgPendingBranches.getSize() > 0 ? _dlgPendingBranches[_dlgPendingBranches.getSize() - 1] : nullptr);
 	_responsesBranch.add(r);
 	return STATUS_OK;
 }
@@ -1990,10 +1871,11 @@ bool AdGame::addBranchResponse(int id) {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::branchResponseUsed(int id) const {
-	char *context = _dlgPendingBranches.size() > 0 ? _dlgPendingBranches[_dlgPendingBranches.size() - 1] : nullptr;
-	for (uint32 i = 0; i < _responsesBranch.size(); i++) {
+	char *context = _dlgPendingBranches.getSize() > 0 ? _dlgPendingBranches[_dlgPendingBranches.getSize() - 1] : nullptr;
+	for (int32 i = 0; i < _responsesBranch.getSize(); i++) {
 		if (_responsesBranch[i]->_id == id) {
-			if ((context == nullptr && _responsesBranch[i]->getContext() == nullptr) || (context != nullptr && scumm_stricmp(context, _responsesBranch[i]->getContext()) == 0)) {
+			// make sure context != nullptr	
+			if ((context == nullptr && _responsesBranch[i]->_context == nullptr) || (context != nullptr && scumm_stricmp(context, _responsesBranch[i]->_context) == 0)) {
 				return true;
 			}
 		}
@@ -2007,9 +1889,9 @@ bool AdGame::addGameResponse(int id) {
 	if (gameResponseUsed(id)) {
 		return STATUS_OK;
 	}
-	AdResponseContext *r = new AdResponseContext(_gameRef);
+	AdResponseContext *r = new AdResponseContext(_game);
 	r->_id = id;
-	r->setContext(_dlgPendingBranches.size() > 0 ? _dlgPendingBranches[_dlgPendingBranches.size() - 1] : nullptr);
+	r->setContext(_dlgPendingBranches.getSize() > 0 ? _dlgPendingBranches[_dlgPendingBranches.getSize() - 1] : nullptr);
 	_responsesGame.add(r);
 	return STATUS_OK;
 }
@@ -2017,11 +1899,12 @@ bool AdGame::addGameResponse(int id) {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::gameResponseUsed(int id) const {
-	char *context = _dlgPendingBranches.size() > 0 ? _dlgPendingBranches[_dlgPendingBranches.size() - 1] : nullptr;
-	for (uint32 i = 0; i < _responsesGame.size(); i++) {
-		const AdResponseContext *respContext = _responsesGame[i];
+	char *context = _dlgPendingBranches.getSize() > 0 ? _dlgPendingBranches[_dlgPendingBranches.getSize() - 1] : nullptr;
+	for (int32 i = 0; i < _responsesGame.getSize(); i++) {
+		AdResponseContext *respContext = _responsesGame[i];
 		if (respContext->_id == id) {
-			if ((context == nullptr && respContext->getContext() == nullptr) || ((context != nullptr && respContext->getContext() != nullptr) && (context != nullptr && scumm_stricmp(context, respContext->getContext()) == 0))) {
+			// make sure context != nullptr	
+			if ((context == nullptr && respContext->_context == nullptr) || ((context != nullptr && respContext->_context != nullptr) && (context != nullptr && scumm_stricmp(context, respContext->_context) == 0))) {
 				return true;
 			}
 		}
@@ -2032,23 +1915,25 @@ bool AdGame::gameResponseUsed(int id) const {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::resetResponse(int id) {
-	char *context = _dlgPendingBranches.size() > 0 ? _dlgPendingBranches[_dlgPendingBranches.size() - 1] : nullptr;
+	char *context = _dlgPendingBranches.getSize() > 0 ? _dlgPendingBranches[_dlgPendingBranches.getSize() - 1] : nullptr;
 
-	for (uint32 i = 0; i < _responsesGame.size(); i++) {
+	for (int32 i = 0; i < _responsesGame.getSize(); i++) {
 		if (_responsesGame[i]->_id == id) {
-			if ((context == nullptr && _responsesGame[i]->getContext() == nullptr) || (context != nullptr && scumm_stricmp(context, _responsesGame[i]->getContext()) == 0)) {
+			// make sure context != nullptr	
+			if ((context == nullptr && _responsesGame[i]->_context == nullptr) || (context != nullptr && scumm_stricmp(context, _responsesGame[i]->_context) == 0)) {
 				delete _responsesGame[i];
-				_responsesGame.remove_at(i);
+				_responsesGame.removeAt(i);
 				break;
 			}
 		}
 	}
 
-	for (uint32 i = 0; i < _responsesBranch.size(); i++) {
+	for (int32 i = 0; i < _responsesBranch.getSize(); i++) {
 		if (_responsesBranch[i]->_id == id) {
-			if ((context == nullptr && _responsesBranch[i]->getContext() == nullptr) || (context != nullptr && scumm_stricmp(context, _responsesBranch[i]->getContext()) == 0)) {
+			// make sure context != nullptr	
+			if ((context == nullptr && _responsesBranch[i]->_context == nullptr) || (context != nullptr && scumm_stricmp(context, _responsesBranch[i]->_context) == 0)) {
 				delete _responsesBranch[i];
-				_responsesBranch.remove_at(i);
+				_responsesBranch.removeAt(i);
 				break;
 			}
 		}
@@ -2084,8 +1969,7 @@ bool AdGame::displayContent(bool doUpdate, bool displayAll) {
 			_theoraPlayer->display();
 		}
 		if (_theoraPlayer->isFinished()) {
-			delete _theoraPlayer;
-			_theoraPlayer = nullptr;
+			SAFE_DELETE(_theoraPlayer);
 		}
 	} else {
 
@@ -2096,16 +1980,16 @@ bool AdGame::displayContent(bool doUpdate, bool displayAll) {
 
 		// process plugin events
 		if (doUpdate)
-			_gameRef->pluginEvents().applyEvent(WME_EVENT_UPDATE, nullptr);
+			_game->pluginEvents().applyEvent(WME_EVENT_UPDATE, nullptr);
 
-		Point32 p;
+		Common::Point32 p;
 		getMousePos(&p);
 
 		_scene->update();
 
-		_gameRef->pluginEvents().applyEvent(WME_EVENT_SCENE_DRAW_BEGIN, _scene);
+		_game->pluginEvents().applyEvent(WME_EVENT_SCENE_DRAW_BEGIN, _scene);
 		_scene->display();
-		_gameRef->pluginEvents().applyEvent(WME_EVENT_SCENE_DRAW_END, _scene);
+		_game->pluginEvents().applyEvent(WME_EVENT_SCENE_DRAW_END, _scene);
 
 		// display in-game windows
 		displayWindows(true);
@@ -2115,17 +1999,30 @@ bool AdGame::displayContent(bool doUpdate, bool displayAll) {
 		if (_stateEx == GAME_WAITING_RESPONSE) {
 			_responseBox->display();
 		}
-		_renderer->displayIndicator();
-
+		if (_indicatorDisplay) {
+#ifdef ENABLE_FOXTAIL
+		if (BaseEngine::instance().isFoxTail())
+			displayIndicatorFoxTail();
+		else
+#endif
+			displayIndicator();
+		}
 
 		if (doUpdate || displayAll) {
+			_accessMgr->displayBeforeGUI();
+
 			// display normal windows
 			displayWindows(false);
 
-			setActiveObject(_gameRef->_renderer->getObjectAt(p.x, p.y));
+			_accessMgr->displayAfterGUI();
+
+			setActiveObject(_game->_renderer->getObjectAt(p.x, p.y));
 
 			// textual info
-			displaySentences(_state == GAME_FROZEN);
+			if (_accessGlobalPaused)
+				displaySentences(false);
+			else
+				displaySentences(_state == GAME_FROZEN);
 
 			showCursor();
 
@@ -2139,8 +2036,7 @@ bool AdGame::displayContent(bool doUpdate, bool displayAll) {
 	if (_loadingIcon) {
 		_loadingIcon->display(_loadingIconX, _loadingIconY);
 		if (!_loadingIconPersistent) {
-			delete _loadingIcon;
-			_loadingIcon = nullptr;
+			SAFE_DELETE(_loadingIcon);
 		}
 	}
 
@@ -2149,7 +2045,7 @@ bool AdGame::displayContent(bool doUpdate, bool displayAll) {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::registerInventory(AdInventory *inv) {
-	for (uint32 i = 0; i < _inventories.size(); i++) {
+	for (int32 i = 0; i < _inventories.getSize(); i++) {
 		if (_inventories[i] == inv) {
 			return STATUS_OK;
 		}
@@ -2162,10 +2058,10 @@ bool AdGame::registerInventory(AdInventory *inv) {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::unregisterInventory(AdInventory *inv) {
-	for (uint32 i = 0; i < _inventories.size(); i++) {
+	for (int32 i = 0; i < _inventories.getSize(); i++) {
 		if (_inventories[i] == inv) {
 			unregisterObject(_inventories[i]);
-			_inventories.remove_at(i);
+			_inventories.removeAt(i);
 			return STATUS_OK;
 		}
 	}
@@ -2174,11 +2070,11 @@ bool AdGame::unregisterInventory(AdInventory *inv) {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::isItemTaken(char *itemName) {
-	for (uint32 i = 0; i < _inventories.size(); i++) {
+	for (int32 i = 0; i < _inventories.getSize(); i++) {
 		AdInventory *inv = _inventories[i];
 
-		for (uint32 j = 0; j < inv->_takenItems.size(); j++) {
-			if (scumm_stricmp(itemName, inv->_takenItems[j]->getName()) == 0) {
+		for (int32 j = 0; j < inv->_takenItems.getSize(); j++) {
+			if (scumm_stricmp(itemName, inv->_takenItems[j]->_name) == 0) {
 				return true;
 			}
 		}
@@ -2188,8 +2084,8 @@ bool AdGame::isItemTaken(char *itemName) {
 
 //////////////////////////////////////////////////////////////////////////
 AdItem *AdGame::getItemByName(const char *name) const {
-	for (uint32 i = 0; i < _items.size(); i++) {
-		if (scumm_stricmp(_items[i]->getName(), name) == 0) {
+	for (int32 i = 0; i < _items.getSize(); i++) {
+		if (scumm_stricmp(_items[i]->_name, name) == 0) {
 			return _items[i];
 		}
 	}
@@ -2200,44 +2096,44 @@ AdItem *AdGame::getItemByName(const char *name) const {
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::addItem(AdItem *item) {
 	_items.add(item);
-	return _gameRef->registerObject(item);
+	return _game->registerObject(item);
 }
 
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::resetContent() {
 	// clear pending dialogs
-	for (uint32 i = 0; i < _dlgPendingBranches.size(); i++) {
+	for (int32 i = 0; i < _dlgPendingBranches.getSize(); i++) {
 		delete[] _dlgPendingBranches[i];
 	}
-	_dlgPendingBranches.clear();
+	_dlgPendingBranches.removeAll();
 
 
 	// clear inventories
-	for (uint32 i = 0; i < _inventories.size(); i++) {
-		_inventories[i]->_takenItems.clear();
+	for (int32 i = 0; i < _inventories.getSize(); i++) {
+		_inventories[i]->_takenItems.removeAll();
 	}
 
 	// clear scene states
-	for (uint32 i = 0; i < _sceneStates.size(); i++) {
+	for (int32 i = 0; i < _sceneStates.getSize(); i++) {
 		delete _sceneStates[i];
 	}
-	_sceneStates.clear();
+	_sceneStates.removeAll();
 
 	// clear once responses
-	for (uint32 i = 0; i < _responsesBranch.size(); i++) {
+	for (int32 i = 0; i < _responsesBranch.getSize(); i++) {
 		delete _responsesBranch[i];
 	}
-	_responsesBranch.clear();
+	_responsesBranch.removeAll();
 
 	// clear once game responses
-	for (uint32 i = 0; i < _responsesGame.size(); i++) {
+	for (int32 i = 0; i < _responsesGame.getSize(); i++) {
 		delete _responsesGame[i];
 	}
-	_responsesGame.clear();
+	_responsesGame.removeAll();
 
 	// reload inventory items
-	if (_itemsFile) {
+	if (_itemsFile && _itemsFile[0]) {
 		loadItemsFile(_itemsFile);
 	}
 
@@ -2256,18 +2152,18 @@ bool AdGame::deleteItem(AdItem *item) {
 	if (_selectedItem == item) {
 		_selectedItem = nullptr;
 	}
-	_scene->handleItemAssociations(item->getName(), false);
+	_scene->handleItemAssociations(item->_name, false);
 
 	// remove from all inventories
-	for (uint32 i = 0; i < _inventories.size(); i++) {
+	for (int32 i = 0; i < _inventories.getSize(); i++) {
 		_inventories[i]->removeItem(item);
 	}
 
 	// remove object
-	for (uint32 i = 0; i < _items.size(); i++) {
+	for (int32 i = 0; i < _items.getSize(); i++) {
 		if (_items[i] == item) {
 			unregisterObject(_items[i]);
-			_items.remove_at(i);
+			_items.removeAt(i);
 			break;
 		}
 	}
@@ -2289,7 +2185,7 @@ bool AdGame::addSpeechDir(const char *dir) {
 		Common::strcat_s(temp, dirSize, "\\");
 	}
 
-	for (uint32 i = 0; i < _speechDirs.size(); i++) {
+	for (int32 i = 0; i < _speechDirs.getSize(); i++) {
 		if (scumm_stricmp(_speechDirs[i], temp) == 0) {
 			delete[] temp;
 			return STATUS_OK;
@@ -2315,10 +2211,10 @@ bool AdGame::removeSpeechDir(const char *dir) {
 	}
 
 	bool found = false;
-	for (uint32 i = 0; i < _speechDirs.size(); i++) {
+	for (int32 i = 0; i < _speechDirs.getSize(); i++) {
 		if (scumm_stricmp(_speechDirs[i], temp) == 0) {
 			delete[] _speechDirs[i];
-			_speechDirs.remove_at(i);
+			_speechDirs.removeAt(i);
 			found = true;
 			break;
 		}
@@ -2333,14 +2229,14 @@ bool AdGame::removeSpeechDir(const char *dir) {
 char *AdGame::findSpeechFile(char *stringID) {
 	char *ret = new char[MAX_PATH_LENGTH];
 
-	for (uint32 i = 0; i < _speechDirs.size(); i++) {
+	for (int32 i = 0; i < _speechDirs.getSize(); i++) {
 		Common::sprintf_s(ret, MAX_PATH_LENGTH, "%s%s.ogg", _speechDirs[i], stringID);
-		if (BaseFileManager::getEngineInstance()->hasFile(ret)) {
+		if (_game->_fileManager->hasFile(ret)) {
 			return ret;
 		}
 
 		Common::sprintf_s(ret, MAX_PATH_LENGTH, "%s%s.wav", _speechDirs[i], stringID);
-		if (BaseFileManager::getEngineInstance()->hasFile(ret)) {
+		if (_game->_fileManager->hasFile(ret)) {
 			return ret;
 		}
 	}
@@ -2359,9 +2255,34 @@ bool AdGame::renderShadowGeometry() {
 #endif
 
 //////////////////////////////////////////////////////////////////////////
+BaseObject *AdGame::getNextAccessObject(BaseObject *currObject) {
+	BaseObject *ret = BaseGame::getNextAccessObject(currObject);
+	if (!ret) {
+		if (_responseBox && _stateEx == GAME_WAITING_RESPONSE)
+			return _responseBox->getNextAccessObject(currObject);
+		if (_scene)
+			return _scene->getNextAccessObject(currObject);
+	}
+	return ret;
+}
+
+//////////////////////////////////////////////////////////////////////////
+BaseObject *AdGame::getPrevAccessObject(BaseObject *currObject) {
+	BaseObject *ret = BaseGame::getPrevAccessObject(currObject);
+	if (!ret) {
+		if (_responseBox && _stateEx == GAME_WAITING_RESPONSE)
+			return _responseBox->getPrevAccessObject(currObject);
+		if (_scene)
+			return _scene->getPrevAccessObject(currObject);
+	}
+	return ret;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool AdGame::validMouse() {
-	Point32 pos;
+	Common::Point32 pos;
 	BasePlatform::getCursorPos(&pos);
+	//CBPlatform::ScreenToClient(Game->m_Renderer->m_Window, &Pos);
 
 	return _renderer->pointInViewport(&pos);
 }
@@ -2375,6 +2296,11 @@ bool AdGame::onMouseLeftDown() {
 		if (_talkSkipButton == TALK_SKIP_LEFT || _talkSkipButton == TALK_SKIP_BOTH) {
 			finishSentences();
 		}
+		return STATUS_OK;
+	}
+
+	if ((_videoSkipButton == VIDEO_SKIP_LEFT || _videoSkipButton == VIDEO_SKIP_BOTH) && isVideoPlaying()) {
+		_game->stopVideo();
 		return STATUS_OK;
 	}
 
@@ -2392,19 +2318,25 @@ bool AdGame::onMouseLeftDown() {
 	}
 
 	if (_activeObject != nullptr) {
-		_gameRef->_capturedObject = _gameRef->_activeObject;
+		_game->_capturedObject = _game->_activeObject;
 	}
 	_mouseLeftDown = true;
+	//BasePlatform::setCapture(_renderer->_window);
 
 	return STATUS_OK;
 }
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::onMouseLeftUp() {
+	if (isVideoPlaying()) {
+		return STATUS_OK;
+	}
+
 	if (_activeObject) {
 		_activeObject->handleMouse(MOUSE_RELEASE, MOUSE_BUTTON_LEFT);
 	}
 
+	//BasePlatform::releaseCapture();
 	_capturedObject = nullptr;
 	_mouseLeftDown = false;
 
@@ -2428,6 +2360,10 @@ bool AdGame::onMouseLeftUp() {
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::onMouseLeftDblClick() {
 	if (!validMouse()) {
+		return STATUS_OK;
+	}
+
+	if (isVideoPlaying()) {
 		return STATUS_OK;
 	}
 
@@ -2462,6 +2398,11 @@ bool AdGame::onMouseRightDown() {
 		return STATUS_OK;
 	}
 
+	if ((_videoSkipButton == VIDEO_SKIP_RIGHT || _videoSkipButton == VIDEO_SKIP_BOTH) && isVideoPlaying()) {
+		_game->stopVideo();
+		return STATUS_OK;
+	}
+
 	if ((_state == GAME_RUNNING && !_interactive) || _stateEx == GAME_WAITING_RESPONSE) {
 		return STATUS_OK;
 	}
@@ -2483,6 +2424,10 @@ bool AdGame::onMouseRightDown() {
 
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::onMouseRightUp() {
+	if (isVideoPlaying()) {
+		return STATUS_OK;
+	}
+
 	if (_activeObject) {
 		_activeObject->handleMouse(MOUSE_RELEASE, MOUSE_BUTTON_RIGHT);
 	}
@@ -2501,11 +2446,11 @@ bool AdGame::onMouseRightUp() {
 //////////////////////////////////////////////////////////////////////////
 bool AdGame::displayDebugInfo() {
 	char str[100];
-	if (_gameRef->_debugDebugMode) {
+	if (_game->_debugMode) {
 		Common::sprintf_s(str, "Mouse: %d, %d (scene: %d, %d)", _mousePos.x, _mousePos.y, _mousePos.x + (_scene ? _scene->getOffsetLeft() : 0), _mousePos.y + (_scene ? _scene->getOffsetTop() : 0));
 		_systemFont->drawText((byte *)str, 0, 90, _renderer->getWidth(), TAL_RIGHT);
 
-		Common::sprintf_s(str, "Scene: %s (prev: %s)", (_scene && _scene->getName()) ? _scene->getName() : "???", _prevSceneName ? _prevSceneName : "???");
+		Common::sprintf_s(str, "Scene: %s (prev: %s)", (_scene && _scene->_name && _scene->_name[0]) ? _scene->_name : "???", (_prevSceneName && _prevSceneName[0]) ? _prevSceneName : "???");
 		_systemFont->drawText((byte *)str, 0, 110, _renderer->getWidth(), TAL_RIGHT);
 	}
 	return BaseGame::displayDebugInfo();
@@ -2522,31 +2467,31 @@ Wintermute::TShadowType AdGame::getMaxShadowType(Wintermute::BaseObject *object)
 #endif
 
 //////////////////////////////////////////////////////////////////////////
-bool AdGame::getLayerSize(int *layerWidth, int *layerHeight, Rect32 *viewport, bool *customViewport) {
+bool AdGame::getLayerSize(int *layerWidth, int *layerHeight, Common::Rect32 *viewport, bool *customViewport) {
 	if (_scene && _scene->_mainLayer) {
 		int32 portX, portY, portWidth, portHeight;
 		_scene->getViewportOffset(&portX, &portY);
 		_scene->getViewportSize(&portWidth, &portHeight);
 		*customViewport = _sceneViewport || _scene->_viewport;
 
-		viewport->setRect(portX, portY, portX + portWidth, portY + portHeight);
+		BasePlatform::setRect(viewport, portX, portY, portX + portWidth, portY + portHeight);
 
 #ifdef ENABLE_WME3D
 		if (_scene->_scroll3DCompatibility) {
 			// backward compatibility hack
 			// WME pre-1.7 expects the camera to only view the top-left part of the scene
-			*layerWidth = _gameRef->_renderer->getWidth();
-			*layerHeight = _gameRef->_renderer->getHeight();
+			*layerWidth = _game->_renderer->getWidth();
+			*layerHeight = _game->_renderer->getHeight();
 		} else
 #endif
 		{
 			*layerWidth = _scene->_mainLayer->_width;
 			*layerHeight = _scene->_mainLayer->_height;
 #ifdef ENABLE_WME3D
-			if (_gameRef->_editorResolutionWidth > 0)
-				*layerWidth = _gameRef->_editorResolutionWidth;
-			if (_gameRef->_editorResolutionHeight > 0)
-				*layerHeight = _gameRef->_editorResolutionHeight;
+			if (_game->_editorResolutionWidth > 0)
+				*layerWidth = _game->_editorResolutionWidth;
+			if (_game->_editorResolutionHeight > 0)
+				*layerHeight = _game->_editorResolutionHeight;
 #endif
 		}
 		return true;
@@ -2588,7 +2533,119 @@ bool AdGame::onScriptShutdown(ScScript *script) {
 	return STATUS_OK;
 }
 
+//////////////////////////////////////////////////////////////////////////
+bool AdGame::handleCustomActionStart(BaseGameCustomAction action) {
+	bool isCorrosion = BaseEngine::instance().getGameId() == "corrosion";
+
+	if (isCorrosion) {
+		// Corrosion Enhanced Edition contain city map screen, which is
+		// mouse controlled and conflicts with those custom actions
+		const char *m = "items\\street_map\\windows\\street_map_window.script";
+		if (_scEngine->isRunningScript(m)) {
+			return false;
+		}
+	}
+
+	int xLeft   = 30;
+	int xCenter = _renderer->getWidth() / 2;
+	int xRight  = _renderer->getWidth() - 30;
+
+	int yTop    = 35;
+	int yCenter = _renderer->getHeight() / 2;
+	int yBottom = _renderer->getHeight() - 35;
+	if (isCorrosion && !(ConfMan.get("extra").contains("Enhanced"))) {
+		// original version of Corrosion has a toolbar under the game screen
+		yBottom -= 60;
+	}
+
+	BaseArray<AdObject *> objects;
+
+	Common::Point32 p;
+	int distance = xCenter * xCenter + yCenter * yCenter;
+
+	switch (action) {
+	case kClickAtCenter:
+		p.x = xCenter;
+		p.y = yCenter;
+		break;
+	case kClickAtLeft:
+		p.x = xLeft;
+		p.y = yCenter;
+		break;
+	case kClickAtRight:
+		p.x = xRight;
+		p.y = yCenter;
+		break;
+	case kClickAtTop:
+		p.x = xCenter;
+		p.y = yTop;
+		break;
+	case kClickAtBottom:
+		p.x = xCenter;
+		p.y = yBottom;
+		break;
+	case kClickAtEntityNearestToCenter:
+		p.x = xCenter;
+		p.y = yCenter;
+		// Looking through all objects for entities near to the center
+		if (_scene && _scene->getSceneObjects(objects, true)) {
+			for (int32 i = 0; i < objects.getSize(); i++) {
+				BaseRegion *region;
+				if (objects[i]->_type != OBJECT_ENTITY ||
+					!objects[i]->_active ||
+					!objects[i]->_registrable ||
+					(!(region = ((AdEntity *)objects[i])->_region))
+				) {
+					continue;
+				}
+
+				// Something exactly at center? Great!
+				if (region->pointInRegion(xCenter, yCenter)) {
+					distance = 0;
+					p.x = xCenter;
+					p.y = yCenter;
+					break;
+				}
+
+				// Something at the edge? Available with other actions.
+				if (region->pointInRegion(xLeft, yCenter) ||
+					region->pointInRegion(xRight, yCenter) ||
+					region->pointInRegion(xCenter, yBottom) ||
+					region->pointInRegion(xCenter, yTop)
+				) {
+					continue;
+				}
+
+				// Keep entities that has less distance to center
+				int x = ((AdEntity *)objects[i])->_posX;
+				int y = ((AdEntity *)objects[i])->_posY - ((AdEntity *)objects[i])->getHeight() / 2;
+				int d = (x - xCenter) * (x - xCenter) + (y - yCenter) * (y - yCenter);
+				if (distance > d) {
+					distance = d;
+					p.x = x;
+					p.y = y;
+				}
+			}
+		}
+		break;
+	default:
+		return false;
+	}
+
+	BasePlatform::setCursorPos(p.x, p.y);
+	setActiveObject(_game->_renderer->getObjectAt(p.x, p.y));
+	onMouseLeftDown();
+	onMouseLeftUp();
+	return true;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+bool AdGame::handleCustomActionEnd(BaseGameCustomAction action) {
+	return false;
+}
+
 Common::String AdGame::debuggerToString() const {
-	return Common::String::format("%p: Game \"%s\"", (const void *)this, getName());
+	return Common::String::format("%p: Game \"%s\"", (const void *)this, _name);
 }
 } // End of namespace Wintermute

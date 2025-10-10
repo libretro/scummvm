@@ -232,7 +232,7 @@ void MidiDriver_M_AdLib::send(int8 source, uint32 b) {
 	}
 }
 
-void MidiDriver_M_AdLib::metaEvent(int8 source, byte type, byte* data, uint16 length) {
+void MidiDriver_M_AdLib::metaEvent(int8 source, byte type, const byte* data, uint16 length) {
 	if (type == 0x3) {
 		// Load instrument
 		// This loads an OPL instrument definition into the bank. The first 
@@ -265,6 +265,8 @@ void MidiDriver_M_AdLib::metaEvent(int8 source, byte type, byte* data, uint16 le
 		instrument->operator1.waveformSelect = data[10];
 
 		instrument->connectionFeedback0 = data[11];
+
+		instrument->transpose = 0;
 	}
 }
 
@@ -298,6 +300,24 @@ void MidiDriver_M_AdLib::modulation(uint8 channel, uint8 modulation, uint8 sourc
 uint8 MidiDriver_M_AdLib::allocateOplChannel(uint8 channel, uint8 source, InstrumentInfo &instrumentInfo) {
 	// Allocation of M data channels to OPL output channels is simply 1 on 1.
 	return channel;
+}
+
+void MidiDriver_M_AdLib::writeFrequency(uint8 oplChannel, OplInstrumentRhythmType rhythmType) {
+	Common::StackLock lock(_activeNotesMutex);
+
+	ActiveNote *activeNote = &_activeNotes[oplChannel];
+	uint8 mNote = activeNote->oplNote;
+
+	// Calculate the frequency.
+	uint16 channelOffset = determineChannelRegisterOffset(oplChannel, activeNote->instrumentDef->fourOperator);
+	uint16 frequency = calculateFrequency(activeNote->channel, activeNote->source, mNote);
+	activeNote->oplFrequency = frequency;
+
+	// Write the low 8 frequency bits.
+	writeRegister(OPL_REGISTER_BASE_FNUMLOW + channelOffset, frequency & 0xFF);
+	// Write the high 2 frequency bits and block and add the key on bit.
+	writeRegister(OPL_REGISTER_BASE_FNUMHIGH_BLOCK_KEYON + channelOffset,
+				  (frequency >> 8) | (activeNote->noteActive ? OPL_MASK_KEYON : 0));
 }
 
 uint16 MidiDriver_M_AdLib::calculateFrequency(uint8 channel, uint8 source, uint8 note) {

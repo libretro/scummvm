@@ -31,7 +31,7 @@ MidiParser_SMF::MidiParser_SMF(int8 source) : MidiParser(source) {
 
 void MidiParser_SMF::parseNextEvent(EventInfo &info) {
 	uint8 subtrack = info.subtrack;
-	byte *playPos = _position._subtracks[subtrack]._playPos;
+	const byte *playPos = _position._subtracks[subtrack]._playPos;
 	info.start = playPos;
 	info.delta = readVLQ(playPos);
 
@@ -117,13 +117,13 @@ void MidiParser_SMF::parseNextEvent(EventInfo &info) {
 	_position._subtracks[subtrack]._playPos = playPos;
 }
 
-bool MidiParser_SMF::loadMusic(byte *data, uint32 size) {
+bool MidiParser_SMF::loadMusic(const byte *data, uint32 size) {
 	uint32 len;
 	byte midiType;
 	byte numTrackChunks;
 
 	unloadMusic();
-	byte *pos = data;
+	const byte *pos = data;
 
 	if (!memcmp(pos, "RIFF", 4)) {
 		// Skip the outer RIFF header.
@@ -166,7 +166,7 @@ bool MidiParser_SMF::loadMusic(byte *data, uint32 size) {
 	int tracksRead = 0;
 	while (tracksRead < numTrackChunks) {
 		if (memcmp(pos, "MTrk", 4)) {
-			warning("Position: %p ('%c')", (void *)pos, *pos);
+			warning("Position: %p ('%c')", (const void *)pos, *pos);
 			warning("Hit invalid block '%c%c%c%c' while scanning for track locations", pos[0], pos[1], pos[2], pos[3]);
 			return false;
 		}

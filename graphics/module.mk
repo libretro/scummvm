@@ -4,6 +4,7 @@ MODULE_OBJS := \
 	big5.o \
 	blit/blit.o \
 	blit/blit-alpha.o \
+	blit/blit-fast.o \
 	blit/blit-generic.o \
 	blit/blit-scale.o \
 	color_quantizer.o \
@@ -12,6 +13,7 @@ MODULE_OBJS := \
 	fontman.o \
 	fonts/amigafont.o \
 	fonts/bdf.o \
+	fonts/bgifont.o \
 	fonts/consolefont.o \
 	fonts/dosfont.o \
 	fonts/freetype.o \

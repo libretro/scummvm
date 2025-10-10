@@ -289,11 +289,7 @@ CinepakDecoder::CinepakDecoder(int bitsPerPixel) : Codec(), _bitsPerPixel(bitsPe
 	if (bitsPerPixel == 8) {
 		_pixelFormat = Graphics::PixelFormat::createFormatCLUT8();
 	} else {
-		_pixelFormat = g_system->getScreenFormat();
-
-		// Default to a 32bpp format, if in 8bpp mode
-		if (_pixelFormat.bytesPerPixel == 1)
-			_pixelFormat = Graphics::PixelFormat(4, 8, 8, 8, 8, 8, 16, 24, 0);
+		_pixelFormat = getDefaultYUVFormat();
 	}
 
 	// Create a lookup for the clip function
@@ -340,7 +336,7 @@ const Graphics::Surface *CinepakDecoder::decodeFrame(Common::SeekableReadStream 
 		}
 	}
 
-	debug(4, "Cinepak Frame: Width = %d, Height = %d, Strip Count = %d", _curFrame.width, _curFrame.height, _curFrame.stripCount);
+	debugC(kDebugLevelGVideo, 4, "Cinepak Frame: Width = %d, Height = %d, Strip Count = %d", _curFrame.width, _curFrame.height, _curFrame.stripCount);
 
 	// Borrowed from FFMPEG. This should cut out the extra data Cinepak for Sega has (which is useless).
 	// The theory behind this is that this is here to confuse standard Cinepak decoders. But, we won't let that happen! ;)

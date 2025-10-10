@@ -20,6 +20,8 @@
  */
 
 #include "director/director.h"
+#include "director/movie.h"
+#include "director/cast.h"
 #include "director/debugger/dt-internal.h"
 
 #include "director/debugger.h"
@@ -38,9 +40,11 @@ private:
 	int _indent = 0;
 	bool _isScriptInDebug = false;
 	bool _currentStatementDisplayed = false;
+	bool _scrollTo = false;
+	bool _scrollDone = true;
 
 public:
-	explicit RenderOldScriptVisitor(ImGuiScript &script) : _script(script) {
+	explicit RenderOldScriptVisitor(ImGuiScript &script, bool scrollTo) : _script(script), _scrollTo(scrollTo) {
 		Common::Array<CFrame *> &callstack = g_lingo->_state->callstack;
 		if (!callstack.empty()) {
 			CFrame *head = callstack[callstack.size() - 1];
@@ -68,6 +72,11 @@ public:
 			}
 			ImGui::NewLine();
 		}
+		if (_state->_dbg._goToDefinition && _scrollTo) {
+			ImGui::SetScrollHereY(0.5f);
+			_state->_dbg._goToDefinition = false;
+		}
+
 		indent();
 		for (uint i = 0; i < node->stmts->size(); i++) {
 			Node *stmt = (*node->stmts)[i];
@@ -496,10 +505,24 @@ public:
 				}
 			}
 
-			ImGuiScript script = toImGuiScript(_script.type, CastMemberID(obj, _script.id.castLib), *node->name);
-			script.moviePath = _script.moviePath;
-			script.handlerName = *node->name;
-			setScriptToDisplay(script);
+			ScriptContext *context = getScriptContext(obj, _script.id, *node->name);
+			if (context) {
+				ImGuiScript script = toImGuiScript(_script.type, CastMemberID(context->_id, _script.id.castLib), *node->name);
+				const Director::Movie *movie = g_director->getCurrentMovie();
+
+				int castId = context->_id;
+				bool childScript = false;
+				if (castId == -1) {
+					castId = movie->getCast()->getCastIdByScriptId(context->_parentNumber);
+					childScript = true;
+				}
+				script.byteOffsets = context->_functionByteOffsets[script.handlerId];
+				script.moviePath = _script.moviePath;
+
+				script.handlerName = formatHandlerName(context->_scriptId, castId, script.handlerId, context->_scriptType, childScript);
+				setScriptToDisplay(script);
+				_state->_dbg._goToDefinition = true;
+			}
 		}
 		ImGui::SameLine();
 		for (uint i = 0; i < node->args->size(); i++) {
@@ -771,7 +794,12 @@ private:
 		bool showCurrentStatement = false;
 		_script.startOffsets.push_back(pc);
 
-		if (_isScriptInDebug && g_lingo->_exec._state == kPause) {
+		if (_script.pc != 0 && pc >= _script.pc) {
+			if (!_currentStatementDisplayed) {
+				showCurrentStatement = true;
+				_currentStatementDisplayed = true;
+			}
+		} else if (_isScriptInDebug && g_lingo->_exec._state == kPause) {
 			// check current statement
 			if (!_currentStatementDisplayed) {
 				if (g_lingo->_state->pc <= pc) {
@@ -823,8 +851,9 @@ private:
 		if (showCurrentStatement) {
 			dl->AddQuadFilled(ImVec2(pos.x, pos.y + 4.f), ImVec2(pos.x + 9.f, pos.y + 4.f), ImVec2(pos.x + 9.f, pos.y + 10.f), ImVec2(pos.x, pos.y + 10.f), ImColor(_state->_colors._current_statement));
 			dl->AddTriangleFilled(ImVec2(pos.x + 8.f, pos.y), ImVec2(pos.x + 14.f, pos.y + 7.f), ImVec2(pos.x + 8.f, pos.y + 14.f), ImColor(_state->_colors._current_statement));
-			if (_state->_dbg._isScriptDirty && !ImGui::IsItemVisible()) {
+			if (!_scrollDone && _scrollTo && g_lingo->_state->callstack.size() != _state->_dbg._callstackSize) {
 				ImGui::SetScrollHereY(0.5f);
+				_scrollDone = true;
 			}
 			dl->AddRectFilled(ImVec2(pos.x + 16.f, pos.y), ImVec2(pos.x + width, pos.y + 16.f), ImColor(IM_COL32(0xFF, 0xFF, 0x00, 0x20)), 0.4f);
 		}
@@ -841,8 +870,8 @@ private:
 	}
 };
 
-void renderOldScriptAST(ImGuiScript &script, bool showByteCode) {
-    RenderOldScriptVisitor oldVisitor(script);
+void renderOldScriptAST(ImGuiScript &script, bool showByteCode, bool scrollTo) {
+    RenderOldScriptVisitor oldVisitor(script, scrollTo);
 	script.oldAst->accept(&oldVisitor);
 }
 

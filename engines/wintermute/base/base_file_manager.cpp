@@ -34,6 +34,8 @@
 #include "engines/wintermute/base/base.h"
 #include "engines/wintermute/base/base_engine.h"
 #include "engines/wintermute/wintermute.h"
+#include "engines/wintermute/dcgf.h"
+
 #include "common/algorithm.h"
 #include "common/debug.h"
 #include "common/str.h"
@@ -85,8 +87,7 @@ bool BaseFileManager::cleanup() {
 	_packages.clear();
 
 	// get rid of the resources:
-	delete _resources;
-	_resources = NULL;
+	SAFE_DELETE(_resources);
 
 	return STATUS_OK;
 }
@@ -331,6 +332,11 @@ bool BaseFileManager::registerPackages() {
 }
 
 bool BaseFileManager::registerPackage(Common::FSNode file, const Common::String &filename, bool searchSignature) {
+	if (_packages.hasArchive(filename.c_str())) {
+		debugC(kWintermuteDebugFileAccess, "BaseFileManager::registerPackage - file %s already added to archive", filename.c_str());
+		return STATUS_FAILED;
+	}
+
 	PackageSet *pack = new PackageSet(file, filename, searchSignature);
 	_packages.add(filename, pack, pack->getPriority() , true);
 	_versions[filename] = pack->getVersion();
@@ -432,7 +438,7 @@ int BaseFileManager::listMatchingFiles(Common::StringArray &list, const Common::
 
 //////////////////////////////////////////////////////////////////////////
 Common::SeekableReadStream *BaseFileManager::openFile(const Common::String &filename, bool absPathWarning, bool keepTrackOf) {
-	if (strcmp(filename.c_str(), "") == 0) {
+	if (filename.empty()) {
 		return nullptr;
 	}
 	debugC(kWintermuteDebugFileAccess, "Open file %s", filename.c_str());
@@ -447,7 +453,7 @@ Common::SeekableReadStream *BaseFileManager::openFile(const Common::String &file
 
 //////////////////////////////////////////////////////////////////////////
 Common::WriteStream *BaseFileManager::openFileForWrite(const Common::String &filename) {
-	if (strcmp(filename.c_str(), "") == 0) {
+	if (filename.empty()) {
 		return nullptr;
 	}
 	debugC(kWintermuteDebugFileAccess, "Open file %s for write", filename.c_str());

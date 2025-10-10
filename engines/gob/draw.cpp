@@ -54,6 +54,7 @@ Draw::Draw(GobEngine *vm) : _vm(vm) {
 	_destSpriteY = 0;
 	_backColor = 0;
 	_frontColor = 0;
+	_colorOffset = 0;
 	_transparency = 0;
 
 	_sourceSurface = 0;
@@ -503,8 +504,8 @@ void Draw::printTextCentered(int16 id, int16 left, int16 top, int16 right,
 	spriteOperation(DRAW_PRINTTEXT);
 }
 
-void Draw::oPlaytoons_sub_F_1B(uint16 id, int16 left, int16 top, int16 right, int16 bottom,
-		char *paramStr, int16 fontIndex, int16 var4, int16 shortId) {
+void Draw::drawButton(uint16 id, int16 left, int16 top, int16 right, int16 bottom,
+		char *paramStr, int16 fontIndex, int16 color, int16 shortId) {
 
 	int16 width;
 	char tmpStr[128];
@@ -523,9 +524,9 @@ void Draw::oPlaytoons_sub_F_1B(uint16 id, int16 left, int16 top, int16 right, in
 		WRITE_VAR(20, (uint32) (right - left + 1));
 		WRITE_VAR(21, (uint32) (bottom - top + 1));
 
-		if (_vm->_game->_script->peekUint16(41) >= '4') {
+		if (_vm->_game->_script->getVersionMinor() >= 4) {
 			WRITE_VAR(22, (uint32) fontIndex);
-			WRITE_VAR(23, (uint32) var4);
+			WRITE_VAR(23, (uint32) color);
 			if (id & 0x8000)
 				WRITE_VAR(24, (uint32) 1);
 			else
@@ -551,8 +552,8 @@ void Draw::oPlaytoons_sub_F_1B(uint16 id, int16 left, int16 top, int16 right, in
 	if (*paramStr) {
 		_transparency = 1;
 		_fontIndex = fontIndex;
-		_frontColor = var4;
-		if (_vm->_game->_script->peekUint16(41) >= '4' && strchr(paramStr, 92)) {
+		_frontColor = color;
+		if (_vm->_game->_script->getVersionMinor() >= 4 && strchr(paramStr, '\\')) {
 			char str[80];
 			char *str2;
 			int16 strLen= 0;
@@ -562,7 +563,7 @@ void Draw::oPlaytoons_sub_F_1B(uint16 id, int16 left, int16 top, int16 right, in
 			do {
 				strLen++;
 				str2++;
-				str2 = strchr(str2, 92);
+				str2 = strchr(str2, '\\');
 			} while (str2);
 			deltaY = (bottom - right + 1 - (strLen * _fonts[fontIndex]->getCharHeight())) / (strLen + 1);
 			offY = right + deltaY;
@@ -582,14 +583,14 @@ void Draw::oPlaytoons_sub_F_1B(uint16 id, int16 left, int16 top, int16 right, in
 			}
 		} else {
 			_destSpriteX = left;
-			if (_vm->_game->_script->peekUint16(41) >= '4')
-				_destSpriteY = right + (bottom - right + 1 - _fonts[fontIndex]->getCharHeight()) / 2;
+			if (_vm->_game->_script->getVersionMinor() >= 4)
+				_destSpriteY = top + (bottom - top + 1 - _fonts[fontIndex]->getCharHeight()) / 2;
 			else
-				_destSpriteY = right;
+				_destSpriteY = top;
 			_textToPrint = paramStr;
 			width = stringLength(paramStr, fontIndex);
 			adjustCoords(1, &width, nullptr);
-			_destSpriteX += (top - left + 1 - width) / 2;
+			_destSpriteX += (right - left + 1 - width) / 2;
 			spriteOperation(DRAW_PRINTTEXT);
 		}
 	}

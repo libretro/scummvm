@@ -126,9 +126,28 @@ GameFilenamePattern ScummMetaEngineDetection::matchGameFilenamePattern(const MD5
 	return bestMatch;
 }
 
+#if 0
+struct EntryPos {
+	const char *gameid;
+	int id;
+
+	EntryPos(const char *strId, int intId) : gameid(strId), id(intId) {}
+};
+
+static int compareTreeNodes(const void *a, const void *b) {
+	return scumm_stricmp(((const EntryPos *)a)->gameid, ((const EntryPos *)b)->gameid);
+}
+#endif
+
  void ScummMetaEngineDetection::dumpDetectionEntries() const {
 #if 0
-	for (const MD5Table *entry = md5table; entry->gameid != 0; ++entry) {
+	// Sort all entries by gameid, as they are sorted by md5
+	Common::SortedArray<EntryPos *> gameIDs(compareTreeNodes);
+	for (int i = 0; md5table[i].gameid != 0; ++i)
+		gameIDs.insert(new EntryPos(md5table[i].gameid , i));
+
+	for (auto &iter : gameIDs) {
+		const MD5Table *entry = &md5table[iter->id];
 		PlainGameDescriptor pd = findGame(entry->gameid);
 		const char *title = pd.description;
 
@@ -139,7 +158,7 @@ GameFilenamePattern ScummMetaEngineDetection::matchGameFilenamePattern(const MD5
 		printf("\tlanguage \"%s\"\n", escapeString(getLanguageLocale(entry->language)).c_str());
 		printf("\tplatform \"%s\"\n", escapeString(getPlatformCode(entry->platform)).c_str());
 		printf("\tsourcefile \"%s\"\n", escapeString(getName()).c_str());
-		printf("\tengine \"%s\"\n", escapeString("SCUMM").c_str());
+		printf("\tengine \"%s\"\n", escapeString("scumm").c_str());
 
 		// Match the appropriate file name for the current game variant.
 		GameFilenamePattern gameEntry = matchGameFilenamePattern(entry);
@@ -160,6 +179,9 @@ GameFilenamePattern ScummMetaEngineDetection::matchGameFilenamePattern(const MD5
 
 		printf(")\n\n"); // Closing for 'game ('
 	}
+
+	for (auto &iter : gameIDs)
+		delete iter;
 #endif
 }
 
@@ -217,6 +239,8 @@ DetectedGames ScummMetaEngineDetection::detectGames(const Common::FSList &fslist
 
 		game.setGUIOptions(customizeGuiOptions(*x));
 		game.appendGUIOptions(getGameGUIOptionsDescriptionLanguage(x->language));
+		game.appendGUIOptions(getGameGUIOptionsDescriptionPlatform(x->game.platform));
+
 
 		detectedGames.push_back(game);
 	}

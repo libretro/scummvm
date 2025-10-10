@@ -150,7 +150,6 @@ _sdlnet=auto
 _libcurl=auto
 _enet=yes
 _tremor=auto
-_tremolo=no
 _flac=auto
 _mad=auto
 _opl2lpt=no
@@ -281,7 +280,7 @@ _detection_features_full=yes
 # be modified otherwise. Consider them read-only.
 _3d=no
 _posix=no
-_has_posix_spawn=no
+_has_posix_spawn=auto
 _has_fseeko_offt_64=no
 _has_fseeko64=no
 _has_fopen64=no
@@ -2509,8 +2508,9 @@ fi
 # Additional tests for C++11 features that may not be present
 #
 
-# Check if initializer list is available
-echo_n "Checking if C++11 initializer list is available... "
+# Check if initializer_list is available (e.g. missing from macOS < 10.9,
+# when targeting system libstdc++ which had incomplete C++11 support)
+echo_n "Checking if C++11 initializer_list is available... "
 cat > $TMPC << EOF
 #include <initializer_list>
 #include <cstddef>
@@ -2529,7 +2529,8 @@ else
 	define_in_config_if_yes yes 'NO_CXX11_INITIALIZER_LIST'
 fi
 
-# Check if std::nullptr_t is available
+# Check if std::nullptr_t is available (e.g. missing from macOS < 10.9,
+# when targeting system libstdc++ which had incomplete C++11 support)
 echo_n "Checking if C++11 std::nullptr_t is available... "
 cat > $TMPC << EOF
 #include <cstddef>
@@ -2546,7 +2547,8 @@ else
 	define_in_config_if_yes yes 'NO_CXX11_NULLPTR_T'
 fi
 
-# Check if alignas and alignof are available
+# Check if alignas and alignof are available (e.g. GCC 4.7 as used for
+# RISC OS, while the feature was added in GCC 4.8)
 echo_n "Checking if C++11 alignas and alignof keywords are available... "
 cat > $TMPC << EOF
 #include <stddef.h>
@@ -2642,8 +2644,8 @@ fi
 # given (and then you're on your own).
 if $LD $LDFLAGS -Wl,--version 2>/dev/null | grep -q -e 'GNU gold'; then
 	# Trying to help systems where Gold may (unwisely) be the default;
-	# thus we only try to provide a GNU LD (BFD) fallback in that case,
-	# since it appears to only impact some (past?) GNU systems anyway.
+	# we only try to provide a GNU LD (BFD) fallback in that case, as
+	# it appears this would only impact older GNU systems anyway.
 	if test "$_gold" != yes && $LD $LDFLAGS -fuse-ld=bfd -Wl,--version >/dev/null 2>&1; then
 		append_var LDFLAGS -fuse-ld=bfd
 	else
@@ -2695,6 +2697,14 @@ set_flag_if_supported -Wno-undefined-var-template
 set_flag_if_supported -Wno-pragma-pack
 
 set_flag_if_supported -Wno-address-of-packed-member
+
+# We still have (limited) support for MSVC 2015, but it's easy for it to
+# hit fatal C1004 errors, if some files are missing a final newline. Since
+# it's quite easy for this to happen, ask more modern compilers to help
+# our old friend.
+if test "$_release_build" != yes && test "$_werror_build" != no; then
+	set_flag_if_supported -Werror=newline-eof
+fi
 
 if test -n "$STRINGS"; then
 	_strings=$STRINGS
@@ -2898,8 +2908,8 @@ case $_host_os in
 		append_var LDFLAGS "-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft"
 		append_var LDFLAGS "-L$DEVKITPRO/libctru/lib"
 		append_var LDFLAGS "-L$DEVKITPRO/portlibs/3ds/lib"
-		append_var LDFLAGS "-specs=3dsx.specs -lctru"
-		append_var LIBS "-lcitro3d"
+		append_var LDFLAGS "-specs=3dsx.specs"
+		append_var LIBS "-lcitro3d -lctru"
 		;;
 	amigaos*)
 		_port_mk="backends/platform/sdl/amigaos/amigaos.mk"
@@ -3000,20 +3010,14 @@ case $_host_os in
 		fi
 		;;
 	darwin*)
-		case $_host_cpu in
-		powerpc*)
-			if test "$_dynamic_modules" = no ; then
-				echo "WARNING: Building static engines will probably fail at link time on Mac PowerPC"
-			fi
-			;;
-		esac
-
 		append_var DEFINES "-DMACOSX"
 		append_var LIBS "-framework AudioUnit -framework AudioToolbox -framework Carbon -framework CoreMIDI"
 		# SDL2 doesn't seem to add Cocoa for us.
 		append_var LIBS "-framework Cocoa"
 		add_line_to_config_mk 'MACOSX = 1'
 		_seq_midi=no
+		# Custom openUrl() doesn't require it, and it's unavailable on 10.4 anyway
+		_has_posix_spawn=no
 
 		# Now we may have MacPorts or Fink installed
 		# Which put libraries and headers in non-standard places
@@ -3115,7 +3119,7 @@ case $_host_os in
 
 		echocheck "macOS deployment target"
 		cat > $TMPC << EOF
-#include "AvailabilityMacros.h"
+#include <AvailabilityMacros.h>
 
 #define _DIGIT(x) #x
 #define DIGIT(x) _DIGIT(x)
@@ -3149,24 +3153,24 @@ EOF
 
 		# Version-specific quirks
 		if test -n "$_macos_min_version" ; then
-			# When building for MacOS X 10.5 or below
 			if test "$_macos_min_version" -lt 1060 ; then
 				add_line_to_config_mk 'MACOSX_LEOPARD_OR_BELOW = 1'
 
-				# OSX 10.4/10.5 has no native C++11 support, thus we need to
-				# embed an updated libstdc++ in the bundle, and fix its
-				# dynamic references with install_name_tool(1), which requires
-				# linking with a bit of padding for the updated references.
+				# OSX 10.4/10.5 has no native C++11 support, so we need to
+				# embed an updated libstdc++ in the bundle. This means that
+				# its path must be fixed with install_name_tool(1), and this
+				# requires padding the length of all library paths first.
 				append_var LDFLAGS "-Wl,-headerpad_max_install_names"
 
 				if test "$_debug_build" != no ; then
-					# Prefer DWARF over stabs on older OSX; this requires a
-					# newer GDB, but we need it for the updated toolchain
-					# anyway. This improves the debugging experience quite
+					# Prefer DWARF-2 over stabs on older OSX; this requires a
+					# newer GDB, but the updated C++11 toolchain already imposes
+					# it anyway. This improves the debugging experience quite
 					# a lot, and it still creates meaningful traces for the
-					# Crash Reporter of OSX 10.4. -fvar-tracking-assignments
-					# should be disabled then, as it seems to cause issues
-					# and we can't use the later DWARF version it recommends.
+					# Crash Reporter of OSX 10.4.
+					#
+					# -fvar-tracking-assignments should also be disabled,
+					# as it does cause issues on (older) OSX with no DWARF-4.
 					append_var CXXFLAGS "-gdwarf-2 -fno-var-tracking-assignments"
 				fi
 			fi
@@ -3183,6 +3187,14 @@ EOF
 			# We use -force_cpusubtype_ALL to ensure the binary runs on every
 			# PowerPC machine.
 			append_var LDFLAGS "-force_cpusubtype_ALL"
+
+			# The PPC linker hits internal errors when the main binary gets too
+			# large (even when upgrading to the latest cctools release through
+			# MacPorts). So, unless one just builds a small subset of engines,
+			# dynamic modules must be used.
+			if test "$_dynamic_modules" = no ; then
+				echo "WARNING: Building static engines will probably fail at link time on Mac PowerPC"
+			fi
 			;;
 		aarch64)
 			add_line_to_config_mk 'MACOSX_ARM64 = 1'
@@ -3263,22 +3275,37 @@ EOF
 		append_var DEFINES "-DEMSCRIPTEN"
 		add_line_to_config_mk 'EMSCRIPTEN = 1'
 		_port_mk="backends/platform/sdl/emscripten/emscripten.mk"
-		append_var LDFLAGS "-s FORCE_FILESYSTEM"
-		append_var LDFLAGS "-s INITIAL_MEMORY=128MB -s TOTAL_STACK=32MB -s ALLOW_MEMORY_GROWTH=1"
+		append_var LDFLAGS "-s INITIAL_MEMORY=128MB -s STACK_SIZE=32MB -s ALLOW_MEMORY_GROWTH=1"
+		append_var LDFLAGS "-s FORCE_FILESYSTEM -lidbfs.js"
 		append_var LDFLAGS "-s ASYNCIFY=1 -s ASYNCIFY_STACK_SIZE=1048576"
 
+		append_var LDFLAGS "-s EXPORTED_FUNCTIONS=[_main,_malloc,_free,_raise]"
+		append_var LDFLAGS "-s EXPORTED_RUNTIME_METHODS=[ccall,lengthBytesUTF8,setValue,writeArrayToMemory]"
+
+		append_var LDFLAGS "-O2"
+		_optimization_level=-O2
 		if test "$_debug_build" = yes; then
-			_optimization_level=-O2
-			append_var LDFLAGS "-O2 -g3 -s ASSERTIONS=2"
-		else
-			_optimization_level=-O3
-			append_var LDFLAGS "-O3"
+			append_var LDFLAGS "-g3 -s ASSERTIONS=2"
 		fi
 
-		# activate emscripten-ports
-		if test "$_sdl" != no; then # we enable SDL2 by default
-			append_var LDFLAGS "-s USE_SDL=2 "
+		# enable SDL3 and set it up correctly
+		if test "$_dynamic_modules" = "yes" ; then
+			embuilder build sdl3 --pic
+		else
+			embuilder build sdl3
 		fi
+		_pkg_config=yes
+		PKG_CONFIG_LIBDIR="$EMSDK/upstream/emscripten/cache/sysroot/local/lib/pkgconfig:$EMSDK/upstream/emscripten/cache/sysroot/lib/pkgconfig"
+		_sdlconfig="pkg-config sdl3"
+		_sdlversion=`$_sdlconfig --modversion`
+		append_var SDL_CFLAGS "`$_sdlconfig --cflags | sed 's/[[:space:]]*-Dmain=SDL_main//g'`"
+		if test "$_static_build" = yes ; then
+			append_var SDL_LIBS "`$_sdlconfig --static-libs`"
+		else
+			append_var SDL_LIBS "`$_sdlconfig --libs`"
+		fi
+
+		_has_posix_spawn=no
 
 		# We explicitly disable optional libraries if not enabled. "auto" would depend
 		# on whether the port has been used before (and is detected) which is unpredictable.
@@ -3449,7 +3476,14 @@ EOF
 		#the next line fixes "branch out of range" error in gob engine when -Os is used
 		append_var CXXFLAGS "-mlong-calls"
 		append_var CXXFLAGS "-mword-relocations"
-		append_var CXXFLAGS "-fomit-frame-pointer"
+		if test "$_enable_prof" = no ; then
+			# -fomit-frame-pointer is incompatible with profiling but is needed for gob engine
+			append_var CXXFLAGS "-fomit-frame-pointer"
+		fi
+		if test "$_enable_prof" = yes ; then
+			# disable dynamic modules when profiling
+			_dynamic_modules=no
+		fi
 		#ensure verbose output during linking to prevent buildbot kills after 1200 seconds
 		if test "$_verbose_build" = yes ; then
 			append_var LDFLAGS "-Wl,-v --verbose"
@@ -3623,13 +3657,16 @@ if test -n "$_host"; then
 			_strip=$_host-strip
 			;;
 		wasm*-emscripten)
-			_backend="sdl"
-			# Disable cloud and SDL_Net as this is handled in the browser
-			_cloud=no
-			_sdlnet=no
-			_libcurl=no
-			_curl=no
-			_enet=no
+			_backend="emscripten"
+			_enet=no    # Disable ENet (no sockets in the browser)
+			_sdlnet=no  # Disable SDL_Net (no sockets in the browser)
+			_libcurl=no # Emscripten backend uses emscripten_fetch not libcurl
+			if test "$_cloud" != yes; then
+				_cloud=no
+			fi
+			_seq_midi=no
+			_timidity=no
+			_sndio=no
 			_ar="emar cr"
 			_ranlib="emranlib"
 			;;
@@ -3777,9 +3814,11 @@ if test -n "$_host"; then
 				# --enable-release
 				append_var DEFINES  "-DNDEBUG"
 				append_var DEFINES  "-DDISABLE_TEXT_CONSOLE"
+				append_var DEFINES  "-DREDUCE_MEMORY_USAGE"
 			fi
 
 			append_var LDFLAGS "-Wl,--msuper-memory"
+			append_var LDFLAGS "-Wl,--stack,256k"
 
 			_seq_midi=no
 			_timidity=no
@@ -3990,8 +4029,6 @@ if test -n "$_host"; then
 		psp2)
 			_backend="psp2"
 			_vkeybd=yes
-			_build_scalers=yes
-			_build_hq_scalers=no
 			_mt32emu=no
 			_timidity=no
 			_port_mk="backends/platform/sdl/psp2/psp2.mk"
@@ -4115,6 +4152,10 @@ case $_backend in
 	ds)
 		append_var INCLUDES '-I$(srcdir)/backends/platform/ds'
 		;;
+	emscripten)
+		_sdl=yes
+		append_var MODULES "backends/platform/sdl"
+		;;
 	ios7)
 		append_var LIBS "-lobjc -framework UIKit -framework CoreGraphics -framework OpenGLES"
 		append_var LIBS "-framework QuartzCore -framework CoreFoundation -framework Foundation"
@@ -4189,6 +4230,9 @@ case $_backend in
 		append_var LIBS "-lSceNet_stub -lSceNetCtl_stub"
 		append_var LIBS "-lSceAppMgr_stub -lSceAppUtil_stub -lScePgf_stub"
 		append_var LIBS "-lSceTouch_stub -lSceHid_stub -lSceMotion_stub"
+		if test "$_enable_prof" = yes ; then
+			append_var LIBS "-lvitagprof"
+		fi
 		_sdl=yes
 		_sdlversion=2.0.0
 		append_var MODULES "backends/platform/sdl"
@@ -4647,7 +4691,7 @@ fi
 # Enable 16bit support only for backends which support it
 #
 case $_backend in
-	3ds | android | dc | ds | ios7 | kolibrios | maemo | null | opendingux | miyoomini | miyoo | openpandora | psp | psp2 | sailfish | samsungtv | sdl | switch | wii)
+	3ds | android | dc | ds | emscripten |ios7 | kolibrios | maemo | null | opendingux | miyoomini | miyoo | openpandora | psp | psp2 | sailfish | samsungtv | sdl | switch | wii)
 		if test "$_16bit" = auto ; then
 			_16bit=yes
 		else
@@ -4683,7 +4727,7 @@ esac
 # Enable Event Recorder only for backends that support it
 #
 case $_backend in
-	sdl)
+	sdl | emscripten)
 		;;
 	*)
 		_eventrec=no
@@ -4747,12 +4791,18 @@ if test "$_posix" = yes ; then
 	append_var DEFINES "-DPOSIX"
 	add_line_to_config_mk 'POSIX = 1'
 
-	echo_n "Checking if posix_spawn is supported... "
+	# So far, posix_spawn() is only used to provide openUrl() on POSIX
+	# systems. But some of them may already have their own openUrl()
+	# override, meaning that using posix_spawn() serves no purpose.
+	echo_n "Checking if posix_spawn is required and supported... "
+	if test "$_has_posix_spawn" != no ; then
 		cat > $TMPC << EOF
 #include <spawn.h>
 int main(void) { return posix_spawn(0, 0, 0, 0, 0, 0); }
 EOF
-	cc_check && test "$_host_os" != "emscripten" && _has_posix_spawn=yes
+		cc_check && _has_posix_spawn=yes
+	fi
+
 	echo $_has_posix_spawn
 	if test "$_has_posix_spawn" = yes ; then
 		append_var DEFINES "-DHAS_POSIX_SPAWN"
@@ -5291,10 +5341,6 @@ echo "$_vorbis"
 # Check for Tremor
 #
 echocheck "Tremor"
-if test "$_tremolo" = yes ; then
-	_tremor=yes
-fi
-
 if test "$_tremor" = auto ; then
 	_tremor=no
 	cat > $TMPC << EOF
@@ -5312,12 +5358,7 @@ fi
 if test "$_tremor" = yes && test "$_vorbis" = no; then
 	add_line_to_config_h '#define USE_TREMOR'
 	add_line_to_config_h '#define USE_VORBIS'
-	if test "$_tremolo" = yes ; then
-		add_line_to_config_h '#define USE_TREMOLO'
-		append_var LIBS "$TREMOR_LIBS -ltremolo"
-	else
-		append_var LIBS "$TREMOR_LIBS -lvorbisidec"
-	fi
+	append_var LIBS "$TREMOR_LIBS -lvorbisidec"
 	append_var INCLUDES "$TREMOR_CFLAGS"
 else
 	if test "$_vorbis" = yes; then
@@ -5918,6 +5959,20 @@ echo "$_libcurl"
 
 define_in_config_if_yes "$_libcurl" "USE_LIBCURL"
 
+echocheck "HTTP client"
+if test "$_host_os" = "emscripten" &&  test "$_cloud" = "yes"; then
+	append_var LDFLAGS "-sFETCH"
+	_http=yes
+	echo "Emscripten"
+elif test "$_libcurl" = "yes"; then
+	_http=yes
+	echo "libcurl"
+else
+	_http=no
+	echo "no"
+fi
+define_in_config_if_yes $_http 'USE_HTTP'
+
 #
 # Check for libopenmpt to be present
 #
@@ -5973,6 +6028,11 @@ if test "$_libmikmod" != no && test "$_libopenmpt" = no; then
 	else
 		LIBMIKMOD_LIBS=`$_libmikmodconfig --libs`
 		LIBMIKMOD_CFLAGS=`$_libmikmodconfig --cflags`
+
+		if test "$_host_os" = psp2 ; then
+			# On PSP2 -lpthread is needed
+			append_var LIBMIKMOD_LIBS "-lpthread"
+		fi
 
 		if test "$_libmikmod" = "auto"; then
 			_libmikmod=no
@@ -6054,34 +6114,16 @@ fi
 
 echo "$_libmpcdec"
 
-#
-# Check whether to build cloud integration support
-#
-echo_n "Cloud integration... "
-if test "$_cloud" = "no"; then
-	echo "no"
+if test "$_scummvmdlc" = "yes"; then
+	if test "$_http" != "yes"; then
+		_scummvmdlc=no
+	fi
 else
-	_cloud=no
-	if test "$_sdlnet" = "yes"; then
-		_cloud=yes
-		echo_n "local"
-	fi
-	if test "$_libcurl" = "yes"; then
-		if test "$_cloud" = "yes"; then echo_n ", "; fi
-		_cloud=yes
-		echo_n "servers"
-	fi
-	if test "$_cloud" = "no"; then
-		echo_n "no"
-	fi
-	echo  # newline
+	_scummvmdlc=no
 fi
-define_in_config_if_yes $_cloud 'USE_CLOUD'
 
 if test "$_scummvmdlc" = "yes"; then
-	if test "$_libcurl" = "yes"; then
-		_dlc=yes
-	fi
+	_dlc=yes
 fi
 
 define_in_config_if_yes $_dlc 'USE_DLC'
@@ -6483,6 +6525,11 @@ if test "$_opengl_mode" != none ; then
 			_opengl_mode=gles2
 			_opengl_glad=yes
 			;;
+		emscripten)
+			_opengl_mode=gles2
+			_opengl_glad=no # https://github.com/Dav1dde/glad-web/issues/12
+			append_var OPENGL_LIBS "-s FULL_ES2=1 -s MAX_WEBGL_VERSION=1"
+			;;
 		ios7)
 			_opengl_mode=gles2
 			_opengl_glad=yes
@@ -6510,11 +6557,6 @@ if test "$_opengl_mode" != none ; then
 					case $_host_os in
 						darwin*)
 							_opengl_mode=gl
-							;;
-						emscripten)
-							_opengl_mode=gles2
-							_opengl_glad=no # https://github.com/Dav1dde/glad-web/issues/12
-							append_var OPENGL_LIBS "-s FULL_ES2=1 -s MAX_WEBGL_VERSION=1"
 							;;
 						*)
 							# As SDL2 supports everything, let the user choose if he wants to
@@ -6919,7 +6961,7 @@ echocheck "ImGui"
 if test "$_imgui" != no ; then
 	if test "$_freetype2" = yes ; then
 		case $_backend in
-			sdl | sailfish)
+			sdl | sailfish | emscripten)
 				if test "$_sdlMajorVersionNumber" -ge 3 ; then
 					cat > $TMPC << EOF
 #include <SDL3/SDL.h>
@@ -7156,6 +7198,24 @@ else
 	echo "$_updates"
 fi
 define_in_config_if_yes $_updates 'USE_UPDATES'
+
+#
+# Check whether to build cloud integration support
+#
+echo_n "Building cloud integration... "
+if test "$_cloud" = "no"; then
+	echo "no"
+elif test "$_http" = "yes"; then
+	_cloud=yes
+	echo "yes"
+else
+	_cloud=no
+	echo "no"
+fi
+define_in_config_if_yes $_cloud 'USE_CLOUD'
+
+echo_n "Building local web server... "
+echo "$_sdlnet"
 
 #
 # Check whether to create a build with all resources files linked into the binary
@@ -7499,7 +7559,7 @@ case $_host_os in
 		fi
 		;;
 	emscripten)
-		append_var LDFLAGS "--pre-js ./dists/emscripten/custom_shell-pre.js --post-js ./dists/emscripten/custom_shell-post.js --shell-file ./dists/emscripten/custom_shell.html"
+		append_var LDFLAGS '--pre-js $(srcdir)/dists/emscripten/custom_shell-pre.js --post-js $(srcdir)/dists/emscripten/custom_shell-post.js --shell-file $(srcdir)/dists/emscripten/custom_shell.html'
 		# we remove some linker flags for libs which will be added by emscripten from emscripten-ports to avoid duplicate symbols
 		if test "${LDFLAGS#*-s USE_GIFLIB=1}" != "$LDFLAGS"; then
 			LIBS=`echo ${LIBS} | sed 's/-lgif//g'`

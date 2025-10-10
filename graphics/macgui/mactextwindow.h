@@ -29,8 +29,8 @@ namespace Graphics {
 
 class MacTextWindow : public MacWindow {
 public:
-	MacTextWindow(MacWindowManager *wm, const MacFont *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, bool cursorHandler = true);
-	MacTextWindow(MacWindowManager *wm, const Font *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, bool cursorHandler = true);
+	MacTextWindow(MacWindowManager *wm, const MacFont *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, int padding = 0);
+	MacTextWindow(MacWindowManager *wm, const Font *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, int padding = 0);
 	virtual ~MacTextWindow();
 
 	virtual void resize(int w, int h) override;
@@ -51,9 +51,8 @@ public:
 	void setMarkdownText(const Common::U32String &str);
 
 	void setEditable(bool editable) { _editable = editable; _mactext->setEditable(editable); }
+	void setActive(bool active) override { MacWindow::setActive(active); if (_editable) _mactext->setActive(active); }
 	void setSelectable(bool selectable) { _selectable = selectable; }
-
-	void undrawCursor();
 
 	const Common::U32String &getInput() { return _inputText; }
 	void clearInput();
@@ -61,9 +60,9 @@ public:
 	void appendInput(const Common::String &str);
 
 	Common::U32String getSelection(bool formatted = false, bool newlines = true);
-	void clearSelection();
-	Common::U32String cutSelection();
-	const SelectedText *getSelectedText() { return &_selectedText; }
+	void clearSelection() { _mactext->clearSelection(); }
+	Common::U32String cutSelection() { return _mactext->cutSelection(); }
+	const SelectedText *getSelectedText() { return _mactext->getSelectedText(); }
 	uint32 getTextColor() { return _mactext->getTextColor(); }
 	uint32 getTextColor(int start, int end) { return _mactext->getTextColor(start, end); }
 	void setTextColor(uint32 color, int start, int end) { return _mactext->setTextColor(color, start, end); }
@@ -89,6 +88,7 @@ public:
 
 	int getMouseLine(int x, int y);
 
+	virtual void setBorderColor(uint32 color) override { _mactext->setBorderColor(color); }
 	/**
 	 * if we want to draw the text which color is not black, then we need to set _textColorRGB
 	 * @param rgb text color you want to draw
@@ -96,41 +96,22 @@ public:
 	void setTextColorRGB (uint32 rgb) { _textColorRGB = rgb; }
 
 private:
-	void init(bool cursorHandler);
-	bool isCutAllowed();
+	void init();
 
-	void scroll(int delta);
 	void calcScrollBar();
 
 	void undrawInput();
 	void drawInput();
 	void drawSelection();
-	void updateCursorPos();
-
-	void startMarking(int x, int y);
-	void updateTextSelection(int x, int y);
 
 public:
-	int _cursorX, _cursorY;
-	bool _cursorState;
-
-	bool _cursorDirty;
-	Common::Rect *_cursorRect;
-	bool _cursorOff;
 	bool _editable;
 	bool _selectable;
-
-	int _scrollPos;
 
 private:
 	MacText *_mactext;
 	const MacFont *_font;
 	const Font *_fontRef;
-
-	ManagedSurface *_cursorSurface;
-
-	bool _inTextSelection;
-	SelectedText _selectedText;
 
 	int _maxWidth;
 	Common::U32String _inputText;

@@ -21,6 +21,7 @@
 
 #include "engines/wintermute/base/gfx/base_renderer3d.h"
 #include "engines/wintermute/base/base_game.h"
+#include "engines/wintermute/base/gfx/3dutils.h"
 
 #include "common/config-manager.h"
 
@@ -30,7 +31,7 @@ BaseRenderer3D::BaseRenderer3D(Wintermute::BaseGame *inGame) : BaseRenderer(inGa
 	_camera = nullptr;
 
 	_state = RSTATE_NONE;
-	_fov = (float)M_PI / 4;
+	_fov = (float)DX_PI / 4;
 
 	_nearClipPlane = DEFAULT_NEAR_PLANE;
 	_farClipPlane = DEFAULT_FAR_PLANE;
@@ -54,12 +55,12 @@ void BaseRenderer3D::initLoop() {
 	setup2D();
 }
 
-bool BaseRenderer3D::drawSprite(BaseSurface *texture, const Wintermute::Rect32 &rect,
-	                        float zoomX, float zoomY, const Wintermute::Vector2 &pos,
+bool BaseRenderer3D::drawSprite(BaseSurface *texture, const Common::Rect32 &rect,
+	                        float zoomX, float zoomY, const DXVector2 &pos,
 	                        uint32 color, bool alphaDisable, Graphics::TSpriteBlendMode blendMode,
 	                        bool mirrorX, bool mirrorY) {
-	Vector2 scale(zoomX / 100.0f, zoomY / 100.0f);
-	return drawSpriteEx(texture, rect, pos, Vector2(0.0f, 0.0f), scale, 0.0f, color, alphaDisable, blendMode, mirrorX, mirrorY);
+	DXVector2 scale(zoomX / 100.0f, zoomY / 100.0f);
+	return drawSpriteEx(texture, rect, pos, DXVector2(0.0f, 0.0f), scale, 0.0f, color, alphaDisable, blendMode, mirrorX, mirrorY);
 }
 
 bool BaseRenderer3D::getProjectionParams(float *resWidth, float *resHeight, float *layerWidth, float *layerHeight,
@@ -67,14 +68,14 @@ bool BaseRenderer3D::getProjectionParams(float *resWidth, float *resHeight, floa
 	*resWidth = _width;
 	*resHeight = _height;
 
-	if (_gameRef->_editorResolutionWidth > 0)
-		*resWidth = _gameRef->_editorResolutionWidth;
-	if (_gameRef->_editorResolutionHeight > 0)
-		*resHeight = _gameRef->_editorResolutionHeight;
+	if (_game->_editorResolutionWidth > 0)
+		*resWidth = _game->_editorResolutionWidth;
+	if (_game->_editorResolutionHeight > 0)
+		*resHeight = _game->_editorResolutionHeight;
 
 	int lWidth, lHeight;
-	Rect32 sceneViewport;
-	_gameRef->getLayerSize(&lWidth, &lHeight, &sceneViewport, customViewport);
+	Common::Rect32 sceneViewport;
+	_game->getLayerSize(&lWidth, &lHeight, &sceneViewport, customViewport);
 	*layerWidth = (float)lWidth;
 	*layerHeight = (float)lHeight;
 
@@ -96,8 +97,8 @@ bool BaseRenderer3D::getProjectionParams(float *resWidth, float *resHeight, floa
 	return true;
 }
 
-void BaseRenderer3D::fade(uint16 alpha) {
-	fadeToColor(0, 0, 0, (byte)(255 - alpha));
+bool BaseRenderer3D::fade(uint16 alpha) {
+	return fadeToColor(0, 0, 0, (byte)(255 - alpha));
 }
 
 bool BaseRenderer3D::setAmbientLightColor(uint32 color) {
@@ -141,7 +142,7 @@ bool BaseRenderer3D::flip() {
 	return true;
 }
 
-bool BaseRenderer3D::indicatorFlip() {
+bool BaseRenderer3D::indicatorFlip(int32 x, int32 y, int32 width, int32 height) {
 	flip();
 	return true;
 }
@@ -165,6 +166,10 @@ void BaseRenderer3D::setWindowed(bool windowed) {
 	g_system->beginGFXTransaction();
 	g_system->setFeatureState(OSystem::kFeatureFullscreenMode, !windowed);
 	g_system->endGFXTransaction();
+}
+
+void BaseRenderer3D::endSaveLoad() {
+	BaseRenderer::endSaveLoad();
 }
 
 } // namespace Wintermute

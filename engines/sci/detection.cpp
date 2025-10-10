@@ -218,6 +218,8 @@ public:
 
 	ADDetectedGame fallbackDetect(const FileMap &allFiles, const Common::FSList &fslist, ADDetectedGameExtraInfo **extra) const override;
 
+	void dumpDetectionEntries() const override;
+
 private:
 	void addFileToDetectedGame(const Common::Path &name, const FileMap &allFiles, MD5Properties md5Prop, ADDetectedGame &game) const;
 };
@@ -231,6 +233,7 @@ DetectedGames SciMetaEngineDetection::detectGames(const Common::FSList &fslist, 
 			if (game.gameId.equals(g->gameidStr))
 				break;
 		}
+
 		game.setGUIOptions(customizeGuiOptions(fslist.begin()->getParent().getPath(), parseGameGUIOptions(game.getGUIOptions()), game.platform, g->gameidStr, g->version));
 		game.appendGUIOptions(getGameGUIOptionsDescriptionLanguage(game.language));
 	}
@@ -312,6 +315,12 @@ void SciMetaEngineDetection::addFileToDetectedGame(const Common::Path &name, con
 		game.hasUnknownFiles = true;
 		game.matchedFiles[name] = fileProperties;
 	}
+}
+
+void SciMetaEngineDetection::dumpDetectionEntries() const {
+#if 0
+	AdvancedMetaEngineDetectionBase::dumpDetectionEntries();
+#endif
 }
 
 } // End of namespace Sci

@@ -131,9 +131,9 @@ bool BaseRenderOSystem::initRenderer(int width, int height, bool windowed) {
 	return STATUS_OK;
 }
 
-bool BaseRenderOSystem::indicatorFlip() {
-	if (_indicatorWidthDrawn > 0 && _indicatorHeight > 0) {
-		g_system->copyRectToScreen(_renderSurface->getBasePtr(_indicatorX, _indicatorY), _renderSurface->pitch, _indicatorX, _indicatorY, _indicatorWidthDrawn, _indicatorHeight);
+bool BaseRenderOSystem::indicatorFlip(int32 x, int32 y, int32 width, int32 height) {
+	if (width > 0 && height > 0) {
+		g_system->copyRectToScreen(_renderSurface->getBasePtr(x, y), _renderSurface->pitch, x, y, width, height);
 		g_system->updateScreen();
 	}
 	return STATUS_OK;
@@ -224,17 +224,17 @@ bool BaseRenderOSystem::clear() {
 }
 
 //////////////////////////////////////////////////////////////////////////
-void BaseRenderOSystem::fade(uint16 alpha) {
+bool BaseRenderOSystem::fade(uint16 alpha) {
 	byte dwAlpha = (byte)(255 - alpha);
 	return fadeToColor(0, 0, 0, dwAlpha);
 }
 
 //////////////////////////////////////////////////////////////////////////
-void BaseRenderOSystem::fadeToColor(byte r, byte g, byte b, byte a) {
+bool BaseRenderOSystem::fadeToColor(byte r, byte g, byte b, byte a) {
 	Common::Rect fillRect;
 
-	Rect32 rc;
-	_gameRef->getCurrentViewportRect(&rc);
+	Common::Rect32 rc;
+	_game->getCurrentViewportRect(&rc);
 	fillRect.left = (int16)rc.left;
 	fillRect.top = (int16)rc.top;
 	fillRect.setWidth((int16)(rc.right - rc.left));
@@ -247,6 +247,8 @@ void BaseRenderOSystem::fadeToColor(byte r, byte g, byte b, byte a) {
 	temp._rgbaMod = MS_ARGB(a, r, g, b);
 	temp._alphaDisable = (a == 0xff);
 	drawSurface(nullptr, nullptr, &sizeRect, &fillRect, temp);
+
+	return true;
 }
 
 Graphics::PixelFormat BaseRenderOSystem::getPixelFormat() const {
@@ -447,10 +449,37 @@ void BaseRenderOSystem::drawFromSurface(RenderTicket *ticket, Common::Rect *dstR
 }
 
 //////////////////////////////////////////////////////////////////////////
+bool BaseRenderOSystem::drawLine(int x1, int y1, int x2, int y2, uint32 color) {
+#if 0
+	byte r = RGBCOLGetR(color);
+	byte g = RGBCOLGetG(color);
+	byte b = RGBCOLGetB(color);
+	byte a = RGBCOLGetA(color);
+#endif
+
+	Common::Point32 point1, point2;
+	point1.x = x1;
+	point1.y = y1;
+	pointToScreen(&point1);
+
+	point2.x = x2;
+	point2.y = y2;
+	pointToScreen(&point2);
+
+	// TODO
+#if 0
+	uint32 colorVal = _renderSurface->format.ARGBToColor(a, r, g, b);
+	_renderSurface->drawLine(point1.x, point1.y, point2.x + 1, point2.y + 1, colorVal);
+#endif
+
+	return STATUS_OK;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool BaseRenderOSystem::fillRect(int x, int y, int w, int h, uint32 color) {
 	// This function isn't used outside of indicator-displaying, and thus quite unused in
 	// BaseRenderOSystem when dirty-rects are enabled.
-	if (!_disableDirtyRects && !_indicatorDisplay) {
+	if (!_disableDirtyRects && !_game->_indicatorDisplay) {
 		error("BaseRenderOSystem::fillRect - doesn't work for dirty rects yet");
 	}
 
@@ -458,8 +487,6 @@ bool BaseRenderOSystem::fillRect(int x, int y, int w, int h, uint32 color) {
 	byte g = RGBCOLGetG(color);
 	byte b = RGBCOLGetB(color);
 	byte a = RGBCOLGetA(color);
-
-	//SDL_SetRenderDrawBlendMode(_renderer, SDL_BLENDMODE_BLEND);
 
 	Common::Rect fillRect(x, y, x + w, y + w);
 	modTargetRect(&fillRect);
@@ -506,20 +533,20 @@ void BaseRenderOSystem::modTargetRect(Common::Rect *rect) {
 }
 
 //////////////////////////////////////////////////////////////////////////
-void BaseRenderOSystem::pointFromScreen(Point32 *point) {
+void BaseRenderOSystem::pointFromScreen(Common::Point32 *point) {
 	point->x = (int16)(point->x / _ratioX - _borderLeft / _ratioX + _renderRect.left);
 	point->y = (int16)(point->y / _ratioY - _borderTop / _ratioY + _renderRect.top);
 }
 
 
 //////////////////////////////////////////////////////////////////////////
-void BaseRenderOSystem::pointToScreen(Point32 *point) {
+void BaseRenderOSystem::pointToScreen(Common::Point32 *point) {
 	point->x = (int16)MathUtil::roundUp(point->x * _ratioX) + _borderLeft - _renderRect.left;
 	point->y = (int16)MathUtil::roundUp(point->y * _ratioY) + _borderTop - _renderRect.top;
 }
 
 BaseSurface *BaseRenderOSystem::createSurface() {
-	return new BaseSurfaceOSystem(_gameRef);
+	return new BaseSurfaceOSystem(_game);
 }
 
 void BaseRenderOSystem::endSaveLoad() {

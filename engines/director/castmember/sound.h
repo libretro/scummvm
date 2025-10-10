@@ -30,6 +30,7 @@ class AudioDecoder;
 
 class SoundCastMember : public CastMember {
 public:
+	SoundCastMember(Cast *cast, uint16 castId);
 	SoundCastMember(Cast *cast, uint16 castId, Common::SeekableReadStreamEndian &stream, uint16 version);
 	SoundCastMember(Cast *cast, uint16 castId, SoundCastMember &source);
 	~SoundCastMember();
@@ -42,7 +43,10 @@ public:
 
 	bool hasField(int field) override;
 	Datum getField(int field) override;
-	bool setField(int field, const Datum &value) override;
+	void setField(int field, const Datum &value) override;
+
+	uint32 getCastDataSize() override;
+	void writeCastData(Common::SeekableWriteStream *writeStream) override;
 
 	bool _looping;
 	AudioDecoder *_audio;

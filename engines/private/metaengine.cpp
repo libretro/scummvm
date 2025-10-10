@@ -21,8 +21,29 @@
 
 #include "engines/advancedDetector.h"
 #include "graphics/scaler.h"
+#include "common/translation.h"
 
 #include "private/private.h"
+#include "private/detection.h"
+
+#include "backends/keymapper/action.h"
+#include "backends/keymapper/keymapper.h"
+#include "backends/keymapper/standard-actions.h"
+
+static const ADExtraGuiOptionsMap optionsList[] = {
+	{
+		GAMEOPTION_SFX_SUBTITLES,
+		{
+			_s("Display SFX subtitles"),
+			_s("Use SFX subtitles (if subtitles are enabled)."),
+			"sfxSubtitles",
+			false,
+			0,
+			0
+		}
+	},
+	AD_EXTRA_GUI_OPTIONS_TERMINATOR
+};
 
 class PrivateMetaEngine : public AdvancedMetaEngine<ADGameDescription> {
 public:
@@ -30,8 +51,13 @@ public:
 		return "private";
 	}
 
+	const ADExtraGuiOptionsMap *getAdvancedExtraGuiOptions() const override {
+		return optionsList;
+	}
+
 	Common::Error createInstance(OSystem *syst, Engine **engine, const ADGameDescription *desc) const override;
 	void getSavegameThumbnail(Graphics::Surface &thumb) override;
+	Common::KeymapArray initKeymaps(const char *target) const override;
 };
 
 Common::Error PrivateMetaEngine::createInstance(OSystem *syst, Engine **engine, const ADGameDescription *gd) const {
@@ -40,11 +66,33 @@ Common::Error PrivateMetaEngine::createInstance(OSystem *syst, Engine **engine, 
 }
 
 void PrivateMetaEngine::getSavegameThumbnail(Graphics::Surface &thumb) {
-	byte *palette; 
+	byte *palette;
 	Graphics::Surface *vs = Private::g_private->decodeImage(Private::g_private->_nextVS, &palette);
 	::createThumbnail(&thumb, (const uint8 *)vs->getPixels(), vs->w, vs->h, palette);
 	vs->free();
 	delete vs;
+}
+
+Common::KeymapArray PrivateMetaEngine::initKeymaps(const char *target) const {
+	using namespace Common;
+	using namespace Private;
+
+	Keymap *engineKeymap = new Keymap(Keymap::kKeymapTypeGame, "private-default", _("Default keymappings"));
+	Action *act;
+
+	act = new Action(kStandardActionLeftClick, _("Select / Interact"));
+	act->setLeftClickEvent();
+	act->addDefaultInputMapping("MOUSE_LEFT");
+	act->addDefaultInputMapping("JOY_A");
+	engineKeymap->addAction(act);
+
+	act = new Action("SKIP", _("Skip video"));
+	act->setCustomEngineActionEvent(kActionSkip);
+	act->addDefaultInputMapping("ESCAPE");
+	act->addDefaultInputMapping("JOY_X");
+	engineKeymap->addAction(act);
+
+	return Keymap::arrayOf(engineKeymap);
 }
 
 namespace Private {

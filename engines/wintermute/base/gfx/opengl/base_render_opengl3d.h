@@ -23,8 +23,6 @@
 #define WINTERMUTE_BASE_RENDER_OPENGL3D_H
 
 #include "engines/wintermute/base/gfx/base_renderer3d.h"
-#include "engines/wintermute/math/rect32.h"
-#include "engines/wintermute/math/vector2.h"
 #include "engines/wintermute/dctypes.h"
 
 #include "graphics/transform_struct.h"
@@ -76,7 +74,7 @@ public:
 	BaseRenderOpenGL3D(BaseGame *inGame = nullptr);
 	~BaseRenderOpenGL3D() override;
 
-	bool invalidateTexture(BaseSurfaceOpenGL3D *texture) override;
+	bool invalidateTexture(BaseSurface *texture) override;
 
 	bool invalidateDeviceObjects() override;
 	bool restoreDeviceObjects() override;
@@ -96,15 +94,16 @@ public:
 
 	bool enableShadows() override;
 	bool disableShadows() override;
-	bool stencilSupported() override;
+	bool shadowVolumeSupported() override;
 
 	BaseImage *takeScreenshot(int newWidth = 0, int newHeight = 0) override;
-	void fadeToColor(byte r, byte g, byte b, byte a) override;
+	bool fadeToColor(byte r, byte g, byte b, byte a) override;
 
 	bool flip() override;
 	bool clear() override;
 
 	bool setViewport(int left, int top, int right, int bottom) override;
+	bool drawLine(int x1, int y1, int x2, int y2, uint32 color) override;
 	bool fillRect(int x, int y, int w, int h, uint32 color) override;
 
 	DXMatrix *buildMatrix(DXMatrix* out, const DXVector2 *centre, const DXVector2 *scaling, float angle);
@@ -129,21 +128,21 @@ public:
 	bool drawShaderQuad() override {
 		return STATUS_FAILED;
 	}
-	
+
 	float getScaleRatioX() const override {
 		return 1.0f;
 	}
 	float getScaleRatioY() const override {
 		return 1.0f;
 	}
-	
+
 	BaseSurface *createSurface() override;
-	
+
 	bool startSpriteBatch() override;
 	bool endSpriteBatch() override;
 	bool commitSpriteBatch() override;
 
-	bool drawSpriteEx(BaseSurface *texture, const Rect32 &rect, const Vector2 &pos, const Vector2 &rot, const Vector2 &scale,
+	bool drawSpriteEx(BaseSurface *texture, const Common::Rect32 &rect, const DXVector2 &pos, const DXVector2 &rot, const DXVector2 &scale,
 	                  float angle, uint32 color, bool alphaDisable, Graphics::TSpriteBlendMode blendMode, bool mirrorX, bool mirrorY) override;
 
 	void renderSceneGeometry(const BaseArray<AdWalkplane *> &planes, const BaseArray<AdBlock *> &blocks,
@@ -163,6 +162,7 @@ private:
 	bool setupLines();
 	void displaySimpleShadow(BaseObject *object) override;
 
+	Graphics::TSpriteBlendMode _blendMode;
 	SimpleShadowVertex _simpleShadow[4];
 	Common::Array<DXVector4> _lightPositions;
 	Common::Array<DXVector3> _lightDirections;

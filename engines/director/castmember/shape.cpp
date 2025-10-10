@@ -19,7 +19,9 @@
  *
  */
 
+#include "common/stream.h"
 #include "director/director.h"
+#include "director/cast.h"
 #include "director/movie.h"
 #include "director/castmember/shape.h"
 #include "director/lingo/lingo-the.h"
@@ -30,8 +32,6 @@ ShapeCastMember::ShapeCastMember(Cast *cast, uint16 castId, Common::SeekableRead
 		: CastMember(cast, castId, stream) {
 	_type = kCastShape;
 
-	byte unk1;
-
 	_ink = kInkTypeCopy;
 
 	if (debugChannelSet(5, kDebugLoading)) {
@@ -40,8 +40,7 @@ ShapeCastMember::ShapeCastMember(Cast *cast, uint16 castId, Common::SeekableRead
 	}
 
 	if (version < kFileVer400) {
-		unk1 = stream.readByte();
-		_shapeType = static_cast<ShapeType>(stream.readByte());
+		_shapeType = static_cast<ShapeType>(stream.readUint16BE());
 		_initialRect = Movie::readRect(stream);
 		_pattern = stream.readUint16BE();
 		// Normalize D2 and D3 colors from -128 ... 127 to 0 ... 255.
@@ -51,9 +50,8 @@ ShapeCastMember::ShapeCastMember(Cast *cast, uint16 castId, Common::SeekableRead
 		_ink = static_cast<InkType>(_fillType & 0x3f);
 		_lineThickness = stream.readByte();
 		_lineDirection = stream.readByte();
-	} else if (version >= kFileVer400 && version < kFileVer600) {
-		unk1 = stream.readByte();
-		_shapeType = static_cast<ShapeType>(stream.readByte());
+	} else if (version >= kFileVer400 && version < kFileVer1100) {
+		_shapeType = static_cast<ShapeType>(stream.readUint16BE());
 		_initialRect = Movie::readRect(stream);
 		_pattern = stream.readUint16BE();
 		_fgCol = g_director->transformColor((uint8)stream.readByte());
@@ -63,8 +61,7 @@ ShapeCastMember::ShapeCastMember(Cast *cast, uint16 castId, Common::SeekableRead
 		_lineThickness = stream.readByte();
 		_lineDirection = stream.readByte();
 	} else {
-		warning("STUB: ShapeCastMember::ShapeCastMember(): not yet implemented");
-		unk1 = 0;
+		warning("STUB: ShapeCastMember::ShapeCastMember(): Shapes not yet supported for version v%d (%d)", humanVersion(_cast->_version), _cast->_version);
 		_shapeType = kShapeRectangle;
 		_pattern = 0;
 		_fgCol = _bgCol = 0;
@@ -74,8 +71,8 @@ ShapeCastMember::ShapeCastMember(Cast *cast, uint16 castId, Common::SeekableRead
 	}
 	_modified = false;
 
-	debugC(3, kDebugLoading, "ShapeCastMember: unk1: %x type: %d pat: %d fg: %d bg: %d fill: %d thick: %d dir: %d",
-		unk1, _shapeType, _pattern, _fgCol, _bgCol, _fillType, _lineThickness, _lineDirection);
+	debugC(3, kDebugLoading, "ShapeCastMember: type: %d pat: %d fg: %d bg: %d fill: %d thick: %d dir: %d",
+		_shapeType, _pattern, _fgCol, _bgCol, _fillType, _lineThickness, _lineDirection);
 
 	if (debugChannelSet(3, kDebugLoading))
 		_initialRect.debugPrint(0, "ShapeCastMember: rect:");
@@ -165,17 +162,17 @@ Datum ShapeCastMember::getField(int field) {
 	return d;
 }
 
-bool ShapeCastMember::setField(int field, const Datum &d) {
+void ShapeCastMember::setField(int field, const Datum &d) {
 	switch (field) {
 	case kTheFilled:
 		_fillType = d.asInt() ? 1 : 0;
-		return true;
+		return;
 	case kTheLineSize:
 		_lineThickness = d.asInt();
-		return true;
+		return;
 	case kThePattern:
 		_pattern = d.asInt();
-		return true;
+		return;
 	case kTheShapeType:
 		if (d.type == SYMBOL) {
 			Common::String name = *d.u.s;
@@ -188,14 +185,13 @@ bool ShapeCastMember::setField(int field, const Datum &d) {
 			} else if (name.equalsIgnoreCase("line")) {
 				_shapeType = kShapeLine;
 			}
-			return true;
 		}
 		break;
 	default:
 		break;
 	}
 
-	return CastMember::setField(field, d);
+	CastMember::setField(field, d);
 }
 
 
@@ -212,4 +208,43 @@ Common::String ShapeCastMember::formatInfo() {
 	);
 }
 
+uint32 ShapeCastMember::getCastDataSize() {
+	// unk1 : 1 byte
+	// _shapeType : 1 byte
+	// _initalRect : 8 bytes
+	// _pattern : 2 bytes
+	// _fgCol : 1 byte
+	// _bgCol : 1 byte
+	// _fillType : 1 byte
+	// _lineThickness : 1 byte
+	// _lineDirection : 1 byte
+	// Total : 17 bytes
+	// For Director 4 : 1 byte extra for casttype (See Cast::loadCastData())
+	if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		return 17 + 1;
+	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		return 17;
+	} else {
+		warning("ScriptCastMember::writeCastData(): invalid or unhandled Script version: %d", _cast->_version);
+		return 0;
+	}
 }
+
+void ShapeCastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
+	writeStream->writeByte(0);
+	writeStream->writeByte(1);
+
+	Movie::writeRect(writeStream, _initialRect);
+	writeStream->writeUint16LE(_pattern);
+
+	// The foreground and background colors are transformed
+	// Need to retrieve the original colors for saving
+	writeStream->writeByte(_fgCol);
+	writeStream->writeByte(_bgCol);
+
+	writeStream->writeByte(_fillType);
+	writeStream->writeByte(_lineThickness);
+	writeStream->writeByte(_lineDirection);
+}
+
+}	// End of namespace Director

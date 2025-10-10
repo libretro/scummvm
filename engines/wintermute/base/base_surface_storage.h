@@ -38,12 +38,12 @@ public:
 	uint32 _lastCleanupTime;
 	bool initLoop();
 	bool sortSurfaces();
-	static int surfaceSortCB(const void *arg1, const void *arg);
+	static int32 surfaceSortCB(const void *arg1, const void *arg2);
 	bool cleanup(bool warn = false);
-	//DECLARE_PERSISTENT(BaseSurfaceStorage, BaseClass);
+	//DECLARE_PERSISTENT(BaseSurfaceStorage, BaseClass)
 
 	bool restoreAll();
-	BaseSurface *addSurface(const Common::String &filename, bool defaultCK = true, byte ckRed = 0, byte ckGreen = 0, byte ckBlue = 0, int lifeTime = -1, bool keepLoaded = false);
+	BaseSurface *addSurface(const char *filename, bool texture2D = true, bool defaultCK = true, byte ckRed = 0, byte ckGreen = 0, byte ckBlue = 0, int lifeTime = -1, bool keepLoaded = false);
 	bool removeSurface(BaseSurface *surface);
 	BaseSurfaceStorage(BaseGame *inGame);
 	~BaseSurfaceStorage() override;

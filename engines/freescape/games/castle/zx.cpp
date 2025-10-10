@@ -30,11 +30,14 @@ namespace Freescape {
 void CastleEngine::initZX() {
 	_viewArea = Common::Rect(64, 36, 256, 148);
 	_soundIndexShoot = 5;
-	_soundIndexCollide = -1;
-	_soundIndexFall = -1;
-	_soundIndexClimb = -1;
-	_soundIndexMenu = -1;
-	_soundIndexStart = 6;
+	_soundIndexCollide = 3;
+	_soundIndexStartFalling = -1;
+	_soundIndexFallen = 1;
+	_soundIndexFall = 6; 
+	_soundIndexStepUp = 12;
+	_soundIndexStepDown = 12;
+	_soundIndexMenu = 3;
+	_soundIndexStart = 7;
 	_soundIndexAreaChange = 7;
 }
 
@@ -43,6 +46,7 @@ Graphics::ManagedSurface *CastleEngine::loadFrameWithHeader(Common::SeekableRead
 	file->seek(pos);
 	int16 width = file->readByte();
 	int16 height = file->readByte();
+	debugC(kFreescapeDebugParser, "Frame size: %d x %d", width, height);
 	surface->create(width * 8, height, _gfx->_texturePixelFormat);
 
 	/*byte mask =*/ file->readByte();
@@ -111,12 +115,11 @@ void CastleEngine::loadAssetsZXFullGame() {
 	loadMessagesVariableSize(&file, 0x4bd, 71);
 	switch (_language) {
 		case Common::ES_ESP:
-			loadRiddles(&file, 0x1470 - 4 - 2 - 9 * 2, 9);
-			loadMessagesVariableSize(&file, 0xf3d, 71);
-			load8bitBinary(&file, 0x6aab - 2, 16);
+			loadRiddles(&file, 0x1458, 9);
+			load8bitBinary(&file, 0x6aa9, 16);
 			loadSpeakerFxZX(&file, 0xca0, 0xcdc);
 
-			file.seek(0x1218 + 16);
+			file.seek(0x1228);
 			for (int i = 0; i < 90; i++) {
 				Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
 				surface->create(8, 8, Graphics::PixelFormat::createFormatCLUT8());
@@ -128,11 +131,19 @@ void CastleEngine::loadAssetsZXFullGame() {
 
 			break;
 		case Common::EN_ANY:
-			loadRiddles(&file, 0x145c - 2 - 9 * 2, 9);
-			load8bitBinary(&file, 0x6a3b, 16);
-			loadSpeakerFxZX(&file, 0xc91, 0xccd);
-
-			file.seek(0x1219);
+			if (_variant & GF_ZX_RETAIL) {
+				loadRiddles(&file, 0x1448, 9);
+				load8bitBinary(&file, 0x6a3b, 16);
+				loadSpeakerFxZX(&file, 0xc91, 0xccd);
+				file.seek(0x1219);
+			} else if (_variant & GF_ZX_DISC) {
+				loadRiddles(&file, 0x1457, 9);
+				load8bitBinary(&file, 0x6a9b, 16);
+				loadSpeakerFxZX(&file, 0xca0, 0xcdc);
+				file.seek(0x1228);
+			} else {
+				error("Unknown Castle Master ZX variant");
+			}
 			for (int i = 0; i < 90; i++) {
 				Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
 				surface->create(8, 8, Graphics::PixelFormat::createFormatCLUT8());
@@ -155,10 +166,10 @@ void CastleEngine::loadAssetsZXFullGame() {
 	_gfx->readFromPalette(7, r, g, b);
 	uint32 white = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 
-	_keysBorderFrames.push_back(loadFrameWithHeader(&file, _language == Common::ES_ESP ? 0xe06 : 0xdf7, red, white));
+	_keysBorderFrames.push_back(loadFrameWithHeader(&file, _variant & GF_ZX_DISC ? 0xe06 : 0xdf7, red, white));
 
 	uint32 green = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0, 0xff, 0);
-	_spiritsMeterIndicatorFrame = loadFrameWithHeader(&file, _language == Common::ES_ESP ? 0xe5e : 0xe4f, green, white);
+	_spiritsMeterIndicatorFrame = loadFrameWithHeader(&file, _variant & GF_ZX_DISC ? 0xe5e : 0xe4f, green, white);
 
 	_gfx->readFromPalette(4, r, g, b);
 	uint32 front = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
@@ -169,32 +180,34 @@ void CastleEngine::loadAssetsZXFullGame() {
 	background->create(backgroundWidth * 8, backgroundHeight, _gfx->_texturePixelFormat);
 	background->fillRect(Common::Rect(0, 0, backgroundWidth * 8, backgroundHeight), 0);
 
-	file.seek(_language == Common::ES_ESP ? 0xfd3 : 0xfc4);
+	file.seek(_variant & GF_ZX_DISC ? 0xfd3 : 0xfc4);
 	_background = loadFrame(&file, background, backgroundWidth, backgroundHeight, front);
 
 	_gfx->readFromPalette(6, r, g, b);
 	uint32 yellow = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 	uint32 black = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0, 0, 0);
-	_strenghtBackgroundFrame = loadFrameWithHeader(&file, _language == Common::ES_ESP ? 0xee6 : 0xed7, yellow, black);
-	_strenghtBarFrame = loadFrameWithHeader(&file, _language == Common::ES_ESP ? 0xf72 : 0xf63, yellow, black);
+	_strenghtBackgroundFrame = loadFrameWithHeader(&file, _variant & GF_ZX_DISC ? 0xee6 : 0xed7, yellow, black);
+	_strenghtBarFrame = loadFrameWithHeader(&file, _variant & GF_ZX_DISC ? 0xf72 : 0xf63, yellow, black);
+	_strenghtWeightsFrames = loadFramesWithHeader(&file, _variant & GF_ZX_DISC ? 0xf92 : 0xf83, 4, yellow, black);
 
-	Graphics::ManagedSurface *bar = new Graphics::ManagedSurface();
-	bar->create(_strenghtBarFrame->w - 4, _strenghtBarFrame->h, _gfx->_texturePixelFormat);
-	_strenghtBarFrame->copyRectToSurface(*bar, 4, 0, Common::Rect(4, 0, _strenghtBarFrame->w - 4, _strenghtBarFrame->h));
-	_strenghtBarFrame->free();
-	delete _strenghtBarFrame;
-	_strenghtBarFrame = bar;
+	_flagFrames = loadFramesWithHeader(&file, (_variant & GF_ZX_DISC ? 0x10e4 + 15 : 0x10e4), 4, green, black);
 
-	_strenghtWeightsFrames = loadFramesWithHeader(&file, _language == Common::ES_ESP ? 0xf92 : 0xf83, 4, yellow, black);
-
-	_flagFrames = loadFramesWithHeader(&file, (_language == Common::ES_ESP ? 0x10e4 + 15 : 0x10e4), 4, green, black);
-
+	file.skip(24);
 	int thunderWidth = 4;
-	int thunderHeight = 43;
-	_thunderFrame = new Graphics::ManagedSurface();
-	_thunderFrame->create(thunderWidth * 8, thunderHeight, _gfx->_texturePixelFormat);
-	_thunderFrame->fillRect(Common::Rect(0, 0, thunderWidth * 8, thunderHeight), 0);
-	_thunderFrame = loadFrame(&file, _thunderFrame, thunderWidth, thunderHeight, front);
+	int thunderHeight = 44;
+	Graphics::ManagedSurface *thunderFrame = new Graphics::ManagedSurface();
+	thunderFrame->create(thunderWidth * 8, thunderHeight, _gfx->_texturePixelFormat);
+	thunderFrame->fillRect(Common::Rect(0, 0, thunderWidth * 8, thunderHeight), 0);
+	thunderFrame = loadFrame(&file, thunderFrame, thunderWidth, thunderHeight, front);
+
+	_thunderFrames.push_back(new Graphics::ManagedSurface);
+	_thunderFrames.push_back(new Graphics::ManagedSurface);
+
+	_thunderFrames[0]->create(thunderWidth * 8 / 2, thunderHeight, _gfx->_texturePixelFormat);
+	_thunderFrames[1]->create(thunderWidth * 8 / 2, thunderHeight, _gfx->_texturePixelFormat);
+
+	_thunderFrames[0]->copyRectToSurface(*thunderFrame, 0, 0, Common::Rect(0, 0, thunderWidth * 8 / 2, thunderHeight));
+	_thunderFrames[1]->copyRectToSurface(*thunderFrame, 0, 0, Common::Rect(thunderWidth * 8 / 2, 0, thunderWidth * 8, thunderHeight));
 
 	Graphics::Surface *tmp;
 	tmp = loadBundledImage("castle_riddle_top_frame");
@@ -246,6 +259,9 @@ void CastleEngine::drawZXUI(Graphics::Surface *surface) {
 	uint32 color = 5;
 	uint8 r, g, b;
 
+	drawLiftingGate(surface);
+	drawDroppingGate(surface);
+
 	_gfx->readFromPalette(color, r, g, b);
 	uint32 front = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 
@@ -265,7 +281,7 @@ void CastleEngine::drawZXUI(Graphics::Surface *surface) {
 		_temporaryMessages.push_back(message);
 		_temporaryMessageDeadlines.push_back(deadline);
 	} else {
-		if (_gameStateControl == kFreescapeGameStatePlaying) {
+		if (_gameStateControl != kFreescapeGameStateEnd) {
 			drawStringInSurface(_currentArea->_name, 120, 179, front, black, surface);
 		}
 	}
@@ -278,7 +294,9 @@ void CastleEngine::drawZXUI(Graphics::Surface *surface) {
 
 	surface->fillRect(Common::Rect(152, 156, 216, 164), green);
 	surface->copyRectToSurface((const Graphics::Surface)*_spiritsMeterIndicatorFrame, 140 + _spiritsMeterPosition, 156, Common::Rect(0, 0, 15, 8));
-	drawEnergyMeter(surface, Common::Point(63, 154));
+
+	surface->fillRect(Common::Rect(64, 155, 64 + 72, 155 + 15), _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x00, 0x00, 0x00));
+	drawEnergyMeter(surface, Common::Point(64, 155));
 
 	int ticks = g_system->getMillis() / 20;
 	int flagFrameIndex = (ticks / 10) % 4;

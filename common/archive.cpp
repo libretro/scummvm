@@ -358,8 +358,14 @@ void SearchSet::addDirectory(const String &name, const Path &directory, int prio
 }
 
 void SearchSet::addDirectory(const String &name, const FSNode &dir, int priority, int depth, bool flat) {
-	if (!dir.exists() || !dir.isDirectory())
+	if (!dir.exists()) {
+		warning("SearchSet::addDirectory: %s does not exist.", name.c_str());
 		return;
+	}
+	if (!dir.isDirectory()) {
+		warning("SearchSet::addDirectory: %s is not a directory.", name.c_str());
+		return;
+	}
 
 	add(name, new FSDirectory(dir, depth, flat, _ignoreClashes), priority);
 }

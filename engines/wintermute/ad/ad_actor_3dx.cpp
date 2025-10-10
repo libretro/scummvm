@@ -57,6 +57,7 @@
 #include "engines/wintermute/base/sound/base_sound.h"
 #include "engines/wintermute/utils/path_util.h"
 #include "engines/wintermute/utils/utils.h"
+#include "engines/wintermute/dcgf.h"
 
 namespace Wintermute {
 
@@ -73,22 +74,30 @@ AdActor3DX::AdActor3DX(BaseGame *inGame) : AdObject3D(inGame) {
 	_path3D = new AdPath3D(inGame);
 	_path2D = new AdPath(inGame);
 
-	_talkAnimName = Common::String("talk");
+	_talkAnimName = nullptr;
+	BaseUtils::setString(&_talkAnimName, "talk");
 
-	_idleAnimName = Common::String("idle");
+	_idleAnimName = nullptr;
+	BaseUtils::setString(&_idleAnimName, "idle");
 
-	_walkAnimName = Common::String("walk");
+	_walkAnimName = nullptr;
+	BaseUtils::setString(&_walkAnimName, "walk");
 
-	_turnLeftAnimName = Common::String("turnleft");
+	_turnLeftAnimName = nullptr;
+	BaseUtils::setString(&_turnLeftAnimName, "turnleft");
 
-	_turnRightAnimName = Common::String("turnright");
+	_turnRightAnimName = nullptr;
+	BaseUtils::setString(&_turnRightAnimName, "turnright");
 
 	_talkAnimChannel = 0;
 
-	_gameRef->_renderer3D->enableShadows();
+	_game->_renderer3D->enableShadows();
 
+	// direct controls
 	_directWalkMode = DIRECT_WALK_NONE;
 	_directTurnMode = DIRECT_TURN_NONE;
+	_directWalkAnim = nullptr;
+	_directTurnAnim = nullptr;
 	_directWalkVelocity = 0.0f;
 	_directTurnVelocity = 0.0f;
 
@@ -98,30 +107,39 @@ AdActor3DX::AdActor3DX(BaseGame *inGame) : AdObject3D(inGame) {
 
 	_goToTolerance = 2;
 
+	_partBone = nullptr;
 	_partOffset = DXVector3(0.0f, 0.0f, 0.0f);
 }
 
 //////////////////////////////////////////////////////////////////////////
 AdActor3DX::~AdActor3DX() {
 	// delete attachments
-	for (uint32 i = 0; i < _attachments.size(); i++) {
+	for (int32 i = 0; i < _attachments.getSize(); i++) {
 		delete _attachments[i];
 	}
-	_attachments.clear();
+	_attachments.removeAll();
 
 	// delete transition times
-	for (uint32 i = 0; i < _transitionTimes.size(); i++) {
+	for (int32 i = 0; i < _transitionTimes.getSize(); i++) {
 		delete _transitionTimes[i];
 	}
-	_transitionTimes.clear();
+	_transitionTimes.removeAll();
 
-	delete _path2D;
-	_path2D = nullptr;
-	delete _path3D;
-	_path3D = nullptr;
+	SAFE_DELETE_ARRAY(_talkAnimName);
+	SAFE_DELETE_ARRAY(_idleAnimName);
+	SAFE_DELETE_ARRAY(_walkAnimName);
+	SAFE_DELETE_ARRAY(_turnLeftAnimName);
+	SAFE_DELETE_ARRAY(_turnRightAnimName);
 
-	delete _targetPoint2D;
-	_targetPoint2D = nullptr;
+	SAFE_DELETE_ARRAY(_directWalkAnim);
+	SAFE_DELETE_ARRAY(_directTurnAnim);
+
+	SAFE_DELETE(_path2D);
+	SAFE_DELETE(_path3D);
+
+	SAFE_DELETE(_targetPoint2D);
+
+	SAFE_DELETE_ARRAY(_partBone);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -130,11 +148,11 @@ bool AdActor3DX::update() {
 		return true;
 	}
 
-	if (_gameRef->_state == GAME_FROZEN) {
+	if (_game->_state == GAME_FROZEN) {
 		return true;
 	}
 
-	AdGame *adGame = (AdGame *)_gameRef;
+	AdGame *adGame = (AdGame *)_game;
 
 	if (_state == STATE_READY && _stateAnimChannel >= 0 && _xmodel) {
 		_stateAnimChannel = -1;
@@ -142,8 +160,7 @@ bool AdActor3DX::update() {
 
 	if (_sentence && _state != STATE_TALKING) {
 		_sentence->finish();
-		delete _sentence;
-		_sentence = nullptr;
+		SAFE_DELETE(_sentence);
 
 		// kill talking anim
 		if (_talkAnimChannel > 0)
@@ -162,7 +179,7 @@ bool AdActor3DX::update() {
 			if (_directWalkMode != DIRECT_WALK_NONE) {
 				// disabled in original code
 			} else if (_directTurnMode != DIRECT_TURN_NONE) {
-				if (!_directTurnAnim.empty()) {
+				if (_directTurnAnim && _directTurnAnim[0]) {
 					_xmodel->playAnim(0, _directTurnAnim, _defaultTransTime, false, _defaultStopTransTime);
 				} else {
 					_xmodel->playAnim(0, _idleAnimName, _defaultTransTime, false, _defaultStopTransTime);
@@ -173,28 +190,28 @@ bool AdActor3DX::update() {
 			float turnVel = _directTurnVelocity == 0.0f ? _angVelocity : _directTurnVelocity;
 
 			if (_directTurnMode == DIRECT_TURN_CW) {
-				_angle += turnVel * (float)_gameRef->_deltaTime / 1000.f;
+				_angle += turnVel * (float)_game->_timerDelta / 1000.f;
 				_angle = BaseUtils::normalizeAngle(_angle);
 			}
 
 			if (_directTurnMode == DIRECT_TURN_CCW) {
-				_angle -= turnVel * (float)_gameRef->_deltaTime / 1000.f;
+				_angle -= turnVel * (float)_game->_timerDelta / 1000.f;
 				_angle = BaseUtils::normalizeAngle(_angle);
 			}
 
 			float walkVel = _directWalkVelocity == 0.0f ? _velocity : _directWalkVelocity;
 			DXVector3 newPos = _posVector;
 			if (_directWalkMode == DIRECT_WALK_FW) {
-				newPos._x += -sinf(degToRad(_angle)) * walkVel * _scale3D * (float)_gameRef->_deltaTime / 1000.f;
-				newPos._z += -cosf(degToRad(_angle)) * walkVel * _scale3D * (float)_gameRef->_deltaTime / 1000.f;
+				newPos._x += -sinf(degToRad(_angle)) * walkVel * _scale3D * (float)_game->_timerDelta / 1000.f;
+				newPos._z += -cosf(degToRad(_angle)) * walkVel * _scale3D * (float)_game->_timerDelta / 1000.f;
 			}
 
 			if (_directWalkMode == DIRECT_WALK_BK) {
-				newPos._x -= -sinf(degToRad(_angle)) * walkVel * _scale3D * (float)_gameRef->_deltaTime / 1000.f;
-				newPos._z -= -cosf(degToRad(_angle)) * walkVel * _scale3D * (float)_gameRef->_deltaTime / 1000.f;
+				newPos._x -= -sinf(degToRad(_angle)) * walkVel * _scale3D * (float)_game->_timerDelta / 1000.f;
+				newPos._z -= -cosf(degToRad(_angle)) * walkVel * _scale3D * (float)_game->_timerDelta / 1000.f;
 			}
 
-			AdScene *scene = ((AdGame *)_gameRef)->_scene;
+			AdScene *scene = ((AdGame *)_game)->_scene;
 
 			if (scene && scene->_geom) {
 				bool canWalk = false;
@@ -211,7 +228,7 @@ bool AdActor3DX::update() {
 				}
 
 				if (canWalk) {
-					if (!_directWalkAnim.empty()) {
+					if (_directWalkAnim && _directWalkAnim[0]) {
 						_xmodel->playAnim(0, _directWalkAnim, _defaultTransTime, false, _defaultStopTransTime);
 					} else {
 						_xmodel->playAnim(0, _walkAnimName, _defaultTransTime, false, _defaultStopTransTime);
@@ -287,12 +304,11 @@ bool AdActor3DX::update() {
 
 		_sentence->update();
 
-		if (_sentence->_currentSkelAnim) {
+		if (_sentence->_currentSkelAnim && _sentence->_currentSkelAnim[0]) {
 			_tempSkelAnim = _sentence->_currentSkelAnim;
 		}
 
-		bool timeIsUp = (_sentence->_sound && _sentence->_soundStarted && (!_sentence->_sound->isPlaying() && !_sentence->_sound->isPaused())) ||
-		                (!_sentence->_sound && _sentence->_duration <= _gameRef->getTimer()->getTime() - _sentence->_startTime);
+		bool timeIsUp = (_sentence->_sound && _sentence->_soundStarted && (!_sentence->_sound->isPlaying() && !_sentence->_sound->isPaused())) || (!_sentence->_sound && _sentence->_duration <= _game->_timer - _sentence->_startTime);
 		if (_tempSkelAnim == nullptr || !_xmodel->isAnimPending(0, _tempSkelAnim) || timeIsUp) {
 			if (timeIsUp) {
 				_sentence->finish();
@@ -313,14 +329,14 @@ bool AdActor3DX::update() {
 						_xmodel->playAnim(0, _idleAnimName, _defaultTransTime, false, _defaultStopTransTime);
 				}
 
-				((AdGame *)_gameRef)->addSentence(_sentence);
+				((AdGame *)_game)->addSentence(_sentence);
 			}
 		} else {
 			if (_tempSkelAnim) {
 				_xmodel->playAnim(0, _tempSkelAnim, _defaultTransTime, false, _defaultStopTransTime);
 			}
 
-			((AdGame *)_gameRef)->addSentence(_sentence);
+			((AdGame *)_game)->addSentence(_sentence);
 		}
 		break;
 	}
@@ -386,57 +402,56 @@ bool AdActor3DX::display() {
 	updateSounds();
 	setupLights();
 
-	_gameRef->_renderer3D->setSpriteBlendMode(_blendMode);
+	_game->_renderer3D->setSpriteBlendMode(_blendMode);
 
 	if (_hasAmbientLightColor) {
-		_gameRef->_renderer3D->setAmbientLightColor(_ambientLightColor);
+		_game->_renderer3D->setAmbientLightColor(_ambientLightColor);
 	}
 
-	TShadowType shadowType = _gameRef->getMaxShadowType(this);
+	TShadowType shadowType = _game->getMaxShadowType(this);
 	if (shadowType == SHADOW_STENCIL) {
-		displayShadowVolume();
+		// Skip shadow volume rendering if not supported
+		if (_game->_renderer3D->shadowVolumeSupported()) {
+			displayShadowVolume();
+		}
 	} else if (shadowType > SHADOW_NONE) {
-		bool simpleShadow = shadowType <= SHADOW_SIMPLE;
-		if (!_gameRef->_supportsRealTimeShadows)
-			simpleShadow = true;
-		if (simpleShadow)
-			_gameRef->_renderer3D->displaySimpleShadow(this);
-		else
-			displayFlatShadow();
+		if (_game->_maxShadowType > SHADOW_NONE) {
+			bool simpleShadow = shadowType <= SHADOW_SIMPLE;
+			if (!_game->_supportsRealTimeShadows)
+				simpleShadow = true;
+			if (simpleShadow)
+				_game->_renderer3D->displaySimpleShadow(this);
+			else
+				displayFlatShadow();
+		}
 	}
 
-	_gameRef->_renderer3D->setSpriteBlendMode(_blendMode, true);
-	_gameRef->_renderer3D->setWorldTransform(_worldMatrix);
+	_game->_renderer3D->setSpriteBlendMode(_blendMode, true);
+	_game->_renderer3D->setWorldTransform(_worldMatrix);
 
 	bool res = _xmodel->render();
 
 	if (_registrable) {
-		_gameRef->_renderer->addRectToList(new BaseActiveRect(_gameRef, this, _xmodel,
-		                                                      _xmodel->_boundingRect.left,
-		                                                      _xmodel->_boundingRect.top,
-		                                                      _xmodel->_boundingRect.right - _xmodel->_boundingRect.left,
-		                                                      _xmodel->_boundingRect.bottom - _xmodel->_boundingRect.top,
-		                                                      true));
+		_game->_renderer->_rectList.add(new BaseActiveRect(_game, this, _xmodel, _xmodel->_boundingRect.left, _xmodel->_boundingRect.top, _xmodel->_boundingRect.right - _xmodel->_boundingRect.left, _xmodel->_boundingRect.bottom - _xmodel->_boundingRect.top, true));
 	}
+
+	_game->_renderer3D->invalidateLastTexture();
 
 	displayAttachments(true);
 
 	if (_hasAmbientLightColor) {
-		_gameRef->_renderer3D->setDefaultAmbientLightColor();
+		_game->_renderer3D->setDefaultAmbientLightColor();
 	}
 
 	if (_active && _partEmitter) {
-		_gameRef->_renderer3D->setup2D();
+		_game->_renderer3D->setup2D();
 		_partEmitter->display();
 	}
 
-	// this functionality appearently was removed in either WME lite
-	// or in the ScummVM port. It might have been replaced as well
-	// not sure what to do about it right now
 	// accessibility
-	//	if (_gameRef->_accessMgr->GetActiveObject() == this) {
-	//		_gameRef->_accessMgr->SetHintRect(&_xmodel->m_BoundingRect);
-	//	}
+	//if (_game->_accessMgr->GetActiveObject() == this) {
+	//	_game->_accessMgr->SetHintRect(&_xmodel->m_BoundingRect);
+	//}
 
 	return res;
 }
@@ -447,7 +462,7 @@ bool AdActor3DX::renderModel() {
 		return true;
 	}
 
-	_gameRef->_renderer3D->setWorldTransform(_worldMatrix);
+	_game->_renderer3D->setWorldTransform(_worldMatrix);
 
 	if (_shadowModel) {
 		_shadowModel->render();
@@ -470,11 +485,9 @@ bool AdActor3DX::displayShadowVolume() {
 		return false;
 	}
 
-	_gameRef->_renderer3D->setWorldTransform(_worldMatrix);
+	_game->_renderer3D->setWorldTransform(_worldMatrix);
 
-	DXVector3 lightPos = DXVector3(_shadowLightPos._x * _scale3D,
-	                               _shadowLightPos._y * _scale3D,
-								   _shadowLightPos._z * _scale3D);
+	DXVector3 lightPos = DXVector3(_shadowLightPos._x * _scale3D, _shadowLightPos._y * _scale3D, _shadowLightPos._z * _scale3D);
 	pos = _posVector + lightPos;
 	target = _posVector;
 
@@ -496,17 +509,17 @@ bool AdActor3DX::displayShadowVolume() {
 	shadowModel->updateShadowVol(getShadowVolume(), &_worldMatrix, &lightVector, extrusionDepth);
 
 	DXMatrix origWorld;
-	_gameRef->_renderer3D->getWorldTransform(&origWorld);
+	_game->_renderer3D->getWorldTransform(&origWorld);
 
 	// handle the attachments
-	for (uint32 i = 0; i < _attachments.size(); i++) {
+	for (int32 i = 0; i < _attachments.getSize(); i++) {
 		AdAttach3DX *at = _attachments[i];
 
 		if (!at->_active) {
 			continue;
 		}
 
-		DXMatrix *boneMat = _xmodel->getBoneMatrix(at->getParentBone().c_str());
+		DXMatrix *boneMat = _xmodel->getBoneMatrix(at->getParentBone());
 		if (!boneMat) {
 			continue;
 		}
@@ -518,7 +531,7 @@ bool AdActor3DX::displayShadowVolume() {
 	}
 
 	// restore model's world matrix and render the shadow volume
-	_gameRef->_renderer3D->setWorldTransform(origWorld);
+	_game->_renderer3D->setWorldTransform(origWorld);
 
 	getShadowVolume()->renderToStencilBuffer();
 
@@ -539,7 +552,7 @@ bool AdActor3DX::displayFlatShadow() {
 	                               _shadowLightPos._y * _scale3D,
 	                               _shadowLightPos._z * _scale3D);
 
-	_gameRef->_renderer3D->getWorldTransform(&origWorld);
+	_game->_renderer3D->getWorldTransform(&origWorld);
 
 	DXVector4 lightVector = { lightPos._x, lightPos._y, lightPos._z, 0 };
 	DXPlane plane = { 0, 1, 0, -_posVector._y };
@@ -547,17 +560,17 @@ bool AdActor3DX::displayFlatShadow() {
 	DXMatrixShadow(&shadowMat, &lightVector, &plane);
 	DXMatrix shadowWorld = _worldMatrix * shadowMat;
 
-	_gameRef->_renderer3D->setWorldTransform(shadowWorld);
+	_game->_renderer3D->setWorldTransform(shadowWorld);
 	_xmodel->renderFlatShadowModel(_shadowColor);
 
-	_gameRef->_renderer3D->setWorldTransform(origWorld);
+	_game->_renderer3D->setWorldTransform(origWorld);
 
 	return true;
 }
 
 //////////////////////////////////////////////////////////////////////////
 bool AdActor3DX::updateAttachments() {
-	for (uint32 i = 0; i < _attachments.size(); i++) {
+	for (int32 i = 0; i < _attachments.getSize(); i++) {
 		if (_attachments[i]->_active) {
 			_attachments[i]->update();
 		}
@@ -571,20 +584,20 @@ bool AdActor3DX::displayAttachments(bool registerObjects) {
 		return false;
 	}
 
-	if (_attachments.size() == 0) {
+	if (_attachments.getSize() == 0) {
 		return true;
 	}
 
 	DXMatrix origView;
-	_gameRef->_renderer3D->getWorldTransform(&origView);
+	_game->_renderer3D->getWorldTransform(&origView);
 
-	for (uint32 i = 0; i < _attachments.size(); i++) {
+	for (int32 i = 0; i < _attachments.getSize(); i++) {
 		AdAttach3DX *at = _attachments[i];
 		if (!at->_active) {
 			continue;
 		}
 
-		DXMatrix *boneMat = _xmodel->getBoneMatrix(at->getParentBone().c_str());
+		DXMatrix *boneMat = _xmodel->getBoneMatrix(at->getParentBone());
 		if (!boneMat) {
 			continue;
 		}
@@ -595,7 +608,7 @@ bool AdActor3DX::displayAttachments(bool registerObjects) {
 		at->displayAttachable(&viewMat, registerObjects);
 	}
 
-	_gameRef->_renderer3D->setWorldTransform(origView);
+	_game->_renderer3D->setWorldTransform(origView);
 
 	return true;
 }
@@ -644,7 +657,7 @@ void AdActor3DX::goTo2D(int x, int y, float targetAngle) {
 	_targetPoint2D->x = x;
 	_targetPoint2D->y = y;
 
-	((AdGame *)_gameRef)->_scene->correctTargetPoint(_posX, _posY, &_targetPoint2D->x, &_targetPoint2D->y, true, this);
+	((AdGame *)_game)->_scene->correctTargetPoint(_posX, _posY, &_targetPoint2D->x, &_targetPoint2D->y, true, this);
 
 	_state = STATE_SEARCHING_PATH;
 }
@@ -672,8 +685,8 @@ void AdActor3DX::getNextStep3D() {
 		turnToStep(_angVelocity);
 
 	DXVector3 newPos = _posVector;
-	newPos._x += -sinf(degToRad(_targetAngle)) * _velocity * _scale3D * (float)_gameRef->_deltaTime / 1000.f;
-	newPos._z += -cosf(degToRad(_targetAngle)) * _velocity * _scale3D * (float)_gameRef->_deltaTime / 1000.f;
+	newPos._x += -sinf(degToRad(_targetAngle)) * _velocity * _scale3D * (float)_game->_timerDelta / 1000.f;
+	newPos._z += -cosf(degToRad(_targetAngle)) * _velocity * _scale3D * (float)_game->_timerDelta / 1000.f;
 
 	DXVector3 origVec, newVec;
 	DXVector3 *currentPos = _path3D->getCurrent();
@@ -716,7 +729,7 @@ void AdActor3DX::initLine3D(DXVector3 startPt, DXVector3 endPt, bool firstStep) 
 
 //////////////////////////////////////////////////////////////////////////
 void AdActor3DX::getNextStep2D() {
-	AdGame *adGame = (AdGame *)_gameRef;
+	AdGame *adGame = (AdGame *)_game;
 
 	if (!adGame || !adGame->_scene || !adGame->_scene->_geom || !_path2D || !_path2D->getCurrent()) {
 		_state = _nextState;
@@ -729,13 +742,11 @@ void AdActor3DX::getNextStep2D() {
 	}
 
 	DXVector3 newPos = _posVector;
-	newPos._x += -sinf(degToRad(_targetAngle)) * _velocity * _scale3D * (float)_gameRef->_deltaTime / 1000.f;
-	newPos._z += -cosf(degToRad(_targetAngle)) * _velocity * _scale3D * (float)_gameRef->_deltaTime / 1000.f;
+	newPos._x += -sinf(degToRad(_targetAngle)) * _velocity * _scale3D * (float)_game->_timerDelta / 1000.f;
+	newPos._z += -cosf(degToRad(_targetAngle)) * _velocity * _scale3D * (float)_game->_timerDelta / 1000.f;
 
 	DXVector3 currentPoint;
-	adGame->_scene->_geom->convert2Dto3DTolerant(_path2D->getCurrent()->x,
-	                                                      _path2D->getCurrent()->y,
-	                                                      &currentPoint);
+	adGame->_scene->_geom->convert2Dto3DTolerant(_path2D->getCurrent()->x, _path2D->getCurrent()->y, &currentPoint);
 
 	DXVector3 origVec, newVec;
 
@@ -755,9 +766,7 @@ void AdActor3DX::getNextStep2D() {
 				_nextState = STATE_READY;
 			}
 		} else {
-			adGame->_scene->_geom->convert2Dto3DTolerant(_path2D->getCurrent()->x,
-			                                                      _path2D->getCurrent()->y,
-			                                                      &currentPoint);
+			adGame->_scene->_geom->convert2Dto3DTolerant(_path2D->getCurrent()->x, _path2D->getCurrent()->y, &currentPoint);
 			initLine3D(_posVector, currentPoint, false);
 		}
 	} else
@@ -766,7 +775,7 @@ void AdActor3DX::getNextStep2D() {
 
 //////////////////////////////////////////////////////////////////////////
 void AdActor3DX::followPath2D() {
-	AdGame *adGameRef = (AdGame *)_gameRef;
+	AdGame *adGame = (AdGame *)_game;
 
 	// skip current position
 	_path2D->getFirst();
@@ -784,9 +793,7 @@ void AdActor3DX::followPath2D() {
 		_state = STATE_FOLLOWING_PATH;
 
 		DXVector3 currentPoint;
-		adGameRef->_scene->_geom->convert2Dto3DTolerant(_path2D->getCurrent()->x,
-		                                                         _path2D->getCurrent()->y,
-		                                                         &currentPoint);
+		adGame->_scene->_geom->convert2Dto3DTolerant(_path2D->getCurrent()->x, _path2D->getCurrent()->y, &currentPoint);
 
 		initLine3D(_posVector, currentPoint, true);
 	} else {
@@ -828,12 +835,12 @@ bool AdActor3DX::prepareTurn(float targetAngle) {
 //////////////////////////////////////////////////////////////////////////
 bool AdActor3DX::turnToStep(float velocity) {
 	if (_turningLeft) {
-		_angle -= velocity * (float)_gameRef->_deltaTime / 1000.f;
+		_angle -= velocity * (float)_game->_timerDelta / 1000.f;
 		if (_angle < _targetAngle) {
 			_angle = _targetAngle;
 		}
 	} else {
-		_angle += velocity * (float)_gameRef->_deltaTime / 1000.f;
+		_angle += velocity * (float)_game->_timerDelta / 1000.f;
 		if (_angle > _targetAngle) {
 			_angle = _targetAngle;
 		}
@@ -854,7 +861,7 @@ bool AdActor3DX::loadFile(const char *filename) {
 	char *buffer = (char *)BaseFileManager::getEngineInstance()->readWholeFile(filename);
 
 	if (buffer == nullptr) {
-		_gameRef->LOG(0, "AdActor3DX::LoadFile failed for file '%s'", filename);
+		_game->LOG(0, "AdActor3DX::LoadFile failed for file '%s'", filename);
 		return false;
 	}
 
@@ -863,7 +870,7 @@ bool AdActor3DX::loadFile(const char *filename) {
 	bool ret = loadBuffer(buffer, true);
 
 	if (!ret) {
-		_gameRef->LOG(0, "Error parsing ACTOR3D file '%s'", filename);
+		_game->LOG(0, "Error parsing ACTOR3D file '%s'", filename);
 	}
 
 	delete[] buffer;
@@ -952,21 +959,19 @@ bool AdActor3DX::loadBuffer(char *buffer, bool complete) {
 
 	char *params;
 	int cmd;
-	BaseParser parser;
+	BaseParser parser(_game);
 
 	if (complete) {
 		if (parser.getCommand(&buffer, commands, &params) != TOKEN_ACTOR3DX) {
-			_gameRef->LOG(0, "'ACTOR3DX' keyword expected.");
+			_game->LOG(0, "'ACTOR3DX' keyword expected.");
 			return false;
 		}
 
 		buffer = params;
 	}
 
-	delete _xmodel;
-	_xmodel = nullptr;
-	delete _shadowModel;
-	_shadowModel = nullptr;
+	SAFE_DELETE(_xmodel);
+	SAFE_DELETE(_shadowModel);
 
 	while ((cmd = parser.getCommand(&buffer, commands, &params)) > 0) {
 		switch (cmd) {
@@ -1096,11 +1101,10 @@ bool AdActor3DX::loadBuffer(char *buffer, bool complete) {
 
 		case TOKEN_MODEL:
 			if (!_xmodel) {
-				_xmodel = new XModel(_gameRef, this);
+				_xmodel = new XModel(_game, this);
 
 				if (!_xmodel || !_xmodel->loadFromFile(params)) {
-					delete _xmodel;
-					_xmodel = nullptr;
+					SAFE_DELETE(_xmodel);
 					cmd = PARSERR_GENERIC;
 				}
 			} else {
@@ -1112,25 +1116,23 @@ bool AdActor3DX::loadBuffer(char *buffer, bool complete) {
 
 		case TOKEN_SHADOW_MODEL:
 			if (_xmodel) {
-				delete _shadowModel;
-				_shadowModel = new XModel(_gameRef, this);
+				SAFE_DELETE(_shadowModel);
+				_shadowModel = new XModel(_game, this);
 
 				if (!_shadowModel || !_shadowModel->loadFromFile(params, _xmodel)) {
-					delete _shadowModel;
-					_shadowModel = nullptr;
+					SAFE_DELETE(_shadowModel);
 					cmd = PARSERR_GENERIC;
 				}
 			} else {
-				_gameRef->LOG(0, "Error: a MODEL= line must precede shadow model assignment (file: %s)", getFilename());
+				_game->LOG(0, "Error: a MODEL= line must precede shadow model assignment (file: %s)", _filename);
 			}
 			break;
 
 		case TOKEN_CURSOR:
-			delete _cursor;
-			_cursor = new BaseSprite(_gameRef);
+			SAFE_DELETE(_cursor);
+			_cursor = new BaseSprite(_game);
 			if (!_cursor || !_cursor->loadFile(params)) {
-				delete _cursor;
-				_cursor = nullptr;
+				SAFE_DELETE(_cursor);
 				cmd = PARSERR_GENERIC;
 			}
 			break;
@@ -1151,7 +1153,7 @@ bool AdActor3DX::loadBuffer(char *buffer, bool complete) {
 			if (_xmodel) {
 				_xmodel->parseAnim(params);
 			} else {
-				_gameRef->LOG(0, "Error: a MODEL= line must precede any animation definitions (file: %s)", getFilename());
+				_game->LOG(0, "Error: a MODEL= line must precede any animation definitions (file: %s)", _filename);
 			}
 			break;
 
@@ -1159,27 +1161,25 @@ bool AdActor3DX::loadBuffer(char *buffer, bool complete) {
 			if (_xmodel)
 				parseEffect(params);
 			else
-				_gameRef->LOG(0, "Error: a MODEL= line must precede any effect definitions (file: %s)", getFilename());
+				_game->LOG(0, "Error: a MODEL= line must precede any effect definitions (file: %s)", _filename);
 			break;
 
 		case TOKEN_SHADOW_IMAGE:
 			if (_shadowImage)
-				_gameRef->_surfaceStorage->removeSurface(_shadowImage);
+				_game->_surfaceStorage->removeSurface(_shadowImage);
 			_shadowImage = nullptr;
 
-			_shadowImage = _gameRef->_surfaceStorage->addSurface(params);
+			_shadowImage = _game->_surfaceStorage->addSurface(params, false);
 			break;
 
 		case TOKEN_BLOCKED_REGION: {
-			delete _blockRegion;
-			_blockRegion = nullptr;
-			delete _currentBlockRegion;
-			_currentBlockRegion = nullptr;
-			BaseRegion *rgn = new BaseRegion(_gameRef);
-			BaseRegion *crgn = new BaseRegion(_gameRef);
+			SAFE_DELETE(_blockRegion);
+			SAFE_DELETE(_currentBlockRegion);
+			BaseRegion *rgn = new BaseRegion(_game);
+			BaseRegion *crgn = new BaseRegion(_game);
 			if (!rgn || !crgn || !rgn->loadBuffer(params, false)) {
-				delete rgn;
-				delete crgn;
+				SAFE_DELETE(rgn);
+				SAFE_DELETE(crgn);
 				cmd = PARSERR_GENERIC;
 			} else {
 				_blockRegion = rgn;
@@ -1190,15 +1190,13 @@ bool AdActor3DX::loadBuffer(char *buffer, bool complete) {
 		}
 
 		case TOKEN_WAYPOINTS: {
-			delete _wptGroup;
-			_wptGroup = nullptr;
-			delete _currentWptGroup;
-			_currentWptGroup = nullptr;
-			AdWaypointGroup *wpt = new AdWaypointGroup(_gameRef);
-			AdWaypointGroup *cwpt = new AdWaypointGroup(_gameRef);
+			SAFE_DELETE(_wptGroup);
+			SAFE_DELETE(_currentWptGroup);
+			AdWaypointGroup *wpt = new AdWaypointGroup(_game);
+			AdWaypointGroup *cwpt = new AdWaypointGroup(_game);
 			if (!wpt || !cwpt || !wpt->loadBuffer(params, false)) {
-				delete wpt;
-				delete cwpt;
+				SAFE_DELETE(wpt);
+				SAFE_DELETE(cwpt);
 				cmd = PARSERR_GENERIC;
 			} else {
 				_wptGroup = wpt;
@@ -1212,16 +1210,16 @@ bool AdActor3DX::loadBuffer(char *buffer, bool complete) {
 	}
 
 	if (cmd == PARSERR_TOKENNOTFOUND) {
-		_gameRef->LOG(0, "Syntax error in ACTOR3DX definition");
+		_game->LOG(0, "Syntax error in ACTOR3DX definition");
 		return false;
 	}
 	if (cmd == PARSERR_GENERIC) {
-		_gameRef->LOG(0, "Error loading ACTOR3DX definition");
+		_game->LOG(0, "Error loading ACTOR3DX definition");
 		return false;
 	}
 
 	if (!_xmodel) {
-		_gameRef->LOG(0, "Error: No model has been loaded for 3D actor");
+		_game->LOG(0, "Error: No model has been loaded for 3D actor");
 		return false;
 	}
 
@@ -1433,7 +1431,7 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "AddAttachment") == 0 || strcmp(name, "AddMesh") == 0) {
 		if (strcmp(name, "AddMesh") == 0)
-			_gameRef->LOG(0, "Warning: AddMesh is now obsolete, use AddAttachment");
+			_game->LOG(0, "Warning: AddMesh is now obsolete, use AddAttachment");
 
 		stack->correctParams(3);
 		const char *filename = stack->pop()->getString();
@@ -1447,16 +1445,16 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 				script->runtimeError("Bone '%s' cannot be found", boneName);
 				stack->pushBool(false);
 			} else {
-				AdAttach3DX *at = new AdAttach3DX(_gameRef, this);
+				AdAttach3DX *at = new AdAttach3DX(_game, this);
 				if (!at || !at->init(filename, attachName, boneName)) {
 					script->runtimeError("Error adding attachment");
-					delete at;
+					SAFE_DELETE(at);
 					stack->pushBool(false);
 				} else {
 					bool isSet = false;
-					for (uint32 i = 0; i < _attachments.size(); i++) {
-						if (scumm_stricmp(_attachments[i]->getName(), attachName) == 0) {
-							delete _attachments[i];
+					for (int32 i = 0; i < _attachments.getSize(); i++) {
+						if (scumm_stricmp(_attachments[i]->_name, attachName) == 0) {
+							SAFE_DELETE(_attachments[i]);
 							_attachments[i] = at;
 							isSet = true;
 							break;
@@ -1478,7 +1476,7 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "RemoveAttachment") == 0 || strcmp(name, "RemoveMesh") == 0) {
 		if (strcmp(name, "RemoveMesh") == 0) {
-			_gameRef->LOG(0, "Warning: RemoveMesh is now obsolete, use RemoveAttachment");
+			_game->LOG(0, "Warning: RemoveMesh is now obsolete, use RemoveAttachment");
 		}
 
 		stack->correctParams(1);
@@ -1488,10 +1486,10 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 			stack->pushBool(false);
 		} else {
 			bool isFound = false;
-			for (uint32 i = 0; i < _attachments.size(); i++) {
-				if (scumm_stricmp(_attachments[i]->getName(), attachmentName) == 0) {
-					delete _attachments[i];
-					_attachments.remove_at(i);
+			for (int32 i = 0; i < _attachments.getSize(); i++) {
+				if (scumm_stricmp(_attachments[i]->_name, attachmentName) == 0) {
+					SAFE_DELETE(_attachments[i]);
+					_attachments.removeAt(i);
 					isFound = true;
 					break;
 				}
@@ -1512,8 +1510,8 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 			stack->pushNULL();
 		} else {
 			bool isFound = false;
-			for (uint32 i = 0; i < _attachments.size(); i++) {
-				if (scumm_stricmp(_attachments[i]->getName(), attachmentName) == 0) {
+			for (int32 i = 0; i < _attachments.getSize(); i++) {
+				if (scumm_stricmp(_attachments[i]->_name, attachmentName) == 0) {
 					stack->pushNative(_attachments[i], true);
 					isFound = true;
 					break;
@@ -1551,9 +1549,10 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		stack->correctParams(2);
 		int x = stack->pop()->getInt();
 		int y = stack->pop()->getInt();
-		AdGame *adGame = (AdGame *)_gameRef;
+		AdGame *adGame = (AdGame *)_game;
 
 		if (isGoToNeeded(x, y)) {
+			// check for adGame->_scene first if it's null
 			if (adGame->_scene && adGame->_scene->_2DPathfinding) {
 				goTo2D(x, y);
 
@@ -1597,7 +1596,7 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		}
 		AdObject *obj = (AdObject *)val->getNative();
 
-		if (!obj || obj->getType() != OBJECT_ENTITY) {
+		if (!obj || obj->_type != OBJECT_ENTITY) {
 			script->runtimeError("actor.%s method accepts an entity reference only", name);
 			stack->pushNULL();
 			return true;
@@ -1605,20 +1604,20 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 
 		AdEntity *ent = (AdEntity *)obj;
 
-		AdGame *adGame = (AdGame *)_gameRef;
+		AdGame *adGame = (AdGame *)_game;
 
 		bool goToNeeded = true;
 
-		if (ent->getWalkToX() == 0 && ent->getWalkToY() == 0) {
+		if (ent->_walkToX == 0 && ent->_walkToY == 0) {
 			goToNeeded = isGoToNeeded(ent->_posX, ent->_posY);
 		} else {
-			goToNeeded = isGoToNeeded(ent->getWalkToX(), ent->getWalkToY());
+			goToNeeded = isGoToNeeded(ent->_walkToX, ent->_walkToY);
 		}
 
 		if (!goToNeeded) {
 			// no goto needed, but we still want to turn
-			if (ent->getWalkToX() != 0 || ent->getWalkToY() != 0) {
-				turnTo(dirToAngle(ent->getWalkToDir()));
+			if (ent->_walkToX != 0 || ent->_walkToY != 0) {
+				turnTo(dirToAngle(ent->_walkToDir));
 				if (strcmp(name, "GoToObjectAsync") != 0) {
 					script->waitForExclusive(this);
 				}
@@ -1636,10 +1635,10 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		}
 
 		if (adGame->_scene->_2DPathfinding) {
-			if (ent->getWalkToX() == 0 && ent->getWalkToY() == 0) {
+			if (ent->_walkToX== 0 && ent->_walkToY== 0) {
 				goTo2D(ent->_posX, ent->_posY);
 			} else {
-				goTo2D(ent->getWalkToX(), ent->getWalkToY(), dirToAngle(ent->getWalkToDir()));
+				goTo2D(ent->_walkToX, ent->_walkToY, dirToAngle(ent->_walkToDir));
 			}
 
 			if (strcmp(name, "GoToObjectAsync") != 0) {
@@ -1649,11 +1648,11 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 			if (adGame->_scene->_geom) {
 				DXVector3 pos;
 
-				if (adGame->_scene->_geom->convert2Dto3DTolerant(ent->getWalkToX(), ent->getWalkToY(), &pos)) {
-					if (ent->getWalkToX() == 0 && ent->getWalkToY() == 0) {
+				if (adGame->_scene->_geom->convert2Dto3DTolerant(ent->_walkToX, ent->_walkToY, &pos)) {
+					if (ent->_walkToX == 0 && ent->_walkToY == 0) {
 						goTo3D(pos);
 					} else {
-						goTo3D(pos, dirToAngle(ent->getWalkToDir()));
+						goTo3D(pos, dirToAngle(ent->_walkToDir));
 					}
 
 					if (strcmp(name, "GoToObjectAsync") != 0) {
@@ -1677,24 +1676,20 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		float angle = 0.0;
 
 		// turn to object?
-		if (val->isNative() && _gameRef->validObject((BaseObject *)val->getNative())) {
+		if (val->isNative() && _game->validObject((BaseObject *)val->getNative())) {
 			BaseObject *obj = (BaseObject *)val->getNative();
 			DXVector3 objPos;
-			((AdGame *)_gameRef)->_scene->_geom->convert2Dto3D(obj->_posX, obj->_posY, &objPos);
+			((AdGame *)_game)->_scene->_geom->convert2Dto3D(obj->_posX, obj->_posY, &objPos);
 			angle = radToDeg(-atan2(objPos._z - _posVector._z, objPos._x - _posVector._x)) - 90;
 		} else {
 			// otherwise turn to direction
 			dir = val->getInt();
 			angle = dirToAngle((TDirection)dir);
 		}
-
-		if (_path2D) {
+		if (_path2D)
 			_path2D->reset();
-		}
-
-		if (_path3D) {
+		if (_path3D)
 			_path3D->reset();
-		}
 
 		turnTo(angle);
 		if (strcmp(name, "TurnToAsync") != 0) {
@@ -1747,6 +1742,8 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		ScValue *valVelocity = stack->pop();
 		ScValue *valAnim = stack->pop();
 
+		SAFE_DELETE_ARRAY(_directWalkAnim);
+
 		if (!valVelocity->isNULL()) {
 			_directWalkVelocity = valVelocity->getFloat();
 		} else {
@@ -1754,7 +1751,7 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		}
 
 		if (!valAnim->isNULL()) {
-			_directWalkAnim = valAnim->getString();
+			BaseUtils::setString(&_directWalkAnim, valAnim->getString());
 		}
 
 		_state = STATE_DIRECT_CONTROL;
@@ -1789,6 +1786,8 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		ScValue *valVelocity = stack->pop();
 		ScValue *valAnim = stack->pop();
 
+		SAFE_DELETE_ARRAY(_directTurnAnim);
+
 		if (!valVelocity->isNULL()) {
 			_directTurnVelocity = valVelocity->getFloat();
 		} else {
@@ -1796,7 +1795,7 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		}
 
 		if (!valAnim->isNULL()) {
-			_directTurnAnim = valAnim->getString();
+			BaseUtils::setString(&_directTurnAnim, valAnim->getString());
 		}
 
 		_state = STATE_DIRECT_CONTROL;
@@ -1877,7 +1876,6 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 	else if (strcmp(name, "RemoveEffect") == 0) {
 		stack->correctParams(1);
 		const char *materialName = stack->pop()->getString();
-		stack->pop();
 
 		if (_xmodel && _xmodel->removeMaterialEffect(materialName)) {
 			stack->pushBool(true);
@@ -1978,13 +1976,13 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		int time = stack->pop()->getInt();
 
 		bool found = false;
-		for (uint32 i = 0; i < _transitionTimes.size(); i++) {
+		for (int32 i = 0; i < _transitionTimes.getSize(); i++) {
 			BaseAnimationTransitionTime *trans = _transitionTimes[i];
-			if (!trans->_animFrom.empty() && !trans->_animTo.empty() && trans->_animFrom.compareToIgnoreCase(animFrom) == 0 && trans->_animTo.compareToIgnoreCase(animTo) == 0) {
+			if (trans->_animFrom && trans->_animTo && scumm_stricmp(trans->_animFrom, animFrom) == 0 && scumm_stricmp(trans->_animTo, animTo) == 0) {
 				found = true;
 				if (time < 0) {
 					delete trans;
-					_transitionTimes.remove_at(i);
+					_transitionTimes.removeAt(i);
 				} else
 					trans->_time = (uint32)time;
 				break;
@@ -2009,10 +2007,10 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		const char *animTo = stack->pop()->getString();
 
 		int time = -1;
-		for (uint32 i = 0; i < _transitionTimes.size(); i++) {
+		for (int32 i = 0; i < _transitionTimes.getSize(); i++) {
 			BaseAnimationTransitionTime *trans = _transitionTimes[i];
 
-			if (!trans->_animFrom.empty() && !trans->_animTo.empty() && trans->_animFrom.compareToIgnoreCase(animFrom) == 0 && trans->_animTo.compareToIgnoreCase(animTo) == 0) {
+			if (trans->_animFrom && trans->_animTo && scumm_stricmp(trans->_animFrom, animFrom) == 0 && scumm_stricmp(trans->_animTo, animTo) == 0) {
 				time = trans->_time;
 				break;
 			}
@@ -2032,11 +2030,10 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 		float offsetZ = stack->pop()->getFloat();
 
 		PartEmitter *emitter = createParticleEmitter(boneName, DXVector3(offsetX, offsetY, offsetZ));
-		if (emitter) {
+		if (emitter)
 			stack->pushNative(_partEmitter, true);
-		} else {
+		else
 			stack->pushNULL();
-		}
 
 		return true;
 	} else {
@@ -2045,13 +2042,13 @@ bool AdActor3DX::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisSta
 }
 
 //////////////////////////////////////////////////////////////////////////
-ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
+ScValue *AdActor3DX::scGetProperty(const char *name) {
 	_scValue->setNULL();
 
 	//////////////////////////////////////////////////////////////////////////
 	// Type
 	//////////////////////////////////////////////////////////////////////////
-	if (name == "Type") {
+	if (strcmp(name, "Type") == 0) {
 		_scValue->setString("actor3dx");
 		return _scValue;
 	}
@@ -2059,7 +2056,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// TalkAnimName
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "TalkAnimName") {
+	else if (strcmp(name, "TalkAnimName") == 0) {
 		_scValue->setString(_talkAnimName);
 		return _scValue;
 	}
@@ -2067,7 +2064,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// TalkAnimChannel
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "TalkAnimChannel") {
+	else if (strcmp(name, "TalkAnimChannel") == 0) {
 		_scValue->setInt(_talkAnimChannel);
 		return _scValue;
 	}
@@ -2075,7 +2072,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// WalkAnimName
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "WalkAnimName") {
+	else if (strcmp(name, "WalkAnimName") == 0) {
 		_scValue->setString(_talkAnimName);
 		return _scValue;
 	}
@@ -2083,7 +2080,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// IdleAnimName
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "IdleAnimName") {
+	else if (strcmp(name, "IdleAnimName") == 0) {
 		_scValue->setString(_idleAnimName);
 		return _scValue;
 	}
@@ -2091,7 +2088,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// TurnLeftAnimName
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "TurnLeftAnimName") {
+	else if (strcmp(name, "TurnLeftAnimName") == 0) {
 		_scValue->setString(_turnLeftAnimName);
 		return _scValue;
 	}
@@ -2099,7 +2096,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// TurnRightAnimName
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "TurnRightAnimName") {
+	else if (strcmp(name, "TurnRightAnimName") == 0) {
 		_scValue->setString(_turnRightAnimName);
 		return _scValue;
 	}
@@ -2107,7 +2104,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// DirectionAngle / DirAngle
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "DirectionAngle" || name == "DirAngle") {
+	else if (strcmp(name, "DirectionAngle") == 0 || strcmp(name, "DirAngle") == 0) {
 		_scValue->setFloat(_angle);
 		return _scValue;
 	}
@@ -2115,7 +2112,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// Direction
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "Direction") {
+	else if (strcmp(name, "Direction") == 0) {
 		_scValue->setInt(angleToDir(_angle));
 		return _scValue;
 	}
@@ -2123,7 +2120,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// AnimTransitionTime
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "AnimTransitionTime") {
+	else if (strcmp(name, "AnimTransitionTime") == 0) {
 		_scValue->setInt(_defaultTransTime);
 		return _scValue;
 	}
@@ -2131,7 +2128,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// AnimStopTransitionTime
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "AnimStopTransitionTime") {
+	else if (strcmp(name, "AnimStopTransitionTime") == 0) {
 		_scValue->setInt(_defaultStopTransTime);
 		return _scValue;
 	}
@@ -2139,7 +2136,7 @@ ScValue *AdActor3DX::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// GoToTolerance
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "GoToTolerance") {
+	else if (strcmp(name, "GoToTolerance") == 0) {
 		_scValue->setInt(_goToTolerance);
 		return _scValue;
 	}
@@ -2156,9 +2153,9 @@ bool AdActor3DX::scSetProperty(const char *name, ScValue *value) {
 	//////////////////////////////////////////////////////////////////////////
 	if (strcmp(name, "TalkAnimName") == 0) {
 		if (value->isNULL()) {
-			_talkAnimName = "talk";
+			BaseUtils::setString(&_talkAnimName, "talk");
 		} else {
-			_talkAnimName = value->getString();
+			BaseUtils::setString(&_talkAnimName, value->getString());
 		}
 
 		return true;
@@ -2177,9 +2174,9 @@ bool AdActor3DX::scSetProperty(const char *name, ScValue *value) {
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "WalkAnimName") == 0) {
 		if (value->isNULL()) {
-			_walkAnimName = "walk";
+			BaseUtils::setString(&_walkAnimName, "walk");
 		} else {
-			_walkAnimName = value->getString();
+			BaseUtils::setString(&_walkAnimName, value->getString());
 		}
 		return true;
 	}
@@ -2189,9 +2186,9 @@ bool AdActor3DX::scSetProperty(const char *name, ScValue *value) {
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "IdleAnimName") == 0) {
 		if (value->isNULL()) {
-			_idleAnimName = "idle";
+			BaseUtils::setString(&_idleAnimName, "idle");
 		} else {
-			_idleAnimName = value->getString();
+			BaseUtils::setString(&_idleAnimName, value->getString());
 		}
 
 		return true;
@@ -2202,9 +2199,9 @@ bool AdActor3DX::scSetProperty(const char *name, ScValue *value) {
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "TurnLeftAnimName") == 0) {
 		if (value->isNULL()) {
-			_turnLeftAnimName = "turnleft";
+			BaseUtils::setString(&_turnLeftAnimName, "turnleft");
 		} else {
-			_turnLeftAnimName = value->getString();
+			BaseUtils::setString(&_turnLeftAnimName, value->getString());
 		}
 
 		return true;
@@ -2215,9 +2212,9 @@ bool AdActor3DX::scSetProperty(const char *name, ScValue *value) {
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "TurnRightAnimName") == 0) {
 		if (value->isNULL()) {
-			_turnRightAnimName = "turnright";
+			BaseUtils::setString(&_turnRightAnimName, "turnright");
 		} else {
-			_turnRightAnimName = value->getString();
+			BaseUtils::setString(&_turnRightAnimName, value->getString());
 		}
 		return true;
 	}
@@ -2226,8 +2223,7 @@ bool AdActor3DX::scSetProperty(const char *name, ScValue *value) {
 	// DirectionAngle / DirAngle
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "DirectionAngle") == 0 || strcmp(name, "DirAngle") == 0) {
-		_angle = value->getFloat();
-		BaseUtils::normalizeAngle(_angle);
+		_angle = BaseUtils::normalizeAngle(value->getFloat());
 		return true;
 	}
 
@@ -2279,23 +2275,23 @@ bool AdActor3DX::persist(BasePersistenceManager *persistMgr) {
 
 	persistMgr->transferPtr(TMEMBER(_path3D));
 	persistMgr->transferPtr(TMEMBER(_path2D));
-	persistMgr->transferAngle(TMEMBER(_targetAngle));
+	persistMgr->transferFloat(TMEMBER(_targetAngle));
 	persistMgr->transferVector3d(TMEMBER(_targetPoint3D));
 	persistMgr->transferPtr(TMEMBER(_targetPoint2D));
 	persistMgr->transferBool(TMEMBER(_turningLeft));
 	persistMgr->transferFloat(TMEMBER(_afterWalkAngle));
 
-	persistMgr->transferString(TMEMBER(_talkAnimName));
-	persistMgr->transferString(TMEMBER(_idleAnimName));
-	persistMgr->transferString(TMEMBER(_walkAnimName));
-	persistMgr->transferString(TMEMBER(_turnLeftAnimName));
-	persistMgr->transferString(TMEMBER(_turnRightAnimName));
+	persistMgr->transferCharPtr(TMEMBER(_talkAnimName));
+	persistMgr->transferCharPtr(TMEMBER(_idleAnimName));
+	persistMgr->transferCharPtr(TMEMBER(_walkAnimName));
+	persistMgr->transferCharPtr(TMEMBER(_turnLeftAnimName));
+	persistMgr->transferCharPtr(TMEMBER(_turnRightAnimName));
 
 	// direct controls
 	persistMgr->transferSint32(TMEMBER_INT(_directWalkMode));
 	persistMgr->transferSint32(TMEMBER_INT(_directTurnMode));
-	persistMgr->transferString(TMEMBER(_directWalkAnim));
-	persistMgr->transferString(TMEMBER(_directTurnAnim));
+	persistMgr->transferCharPtr(TMEMBER(_directWalkAnim));
+	persistMgr->transferCharPtr(TMEMBER(_directTurnAnim));
 	persistMgr->transferFloat(TMEMBER(_directWalkVelocity));
 	persistMgr->transferFloat(TMEMBER(_directTurnVelocity));
 
@@ -2309,15 +2305,15 @@ bool AdActor3DX::persist(BasePersistenceManager *persistMgr) {
 	persistMgr->transferUint32(TMEMBER(_defaultStopTransTime));
 
 	if (persistMgr->getIsSaving()) {
-		int32 numItems = _transitionTimes.size();
+		int32 numItems = _transitionTimes.getSize();
 		persistMgr->transferSint32(TMEMBER(numItems));
-		for (uint32 i = 0; i < _transitionTimes.size(); i++) {
+		for (int32 i = 0; i < _transitionTimes.getSize(); i++) {
 			_transitionTimes[i]->persist(persistMgr);
 		}
 	} else {
-		int32 numItems = _transitionTimes.size();
+		int32 numItems = _transitionTimes.getSize();
 		persistMgr->transferSint32(TMEMBER(numItems));
-		for (int i = 0; i < numItems; i++) {
+		for (int32 i = 0; i < numItems; i++) {
 			BaseAnimationTransitionTime *trans = new BaseAnimationTransitionTime();
 			trans->persist(persistMgr);
 			_transitionTimes.add(trans);
@@ -2326,7 +2322,7 @@ bool AdActor3DX::persist(BasePersistenceManager *persistMgr) {
 
 	persistMgr->transferSint32(TMEMBER(_talkAnimChannel));
 
-	persistMgr->transferString(TMEMBER(_partBone));
+	persistMgr->transferCharPtr(TMEMBER(_partBone));
 	persistMgr->transferVector3d(TMEMBER(_partOffset));
 
 	return true;
@@ -2339,7 +2335,7 @@ bool AdActor3DX::invalidateDeviceObjects() {
 	if (_shadowModel)
 		_shadowModel->invalidateDeviceObjects();
 
-	for (uint32 i = 0; i < _attachments.size(); i++) {
+	for (int32 i = 0; i < _attachments.getSize(); i++) {
 		_attachments[i]->invalidateDeviceObjects();
 	}
 
@@ -2356,7 +2352,7 @@ bool AdActor3DX::restoreDeviceObjects() {
 		_shadowModel->restoreDeviceObjects();
 	}
 
-	for (uint32 i = 0; i < _attachments.size(); i++) {
+	for (int32 i = 0; i < _attachments.getSize(); i++) {
 		_attachments[i]->restoreDeviceObjects();
 	}
 
@@ -2371,7 +2367,7 @@ bool AdActor3DX::mergeAnimations(const char *filename) {
 
 	bool res = _xmodel->mergeFromFile(filename);
 	if (!res) {
-		_gameRef->LOG(res, "Error: MergeAnims failed for file '%s'", filename);
+		_game->LOG(res, "Error: MergeAnims failed for file '%s'", filename);
 		return res;
 	}
 
@@ -2401,7 +2397,7 @@ bool AdActor3DX::mergeAnimations2(const char *filename) {
 
 	char *params;
 	int cmd;
-	BaseParser parser;
+	BaseParser parser(_game);
 
 	while ((cmd = parser.getCommand(&buffer, commands, &params)) > 0) {
 		switch (cmd) {
@@ -2414,11 +2410,11 @@ bool AdActor3DX::mergeAnimations2(const char *filename) {
 	delete[] bufferOrig;
 
 	if (cmd == PARSERR_TOKENNOTFOUND) {
-		_gameRef->LOG(0, "Syntax error in animation definition file");
+		_game->LOG(0, "Syntax error in animation definition file");
 		return false;
 	}
 	if (cmd == PARSERR_GENERIC) {
-		_gameRef->LOG(0, "Error loading animation definition file");
+		_game->LOG(0, "Error loading animation definition file");
 		return false;
 	}
 
@@ -2435,7 +2431,7 @@ bool AdActor3DX::unloadAnimation(const char *animName) {
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool AdActor3DX::isGoToNeeded(int x, int y) {
+bool AdActor3DX::isGoToNeeded(int32 x, int32 y) {
 	if (ABS(x - _posX) <= _goToTolerance && ABS(y - _posY) <= _goToTolerance) {
 		return false;
 	} else {
@@ -2444,10 +2440,10 @@ bool AdActor3DX::isGoToNeeded(int x, int y) {
 }
 
 //////////////////////////////////////////////////////////////////////////
-uint32 AdActor3DX::getAnimTransitionTime(char *from, char *to) {
-	for (uint32 i = 0; i < _transitionTimes.size(); i++) {
+uint32 AdActor3DX::getAnimTransitionTime(const char *from, const char *to) {
+	for (int32 i = 0; i < _transitionTimes.getSize(); i++) {
 		BaseAnimationTransitionTime *trans = _transitionTimes[i];
-		if (!trans->_animFrom.empty() && !trans->_animTo.empty() && trans->_animFrom.compareToIgnoreCase(from) == 0 && trans->_animTo.compareToIgnoreCase(to) == 0) {
+		if (trans->_animFrom && trans->_animTo && scumm_stricmp(trans->_animFrom, from) == 0 && scumm_stricmp(trans->_animTo, to) == 0) {
 			return trans->_time;
 		}
 	}
@@ -2457,13 +2453,13 @@ uint32 AdActor3DX::getAnimTransitionTime(char *from, char *to) {
 
 //////////////////////////////////////////////////////////////////////////
 PartEmitter *AdActor3DX::createParticleEmitter(bool followParent, int offsetX, int offsetY) {
-	_partBone.clear();
+	SAFE_DELETE_ARRAY(_partBone);
 	return AdObject::createParticleEmitter(followParent, offsetX, offsetY);
 }
 
 //////////////////////////////////////////////////////////////////////////
 PartEmitter *AdActor3DX::createParticleEmitter(const char *boneName, DXVector3 offset) {
-	_partBone = boneName;
+	BaseUtils::setString(&_partBone, boneName);
 	_partOffset = offset;
 	return AdObject::createParticleEmitter(true);
 }
@@ -2474,23 +2470,23 @@ bool AdActor3DX::updatePartEmitter() {
 		return false;
 	}
 
-	if (_partBone.empty()) {
+	if (!_partBone) {
 		return AdObject::updatePartEmitter();
 	}
 
-	AdGame *adGame = (AdGame *)_gameRef;
+	AdGame *adGame = (AdGame *)_game;
 
 	if (!adGame->_scene || !adGame->_scene->_geom) {
 		return false;
 	}
 
 	DXVector3 bonePos;
-	getBonePosition3D(_partBone.c_str(), &bonePos, &_partOffset);
+	getBonePosition3D(_partBone, &bonePos, &_partOffset);
 	int32 x = 0, y = 0;
-	static_cast<AdGame *>(_gameRef)->_scene->_geom->convert3Dto2D(&bonePos, &x, &y);
+	static_cast<AdGame *>(_game)->_scene->_geom->convert3Dto2D(&bonePos, &x, &y);
 
-	_partEmitter->_posX = x - _gameRef->_renderer->_drawOffsetX;
-	_partEmitter->_posY = y - _gameRef->_renderer->_drawOffsetY;
+	_partEmitter->_posX = x - _game->_renderer->_drawOffsetX;
+	_partEmitter->_posY = y - _game->_renderer->_drawOffsetY;
 
 	return _partEmitter->update();
 }
@@ -2504,7 +2500,7 @@ bool AdActor3DX::parseEffect(char *buffer) {
 
 	char *params;
 	int cmd;
-	BaseParser parser;
+	BaseParser parser(_game);
 
 	char *effectFile = nullptr;
 	char *material = nullptr;
@@ -2527,12 +2523,12 @@ bool AdActor3DX::parseEffect(char *buffer) {
 
 	if (effectFile && material) {
 		if (!_xmodel->setMaterialEffect(material, effectFile)) {
-			_gameRef->LOG(0, "Error assigning effect to material '%s'", material);
+			_game->LOG(0, "Error assigning effect to material '%s'", material);
 		}
 	}
 
-	delete[] effectFile;
-	delete[] material;
+	SAFE_DELETE_ARRAY(effectFile);
+	SAFE_DELETE_ARRAY(material);
 
 	return true;
 }

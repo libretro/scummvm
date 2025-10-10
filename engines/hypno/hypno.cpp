@@ -42,6 +42,8 @@
 #include "hypno/grammar.h"
 #include "hypno/hypno.h"
 
+#include "backends/keymapper/keymapper.h"
+
 namespace Hypno {
 
 Hotspots *g_parsedHots;
@@ -56,10 +58,10 @@ HypnoEngine::HypnoEngine(OSystem *syst, const ADGameDescription *gd)
 	  _playerFrameIdx(0), _playerFrameSep(0), _refreshConversation(false),
 	  _countdown(0), _timerStarted(false), _score(0), _bonus(0), _lives(0),
 	  _defaultCursor(""), _defaultCursorIdx(0),  _skipDefeatVideo(false),
-	  _background(nullptr), _masks(nullptr), _musicRate(0), _musicStereo(false),
+	  _background(nullptr), _masks(nullptr),
 	  _additionalVideo(nullptr), _ammo(0), _maxAmmo(0), _skipNextVideo(false),
-	  _doNotStopSounds(false), _screenW(0), _screenH(0), // Every games initializes its own resolution
-	  _keepTimerDuringScenes(false) {
+	  _screenW(0), _screenH(0), // Every games initializes its own resolution
+	  _keepTimerDuringScenes(false), _subtitles(nullptr) {
 	_rnd = new Common::RandomSource("hypno");
 	_checkpoint = "";
 
@@ -171,6 +173,16 @@ Common::Error HypnoEngine::run() {
 		} else
 			g_system->delayMillis(300);
 	}
+
+	// Only enable if subtitles are available
+	bool useSubtitles = false;
+	if (!Common::parseBool(ConfMan.get("subtitles"), useSubtitles))
+		warning("Failed to parse bool from subtitles options");
+
+	if (useSubtitles) {
+		g_system->showOverlay(false);
+	}
+
 	return Common::kNoError;
 }
 
@@ -180,14 +192,13 @@ void HypnoEngine::runLevel(Common::String &name) {
 
 	_prefixDir = _levels[name]->prefix;
 	stopSound();
-	_music.clear();
+	stopMusic();
 
 	// Play intros
 	disableCursor();
 
 	if (_levels[name]->playMusicDuringIntro && !_levels[name]->music.empty()) {
-		playSound(_levels[name]->music, 0, _levels[name]->musicRate);
-		_doNotStopSounds = true;
+		playMusic(_levels[name]->music, _levels[name]->musicRate);
 	}
 
 	debug("Number of videos to play: %d", _levels[name]->intros.size());
@@ -195,8 +206,6 @@ void HypnoEngine::runLevel(Common::String &name) {
 		MVideo v(*it, Common::Point(0, 0), false, true, false);
 		runIntro(v);
 	}
-
-	_doNotStopSounds = false;
 
 	if (_levels[name]->type == TransitionLevel) {
 		debugC(1, kHypnoDebugScene, "Executing transition level %s", name.c_str());
@@ -223,8 +232,6 @@ void HypnoEngine::runLevel(Common::String &name) {
 void HypnoEngine::runIntros(Videos &videos) {
 	debugC(1, kHypnoDebugScene, "Starting run intros with %d videos!", videos.size());
 	Common::Event event;
-	if (!_doNotStopSounds)
-		stopSound();
 	bool skip = false;
 	int clicked[3] = {-1, -1, -1};
 	int clicks = 0;
@@ -233,12 +240,16 @@ void HypnoEngine::runIntros(Videos &videos) {
 		playVideo(*it);
 	}
 
+	Common::Keymapper *keymapper = g_system->getEventManager()->getKeymapper();
+	disableGameKeymaps();
+	keymapper->getKeymap("intro")->setEnabled(true);
+
 	while (!shouldQuit()) {
 		while (g_system->getEventManager()->pollEvent(event)) {
 			// Events
 			switch (event.type) {
-			case Common::EVENT_KEYDOWN:
-				if (event.kbd.keycode == Common::KEYCODE_ESCAPE)
+			case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
+				if (event.customType == kActionSkipIntro)
 					skip = true;
 				break;
 			case Common::EVENT_LBUTTONDOWN:
@@ -278,6 +289,9 @@ void HypnoEngine::runIntros(Videos &videos) {
 					playing = true;
 					if (it->decoder->needsUpdate()) {
 						updateScreen(*it);
+						if (_subtitles && it->decoder && !it->decoder->isPaused())
+							_subtitles->drawSubtitle(it->decoder->getTime(), false, false);
+
 						drawScreen();
 					}
 				}
@@ -290,12 +304,20 @@ void HypnoEngine::runIntros(Videos &videos) {
 		g_system->updateScreen();
 		g_system->delayMillis(10);
 	}
+	keymapper->getKeymap("intro")->setEnabled(false);
+	enableGameKeymaps();
 }
 
 void HypnoEngine::runIntro(MVideo &video) {
+	Common::Path path(video.path);
+	loadSubtitles(path);
 	Videos tmp;
 	tmp.push_back(video);
 	runIntros(tmp);
+
+	delete _subtitles;
+	_subtitles = nullptr;
+	g_system->clearOverlay();
 }
 
 void HypnoEngine::runCode(Code *code) { error("Function \"%s\" not implemented", __FUNCTION__); }
@@ -540,6 +562,48 @@ void HypnoEngine::drawScreen() {
 
 // Video handling
 
+void HypnoEngine::adjustSubtitleSize() {
+	debugC(1, kHypnoDebugMedia, "%s()", __FUNCTION__);
+	if (_subtitles) {
+		int16 h = g_system->getOverlayHeight();
+		int16 w = g_system->getOverlayWidth();
+		float scale = h / 2160.f;
+		_subtitles->setBBox(Common::Rect(20, h - 160 * scale, w - 20, h - 20));
+		int fontSize = MAX(8, int(50 * scale));
+		_subtitles->setColor(0xff, 0xff, 0x80);
+		_subtitles->setFont("NotoSerif-Regular.ttf", fontSize, "regular");
+		_subtitles->setFont("NotoSerif-Italic.ttf", fontSize, "italic");
+	}
+}
+
+void HypnoEngine::loadSubtitles(const Common::Path &path) {
+	debugC(1, kHypnoDebugMedia, "%s(%s)", __FUNCTION__, path.toString().c_str());
+	debug("Subtitle path: %s", path.toString().c_str());
+	Common::String subPathStr = path.toString() + ".srt";
+	subPathStr.toLowercase();
+	subPathStr.replace('/', '_');
+	subPathStr.replace('\\', '_');
+	Common::String language(Common::getLanguageCode(_language));
+	if (language == "us")
+		language = "en";
+
+	Common::Path subPath = "subtitles";
+	subPath = subPath.appendComponent(language);
+	subPath = subPath.appendComponent(subPathStr);
+	debugC(1, kHypnoDebugMedia, "Loading subtitles from %s", subPath.toString().c_str());
+	if (Common::File::exists(subPath)) {
+		_subtitles = new Video::Subtitles();
+		_subtitles->loadSRTFile(subPath);
+		g_system->showOverlay(false);
+		adjustSubtitleSize();
+	} else {
+		delete _subtitles;
+		_subtitles = nullptr;
+		g_system->clearOverlay();
+	}
+}
+
+
 void HypnoEngine::playVideo(MVideo &video) {
 	debugC(1, kHypnoDebugMedia, "%s(%s)", __FUNCTION__, video.path.c_str());
 	Common::File *file = new Common::File();
@@ -575,12 +639,10 @@ void HypnoEngine::skipVideo(MVideo &video) {
 }
 
 // Sound handling
-
-void HypnoEngine::playSound(const Common::String &filename, uint32 loops, uint32 sampleRate, bool stereo) {
-	debugC(1, kHypnoDebugMedia, "%s(%s, %d, %d)", __FUNCTION__, filename.c_str(), loops, sampleRate);
+Audio::SeekableAudioStream *HypnoEngine::loadAudioStream(const Common::String &filename, uint32 sampleRate, bool stereo) {
+	debugC(1, kHypnoDebugMedia, "%s(%s, %d)", __FUNCTION__, filename.c_str(), sampleRate);
 	Common::Path name = convertPath(filename);
 
-	Audio::LoopingAudioStream *stream = nullptr;
 	Common::File *file = new Common::File();
 	if (file->open(name)) {
 		uint32 flags = Audio::FLAG_UNSIGNED;
@@ -593,25 +655,50 @@ void HypnoEngine::playSound(const Common::String &filename, uint32 loops, uint32
 			sub = new Common::SeekableSubReadStream(file, 0, file->size(), DisposeAfterUse::YES);
 		}
 
-		stream = new Audio::LoopingAudioStream(Audio::makeRawStream(sub, sampleRate, flags, DisposeAfterUse::YES), loops);
-		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundHandle, stream, -1, Audio::Mixer::kMaxChannelVolume);
+		return Audio::makeRawStream(sub, sampleRate, flags, DisposeAfterUse::YES);
 	} else {
 		if (!_prefixDir.empty())
 			name = _prefixDir.join(name);
 		if (file->open(name)) {
-			stream = new Audio::LoopingAudioStream(Audio::makeRawStream(file, sampleRate, Audio::FLAG_UNSIGNED, DisposeAfterUse::YES), loops);
-			_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundHandle, stream, -1, Audio::Mixer::kMaxChannelVolume);
+			return Audio::makeRawStream(file, sampleRate, Audio::FLAG_UNSIGNED, DisposeAfterUse::YES);
 		} else {
 			debugC(1, kHypnoDebugMedia, "%s not found!", name.toString().c_str());
 			delete file;
+			return nullptr;
 		}
 	}
 }
 
+void HypnoEngine::playSound(const Common::String &filename, uint32 loops, uint32 sampleRate, bool stereo) {
+	Audio::SeekableAudioStream *stream = loadAudioStream(filename, sampleRate, stereo);
+	if (!stream)
+		return;
+	_mixer->stopHandle(_soundHandle);
+	Audio::LoopingAudioStream *loopstream = new Audio::LoopingAudioStream(stream, loops);
+	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundHandle, loopstream, -1, Audio::Mixer::kMaxChannelVolume);
+}
+
+void HypnoEngine::playMusic(const Common::String &filename, uint32 sampleRate, bool stereo) {
+	Audio::SeekableAudioStream *stream = loadAudioStream(filename, sampleRate, stereo);
+	if (!stream)
+		return;
+	_mixer->stopHandle(_musicHandle);
+	Audio::LoopingAudioStream *loopstream = new Audio::LoopingAudioStream(stream, 0);
+	_mixer->playStream(Audio::Mixer::kMusicSoundType, &_musicHandle, loopstream, -1, Audio::Mixer::kMaxChannelVolume);
+}
+
 void HypnoEngine::stopSound() {
 	debugC(1, kHypnoDebugMedia, "%s()", __FUNCTION__);
-	_mixer->stopAll();
-	//_mixer->stopHandle(_soundHandle);
+	_mixer->stopHandle(_soundHandle);
+}
+
+void HypnoEngine::stopMusic() {
+	debugC(1, kHypnoDebugMedia, "%s()", __FUNCTION__);
+	_mixer->stopHandle(_musicHandle);
+}
+
+bool HypnoEngine::isMusicActive() {
+	return _mixer->isSoundHandleActive(_musicHandle);
 }
 
 // Path handling

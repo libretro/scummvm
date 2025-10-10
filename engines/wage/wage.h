@@ -69,6 +69,10 @@ namespace Graphics {
 class MacDialog;
 }
 
+namespace Audio {
+class PCSpeaker;
+}
+
 namespace Wage {
 
 class Console;
@@ -87,6 +91,11 @@ typedef Common::List<Chr *> ChrList;
 
 #define STORAGESCENE "STORAGE@"
 
+enum {
+	kDebugImGui = 1,
+	kDebugSound,
+};
+
 enum OperandType {
 	OBJ = 0,
 	CHR = 1,
@@ -103,14 +112,6 @@ enum Directions {
 	SOUTH = 1,
 	EAST = 2,
 	WEST = 3
-};
-
-// our engine debug levels
-enum {
-	kWageDebugExample = 1 << 0,
-	kWageDebugExample2 = 1 << 1
-	// next new level must be 1 << 2 (4)
-	// the current limitation is 32 debug levels (1 << 31 is the last one)
 };
 
 enum Resolution {
@@ -160,8 +161,6 @@ private:
 	bool attackHit(Chr *attacker, Chr *victim, Obj *weapon, int targetIndex);
 	void performHealingMagic(Chr *chr, Obj *magicalObject);
 
-	void doClose();
-
 public:
 	void takeObj(Obj *obj);
 
@@ -187,6 +186,8 @@ public:
 
 	void printPlayerCondition(Chr *player);
 	const char *getPercentMessage(double percent);
+
+	void doClose();
 
 public:
 	Common::RandomSource *_rnd;
@@ -215,16 +216,14 @@ public:
 
 	Common::List<int> _soundQueue;
 	Common::String _soundToPlay;
+	Audio::PCSpeaker *_speaker;
 
-	void playSound(Common::String soundName);
+	void playSound(Common::String soundName, bool blocking = true);
 	void updateSoundTimerForScene(Scene *scene, bool firstTime);
 	void setMenu(Common::String soundName);
 	void appendText(const char *str);
 	void sayText(const Common::U32String &str, Common::TextToSpeechManager::Action action = Common::TextToSpeechManager::INTERRUPT_NO_REPEAT) const;
 	void sayText(const Common::String &str, Common::TextToSpeechManager::Action action = Common::TextToSpeechManager::INTERRUPT_NO_REPEAT) const;
-	void gameOver();
-	bool saveDialog();
-	void aboutDialog();
 	Obj *getOffer();
 	Chr *getMonster();
 	void processEvents();
@@ -260,6 +259,8 @@ private:
 
 	Audio::SoundHandle _soundHandle;
 };
+
+extern WageEngine *g_wage;
 
 } // End of namespace Wage
 

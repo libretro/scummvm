@@ -26,7 +26,7 @@ import unicodedata
 import urllib.request
 import zipfile
 from binascii import crc_hqx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from io import BytesIO, IOBase, StringIO
 from pathlib import Path
@@ -282,12 +282,31 @@ def punyencode(orig: str) -> str:
     # punyencoding adds an '-' at the end when there are no special chars
     # don't use it for comparing
     compare = encoded
+
+    if len(encoded) == 0:
+        return orig
+
     if encoded[-1] == "-":
         compare = encoded[:-1]
     if orig != compare or compare[-1] in " .":
         return "xn--" + encoded
     return orig
 
+def punyencode_filename(orig: str) -> str:
+    """
+    Punyencode a filename
+
+    - escape special characters and
+    - ensure filenames can't end in a space or dot
+    """
+    out = ""
+    for p in os.path.split(orig):
+        p = os.path.basename(p)
+        if len(p) == 0:
+            continue
+        out += "/" + punyencode(p)
+
+    return out
 
 def decode_string(orig: str) -> str:
     """
@@ -541,20 +560,34 @@ def extract_volume_iso(args: argparse.Namespace) -> None:
         arg["encoding"] = "shift_jis"
 
     for dirname, dirlist, filelist in iso.walk(**arg):
-        pwd = output_dir + dirname
+        if punyencode:
+            pwd = output_dir + punyencode_filename(dirname)
+        else:
+            pwd = output_dir + dirname
+
         for dir in dirlist:
+            if dopunycode:
+                dir = punyencode(dir)
+
             joined_path = os.path.join(pwd, dir)
             if not dryrun:
                 os.makedirs(joined_path, exist_ok=True)
 
         for file in filelist:
             filename = file.split(";")[0]
+            if dopunycode:
+                filename = punyencode(filename)
+
             iso_file_path = os.path.join(dirname, file)
             out_file_path = os.path.join(pwd, filename)
             if not silent:
                 print(out_file_path)
             if dryrun:
                 continue
+
+            # Sometimes, directory is not present in the list
+            # Make sure we have place to write the file
+            os.makedirs(os.path.dirname(out_file_path), exist_ok=True)
 
             # arg[path_type] = iso_file_path
             # iso.get_file_from_iso(out_file_path, **arg)
@@ -564,7 +597,7 @@ def extract_volume_iso(args: argparse.Namespace) -> None:
 
                 rec = iso.get_record(**arg).date
                 stamp = datetime(rec.years_since_1900 + 1900, rec.month, rec.day_of_month,
-                                 rec.hour - rec.gmtoffset, rec.minute, rec.second, tzinfo=timezone.utc).timestamp()
+                                 rec.hour, rec.minute, rec.second, tzinfo=timezone.utc).timestamp() - timedelta(minutes=rec.gmtoffset * 15).total_seconds()
 
                 f.close()
 
@@ -574,20 +607,25 @@ def extract_volume_iso(args: argparse.Namespace) -> None:
 
     arg[path_type] = "/"
     for dirname, dirlist, filelist in iso.walk(**arg):
-        pwd = output_dir + dirname
+        if punyencode:
+            pwd = output_dir + punyencode_filename(dirname)
+        else:
+            pwd = output_dir + dirname
         # Set the modified time for directories
         for dir in dirlist:
+            dirorig = dir
+            if dopunycode:
+                dir = punyencode(dir)
+
             joined_path = os.path.join(pwd, dir)
             if not dryrun:
                 print(joined_path)
-                arg[path_type] = os.path.join(dirname, dir)
+                arg[path_type] = os.path.join(dirname, dirorig)
                 rec = iso.get_record(**arg).date
                 stamp = datetime(rec.years_since_1900 + 1900, rec.month, rec.day_of_month,
-                                 rec.hour - rec.gmtoffset, rec.minute, rec.second, tzinfo=timezone.utc).timestamp()
+                                 rec.hour, rec.minute, rec.second, tzinfo=timezone.utc).timestamp() - timedelta(minutes=rec.gmtoffset * 15).total_seconds()
                 os.utime(joined_path, (stamp, stamp))
 
-    if dopunycode:
-        punyencode_dir(Path(output_dir))
     iso.close()
 
 

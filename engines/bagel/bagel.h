@@ -23,10 +23,10 @@
 #define BAGEL_H
 
 #include "common/random.h"
-
+#include "graphics/screen.h"
 #include "bagel/detection.h"
 #include "bagel/music.h"
-#include "bagel/baglib/master_win.h"
+#include "bagel/spacebar/baglib/master_win.h"
 
 namespace Bagel {
 
@@ -36,18 +36,14 @@ class BagelEngine : public Engine {
 private:
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
-	StBagelSave _saveData;
-
-	bool canSaveLoadFromWindow(bool save) const;
 
 public:
-	Graphics::Screen *_screen = nullptr;
-	MusicPlayer *_midi = nullptr;
 	bool _useOriginalSaveLoad = false;
-	CBagMasterWin *_masterWin = nullptr;
+	SpaceBar::CBagMasterWin *_masterWin = nullptr;
 	CBofPoint g_cInitLoc;       // This is the initial location for the next new pan (only option at this point)
 	bool g_bUseInitLoc = false;
 	bool g_getVilVarsFl = true;
+	MusicPlayer *_midi = nullptr;
 
 public:
 	BagelEngine(OSystem *syst, const ADGameDescription *gameDesc);
@@ -61,6 +57,13 @@ public:
 	Common::String getGameId() const;
 
 	/**
+	 * Return if the game is Space Bar
+	 */
+	bool isSpaceBar() const {
+		return getGameId() == "spacebar";
+	}
+
+	/**
 	 * Return the game's platform
 	 */
 	Common::Platform getPlatform() const;
@@ -69,6 +72,7 @@ public:
 	 * Return whether it's a demo
 	 */
 	bool isDemo() const;
+	bool isMazeODoomDemo() const;
 
 	/**
 	 * Gets a random number
@@ -84,31 +88,6 @@ public:
 		    (f == kSupportsReturnToLauncher);
 	};
 
-	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
-	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
-
-	/**
-	 * Save a game state
-	 */
-	Common::Error saveGameState(int slot, const Common::String &desc, bool isAutosave = false) override;
-	Common::Error saveGameState(int slot, const Common::String &desc, bool isAutosave,
-		StBagelSave &saveData);
-
-	/**
-	 * Load a game state
-	 */
-	Common::Error loadGameState(int slot) override;
-
-	/**
-	 * Handles saving the game
-	 */
-	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave = false) override;
-
-	/**
-	 * Handles loading a savegame
-	 */
-	Common::Error loadGameStream(Common::SeekableReadStream *stream) override;
-
 	/**
 	 * Returns a list of savegames
 	 */
@@ -119,10 +98,7 @@ public:
 	 */
 	bool savesExist() const;
 
-	/**
-	 * Pause all internal timers.
-	 */
-	void pauseEngineIntern(bool pause) override;
+	virtual Graphics::Screen *getScreen() const = 0;
 
 	void errorDialog(const char *msg) const;
 
@@ -131,6 +107,10 @@ public:
 
 extern BagelEngine *g_engine;
 #define SHOULD_QUIT ::Bagel::g_engine->shouldQuit()
+
+inline int brand() {
+	return g_engine->getRandomNumber(RAND_MAX);
+}
 
 } // End of namespace Bagel
 

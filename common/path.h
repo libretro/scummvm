@@ -396,6 +396,25 @@ public:
 	Path &appendInPlace(const char *str, char separator = '/');
 
 	/**
+	 * Appends the given path to this path (in-place).
+	 * Does not automatically add a directory separator.
+	 * For string based versions, expects / as a directory separator.
+	 */
+	Path &operator+=(const Path &x) {
+		return appendInPlace(x);
+	}
+
+	/** @overload */
+	Path &operator+=(const String &str) {
+		return appendInPlace(str);
+	}
+
+	/** @overload */
+	Path &operator+=(const char *str) {
+		return appendInPlace(str);
+	}
+
+	/**
 	 * Returns this path with the given path appended (out-of-place).
 	 * Does not automatically add a directory separator.
 	 */
@@ -419,7 +438,7 @@ public:
 
 	/**
 	 * Appends exactly one component, without any separators
-	 * and prepends a separator if necessarry
+	 * and prepends a separator if necessary
 	 */
 	WARN_UNUSED_RESULT Path appendComponent(const char *str) const;
 
@@ -443,6 +462,25 @@ public:
 	Path &joinInPlace(const char *str, char separator = '/');
 
 	/**
+	 * Joins the given path to this path (in-place).
+	 * Automatically adds a directory separator.
+	 * For string based versions, expects / as a directory separator.
+	 */
+	Path &operator/=(const Path &x) {
+		return joinInPlace(x);
+	}
+
+	/** @overload */
+	Path &operator/=(const String &str) {
+		return joinInPlace(str);
+	}
+
+	/** @overload */
+	Path &operator/=(const char *str) {
+		return joinInPlace(str);
+	}
+
+	/**
 	 * Returns this path joined with the given path (out-of-place).
 	 * Automatically adds a directory separator.
 	 */
@@ -462,6 +500,25 @@ public:
 		Path temp(*this);
 		temp.joinInPlace(str, separator);
 		return temp;
+	}
+
+	/**
+	 * Returns this path joined with the given path (out-of-place).
+	 * Automatically adds a directory separator.
+	 * For string based versions, expects / as a directory separator.
+	 */
+	WARN_UNUSED_RESULT Path operator/(const Path &x) const {
+		return join(x);
+	}
+
+	/** @overload */
+	WARN_UNUSED_RESULT Path operator/(const String &str) const {
+		return join(str);
+	}
+
+	/** @overload */
+	WARN_UNUSED_RESULT Path operator/(const char *str) const {
+		return join(str);
 	}
 
 	/**
@@ -512,6 +569,14 @@ public:
 	 * Returns whether the path will need to be Punycoded
 	 */
 	bool punycodeNeedsEncode() const;
+
+	/**
+	 * Returns whether the path is already Punycoded
+	 *
+	 * Only the prefix is checked and not the Punycode correctness.
+	 * Use this function only with known Punycoded paths.
+	 */
+	bool punycodeIsEncoded() const;
 
 	/**
 	 * Convert all characters in the path to lowercase.

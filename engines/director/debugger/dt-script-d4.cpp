@@ -20,6 +20,8 @@
  */
 
 #include "director/director.h"
+#include "director/movie.h"
+#include "director/cast.h"
 #include "director/debugger/dt-internal.h"
 
 #include "director/debugger.h"
@@ -35,7 +37,7 @@ namespace DT {
 
 class RenderScriptVisitor : public LingoDec::NodeVisitor {
 public:
-	RenderScriptVisitor(ImGuiScript &script, bool showByteCode) : _script(script), _showByteCode(showByteCode) {
+	RenderScriptVisitor(ImGuiScript &script, bool showByteCode, bool scrollTo) : _script(script), _showByteCode(showByteCode), _scrollTo(scrollTo) {
 		Common::Array<CFrame *> &callstack = g_lingo->_state->callstack;
 		if (!callstack.empty()) {
 			CFrame *head = callstack[callstack.size() - 1];
@@ -95,14 +97,6 @@ public:
 	}
 
 	virtual void visit(const LingoDec::CallNode &node) override {
-		int32 obj = 0;
-		for (uint i = 0; i < _script.bytecodeArray.size(); i++) {
-			if (node._startOffset == _script.bytecodeArray[i].pos) {
-				obj = _script.bytecodeArray[i].obj;
-				break;
-			}
-		}
-
 		// new line only if it's a statement
 		if (node.isStatement) {
 			renderLine(node._startOffset);
@@ -112,15 +106,39 @@ public:
 		const ImVec4 color = (ImVec4)ImColor(g_lingo->_builtinCmds.contains(node.name) ? _state->_colors._builtin_color : _state->_colors._call_color);
 		ImGui::TextColored(color, "%s", node.name.c_str());
 		// TODO: we should test Director::builtins too (but inaccessible)
-		if (!g_lingo->_builtinCmds.contains(node.name) && ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
+		if (!g_lingo->_builtinFuncs.contains(node.name) && ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
 			ImGui::Text("Go to definition");
 			ImGui::EndTooltip();
 		}
-		if (!g_lingo->_builtinCmds.contains(node.name) && ImGui::IsItemClicked()) {
-			ImGuiScript script = toImGuiScript(_script.type, CastMemberID(obj, _script.id.castLib), node.name);
-			script.moviePath = _script.moviePath;
-			script.handlerName = node.name;
-			setScriptToDisplay(script);
+		if (!g_lingo->_builtinFuncs.contains(node.name) && ImGui::IsItemClicked()) {
+			int32 obj = 0;
+			for (uint i = 0; i < _script.bytecodeArray.size(); i++) {
+				if (node._startOffset == _script.bytecodeArray[i].pos) {
+					// This obj represents the index of the handler being called
+					// The index may be local (lingo context-wide) or global (cast-wide)
+					obj = _script.bytecodeArray[i].obj;
+					break;
+				}
+			}
+			ScriptContext *context = getScriptContext(obj, _script.id, node.name);
+
+			if (context) {
+				ImGuiScript script = toImGuiScript(_script.type, CastMemberID(context->_id, _script.id.castLib), node.name);
+				const Director::Movie *movie = g_director->getCurrentMovie();
+
+				script.byteOffsets = context->_functionByteOffsets[script.handlerId];
+				script.moviePath = _script.moviePath;
+				int castId = context->_id;
+				bool childScript = false;
+				if (castId == -1) {
+					castId = movie->getCast()->getCastIdByScriptId(context->_parentNumber);
+					childScript = true;
+				}
+
+				script.handlerName = formatHandlerName(context->_scriptId, castId, script.handlerId, context->_scriptType, childScript);
+				setScriptToDisplay(script);
+				_state->_dbg._goToDefinition = true;
+			}
 		}
 		ImGui::SameLine();
 
@@ -916,6 +934,7 @@ private:
 			return;
 		case LingoDec::kDatumPropList: {
 			ImGui::Text("[");
+			ImGui::SameLine();
 			if (datum.l.size() == 0) {
 				ImGui::Text(":");
 				ImGui::SameLine();
@@ -943,6 +962,7 @@ private:
 		if (ImGui::IsItemHovered() && g_lingo->_globalvars.contains(varName)) {
 			const Datum &val = g_lingo->_globalvars.getVal(varName);
 			ImGui::BeginTooltip();
+			ImGui::Text("%s", varName.c_str());
 			ImGui::Text("Click to add to watches.");
 			Common::String s = val.asString(true);
 			s.wordWrap(150);
@@ -984,6 +1004,11 @@ private:
 				ImGui::SameLine();
 			}
 		}
+		if (_state->_dbg._goToDefinition && _scrollTo) {
+			ImGui::SetScrollHereY(0.5f);
+			_state->_dbg._goToDefinition = false;
+		}
+
 		indent();
 
 		if (isMethod && !_script.propertyNames.empty() && node.handler == &node.handler->script->handlers[0]) {
@@ -1008,7 +1033,7 @@ private:
 					ImGui::Text(",");
 					ImGui::SameLine();
 				}
-				ImGui::TextColored(_state->_colors._var_color, "%s", _script.globalNames[i].c_str());
+				renderVar(_script.globalNames[i]);
 				ImGui::SameLine();
 			}
 		}
@@ -1112,7 +1137,12 @@ private:
 		uint pc = _script.byteOffsets[p];
 		_script.startOffsets.push_back(pc);
 
-		if (_isScriptInDebug && g_lingo->_exec._state == kPause) {
+		if (_script.pc != 0 && pc >= _script.pc) {
+			if (!_currentStatementDisplayed) {
+				showCurrentStatement = true;
+				_currentStatementDisplayed = true;
+			}
+		} else if (_isScriptInDebug && g_lingo->_exec._state == kPause) {
 			// check current statement
 			if (!_currentStatementDisplayed) {
 				if (g_lingo->_state->pc <= pc) {
@@ -1132,7 +1162,12 @@ private:
 		if (bp)
 			color = _state->_colors._bp_color_enabled;
 
+		// Need to give a new id for each button
+		Common::String id = _script.handlerId + _renderLineID;
+		ImGui::PushID(id.c_str());
 		ImGui::InvisibleButton("Line", ImVec2(16, ImGui::GetFontSize()));
+		ImGui::PopID();
+		_renderLineID++;
 
 		// click on breakpoint column?
 		if (ImGui::IsItemClicked(0)) {
@@ -1164,8 +1199,9 @@ private:
 		if (showCurrentStatement) {
 			dl->AddQuadFilled(ImVec2(pos.x, pos.y + 4.f), ImVec2(pos.x + 9.f, pos.y + 4.f), ImVec2(pos.x + 9.f, pos.y + 10.f), ImVec2(pos.x, pos.y + 10.f), ImColor(_state->_colors._current_statement));
 			dl->AddTriangleFilled(ImVec2(pos.x + 8.f, pos.y), ImVec2(pos.x + 14.f, pos.y + 7.f), ImVec2(pos.x + 8.f, pos.y + 14.f), ImColor(_state->_colors._current_statement));
-			if (_state->_dbg._isScriptDirty && !ImGui::IsItemVisible()) {
+			if (_state->_dbg._scrollToPC && _scrollTo && g_lingo->_state->callstack.size() != _state->_dbg._callstackSize) {
 				ImGui::SetScrollHereY(0.5f);
+				_state->_dbg._scrollToPC = false;
 			}
 			dl->AddRectFilled(ImVec2(pos.x + 16.f, pos.y), ImVec2(pos.x + width, pos.y + 16.f), ImColor(IM_COL32(0xFF, 0xFF, 0x00, 0x20)), 0.4f);
 		}
@@ -1211,10 +1247,12 @@ private:
 	int _indent = 0;
 	bool _currentStatementDisplayed = false;
 	bool _isScriptInDebug = false;
+	int _renderLineID = 1;
+	bool _scrollTo = false;
 };
 
-void renderScriptAST(ImGuiScript &script, bool showByteCode) {
-	RenderScriptVisitor visitor(script, showByteCode);
+void renderScriptAST(ImGuiScript &script, bool showByteCode, bool scrollTo) {
+	RenderScriptVisitor visitor(script, showByteCode, scrollTo);
 	script.root->accept(visitor);
 }
 

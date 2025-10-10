@@ -32,9 +32,14 @@
 #include "graphics/font.h"
 #include "graphics/fontman.h"
 #include "graphics/surface.h"
+#include "video/subtitles.h"
 
 #include "hypno/grammar.h"
 #include "hypno/libfile.h"
+
+namespace Audio {
+class SeekableAudioStream;
+}
 
 namespace Image {
 class ImageDecoder;
@@ -76,6 +81,32 @@ enum HypnoColors {
 enum SpiderColors {
 	kSpiderColorWhite = 248,
 	kSpiderColorBlue = 252,
+};
+
+enum HYPNOActions {
+	kActionNone,
+	kActionSkipIntro,
+	kActionSkipCutscene,
+	kActionPrimaryShoot,
+	kActionSkipLevel,
+	kActionKillPlayer,
+	kActionPause,
+	kActionLeft,
+	kActionDown,
+	kActionRight,
+	kActionUp,
+	kActionYes,
+	kActionNo,
+	kActionDifficultyChump,
+	kActionDifficultyPunk,
+	kActionDifficultyBadass,
+	kActionDifficultExit,
+	kActionRetry,
+	kActionRestart,
+	kActionNewMission,
+	kActionQuit,
+	kActionCredits,
+	kActionSelect,
 };
 
 class HypnoEngine;
@@ -121,7 +152,7 @@ public:
 	bool _unlockAllLevels;
 	bool _restoredContentEnabled;
 
-	Audio::SoundHandle _soundHandle;
+	Audio::SoundHandle _soundHandle, _musicHandle;
 	Common::InstallShieldV3 _installerArchive;
 	Common::List<LibFile*> _archive;
 
@@ -170,6 +201,10 @@ public:
 	bool canSaveAutosaveCurrently() override { return false; }
 	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override { return (isDemo() ? false : true); }
 	Common::String _checkpoint;
+
+	Video::Subtitles *_subtitles;
+	void adjustSubtitleSize();
+	void loadSubtitles(const Common::Path &path);
 
 	Common::Path _prefixDir;
 	Common::Path convertPath(const Common::String &);
@@ -258,12 +293,12 @@ public:
 
 	// Sounds
 	Filename _soundPath;
-	Filename _music;
-	int _musicRate;
-	bool _musicStereo;
-	bool _doNotStopSounds;
+	Audio::SeekableAudioStream *loadAudioStream(const Filename &filename, uint32 sampleRate = 22050, bool stereo = false);
 	void playSound(const Filename &filename, uint32 loops, uint32 sampleRate = 22050, bool stereo = false);
+	void playMusic(const Filename &filename, uint32 sampleRate = 22050, bool stereo = false);
 	void stopSound();
+	void stopMusic();
+	bool isMusicActive();
 
 	// Arcade
 	Common::String _arcadeMode;
@@ -287,6 +322,8 @@ public:
 	virtual byte *getTargetColor(Common::String name, int levelId);
 	virtual bool checkRButtonUp();
 	virtual void setRButtonUp(const bool val);
+	virtual void disableGameKeymaps();
+	virtual void enableGameKeymaps();
 
 	// Segments
 	Segments _segments;
@@ -404,6 +441,7 @@ struct chapterEntry {
 class WetEngine : public HypnoEngine {
 public:
 	WetEngine(OSystem *syst, const ADGameDescription *gd);
+	~WetEngine();
 	Common::HashMap<int, const struct chapterEntry*> _chapterTable;
 	Common::Array<int> _ids;
 	int _lastLevel;
@@ -455,6 +493,8 @@ public:
 	byte *getTargetColor(Common::String name, int levelId) override;
 	bool checkRButtonUp() override;
 	void setRButtonUp(const bool val) override;
+	void disableGameKeymaps() override;
+	void enableGameKeymaps() override;
 
 
 	bool hasFeature(EngineFeature f) const override {
@@ -498,6 +538,7 @@ private:
 class SpiderEngine : public HypnoEngine {
 public:
 	SpiderEngine(OSystem *syst, const ADGameDescription *gd);
+	~SpiderEngine();
 	void loadAssets() override;
 	void loadAssetsDemo();
 	void loadAssetsFullGame();

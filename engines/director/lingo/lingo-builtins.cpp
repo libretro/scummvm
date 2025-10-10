@@ -43,6 +43,7 @@
 #include "director/castmember/bitmap.h"
 #include "director/castmember/palette.h"
 #include "director/castmember/text.h"
+#include "director/castmember/transition.h"
 #include "director/lingo/lingo-builtins.h"
 #include "director/lingo/lingo-code.h"
 #include "director/lingo/lingo-codegen.h"
@@ -82,7 +83,7 @@ static const BuiltinProto builtins[] = {
 	{ "append",			LB::b_append,		2, 2, 400, HBLTIN_LIST },	//			D4 h
 	{ "count",			LB::b_count,		1, 1, 400, FBLTIN_LIST },	//			D4 f
 	{ "deleteAt",		LB::b_deleteAt,		2, 2, 400, HBLTIN_LIST },	//			D4 h
-	{ "deleteOne",		LB::b_deleteOne,	2, 2, 400, HBLTIN_LIST },	//			D4 h, undocumented?
+	{ "deleteOne",		LB::b_deleteOne,	2, 2, 400, HBLTIN_LIST },	//			D4 h, documented in D5
 	{ "deleteProp",		LB::b_deleteProp,	2, 2, 400, HBLTIN_LIST },	//			D4 h
 	{ "duplicate",		LB::b_duplicateList,1, 1, 500, FBLTIN_LIST },	//				D5 f
 	{ "findPos",		LB::b_findPos,		2, 2, 400, FBLTIN_LIST },	//			D4 f
@@ -121,6 +122,8 @@ static const BuiltinProto builtins[] = {
 	// Control
 	{ "abort",			LB::b_abort,		0, 0, 400, CBLTIN },	//			D4 c
 	{ "cancelIdleLoad",	LB::b_cancelIdleLoad,1, 1, 500, CBLTIN },	//				D5 c
+	{ "call",			LB::b_call,			-1,0, 200, CBLTIN },	// 					D6 c
+	{ "callAncestor",	LB::b_callAncestor,	-1,0, 200, CBLTIN },	// 					D6 c
 	{ "continue",		LB::b_continue,		0, 0, 200, CBLTIN },	// D2 c
 	{ "dontPassEvent",	LB::b_dontPassEvent,0, 0, 200, CBLTIN },	// D2 c
 	{ "delay",	 		LB::b_delay,		1, 1, 200, CBLTIN },	// D2 c
@@ -144,6 +147,7 @@ static const BuiltinProto builtins[] = {
 	{ "return",			LB::b_return,		0, 1, 200, CBLTIN },	// D2 f
 	{ "shutDown",		LB::b_shutDown,		0, 0, 200, CBLTIN },	// D2 c
 	{ "startTimer",		LB::b_startTimer,	0, 0, 200, CBLTIN },	// D2 c
+	{ "stopEvent",		LB::b_stopEvent,	0, 0, 600, CBLTIN },	//						D6 c
 		// when keyDown													// D2
 		// when mouseDown												// D2
 		// when mouseUp													// D2
@@ -168,6 +172,7 @@ static const BuiltinProto builtins[] = {
 	{ "printFrom",	 	LB::b_printFrom,	-1,0, 200, CBLTIN },	// D2 c
 	{ "put",			LB::b_put,			-1,0, 200, CBLTIN },	// D2
 		// set															// D2
+	{ "setPref",		LB::b_setPref,		2, 2, 600, CBLTIN },	// 					D6 c
 	{ "showGlobals",	LB::b_showGlobals,	0, 0, 200, CBLTIN },	// D2 c
 	{ "showLocals",		LB::b_showLocals,	0, 0, 200, CBLTIN },	// D2 c
 	// Score
@@ -193,6 +198,8 @@ static const BuiltinProto builtins[] = {
 	{ "puppetTransition",LB::b_puppetTransition,-1,0,200, CBLTIN },// D2 c
 	{ "ramNeeded",		LB::b_ramNeeded,	2, 2, 300, FBLTIN },	//		D3.1 f
 	{ "rollOver",		LB::b_rollOver,		1, 1, 200, FBLTIN },	// D2 f
+	{ "sendAllSprites",	LB::b_sendAllSprites,-1,0,600, CBLTIN },	// 					D6 c
+	{ "sendSprite",		LB::b_sendSprite,	-1,0, 600, CBLTIN },	// 					D6 c
 	{ "spriteBox",		LB::b_spriteBox,	5, 5, 200, CBLTIN },	// D2 c
 	{ "unLoad",			LB::b_unLoad,		0, 2, 300, CBLTIN },	//		D3.1 c
 	{ "unLoadCast",		LB::b_unLoadCast,	0, 2, 300, CBLTIN },	//		D3.1 c
@@ -209,6 +216,8 @@ static const BuiltinProto builtins[] = {
 	{ "updateFrame",	LB::b_updateFrame,	0, 0, 500, CBLTIN },	//				D5 c
 	// Point
 	{ "point",			LB::b_point,		2, 2, 400, FBLTIN },	//			D4 f
+	// Rect
+	{ "inflate",        LB::b_inflate,      2, 3, 400, FBLTIN },    //			D4 f
 	{ "inside",			LB::b_inside,		2, 2, 400, FBLTIN },	//			D4 f
 	{ "intersect",		LB::b_intersect,	2, 2, 400, FBLTIN },	//			D4 f
 	{ "map",			LB::b_map,			3, 3, 400, FBLTIN },	//			D4 f
@@ -216,6 +225,7 @@ static const BuiltinProto builtins[] = {
 	{ "union",			LB::b_union,		2, 2, 400, FBLTIN },	//			D4 f
 	// Sound
 	{ "beep",	 		LB::b_beep,			0, 1, 200, CBLTIN },	// D2
+	{ "isPastCuePoint",LB::b_isPastCuePoint,2, 2, 600, FBLTIN },	// 					D6 f
 	{ "mci",	 		LB::b_mci,			1, 1, 300, CBLTIN },	//		D3.1 c
 	{ "mciwait",		LB::b_mciwait,		1, 1, 300, CBLTIN },	//		D3.1 c
 	{ "sound",			LB::b_sound,		2, 3, 300, CBLTIN },	//		D3 c
@@ -240,12 +250,12 @@ static const BuiltinProto builtins[] = {
 	{ "windowPresent",	LB::b_windowPresent,1, 1, 500, FBLTIN },	//				D5 f
 	// Field operations
 	{ "charPosToLoc",	LB::b_charPosToLoc, 2, 2, 500, FBLTIN },	//				D5 f
+	{ "lineHeight",		LB::b_lineHeight,   2, 2, 500, FBLTIN },	//				D5 f
 	{ "linePosToLocV",	LB::b_linePosToLocV,2, 2, 500, FBLTIN },	//				D5 f
 	{ "locToCharPos",	LB::b_locToCharPos, 2, 2, 500, FBLTIN },	//				D5 f
 	{ "locVToLinePos",	LB::b_locVToLinePos, 2, 2, 500, FBLTIN },	//				D5 f
 	{ "scrollByLine",	LB::b_scrollByLine, 2, 2, 500, CBLTIN },	//				D5 c
 	{ "scrollByPage",	LB::b_scrollByPage, 2, 2, 500, CBLTIN },	//				D5 c
-	{ "lineHeight",		LB::b_lineHeight,   2, 2, 500, FBLTIN },	//				D5 f
 	// Chunk operations
 	{ "numberOfChars",	LB::b_numberofchars,1, 1, 300, FBLTIN },	//			D3 f
 	{ "numberOfItems",	LB::b_numberofitems,1, 1, 300, FBLTIN },	//			D3 f
@@ -257,6 +267,17 @@ static const BuiltinProto builtins[] = {
 	{ "trackStopTime",	LB::b_trackStopTime,1, 1, 500, FBLTIN },	//				D5 f
 	{ "trackType",		LB::b_trackType,	1, 1, 500, FBLTIN },	//				D5 f
 
+	// Save session
+	{ "beginRecording", LB::b_beginRecording,0, 1, 500, CBLTIN },	//				D5 c
+	{ "endRecording",	LB::b_endRecording,	 0, 0, 500, CBLTIN },	//				D5 c
+
+	// Shockwave
+	{ "externalParamCount", LB::b_externalParamCount, 0, 0, 600, FBLTIN }, //			D6 f
+	{ "externalParamName",  LB::b_externalParamName, 1, 1, 600, FBLTIN },  // 			D6 f
+	{ "externalParamValue", LB::b_externalParamValue, 1, 1, 600, FBLTIN },  // 			D6 f
+	{ "frameReady", LB::b_frameReady, 0, 2, 600, FBLTIN }, 			//					D6 f
+	{ "getPref", LB::b_getPref, 1, 1, 600, FBLTIN }, 				//					D6 f
+
 	// ScummVM Asserts: Used for testing ScummVM's Lingo implementation
 	{ "scummvmAssert",	LB::b_scummvmassert,1, 2, 200, HBLTIN },
 	{ "scummvmAssertEqual",	LB::b_scummvmassertequal,2,3,200,HBLTIN },
@@ -267,6 +288,156 @@ static const BuiltinProto builtins[] = {
 
 	{ nullptr, nullptr, 0, 0, 0, VOIDSYM }
 };
+
+/* These are related to Director Serrvices API, used by Xtras
+   to talk to Director. Unused in ScummVM. Leaving here for reference.
+
+   Media Info:
+   composite			//	D5
+   editableMedia		//			D7
+   image				//	D5
+   palette				//	D5
+   sound				//	D5
+   score				//	D5
+   scriptStyles			//		D6
+   text					//	D5
+   textSyles			//	D5
+
+   Media Format:
+   macColorTable		//	D5
+   macGWorld			//	D5
+   macPICT				//	D5
+   macSnd				//	D5
+   macTEStyles			//	D5
+   moaHandle			//	D5
+   moaPixels			//	D5
+   moaSound				//	D5
+   moaTEStyles			//	D5
+   winDIB				//	D5
+   winPALETTE			//	D5
+   winPICT				//	D5
+   winWAVE				//	D5
+
+   Frame properties:
+   palette				//	D5
+   paletteFrames		//	D5
+   paletteOverTime		//	D5
+   paletteRef			//	D5
+   paletteSpeed			//	D5
+   paletteTransitionType//	D5
+   script				//	D5
+   tempo				//	D5
+   transition			//	D5
+   waitClick			//	D5
+   waitDigitalVideo		//	D5
+   waitSeconds			//	D5
+   waitSound			//	D5
+
+   Palette properties:
+   fadeToBlack			//	D5
+   fadeToWhite			//	D5
+   normal				//	D5
+
+   Sound properties:
+   member				//	D5
+   scoreColor			//	D5
+
+   Sprite properties:
+   member				//	D5
+   scoreColor			//	D5
+   script				//	D5
+   scriptNum			//	D5
+   size					//	D5
+   loc					//	D5
+   foreColor			//	D5
+   color				//	D5
+   backColor			//	D5
+   bgColor				//			D7
+   ink					//	D5
+   trails				//	D5
+   moveableSprite		//	D5
+   editableText			//	D5
+   blend				//	D5
+   stretch				//	D5
+   tweened				//		D6
+
+   General properties:
+   authorMode			//	D5
+   folderName			//	D5
+   maxMember			//	D5
+   minMember			//	D5
+   memberCount			//	D5
+   modified				//	D5
+   name					//	D5
+   pathName				//	D5
+   preloadMode			//				D8
+   selectiomn			//	D5
+   soundDevice			//			D7
+   version				//	D5
+
+   Movie properties:
+   active3dRenderer		//				D8.5
+   activeCast			//	D5
+   activeCastLib		//	D5
+   bgStageColor			//			D7
+   castCount			//	D5
+   createName			//	D5
+   defaultColorDepth	//	D5
+   defaultPalette		//	D5
+   defaultStageRect		//	D5
+   editShortcutsEnabled	//				D8
+   enableFlashLingo		//				D8.5
+   enableInkmodeLimitations//			D8
+   frame				//	D5
+   instance				//	D5
+   lastChannel			//			D7
+   modified				//	D5
+   modifyName			//	D5
+   movieAboutInfo		//			D7
+   movieCopyrightInfo	//			D7
+   movieFileVersion		//				D8
+   movieImageCompression//				D8
+   movieImageQuality	//				D8
+   name					//	D5
+   okToQueryKeyboard	//				D8.5
+   pathName				//	D5
+   playing				//	D5
+   preferred3dRenderer	//				D8.5
+   remapPalettes		//	D5
+   scriptExecutionStyle	//					D10
+   safePlayer			//		D6
+   scoreSelection		//	D5
+   stageColor			//	D5
+   tempo				//	D5
+   tempoScaleFactor		//			D7
+   urlAdmin				//			D7
+   version				//	D5
+
+   Time Frame Prop:
+   label				//	D5
+   palette				//	D5
+   script				//	D5
+   tempo				//	D5
+   transition			//	D5
+
+   Host Info:
+   appFileSpec			//	D5
+
+   Types:
+	bitmap
+	button
+	digitalVideo
+	field
+	filmLoop
+	movie
+	ole
+	palette
+	richText
+	shape
+	script
+	sound
+	transition
+*/
 
 void Lingo::initBuiltIns() {
 	initBuiltIns(builtins);
@@ -513,7 +684,29 @@ void LB::b_sin(int nargs) {
 
 void LB::b_sqrt(int nargs) {
 	Datum d = g_lingo->pop();
-	Datum res(sqrt(d.asFloat()));
+	Datum res;
+	if (d.type == INT) {
+		// integer input returns the sqrt rounded to the nearest int
+		res = Datum((int)round(sqrt(d.asInt())));
+	} else if (d.type == FLOAT) {
+		// float input returns float output
+		res = Datum(sqrt(d.asFloat()));
+	} else if (d.type == STRING) {
+		// string input attempts to coerce to float, else crash
+		Common::String src = d.asString();
+		char *endPtr = nullptr;
+		double result = strtod(src.c_str(), &endPtr);
+		if (*endPtr == 0) {
+			res = Datum(sqrt(result));
+		} else {
+			g_lingo->lingoError("b_sqrt: Invalid string");
+		}
+	} else if (d.type == VOID) {
+		// void input returns float 0.0
+		res = Datum(0.0);
+	} else {
+		g_lingo->lingoError("b_sqrt: Invalid type");
+	}
 	g_lingo->push(res);
 }
 
@@ -861,26 +1054,25 @@ void LB::b_findPos(int nargs) {
 }
 
 void LB::b_findPosNear(int nargs) {
-	Common::String prop = g_lingo->pop().asString();
+	Datum prop = g_lingo->pop();
 	Datum list = g_lingo->pop();
 	Datum res;
-	TYPECHECK(list, PARRAY);
-
-	// FIXME: Integrate with compareTo framework
-	prop.toLowercase();
+	TYPECHECK2(list, PARRAY, ARRAY);
 
 	// This requires more testing, but D4-D6 test show that it does not work as described.
 	// The example:
 	//   findPosNear([#Nile:2, #Pharaoh:4, #Raja:0], #Ni)  supposed to return 1, for #Nile, but it returns 4
-	res = Datum((int)list.u.parr->arr.size() + 1); // Set it to the end of array by default
-
-	for (uint i = 0; i < list.u.parr->arr.size(); i++) {
-		Datum p = list.u.parr->arr[i].p;
-		Common::String tgt = p.asString();
-		tgt.toLowercase();
-		if (tgt.find(prop.c_str()) == 0) {
-			res.u.i = i + 1;
-			break;
+	if (list.type == PARRAY) {
+		res = Datum((int)list.u.parr->arr.size() + 1); // Set it to the end of array by default
+		int index = LC::compareArrays(list.u.parr->_sorted ? LC::geData : LC::eqData, list, prop, true).u.i;
+		if (index != 0) {
+			res = index;
+		}
+	} else if (list.type == ARRAY) {
+		res = prop; // set it to the returned value
+		int index = LC::compareArrays(list.u.farr->_sorted ? LC::geData : LC::eqData, list, prop, true).u.i;
+		if (index != 0) {
+			res = index;
 		}
 	}
 
@@ -1122,36 +1314,57 @@ void LB::b_max(int nargs) {
 	max.type = INT;
 	max.u.i = 0;
 
+	bool hasVoidQuirk = g_director->getVersion() < 500;
+
+	Common::Array<Datum> testArr;
+
 	if (nargs == 1) {
 		Datum d = g_lingo->pop();
 		if (d.type == ARRAY) {
-			uint arrsize = d.u.farr->arr.size();
-
-			if (d.u.farr->_sorted && arrsize) {
-				max = d.u.farr->arr[arrsize - 1];
-			} else {
-				for (uint i = 0; i < arrsize; i++) {
-					Datum item = d.u.farr->arr[i];
-					if (i == 0 || item > max) {
-						max = item;
-					}
-				}
+			for (auto &it : d.u.farr->arr) {
+				testArr.push_back(it);
 			}
 		} else {
 			max = d;
 		}
 	} else if (nargs > 0) {
 		for (int i = 0; i < nargs; i++) {
-			Datum d = g_lingo->_state->stack[g_lingo->_state->stack.size() - nargs + i];
+			Datum d = g_lingo->peek(nargs - i - 1);
 			if (d.type == ARRAY) {
 				warning("b_max: undefined behavior: array mixed with other args");
 			}
-			if (i == 0 || d > max) {
-				max = d;
-			}
+			testArr.push_back(d);
 		}
 		g_lingo->dropStack(nargs);
 	}
+
+	if (!testArr.empty()) {
+		// D4: if there is a VOID for the first arg of max, return VOID
+		if (hasVoidQuirk && testArr[0].type == VOID) {
+			g_lingo->pushVoid();
+			return;
+		}
+		// The trick seems to be to compare each item in sequence.
+		// D4: If we encounter a VOID, treat it as the smallest value possible.
+		// D5+: If we encounter a string, and the current maximum is a VOID, it gets ignored.
+		// D5+: If we encounter a VOID, and the current maximum is a STRING, set it to VOID.
+
+		max = testArr[0];
+		for (int i = 1; i < (int)testArr.size(); i++) {
+			if (!hasVoidQuirk) {
+				if ((max.type == VOID) && (testArr[i].type == STRING)) {
+					continue;
+				} else if ((testArr[i].type == VOID) && (max.type == STRING)) {
+					max = Datum();
+					continue;
+				}
+			}
+			if (testArr[i] > max) {
+				max = testArr[i];
+			}
+		}
+	}
+
 	g_lingo->push(max);
 }
 
@@ -1160,35 +1373,57 @@ void LB::b_min(int nargs) {
 	min.type = INT;
 	min.u.i = 0;
 
+	bool hasVoidQuirk = g_director->getVersion() < 500;
+
+	Common::Array<Datum> testArr;
+
 	if (nargs == 1) {
 		Datum d = g_lingo->pop();
 		if (d.type == ARRAY) {
-			uint arrsize = d.u.farr->arr.size();
-
-			if (d.u.farr->_sorted && arrsize) {
-				min = d.u.farr->arr[0];
-			} else {
-				for (uint i = 0; i < arrsize; i++) {
-					Datum item = d.u.farr->arr[i];
-					if (i == 0 || item < min) {
-						min = item;
-					}
-				}
+			for (auto &it : d.u.farr->arr) {
+				testArr.push_back(it);
 			}
 		} else {
 			min = d;
 		}
 	} else if (nargs > 0) {
 		for (int i = 0; i < nargs; i++) {
-			Datum d = g_lingo->_state->stack[g_lingo->_state->stack.size() - nargs + i];
+			Datum d = g_lingo->peek(nargs - i - 1);
 			if (d.type == ARRAY) {
 				warning("b_min: undefined behavior: array mixed with other args");
 			}
-			if (i == 0 || d < min) {
-				min = d;
-			}
+			testArr.push_back(d);
 		}
 		g_lingo->dropStack(nargs);
+	}
+	if (!testArr.empty()) {
+		// D4: if there is a VOID for the last arg of min, return VOID
+		if (hasVoidQuirk && testArr[testArr.size()-1].type == VOID) {
+			g_lingo->pushVoid();
+			return;
+		}
+		// The trick seems to be to compare each item in sequence.
+		// If we encounter a VOID, and the current minimum is a number or a symbol, it gets converted to VOID.
+		// If we encounter a VOID, and the current minimum is a string, we ignore it.
+		// If the current minimum is VOID, and we encounter a string, the current minimum is set to the string.
+
+		min = testArr[0];
+		for (int i = 1; i < (int)testArr.size(); i++) {
+			if (testArr[i].type == VOID) {
+				if (min.type != STRING) {
+					min = Datum();
+				}
+				continue;
+			// D4: if the current minimum is VOID, set the next value as the new minimum
+			// D5+: if the current minimum is VOID, and the next value is a string (coercable or not), set it as the new minimum
+			} else if ((min.type == VOID) && (hasVoidQuirk || (testArr[i].type == STRING))) {
+				min = testArr[i];
+				continue;
+			}
+			if (testArr[i] < min) {
+				min = testArr[i];
+			}
+		}
 	}
 	g_lingo->push(min);
 }
@@ -1425,6 +1660,10 @@ void LB::b_getNthFileNameInFolder(int nargs) {
 	Datum r("");
 	Common::Array<Common::String> fileNameList;
 
+	// Update the game quirks archive in case our save state has changed.
+	// This is necessary because we may save a game and then try to open a game in the same session.
+	g_director->gameQuirks(g_director->getGameId(), g_director->getPlatform());
+
 	// First, mix in any files injected from the quirks
 	Common::Archive *cache = SearchMan.getArchive(kQuirksCacheArchive);
 	if (cache) {
@@ -1458,14 +1697,16 @@ void LB::b_getNthFileNameInFolder(int nargs) {
 }
 
 void LB::b_open(int nargs) {
-	Datum d = g_lingo->pop();
+
+	Datum ex = g_lingo->pop();
+	Datum d;
 	if (nargs == 2)
-		g_lingo->pop();
-	warning("LB::b_open(): Unsupported command open encountered -> The movie tried to open %s", d.asString().c_str());
+		d = g_lingo->pop();
+	warning("LB::b_open(): Unsupported command open encountered -> The movie tried to open %s %s", ex.asString().c_str(), d.type != VOID ? d.asString().c_str() : "");
 
 	if (!debugChannelSet(-1, kDebugFewFramesOnly) &&
 		!(g_director->getGameGID() == GID_TEST || g_director->getGameGID() == GID_TESTALL)) {
-		Common::U32String message = Common::String::format("Unsupported command open encountered -> The movie tried to execute open %s!", d.asString().c_str());
+		Common::U32String message = Common::String::format("Unsupported command open encountered -> The movie tried to execute open %s %s!", ex.asString().c_str(), d.type != VOID ? d.asString().c_str() : "");
 		GUI::MessageDialog dialog(message, _("Ok"));
 		dialog.runModal();
 	}
@@ -1553,9 +1794,11 @@ void LB::b_save(int nargs) {
 }
 
 void LB::b_saveMovie(int nargs) {
-	g_lingo->printSTUBWithArglist("b_saveMovie", nargs);
-
-	g_lingo->dropStack(nargs);
+	Common::String filename;
+	if (nargs) {
+		filename = g_lingo->pop().asString();
+	}
+	g_director->getCurrentMovie()->getArchive()->writeToFile(filename, g_director->getCurrentMovie());
 }
 
 void LB::b_setCallBack(int nargs) {
@@ -1594,16 +1837,16 @@ void LB::b_xtra(int nargs) {
 	Datum d = g_lingo->pop();
 	if (d.type == INT) {
 		int i = d.asInt() -1; // Lingo index for XTRAs start at 1
-		if (i >=0 && (uint)i < g_lingo->_openXtras.size()) {
-			Datum var = g_lingo->_globalvars[g_lingo->_openXtras[i]];
+		if (i >=0 && (uint)i < g_lingo->_openXtraObjects.size()) {
+			Datum var = g_lingo->_openXtraObjects[i];
 			g_lingo->push(var);
 			return;
 		}
 	} else {
 		Common::String name = d.asString();
-		if (g_lingo->_globalvars.contains(name)) {
-			Datum var = g_lingo->_globalvars[name];
-			if (var.type == OBJECT && var.u.obj->getObjType() == kXtraObj) {
+		for (uint i = 0; i < g_lingo->_openXtras.size(); i++) {
+			if (name.equalsIgnoreCase(g_lingo->_openXtras[i])) {
+				Datum var = g_lingo->_openXtraObjects[i];
 				g_lingo->push(var);
 				return;
 			}
@@ -1617,6 +1860,16 @@ void LB::b_xtra(int nargs) {
 ///////////////////
 void LB::b_abort(int nargs) {
 	g_lingo->_abort = true;
+}
+
+void LB::b_call(int nargs) {
+	g_lingo->printSTUBWithArglist("b_call", nargs);
+	g_lingo->dropStack(nargs);
+}
+
+void LB::b_callAncestor(int nargs) {
+	g_lingo->printSTUBWithArglist("b_callAncestor", nargs);
+	g_lingo->dropStack(nargs);
 }
 
 void LB::b_cancelIdleLoad(int nargs) {
@@ -1792,6 +2045,24 @@ void LB::b_play(int nargs) {
 
 void LB::b_playAccel(int nargs) {
 	g_lingo->printSTUBWithArglist("b_playAccel", nargs);
+
+/*
+	byFrame	Read one frame at a time from disk.
+	click		Stop and pass on mouse event.
+	clickStop	Stop and don't pass on mouse event.
+	loop		Play movie continuously.
+	noFlush		Prevents the current interactive movie from being
+				removed from memory when the Accelerator
+				document is loaded.
+	noSound		Don’t play sound.
+	noUpdate	Don’t update screen at end of movie.
+	playRect, l, t, r, b
+				Stop the movie when the pointer is moved outside the coordinates (left, top, right, bottom).
+	repeat, n 	Number of times to repeat.
+	sync		Attempt to play in sync with scan rate of monitor.
+	whatFits	Play only what fits into memory.
+	tempo, n	Set the tempo of the movie.
+*/
 
 	g_lingo->dropStack(nargs);
 }
@@ -2021,6 +2292,13 @@ void LB::b_startTimer(int nargs) {
 	g_director->getCurrentMovie()->_lastTimerReset = g_director->getMacTicks();
 }
 
+void LB::b_stopEvent(int nargs) {
+	warning("STUB: b_stopEvent");
+	// TEquivalent to the dontPassEvent command used in earlier
+	//versions of Director, this command also applies to sprite scripts.
+	g_lingo->_passEvent = false;
+}
+
 ///////////////////
 // Types
 ///////////////////
@@ -2187,6 +2465,11 @@ void LB::b_put(int nargs) {
 	} else {
 		debug("-- %s", output.c_str());
 	}
+	g_lingo->dropStack(nargs);
+}
+
+void LB::b_setPref(int nargs) {
+	g_lingo->printSTUBWithArglist("b_setPref", nargs);
 	g_lingo->dropStack(nargs);
 }
 
@@ -2401,31 +2684,21 @@ void LB::b_importFileInto(int nargs) {
 
 	CastMemberID memberID = *dst.u.cast;
 
-	if (!(file.matchString("*.pic") || file.matchString("*.pict"))) {
-		warning("LB::b_importFileInto : %s is not a valid PICT file", file.c_str());
+	Movie *movie = g_director->getCurrentMovie();
+	Score *score = movie->getScore();
+	Cast *cast = movie->getCast(memberID);
+	if (!cast) {
 		return;
 	}
 
 	Common::Path path = findPath(file);
-	Common::File in;
-	in.open(path);
-
-	if (!in.isOpen()) {
-		warning("b_importFileInto(): Cannot open file %s", path.toString().c_str());
+	if (path.empty()) {
+		warning("b_importFileInto(): couldn't find target file %s", file.c_str());
 		return;
 	}
 
-	Image::PICTDecoder *img = new Image::PICTDecoder();
-	img->loadStream(in);
-	in.close();
+	cast->importFileInto(memberID.member, path);
 
-	Movie *movie = g_director->getCurrentMovie();
-	Score *score = movie->getScore();
-	BitmapCastMember *bitmapCast = new BitmapCastMember(movie->getCast(), memberID.member, img);
-	movie->createOrReplaceCastMember(memberID, bitmapCast);
-	bitmapCast->setModified(true);
-	const Graphics::Surface *surf = img->getSurface();
-	bitmapCast->_size = surf->pitch * surf->h + img->getPalette().size() * 3;
 	score->refreshPointersForCastMemberID(dst.asMemberID());
 }
 
@@ -2795,9 +3068,23 @@ void LB::b_puppetPalette(int nargs) {
 void LB::b_puppetSound(int nargs) {
 
 	if (nargs < 1 || nargs >= 3) {
-		warning("b_puppetSound(): needs 1 or 2 args");
-		return;
+		warning("b_puppetSound(): needs 1 or 2 args, got %d", nargs);
+		if (nargs < 1)
+			return;
+		g_lingo->dropStack(nargs - 2);
 	}
+
+	// TODO
+	// Midi variant is similar to playAccel
+	//
+	// and contains these commands:
+	//
+	// midiBeat
+	// midiContinue
+	// midiSong
+	// midiSongpointer
+	// midiStart
+	// midiStop
 
 	DirectorSound *sound = g_director->getCurrentWindow()->getSoundManager();
 	Score *score = g_director->getCurrentMovie()->getScore();
@@ -2921,6 +3208,8 @@ void LB::b_puppetTransition(int nargs) {
 	Window *stage = g_director->getCurrentWindow();
 	uint16 duration = 250, area = 1, chunkSize = 1, type = 0;
 
+	TransitionCastMember *tcast = nullptr;
+
 	switch (nargs) {
 	case 4:
 		area = g_lingo->pop().asInt();
@@ -2933,7 +3222,21 @@ void LB::b_puppetTransition(int nargs) {
 		duration = g_lingo->pop().asInt() * 250;
 		// fall through
 	case 1:
-		type = ((TransitionType)(g_lingo->pop().asInt()));
+		{
+			Datum d = g_lingo->pop();
+			if (d.type == CASTREF) {
+				CastMemberID castId = d.asMemberID();
+				CastMember *cast = stage->getCurrentMovie()->getCastMember(castId);
+				if (cast->_type == kCastTransition) {
+					tcast = (TransitionCastMember *)cast;
+				} else {
+					warning("b_puppetTransition: expected transition cast member");
+					return;
+				}
+			} else {
+				type = ((TransitionType)(d.asInt()));
+			}
+		}
 		break;
 	default:
 		ARGNUMCHECK(1);
@@ -2943,11 +3246,17 @@ void LB::b_puppetTransition(int nargs) {
 
 	if (stage->_puppetTransition) {
 		warning("b_puppetTransition: Transition already queued");
-		return;
+		delete stage->_puppetTransition;
+		stage->_puppetTransition = nullptr;
 	}
-	debugC(3, kDebugImages, "b_puppetTransition(): type: %d, duration: %d, chunkSize: %d, area: %d", type, duration, chunkSize, area);
+	if (tcast) {
+		stage->_puppetTransition = new TransParams(tcast->_durationMillis, tcast->_area, tcast->_chunkSize, tcast->_transType);
+	} else {
+		stage->_puppetTransition = new TransParams(duration, area, chunkSize, ((TransitionType)type));
+	}
+	debugC(3, kDebugImages, "b_puppetTransition(): type: %d, duration: %d, chunkSize: %d, area: %d",
+			stage->_puppetTransition->type, stage->_puppetTransition->duration, stage->_puppetTransition->chunkSize, stage->_puppetTransition->area);
 
-	stage->_puppetTransition = new TransParams(duration, area, chunkSize, ((TransitionType)type));
 }
 
 void LB::b_ramNeeded(int nargs) {
@@ -2987,6 +3296,16 @@ void LB::b_rollOver(int nargs) {
 		res.u.i = 1; // TRUE
 
 	g_lingo->push(res);
+}
+
+void LB::b_sendAllSprites(int nargs) {
+	g_lingo->printSTUBWithArglist("b_sendAllSprites", nargs);
+	g_lingo->dropStack(nargs);
+}
+
+void LB::b_sendSprite(int nargs) {
+	g_lingo->printSTUBWithArglist("b_sendSprite", nargs);
+	g_lingo->dropStack(nargs);
 }
 
 void LB::b_spriteBox(int nargs) {
@@ -3122,6 +3441,11 @@ void LB::b_updateStage(int nargs) {
 	Score *score = movie->getScore();
 	Window *window = movie->getWindow();
 
+	if (score->_disableGoPlayUpdateStage) {
+		warning("Lingo::b_updateStage(): ignoring updateStage due to disableGoPlayUpdateStage flag");
+		return;
+	}
+
 	score->updateWidgets(movie->_videoPlayback);
 	if (window->_puppetTransition) {
 		window->playTransition(score->getCurrentFrameNum(), kRenderModeNormal, window->_puppetTransition->duration, window->_puppetTransition->area, window->_puppetTransition->chunkSize, window->_puppetTransition->type, score->_currentFrame->_mainChannels.scoreCachedPaletteId);
@@ -3250,6 +3574,35 @@ void LB::b_intersect(int nargs) {
 	g_lingo->push(d);
 }
 
+void LB::b_inflate(int nargs) {
+	int inflateHeight = g_lingo->pop().asInt();
+	int inflateWidth = g_lingo->pop().asInt();
+	Datum sR = g_lingo->pop();
+
+	TYPECHECK(sR, RECT);
+
+	Common::Rect sourceRect(sR.u.farr->arr[0].asInt(),
+		                    sR.u.farr->arr[1].asInt(),
+		                    sR.u.farr->arr[2].asInt(),
+		                    sR.u.farr->arr[3].asInt());
+
+	int inflatedLeft = sourceRect.left - inflateWidth;
+	int inflatedTop = sourceRect.top - inflateHeight;
+	int inflatedRight = sourceRect.right + inflateWidth;
+	int inflatedBottom = sourceRect.bottom + inflateHeight;
+
+	Datum inflatedRect;
+	inflatedRect.type = RECT;
+
+	inflatedRect.u.farr = new FArray();
+	inflatedRect.u.farr->arr.push_back(Datum(inflatedLeft));
+	inflatedRect.u.farr->arr.push_back(Datum(inflatedTop));
+	inflatedRect.u.farr->arr.push_back(Datum(inflatedRight));
+	inflatedRect.u.farr->arr.push_back(Datum(inflatedBottom));
+
+	g_lingo->push(inflatedRect);
+}
+
 void LB::b_inside(int nargs) {
 	Datum d;
 	Datum r2 = g_lingo->pop();
@@ -3368,6 +3721,12 @@ void LB::b_beep(int nargs) {
 		repeat = d.u.i;
 	}
 	g_lingo->func_beep(repeat);
+}
+
+void LB::b_isPastCuePoint(int nargs) {
+	g_lingo->printSTUBWithArglist("b_isPastCuePoint", nargs);
+	g_lingo->dropStack(nargs);
+	g_lingo->push(Datum());
 }
 
 void LB::b_mci(int nargs) {
@@ -3634,7 +3993,15 @@ void LB::b_window(int nargs) {
 
 	Common::String windowName = d.asString();
 	Window *window = g_director->getOrCreateWindow(windowName);
-	windowList->arr.push_back(Datum(window));
+	bool isNewWindow = true;
+	for (auto &it : windowList->arr) {
+		if (it.type == OBJECT && it.u.obj == window) {
+			isNewWindow = false;
+			break;
+		}
+	}
+	if (isNewWindow)
+		windowList->arr.push_back(Datum(window));
 
 	g_lingo->push(window);
 }
@@ -3763,6 +4130,8 @@ void LB::b_trackStopTime(int nargs) {
 void LB::b_trackType(int nargs) {
 	g_lingo->printSTUBWithArglist("b_trackType", nargs);
 	g_lingo->dropStack(nargs);
+	// Possible values are #video, #sound, #text, and #music
+	// also #timeCode is present but seemingly not used
 	Datum result("video");
 	result.type = SYMBOL;
 	g_lingo->push(result);
@@ -3796,7 +4165,7 @@ void LB::b_scummvmassertequal(int nargs) {
 	}
 
 	if (!result) {
-		warning("BUILDBOT: LB::b_scummvmassertequals: %s is not equal %s at line %d", d1.asString().c_str(), d2.asString().c_str(), line.asInt());
+		warning("BUILDBOT: LB::b_scummvmassertequal: %s is not equal %s at line %d", formatStringForDump(d1.asString()).c_str(), formatStringForDump(d2.asString()).c_str(), line.asInt());
 	}
 	if (debugChannelSet(-1, kDebugLingoStrict)) {
 		assert(result == 1);
@@ -3820,6 +4189,54 @@ void LB::b_getVolumes(int nargs) {
 	d.u.farr->arr.push_back(Datum("Buried in Time\252 1"));
 
 	g_lingo->push(d);
+}
+
+void LB::b_beginRecording(int nargs) {
+	g_lingo->printSTUBWithArglist("b_beginRecording", nargs);
+	g_lingo->dropStack(nargs);
+}
+
+void LB::b_endRecording(int nargs) {
+	g_lingo->printSTUBWithArglist("b_endRecording", nargs);
+	g_lingo->dropStack(nargs);
+}
+
+// Shockwave D6
+void LB::b_externalParamCount(int nargs) {
+	g_lingo->printSTUBWithArglist("b_externalParamCount", nargs);
+	g_lingo->dropStack(nargs);
+	g_lingo->push(Datum());
+}
+
+void LB::b_externalParamName(int nargs) {
+	g_lingo->printSTUBWithArglist("b_externalParamName", nargs);
+	g_lingo->dropStack(nargs);
+	g_lingo->push(Datum());
+}
+
+void LB::b_externalParamValue(int nargs) {
+	g_lingo->printSTUBWithArglist("b_externalParamValue", nargs);
+	g_lingo->dropStack(nargs);
+	g_lingo->push(Datum());
+}
+
+void LB::b_frameReady(int nargs) {
+	g_lingo->printSTUBWithArglist("b_frameReady", nargs);
+	g_lingo->dropStack(nargs);
+	g_lingo->push(Datum());
+}
+
+void LB::b_getPref(int nargs) {
+	g_lingo->printSTUBWithArglist("b_getPref", nargs);
+	g_lingo->dropStack(nargs);
+	g_lingo->push(Datum());
+}
+
+void LB::b_netPresent(int nargs) {
+	// Once NETLINGO.X32 is implmemented, this should return 1
+	g_lingo->printSTUBWithArglist("b_netPresent", nargs);
+	g_lingo->dropStack(nargs);
+	g_lingo->push(Datum());
 }
 
 } // End of namespace Director

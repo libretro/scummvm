@@ -25,6 +25,9 @@
 #include "common/hashmap.h"
 #include "common/types.h"
 
+#define PALETTE_6BIT_TO_8BIT(x) ((x) * 255 / 63)
+#define PALETTE_8BIT_TO_6BIT(x) ((x) * 63 / 255)
+
 namespace Graphics {
 
 enum ColorDistanceMethod {
@@ -62,7 +65,7 @@ public:
 	 *
 	 * @param size   the number of palette entries
 	 */
-	Palette(uint size);
+	Palette(uint size = 0);
 
 	/**
 	 * @brief Construct a new Palette object with a copy of the palette data

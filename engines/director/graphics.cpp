@@ -133,9 +133,13 @@ void DirectorEngine::loadDefaultPalettes() {
 	_loaded4Palette = PaletteV4(CastMemberID(kClutGrayscale, -1), grayscale4Palette, 4);
 }
 
-PaletteV4 *DirectorEngine::getPalette(const CastMemberID &id) {
+PaletteV4 *DirectorEngine::getPalette(CastMemberID id) {
 	if (id.isNull())
 		return nullptr;
+
+	// Reference to internal palettes
+	if (id.member < 0)
+		id.castLib = -1; // Ensure we use the default palette set
 
 	if (!_loadedPalettes.contains(id)) {
 		warning("DirectorEngine::getPalette(): Palette %s not found, hash %x", id.asString().c_str(), id.hash());
@@ -145,7 +149,11 @@ PaletteV4 *DirectorEngine::getPalette(const CastMemberID &id) {
 	return &_loadedPalettes[id];
 }
 
-bool DirectorEngine::hasPalette(const CastMemberID &id) {
+bool DirectorEngine::hasPalette(CastMemberID id) {
+	// Reference to internal palettes
+	if (id.member < 0)
+		id.castLib = -1; // Ensure we use the default palette set
+
 	return _loadedPalettes.contains(id);
 }
 
@@ -290,6 +298,7 @@ void InkPrimitives<T>::drawPoint(int x, int y, uint32 src, void *data) {
 
 	if (!p->destRect.contains(x, y))
 		return;
+
 
 	T *dst;
 	uint32 tmpDst;
@@ -566,7 +575,7 @@ uint32 DirectorPlotData::preprocessColor(uint32 src) {
 	// HACK: Right now this method is just used for adjusting the colourization on text
 	// sprites, as it would be costly to colourize the chunks on the fly each
 	// time a section needs drawing. It's ugly but mostly works.
-	if (sprite == kTextSprite) {
+	if (sprite == kTextSprite || sprite == kButtonSprite || sprite == kCheckboxSprite || sprite == kRadioButtonSprite) {
 		switch(ink) {
 		case kInkTypeMask:
 			src = (src == backColor ? foreColor : 0xff);
@@ -705,7 +714,7 @@ void DirectorPlotData::inkBlitSurface(Common::Rect &srcRect, const Graphics::Sur
 		return;
 
 	// TODO: Determine why colourization causes problems in Warlock
-	if (sprite == kTextSprite)
+	if (sprite == kTextSprite || sprite == kButtonSprite || sprite == kCheckboxSprite || sprite == kRadioButtonSprite)
 		applyColor = false;
 
 	Common::Rect srfClip = srf->getBounds();

@@ -146,6 +146,22 @@ void Window::probeResources(Archive *archive) {
 			}
 		}
 
+		// Mac Director will check resource STR# id 200 from the projector
+		// executable, and use the second string in the list.
+		// Usually this is "Shared Cast", but Journeyman Project
+		// has this set to "Mars ESG Upper 03"??
+		if (archive->hasResource(MKTAG('S', 'T', 'R', '#'), 200)) {
+			Common::SeekableReadStreamEndian *name = archive->getResource(MKTAG('S', 'T', 'R', '#'), 200);
+			int num = name->readUint16();
+			if (num < 2) {
+				warning("Window::probeResources: Missing data in the Filenames resource of the Projector file");
+				delete name;
+			} else {
+				_soundsFilenameHint = decodePlatformEncoding(name->readPascalString());
+				_sharedCastFilenameHint = decodePlatformEncoding(name->readPascalString());
+			}
+		}
+
 		if (archive->hasResource(MKTAG('S', 'T', 'R', '#'), 0)) {
 			if (_currentMovie)
 				_currentMovie->setArchive(archive);
@@ -597,11 +613,21 @@ void Window::loadStartMovieXLibs() {
 	if (strcmp(g_director->getGameId(), "warlock") == 0 && g_director->getPlatform() != Common::kPlatformWindows) {
 		g_lingo->openXLib("FPlayXObj", kXObj, Common::Path());
 	}
-	g_lingo->openXLib("SerialPort", kXObj, Common::Path());
+
+	// After D5 we always have list of Xlibs to load
+	if (g_director->getVersion() < 500 && g_director->getPlatform() == Common::kPlatformMacintosh) {
+		// SerialPort is Mac-only
+		g_lingo->openXLib("SerialPort", kXObj, Common::Path());
+	}
 }
 
 ProjectorArchive::ProjectorArchive(Common::Path path)
 	: _path(path), _files() {
+
+	if (path.empty()) {
+		_isLoaded = false;
+		return;
+	}
 
 	// Buffer 100K into memory
 	Common::SeekableReadStream *stream = createBufferedReadStream();
@@ -738,7 +764,7 @@ bool ProjectorArchive::loadArchive(Common::SeekableReadStream *stream) {
 		tag = stream->readUint32BE();
 		size = bigEndian ? stream->readUint32BE() : stream->readUint32LE();
 
-		Common::Path path = toSafePath(arr[i]);
+		Common::Path path = toSafePath(arr[i]).getLastComponent();
 
 		debugC(1, kDebugLoading, "Entry: %s offset %lX (%ld) tag %s size %d", path.toString().c_str(), long(stream->pos() - 8), long(stream->pos() - 8), tag2str(tag), size);
 

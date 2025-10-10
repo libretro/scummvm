@@ -45,7 +45,7 @@ public:
 	PartEmitter *createParticleEmitter(bool followParent = false, int offsetX = 0, int offsetY = 0) override;
 	virtual PartEmitter *createParticleEmitter(const char *boneName, DXVector3 offset);
 	bool updatePartEmitter() override;
-	Common::String _partBone;
+	char *_partBone;
 	DXVector3 _partOffset;
 
 	bool displayShadowVolume();
@@ -58,7 +58,7 @@ public:
 	bool playAnim3DX(const char *name, bool setState);
 	bool playAnim3DX(int channel, const char *name, bool setState);
 
-	uint32 getAnimTransitionTime(char *from, char *to) override;
+	uint32 getAnimTransitionTime(const char *from, const char *to) override;
 	BaseArray<BaseAnimationTransitionTime *> _transitionTimes;
 
 	virtual bool renderModel() override;
@@ -67,18 +67,18 @@ public:
 	uint32 _defaultStopTransTime;
 
 	float _afterWalkAngle;
-	Common::String _talkAnimName;
-	Common::String _idleAnimName;
-	Common::String _walkAnimName;
-	Common::String _turnLeftAnimName;
-	Common::String _turnRightAnimName;
+	char *_talkAnimName;
+	char *_idleAnimName;
+	char *_walkAnimName;
+	char *_turnLeftAnimName;
+	char *_turnRightAnimName;
 
 	int32 _talkAnimChannel;
 
 	TDirectWalkMode _directWalkMode;
 	TDirectTurnMode _directTurnMode;
-	Common::String _directWalkAnim;
-	Common::String _directTurnAnim;
+	char *_directWalkAnim;
+	char *_directTurnAnim;
 	float _directWalkVelocity;
 	float _directTurnVelocity;
 
@@ -115,7 +115,7 @@ public:
 	bool displayAttachments(bool registerObjects);
 
 	// scripting interface
-	ScValue *scGetProperty(const Common::String &name) override;
+	ScValue *scGetProperty(const char *name) override;
 	bool scSetProperty(const char *name, ScValue *value) override;
 	bool scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, const char *name) override;
 	const char *scToString() override;
@@ -128,7 +128,7 @@ private:
 	bool mergeAnimations(const char *filename);
 	bool mergeAnimations2(const char *filename);
 	bool unloadAnimation(const char *animName);
-	bool isGoToNeeded(int x, int y);
+	bool isGoToNeeded(int32 x, int32 y);
 };
 
 } // namespace Wintermute

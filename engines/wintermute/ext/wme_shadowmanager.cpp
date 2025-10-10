@@ -44,12 +44,12 @@ BaseScriptable *makeSXShadowManager(BaseGame *inGame, ScStack *stack) {
 //////////////////////////////////////////////////////////////////////////
 SXShadowManager::SXShadowManager(BaseGame *inGame, ScStack *stack) : BaseScriptable(inGame) {
 	stack->correctParams(0);
-	
+
 	PluginEventEntry event;
 	event._type = WME_EVENT_UPDATE;
 	event._callback = callback;
 	event._plugin = this;
-	_gameRef->pluginEvents().subscribeEvent(event);
+	_game->pluginEvents().subscribeEvent(event);
 	
 	_defaultLightPos = DXVector3(1.0f, 200.0f, 1.0f);
 	_minShadow = 0.1f;
@@ -64,7 +64,7 @@ SXShadowManager::~SXShadowManager() {
 	event._type = WME_EVENT_UPDATE;
 	event._callback = callback;
 	event._plugin = this;
-	_gameRef->pluginEvents().unsubscribeEvent(event);
+	_game->pluginEvents().unsubscribeEvent(event);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -206,13 +206,13 @@ bool SXShadowManager::scCallMethod(ScScript *script, ScStack *stack, ScStack *th
 
 
 //////////////////////////////////////////////////////////////////////////
-ScValue *SXShadowManager::scGetProperty(const Common::String &name) {
+ScValue *SXShadowManager::scGetProperty(const char *name) {
 	_scValue->setNULL();
 
 	//////////////////////////////////////////////////////////////////////////
 	// DefaultLightPos
 	//////////////////////////////////////////////////////////////////////////
-	if (name == "DefaultLightPos") {
+	if (strcmp(name, "DefaultLightPos") == 0) {
 		_scValue->setProperty("x", _defaultLightPos._x);
 		_scValue->setProperty("y", _defaultLightPos._y);
 		_scValue->setProperty("z", _defaultLightPos._z);
@@ -222,7 +222,7 @@ ScValue *SXShadowManager::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// DefaultLightPosX
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "DefaultLightPosX") {
+	else if (strcmp(name, "DefaultLightPosX") == 0) {
 		_scValue->setFloat(_defaultLightPos._x);
 		return _scValue;
 	}
@@ -230,7 +230,7 @@ ScValue *SXShadowManager::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// DefaultLightPosY
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "DefaultLightPosY") {
+	else if (strcmp(name, "DefaultLightPosY") == 0) {
 		_scValue->setFloat(_defaultLightPos._y);
 		return _scValue;
 	}
@@ -238,7 +238,7 @@ ScValue *SXShadowManager::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// DefaultLightPosZ
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "DefaultLightPosZ") {
+	else if (strcmp(name, "DefaultLightPosZ") == 0) {
 		_scValue->setFloat(_defaultLightPos._z);
 		return _scValue;
 	}
@@ -246,7 +246,7 @@ ScValue *SXShadowManager::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// MinShadow
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "MinShadow") {
+	else if (strcmp(name, "MinShadow") == 0) {
 		_scValue->setFloat(_minShadow);
 		return _scValue;
 	}
@@ -254,7 +254,7 @@ ScValue *SXShadowManager::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// MaxShadow
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "MaxShadow") {
+	else if (strcmp(name, "MaxShadow") == 0) {
 		_scValue->setFloat(_maxShadow);
 		return _scValue;
 	}
@@ -262,7 +262,7 @@ ScValue *SXShadowManager::scGetProperty(const Common::String &name) {
 	//////////////////////////////////////////////////////////////////////////
 	// UseSmartShadows
 	//////////////////////////////////////////////////////////////////////////
-	else if (name == "UseSmartShadows") {
+	else if (strcmp(name, "UseSmartShadows") == 0) {
 		_scValue->setBool(_useSmartShadows);
 		return _scValue;
 	}
@@ -344,7 +344,7 @@ bool SXShadowManager::persist(BasePersistenceManager *persistMgr) {
 		event._type = WME_EVENT_UPDATE;
 		event._callback = callback;
 		event._plugin = this;
-		_gameRef->pluginEvents().subscribeEvent(event);
+		_game->pluginEvents().subscribeEvent(event);
 
 		// Actor and light lists is not get restored, plugin is not designed to work this way.
 		// Lists get refreshed by game script on scene change.
@@ -364,7 +364,7 @@ bool SXShadowManager::persist(BasePersistenceManager *persistMgr) {
 void SXShadowManager::callback(void *eventData1, void *eventData2) {
 	SXShadowManager *shadowManager = (SXShadowManager *)eventData2;
 
-	uint32 time = shadowManager->_gameRef->scGetProperty("CurrentTime")->getInt();
+	uint32 time = shadowManager->_game->scGetProperty("CurrentTime")->getInt();
 	if (time - shadowManager->_lastTime > 20) {
 		shadowManager->_lastTime = time;
 		shadowManager->update();
@@ -373,7 +373,7 @@ void SXShadowManager::callback(void *eventData1, void *eventData2) {
 
 void SXShadowManager::update() {
 	if (_useSmartShadows) {
-		AdGame *adGame = (AdGame *)_gameRef;
+		AdGame *adGame = (AdGame *)_game;
 		if (!adGame->_scene || !adGame->_scene->_geom)
 			return;
 
@@ -414,12 +414,12 @@ void SXShadowManager::update() {
 }
 
 void SXShadowManager::run() {
-	_lastTime = _gameRef->scGetProperty("CurrentTime")->getInt();
+	_lastTime = _game->scGetProperty("CurrentTime")->getInt();
 	_lights.clear();
-	AdGame *adGame = (AdGame *)_gameRef;
+	AdGame *adGame = (AdGame *)_game;
 	if (!adGame->_scene || !adGame->_scene->_geom)
 		return;
-	for (uint32 l = 0; l < adGame->_scene->_geom->_lights.size(); l++) {
+	for (int32 l = 0; l < adGame->_scene->_geom->_lights.getSize(); l++) {
 		auto light = adGame->_scene->_geom->_lights[l];
 		_lights.push_back(Common::Pair<Light3D *, bool>(light, true));
 	}

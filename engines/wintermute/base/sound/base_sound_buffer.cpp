@@ -29,7 +29,10 @@
 #include "engines/wintermute/base/sound/base_sound_manager.h"
 #include "engines/wintermute/base/sound/base_sound_buffer.h"
 #include "engines/wintermute/base/base_file_manager.h"
+#include "engines/wintermute/utils/utils.h"
 #include "engines/wintermute/wintermute.h"
+#include "engines/wintermute/dcgf.h"
+
 #include "audio/audiostream.h"
 #include "audio/mixer.h"
 #ifdef USE_VORBIS
@@ -46,17 +49,14 @@ namespace Wintermute {
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-#define MAX_NONSTREAMED_FILE_SIZE 1024*1024
-
 //////////////////////////////////////////////////////////////////////////
 BaseSoundBuffer::BaseSoundBuffer(BaseGame *inGame) : BaseClass(inGame) {
 	_stream = nullptr;
 	_handle = nullptr;
-//	_sync = nullptr;
 
 	_streamed = false;
-	_filename = "";
-	_privateVolume = 255;
+	_filename = nullptr;
+	_privateVolume = 100;
 	_volume = 255;
 	_pan = 0;
 
@@ -64,7 +64,7 @@ BaseSoundBuffer::BaseSoundBuffer(BaseGame *inGame) : BaseClass(inGame) {
 	_loopStart = 0;
 	_startPos = 0;
 
-	_type = Audio::Mixer::kSFXSoundType;
+	_type = TSoundType::SOUND_SFX;
 
 	_freezePaused = false;
 }
@@ -76,11 +76,11 @@ BaseSoundBuffer::~BaseSoundBuffer() {
 
 	if (_handle) {
 		g_system->getMixer()->stopHandle(*_handle);
-		delete _handle;
-		_handle = nullptr;
+		SAFE_DELETE(_handle);
 	}
-	delete _stream;
-	_stream = nullptr;
+
+	SAFE_DELETE(_stream);
+	SAFE_DELETE_ARRAY(_filename);
 }
 
 
@@ -91,13 +91,17 @@ void BaseSoundBuffer::setStreaming(bool streamed, uint32 numBlocks, uint32 block
 
 
 //////////////////////////////////////////////////////////////////////////
-bool BaseSoundBuffer::loadFromFile(const Common::String &filename, bool forceReload) {
-	debugC(kWintermuteDebugAudio, "BSoundBuffer::LoadFromFile(%s,%d)", filename.c_str(), forceReload);
+bool BaseSoundBuffer::loadFromFile(const char *filename, bool forceReload) {
+	if (_handle) {
+		g_system->getMixer()->stopHandle(*_handle);
+		SAFE_DELETE(_handle);
+	}
+	SAFE_DELETE(_stream);
 
 	// Load a file, but avoid having the File-manager handle the disposal of it.
-	Common::SeekableReadStream *file = BaseFileManager::getEngineInstance()->openFile(filename, true, false);
+	Common::SeekableReadStream *file = _game->_fileManager->openFile(filename, true, false);
 	if (!file) {
-		_gameRef->LOG(0, "Error opening sound file '%s'", filename.c_str());
+		_game->LOG(0, "Error opening sound file '%s'", filename);
 		return STATUS_FAILED;
 	}
 	Common::String strFilename(filename);
@@ -106,7 +110,7 @@ bool BaseSoundBuffer::loadFromFile(const Common::String &filename, bool forceRel
 #ifdef USE_VORBIS
 		_stream = Audio::makeVorbisStream(file, DisposeAfterUse::YES);
 #else
-		error("BSoundBuffer::LoadFromFile - Ogg Vorbis not supported by this version of ScummVM (please report as this shouldn't trigger)");
+		error("BSoundBuffer::loadFromFile - Ogg Vorbis not supported by this version of ScummVM (please report as this shouldn't trigger)");
 #endif
 	} else if (strFilename.hasSuffix(".wav")) {
 		int waveSize, waveRate;
@@ -119,16 +123,18 @@ bool BaseSoundBuffer::loadFromFile(const Common::String &filename, bool forceRel
 				file = new Common::SeekableSubReadStream(file, file->pos(), waveSize + file->pos(), DisposeAfterUse::YES);
 				_stream = Audio::makeRawStream(file, waveRate, waveFlags, DisposeAfterUse::YES);
 			} else {
-				error("BSoundBuffer::LoadFromFile - WAVE not supported yet for %s with type %d", filename.c_str(), waveType);
+				error("BSoundBuffer::loadFromFile - WAVE not supported yet for %s with type %d", filename, waveType);
 			}
 		}
 	} else {
-		error("BSoundBuffer::LoadFromFile - Unknown filetype for %s", filename.c_str());
+		error("BSoundBuffer::loadFromFile - Unknown filetype for %s", filename);
 	}
 	if (!_stream) {
+		_game->LOG(0, "BSoundBuffer::koadFromFile - Error while loading '%s'", filename);
 		return STATUS_FAILED;
 	}
-	_filename = filename;
+
+	BaseUtils::setString(&_filename, filename);
 
 	return STATUS_OK;
 }
@@ -138,24 +144,31 @@ bool BaseSoundBuffer::loadFromFile(const Common::String &filename, bool forceRel
 bool BaseSoundBuffer::play(bool looping, uint32 startSample) {
 	if (_handle) {
 		g_system->getMixer()->stopHandle(*_handle);
-		delete _handle;
-		_handle = nullptr;
+		SAFE_DELETE(_handle);
 	}
 	// Store the loop-value for save-games.
 	setLooping(looping);
 	if (_stream) {
 		_stream->seek(startSample);
 		_handle = new Audio::SoundHandle;
+		Audio::Mixer::SoundType type = Audio::Mixer::SoundType::kPlainSoundType;
+		if (_type == TSoundType::SOUND_SFX) {
+			type = Audio::Mixer::SoundType::kSFXSoundType;
+		} else if (_type == TSoundType::SOUND_MUSIC) {
+			type = Audio::Mixer::SoundType::kMusicSoundType;
+		} else if (_type == TSoundType::SOUND_SPEECH) {
+			type = Audio::Mixer::SoundType::kSpeechSoundType;
+		}
 		if (_looping) {
 			if (_loopStart != 0) {
 				Audio::AudioStream *loopStream = new Audio::SubLoopingAudioStream(_stream, 0, Audio::Timestamp(_loopStart, _stream->getRate()), _stream->getLength(), DisposeAfterUse::NO);
-				g_system->getMixer()->playStream(_type, _handle, loopStream, -1, _volume, _pan, DisposeAfterUse::YES);
+				g_system->getMixer()->playStream(type, _handle, loopStream, -1, _volume, _pan, DisposeAfterUse::YES);
 			} else {
 				Audio::AudioStream *loopStream = new Audio::LoopingAudioStream(_stream, 0, DisposeAfterUse::NO);
-				g_system->getMixer()->playStream(_type, _handle, loopStream, -1, _volume, _pan, DisposeAfterUse::YES);
+				g_system->getMixer()->playStream(type, _handle, loopStream, -1, _volume, _pan, DisposeAfterUse::YES);
 			}
 		} else {
-			g_system->getMixer()->playStream(_type, _handle, _stream, -1, _volume, _pan, DisposeAfterUse::NO);
+			g_system->getMixer()->playStream(type, _handle, _stream, -1, _volume, _pan, DisposeAfterUse::NO);
 		}
 	}
 
@@ -164,11 +177,12 @@ bool BaseSoundBuffer::play(bool looping, uint32 startSample) {
 
 //////////////////////////////////////////////////////////////////////////
 void BaseSoundBuffer::setLooping(bool looping) {
+	_looping = looping;
+
 	if (isPlaying()) {
 		// This warning is here, to see if this is ever the case.
 		warning("BSoundBuffer::SetLooping(%d) - won't change a playing sound", looping); // TODO
 	}
-	_looping = looping;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -214,21 +228,16 @@ uint32 BaseSoundBuffer::getLength() {
 
 
 //////////////////////////////////////////////////////////////////////////
-void BaseSoundBuffer::setType(Audio::Mixer::SoundType type) {
+void BaseSoundBuffer::setType(TSoundType type) {
 	_type = type;
 }
 
 //////////////////////////////////////////////////////////////////////////
-void BaseSoundBuffer::updateVolume() {
-	setVolume(_privateVolume);
-}
-
-//////////////////////////////////////////////////////////////////////////
 bool BaseSoundBuffer::setVolume(int volume) {
-	_volume = volume * _gameRef->_soundMgr->getMasterVolume() / 255;
+	volume = (float)volume / 100.0f * _privateVolume;
+	_volume = (volume * Audio::Mixer::kMaxChannelVolume) / 100;
 	if (_stream && _handle) {
-		byte vol = (byte)(_volume);
-		g_system->getMixer()->setChannelVolume(*_handle, vol);
+		g_system->getMixer()->setChannelVolume(*_handle, (byte)(_volume));
 	}
 	return STATUS_OK;
 }
@@ -237,7 +246,7 @@ bool BaseSoundBuffer::setVolume(int volume) {
 //////////////////////////////////////////////////////////////////////////
 bool BaseSoundBuffer::setPrivateVolume(int volume) {
 	_privateVolume = volume;
-	return setVolume(_privateVolume);
+	return setVolume(volume);
 }
 
 
@@ -277,6 +286,7 @@ bool BaseSoundBuffer::setPosition(uint32 pos) {
 //////////////////////////////////////////////////////////////////////////
 bool BaseSoundBuffer::setLoopStart(uint32 pos) {
 	_loopStart = pos;
+
 	return STATUS_OK;
 }
 
@@ -293,7 +303,7 @@ bool BaseSoundBuffer::setPan(float pan) {
 
 //////////////////////////////////////////////////////////////////////////
 bool BaseSoundBuffer::applyFX(TSFXType type, float param1, float param2, float param3, float param4) {
-	// This function was stubbed out in WME Lite.
+	// TODO
 	switch (type) {
 	case SFX_ECHO:
 		warning("BaseSoundBuffer::ApplyFX(SFX_ECHO, %f, %f, %f, %f)  - not implemented yet", param1, param2, param3, param4);
@@ -307,26 +317,6 @@ bool BaseSoundBuffer::applyFX(TSFXType type, float param1, float param2, float p
 		break;
 	}
 	return STATUS_OK;
-}
-
-int32 BaseSoundBuffer::getPrivateVolume() const {
-	return _privateVolume;
-}
-
-bool BaseSoundBuffer::isLooping() const {
-	return _looping;
-}
-
-bool BaseSoundBuffer::isFreezePaused() const {
-	return _freezePaused;
-}
-
-void BaseSoundBuffer::setFreezePaused(bool freezePaused) {
-	_freezePaused = freezePaused;
-}
-
-Audio::Mixer::SoundType BaseSoundBuffer::getType() const {
-	return _type;
 }
 
 } // End of namespace Wintermute

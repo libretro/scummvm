@@ -33,12 +33,12 @@ public:
 
 	CastMember *duplicate(Cast *cast, uint16 castId) override { return (CastMember *)(new MovieCastMember(cast, castId, *this)); }
 
-	Common::Array<Channel> *getSubChannels(Common::Rect &bbox, Channel *channel) override;
+	Common::Array<Channel> *getSubChannels(Common::Rect &bbox, uint frame) override;
 	void load() override;
 
 	bool hasField(int field) override;
 	Datum getField(int field) override;
-	bool setField(int field, const Datum &value) override;
+	void setField(int field, const Datum &value) override;
 
 	Common::String formatInfo() override;
 

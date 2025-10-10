@@ -243,6 +243,11 @@ bool Room::load() {
 		if (roomObj.objNum == 41 && roomObj.type == 0) { // TODO hack. figure out why the tincup doesn't show in the jail cell normally.
 			roomObj.type = 1;
 		}
+		if (roomObj.objNum == 14 && _roomNumber == 34) { // TODO HACK. Figure out why we need to resize the hitbox for the gloves.
+			// originally it is 20x12 pixels not sure why.
+			roomObj.width = 52;
+			roomObj.height = 22;
+		}
 	}
 
 	_pal.load(g_engine->getPictureFilePath(Common::Path(Common::String::format("%s.pal", filenameBase.c_str()))), false);
@@ -374,7 +379,7 @@ int Room::checkCursorAndMoveableObjects() {
 			}
 
 			if (_roomObj[i].objNum == 14 && g_engine->_cursor.getY() > 40 && g_engine->_objectVar.getVar(86) == 0) {
-				hasObject = false;
+				hasObject = false; // don't return gloves if the glovebox is closed.
 			}
 
 			if (hasObject) {
@@ -966,6 +971,27 @@ void Room::runRoomObjects() {
 					advanceLocAnimFrame(roomObjIdx);
 				}
 				spriteNum = _locationSprites.getAnimAt(_roomObj[roomObjIdx].spriteNum)._frameNo[_locObjFrame[roomObjIdx]];
+
+				// librarian stamping book
+				if (_roomNumber == 17 && !g_engine->_animation->_isPlayingAnimation_maybe && g_engine->_animation->_frameAdvanced && spriteNum == 6) {
+					g_engine->playSound(54, 5, 0);
+				}
+				// dark world barber
+				if (_roomNumber == 67 && g_engine->_animation->_frameAdvanced && spriteNum == 6) {
+					g_engine->playSound(50, 5, 0);
+				}
+				// hallway mosquito
+				if (_roomNumber == 5 && g_engine->_animation->_frameAdvanced && (spriteNum == 1 || spriteNum == 3)) {
+					g_engine->playSound(53, 5, 0);
+				}
+				// lounge room clock ticking
+				if (_roomNumber == 7 && g_engine->_animation->_frameAdvanced) {
+					if (spriteNum == 0) {
+						g_engine->playSound(43, 5, 0);
+					} else if (spriteNum == 5) {
+						g_engine->playSound(44, 5, 0);
+					}
+				}
 			}
 
 			if (_roomNumber == 16 && g_engine->_animation->_isPlayingAnimation_maybe && g_engine->_animation->_otherNspAnimationType_maybe == 35) {
@@ -1369,8 +1395,10 @@ void Room::drawTrunk() {
 void Room::advanceLocAnimFrame(int roomObjIdx) {
 	const Obt &anim = _locationSprites.getAnimAt(_roomObj[roomObjIdx].spriteNum);
 	g_engine->_animation->_objRestarted = false;
+	g_engine->_animation->_frameAdvanced = false;
 	_locObjFrameTimer[roomObjIdx]--;
 	if (_locObjFrameTimer[roomObjIdx] < 1) {
+		g_engine->_animation->_frameAdvanced = true;
 		_locObjFrame[roomObjIdx]++;
 		if (_locObjFrame[roomObjIdx] == anim._numFrames) {
 			_locObjFrame[roomObjIdx] = 0;

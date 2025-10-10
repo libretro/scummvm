@@ -330,6 +330,9 @@ Common::String detokenise8bitCondition(Common::Array<uint16> &tokenisedCondition
 		case 42: // Not sure about this one
 			detokenisedStream += "AGAIN";
 			currentInstruction = FCLInstruction(Token::AGAIN);
+			conditionalInstructions->push_back(currentInstruction);
+			currentInstruction = FCLInstruction(Token::UNKNOWN);
+			numberOfArguments = 0;
 			break;
 
 		case 12:

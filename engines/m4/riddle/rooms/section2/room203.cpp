@@ -911,7 +911,7 @@ void Room203::daemon() {
 				} else {
 					player_update_info();
 
-					if (_G(player_info).x >= 450 && _G(player_info).x <= 8000) {
+					if (_G(player_info).x >= 450 && _G(player_info).x <= 800) {
 						kernel_trigger_dispatchx(kernel_trigger_create(121));
 					} else {
 						player_set_commands_allowed(false);
@@ -962,7 +962,7 @@ void Room203::daemon() {
 				} else {
 					player_update_info();
 
-					if (_G(player_info).x >= 450 && _G(player_info).x <= 1040) {
+					if (_G(player_info).x >= 800 && _G(player_info).x <= 1040) {
 						kernel_trigger_dispatchx(kernel_trigger_create(121));
 					} else {
 						player_set_commands_allowed(false);
@@ -1151,6 +1151,7 @@ void Room203::daemon() {
 					triggerMachineByHashCallback, "pesky peasant");
 				_peasantShadow = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 745, 325, 75, 0x800, false,
 					triggerMachineByHashCallback, "pesky peasant shadow");
+				peasantAnim1();
 				_peasantShould = 4118;
 				break;
 

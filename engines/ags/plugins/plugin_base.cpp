@@ -32,11 +32,13 @@
 #include "ags/plugins/ags_controller/ags_controller_arcnor.h"
 #include "ags/plugins/ags_creditz/ags_creditz1.h"
 #include "ags/plugins/ags_creditz/ags_creditz2.h"
+#include "ags/plugins/ags_filedel/ags_filedel.h"
 #include "ags/plugins/ags_fire/ags_fire.h"
 #include "ags/plugins/ags_flashlight/ags_flashlight.h"
 #include "ags/plugins/ags_galaxy_steam/ags_wadjeteye_steam.h"
 #include "ags/plugins/ags_galaxy_steam/ags_galaxy_steam.h"
 #include "ags/plugins/ags_joy/ags_joy.h"
+#include "ags/plugins/ags_maya/ags_maya.h"
 #include "ags/plugins/ags_nickenstien_gfx/ags_nickenstien_gfx.h"
 #include "ags/plugins/ags_pal_render/ags_pal_render.h"
 #include "ags/plugins/ags_parallax/ags_parallax.h"
@@ -49,6 +51,7 @@
 #include "ags/plugins/ags_tcp_ip/ags_tcp_ip.h"
 #include "ags/plugins/ags_touch/ags_touch.h"
 #include "ags/plugins/ags_trans/ags_trans.h"
+#include "ags/plugins/ags_utils/ags_utils.h"
 #include "ags/plugins/ags_wadjet_util/ags_wadjet_util.h"
 #include "ags/plugins/ags_waves/ags_waves.h"
 #include "ags/ags.h"
@@ -110,6 +113,9 @@ Plugins::PluginBase *pluginOpen(const char *filename) {
 	if (fname.equalsIgnoreCase("ags_d3d") || fname.equalsIgnoreCase("ags_spritevideo"))
 		return new AGSSpriteVideo::AGSSpriteVideo();
 
+	if (fname.equalsIgnoreCase("AGS_FileDel"))
+		return new AGSFileDel::AGSFileDel();
+
 	if (fname.equalsIgnoreCase("AGS_Fire"))
 		return new AGSFire::AGSFire();
 
@@ -118,6 +124,9 @@ Plugins::PluginBase *pluginOpen(const char *filename) {
 
 	if (fname.equalsIgnoreCase("AGSJoy"))
 		return new AGSJoy::AGSJoy();
+
+	if (fname.equalsIgnoreCase("AGS_Maya"))
+		return new AGSMaya::AGSMaya();
 
 	if (fname.equalsIgnoreCase("AGSPalRender"))
 		return new AGSPalRender::AGSPalRender();
@@ -160,6 +169,9 @@ Plugins::PluginBase *pluginOpen(const char *filename) {
 
 	if (fname.equalsIgnoreCase("AGSTrans"))
 		return new AGSTrans::AGSTrans();
+
+	if (fname.equalsIgnoreCase("ags_utils"))
+		return new AGSUtils::AGSUtils();
 
 	if (fname.equalsIgnoreCase("AGSWadjetUtil"))
 		return new AGSWadjetUtil::AGSWadjetUtil();

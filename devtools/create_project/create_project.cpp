@@ -1184,7 +1184,9 @@ const Feature s_features[] = {
 	{             "opengl",                    "USE_OPENGL", false, true,  "OpenGL support" },
 	{"opengl_game_classic",               "USE_OPENGL_GAME", false, true,  "OpenGL support (classic) in 3d games" },
 	{"opengl_game_shaders",            "USE_OPENGL_SHADERS", false, true,  "OpenGL support (shaders) in 3d games" },
+	{             "tinygl",                    "USE_TINYGL", false, true,  "TinyGL support (software) in 3d games" },
 	{            "taskbar",                   "USE_TASKBAR", false, true,  "Taskbar integration support" },
+	{               "http",                      "USE_HTTP", false, true,  "HTTP client support" },
 	{              "cloud",                     "USE_CLOUD", false, true,  "Cloud integration support" },
 	{               "enet",                      "USE_ENET", false, true,  "ENet networking support" },
 	{        "translation",               "USE_TRANSLATION", false, true,  "Translation support" },
@@ -1218,9 +1220,6 @@ const Tool s_tools[] = {
 
 const MSVCVersion s_msvc[] = {
 //    Ver    Name                     Solution                     Project    Toolset    LLVM
-	{ 10,    "Visual Studio 2010",    "11.00",          "2010",     "4.0",    "v100",    "LLVM-vs2010" },
-	{ 11,    "Visual Studio 2012",    "11.00",          "2012",     "4.0",    "v110",    "LLVM-vs2012" },
-	{ 12,    "Visual Studio 2013",    "12.00",          "2013",    "12.0",    "v120",    "LLVM-vs2013" },
 	{ 14,    "Visual Studio 2015",    "12.00",            "14",    "14.0",    "v140",    "LLVM-vs2014" },
 	{ 15,    "Visual Studio 2017",    "12.00",            "15",    "15.0",    "v141",    "llvm"        },
 	{ 16,    "Visual Studio 2019",    "12.00",    "Version 16",    "16.0",    "v142",    "llvm"        },
@@ -1298,6 +1297,17 @@ static void fixupFeatures(ProjectType projectType, BuildSetup &setup) {
 	// OpenMPT and Mikmod can not be enabled simultaneously
 	if (getFeatureBuildState("openmpt", setup.features)) {
 		setFeatureBuildState("mikmod", setup.features, false);
+	}
+
+	// Only libcurl provides an HTTP client for now
+	// (or Emscripten but it's not supported by create_project)
+	if (!getFeatureBuildState("libcurl", setup.features)) {
+		setFeatureBuildState("http", setup.features, false);
+	}
+
+	// Without an HTTP client there is no cloud feature
+	if (!getFeatureBuildState("http", setup.features)) {
+		setFeatureBuildState("cloud", setup.features, false);
 	}
 
 	// These features depend on OpenGL
@@ -1979,7 +1989,6 @@ void ProjectProvider::createProject(BuildSetup &setup) {
 			in.push_back(setup.srcDir + "/LICENSES/COPYING.Apache");
 			in.push_back(setup.srcDir + "/LICENSES/COPYING.BSD");
 			in.push_back(setup.srcDir + "/LICENSES/COPYING.BSL");
-			in.push_back(setup.srcDir + "/LICENSES/COPYING.FREEFONT");
 			in.push_back(setup.srcDir + "/LICENSES/COPYING.GLAD");
 			in.push_back(setup.srcDir + "/LICENSES/COPYING.ISC");
 			in.push_back(setup.srcDir + "/LICENSES/COPYING.LGPL");

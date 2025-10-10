@@ -21,13 +21,20 @@
 
 #ifdef __EMSCRIPTEN__
 
-
 #define FORBIDDEN_SYMBOL_EXCEPTION_FILE
 #define FORBIDDEN_SYMBOL_EXCEPTION_getenv
 #include <emscripten.h>
 
+#include "backends/events/emscriptensdl/emscriptensdl-events.h"
+#include "backends/fs/emscripten/emscripten-fs-factory.h"
+#include "backends/mutex/null/null-mutex.h"
+#include "backends/fs/emscripten/emscripten-fs-factory.h"
 #include "backends/platform/sdl/emscripten/emscripten.h"
+#include "backends/timer/default/default-timer.h"
 #include "common/file.h"
+#ifdef USE_TTS
+#include "backends/text-to-speech/emscripten/emscripten-text-to-speech.h"
+#endif
 
 // Inline JavaScript, see https://emscripten.org/docs/api_reference/emscripten.h.html#inline-assembly-javascript for details
 EM_JS(bool, isFullscreen, (), {
@@ -64,6 +71,35 @@ EM_JS(void, downloadFile, (const char *filenamePtr, char *dataPtr, int dataSize)
 	}, 0);
 });
 
+#ifdef USE_CLOUD
+/* Listener to feed the activation JSON from the wizard at cloud.scummvm.org back 
+ * Usage: Run the following on the final page of the activation flow:
+ * 		  window.opener.postMessage(document.getElementById("json").value,"*")
+ */
+EM_JS(bool, cloud_connection_open_oauth_window, (char const *url), {
+	oauth_window = window.open(UTF8ToString(url));
+	window.addEventListener("message", (event) => {
+		Module._cloud_connection_json_callback(stringToNewUTF8( JSON.stringify(event.data)));
+		oauth_window.close()
+	}, {once : true});
+	return true;
+});
+#endif
+
+extern "C" {
+#ifdef USE_CLOUD
+void EMSCRIPTEN_KEEPALIVE cloud_connection_json_callback(char *str) {
+	warning("cloud_connection_callback: %s", str);
+	OSystem_Emscripten *emscripten_g_system = dynamic_cast<OSystem_Emscripten *>(g_system);
+	if (emscripten_g_system->_cloudConnectionCallback) {
+		(*emscripten_g_system->_cloudConnectionCallback)(new Common::String(str));
+	} else {
+		warning("No Storage Connection Callback Registered!");
+	}
+}
+#endif
+}
+
 // Overridden functions
 
 void OSystem_Emscripten::initBackend() {
@@ -71,8 +107,25 @@ void OSystem_Emscripten::initBackend() {
 	// Initialize Text to Speech manager
 	_textToSpeechManager = new EmscriptenTextToSpeechManager();
 #endif
+
+	// SDL Timers don't work in Emscripten unless threads are enabled or Asyncify is disabled.
+	// We can do neither, so we use the DefaultTimerManager instead.
+	_timerManager = new DefaultTimerManager();
+
+	// Event source
+	_eventSource = new EmscriptenSdlEventSource();
+
 	// Invoke parent implementation of this method
 	OSystem_POSIX::initBackend();
+}
+
+void OSystem_Emscripten::init() {
+	// Initialze File System Factory
+	EmscriptenFilesystemFactory *fsFactory = new EmscriptenFilesystemFactory();
+	_fsFactory = fsFactory;
+
+	// Invoke parent implementation of this method
+	OSystem_SDL::init();
 }
 
 bool OSystem_Emscripten::hasFeature(Feature f) {
@@ -145,4 +198,64 @@ void OSystem_Emscripten::exportFile(const Common::Path &filename) {
 	downloadFile(exportName.c_str(), bytes, size);
 	delete[] bytes;
 }
+
+void OSystem_Emscripten::updateTimers() {
+	// avoid a recursion loop if a timer callback decides to call OSystem::delayMillis()
+	static bool inTimer = false;
+
+	if (!inTimer) {
+		inTimer = true;
+		((DefaultTimerManager *)_timerManager)->checkTimers();
+		inTimer = false;
+	} else {
+		const Common::ConfigManager::Domain *activeDomain = ConfMan.getActiveDomain();
+		assert(activeDomain);
+
+		warning("%s/%s calls update() from timer",
+				activeDomain->getValOrDefault("engineid").c_str(),
+				activeDomain->getValOrDefault("gameid").c_str());
+	}
+}
+
+Common::MutexInternal *OSystem_Emscripten::createMutex() {
+	return new NullMutexInternal();
+}
+
+void OSystem_Emscripten::addSysArchivesToSearchSet(Common::SearchSet &s, int priority) {
+	// Add the global DATA_PATH (and some sub-folders) to the directory search list 
+	// Note: gui-icons folder is added in GuiManager::initIconsSet 
+	Common::FSNode dataNode(DATA_PATH);
+	if (dataNode.exists() && dataNode.isDirectory()) {
+		s.addDirectory(dataNode, priority, 2, false);
+	}
+}
+
+void OSystem_Emscripten::delayMillis(uint msecs) {
+	static uint32 lastThreshold = 0;
+	const uint32 threshold = getMillis() + msecs;
+	if (msecs == 0 && threshold - lastThreshold < 10) {
+		return;
+	}
+	uint32 pause = 0;
+	do {
+#ifdef ENABLE_EVENTRECORDER
+		if (!g_eventRec.processDelayMillis())
+#endif
+		SDL_Delay(pause);
+		updateTimers();
+		pause = getMillis() > threshold ? 0 : threshold - getMillis(); // Avoid negative values
+		pause = pause > 10 ? 10 : pause; // ensure we don't pause for too long
+	} while (pause > 0);
+	lastThreshold = threshold;
+}
+
+#ifdef USE_CLOUD
+bool OSystem_Emscripten::openUrl(const Common::String &url) {
+	if(url.hasPrefix("https://cloud.scummvm.org/")){
+		return cloud_connection_open_oauth_window(url.c_str());
+	}
+	return	OSystem_SDL::openUrl(url);
+}
+#endif
+
 #endif

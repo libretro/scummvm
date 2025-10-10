@@ -37,12 +37,10 @@ class MartianRoom : public Room {
 private:
 	MartianEngine *_game;
 
-	void roomSet();
-
-	int _byte26CD2[30];
-	int _byte26CBC[10];
 protected:
 	void loadRoom(int roomNumber) override;
+
+	void roomInit() override;
 
 	void reloadRoom() override;
 

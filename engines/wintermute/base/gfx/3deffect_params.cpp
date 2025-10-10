@@ -30,6 +30,8 @@
 #include "engines/wintermute/base/base_file_manager.h"
 #include "engines/wintermute/base/scriptables/script_value.h"
 #include "engines/wintermute/base/gfx/3deffect_params.h"
+#include "engines/wintermute/utils/utils.h"
+#include "engines/wintermute/dcgf.h"
 
 namespace Wintermute {
 
@@ -41,17 +43,19 @@ Effect3DParams::Effect3DParam::Effect3DParam() {
 //////////////////////////////////////////////////////////////////////////
 Effect3DParams::Effect3DParam::Effect3DParam(const char *paramName) {
 	setDefaultValues();
-	_paramName = paramName;
+	BaseUtils::setString(&_paramName, paramName);
 }
 
 //////////////////////////////////////////////////////////////////////////
 Effect3DParams::Effect3DParam::~Effect3DParam() {
+	SAFE_DELETE_ARRAY(_paramName);
+	SAFE_DELETE_ARRAY(_valString);
 }
 
 //////////////////////////////////////////////////////////////////////////
 void Effect3DParams::Effect3DParam::setValue(char *val) {
 	_type = EP_STRING;
-	_valString = val;
+	BaseUtils::setString(&_valString, val);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -80,8 +84,8 @@ void Effect3DParams::Effect3DParam::setValue(DXVector4 val) {
 
 //////////////////////////////////////////////////////////////////////////
 void Effect3DParams::Effect3DParam::setDefaultValues() {
-	_paramName = "";
-	_valString = "";
+	_paramName = nullptr;
+	_valString = nullptr;
 	_valInt = 0;
 	_valFloat = 0;
 	_valBool = 0;
@@ -94,9 +98,9 @@ void Effect3DParams::Effect3DParam::setDefaultValues() {
 
 //////////////////////////////////////////////////////////////////////////
 bool Effect3DParams::Effect3DParam::persist(BasePersistenceManager *persistMgr) {
-	persistMgr->transferString(TMEMBER(_paramName));
+	persistMgr->transferCharPtr(TMEMBER(_paramName));
 	persistMgr->transferSint32(TMEMBER_INT(_type));
-	persistMgr->transferString(TMEMBER(_valString));
+	persistMgr->transferCharPtr(TMEMBER(_valString));
 	persistMgr->transferSint32(TMEMBER(_valInt));
 	persistMgr->transferFloat(TMEMBER(_valFloat));
 	persistMgr->transferVector4d(TMEMBER(_valVector));
@@ -121,21 +125,20 @@ Effect3DParams::~Effect3DParams() {
 
 //////////////////////////////////////////////////////////////////////////
 void Effect3DParams::clear() {
-	for (size_t i = 0; i < _params.size(); i++) {
-		delete _params[i];
-		_params[i] = nullptr;
+	for (int32 i = 0; i < _params.getSize(); i++) {
+		SAFE_DELETE(_params[i]);
 	}
 
-	_params.clear();
+	_params.removeAll();
 }
 
 //////////////////////////////////////////////////////////////////////////
 bool Effect3DParams::persist(BasePersistenceManager *persistMgr) {
 	if (persistMgr->getIsSaving()) {
-		uint32 numItems = _params.size();
-		persistMgr->transferUint32(TMEMBER(numItems));
+		int32 numItems = _params.getSize();
+		persistMgr->transferSint32(TMEMBER(numItems));
 
-		for (uint32 i = 0; i < numItems; i++) {
+		for (int32 i = 0; i < numItems; i++) {
 			_params[i]->persist(persistMgr);
 		}
 	} else {
@@ -182,7 +185,7 @@ void Effect3DParams::setParam(const char *paramName, DXVector4 val) {
 Effect3DParams::Effect3DParam *Effect3DParams::getParamByName(const char *paramName) {
 	Effect3DParam *param = nullptr;
 
-	for (uint32 i = 0; i < _params.size(); i++) {
+	for (int32 i = 0; i < _params.getSize(); i++) {
 		if (_params[i]->getParamName() && strcmp(paramName, _params[i]->getParamName()) == 0) {
 			param = _params[i];
 			break;

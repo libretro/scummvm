@@ -32,9 +32,9 @@
 #include "director/castmember/bitmap.h"
 #include "director/castmember/digitalvideo.h"
 #include "director/castmember/filmloop.h"
+#include "director/castmember/movie.h"
 
 #include "graphics/macgui/mactext.h"
-#include "graphics/macgui/mactextwindow.h"
 #include "graphics/macgui/macbutton.h"
 
 namespace Director {
@@ -62,8 +62,13 @@ Channel::Channel(Score *sc, Sprite *sp, int priority) {
 	_visible = true;
 	_dirty = true;
 
-	if (_sprite)
-		_sprite->updateEditable();
+	if (sp) {
+		_startFrame = sp->_spriteInfo.startFrame;
+		_endFrame = sp->_spriteInfo.endFrame;
+	} else {
+		_startFrame = -1;
+		_endFrame = -1;
+	}
 }
 
 Channel::Channel(const Channel &channel) {
@@ -90,16 +95,16 @@ Channel& Channel::operator=(const Channel &channel) {
 	_visible = channel._visible;
 	_dirty = channel._dirty;
 
+	_startFrame = channel._startFrame;
+	_endFrame = channel._endFrame;
+
 	return *this;
 }
 
 
 Channel::~Channel() {
 	if (_widget) {
-		if (dynamic_cast<Graphics::MacWindow *>(_widget))
-			g_director->_wm->removeWindow((Graphics::MacWindow *)_widget);
-		else
-			delete _widget;
+		delete _widget;
 	}
 
 	if (_mask)
@@ -109,7 +114,8 @@ Channel::~Channel() {
 }
 
 DirectorPlotData Channel::getPlotData() {
-	DirectorPlotData pd(g_director, _sprite->_spriteType, _sprite->_ink, _sprite->_blendAmount, _sprite->getBackColor(), _sprite->getForeColor());
+	int blend = (_sprite->_thickness & kTHasBlend) || _sprite->_ink == kInkTypeBlend ? _sprite->_blendAmount : 0;
+	DirectorPlotData pd(g_director, _sprite->_spriteType, _sprite->_ink, blend, _sprite->getBackColor(), _sprite->getForeColor());
 	pd.colorWhite = g_director->getColorWhite();
 	pd.colorBlack = g_director->getColorBlack();
 	pd.dst = nullptr;
@@ -156,7 +162,7 @@ const Graphics::Surface *Channel::getMask(bool forceMatte) {
 		_sprite->_ink == kInkTypeLight ||
 		_sprite->_ink == kInkTypeSub ||
 		_sprite->_ink == kInkTypeDark ||
-		_sprite->_blendAmount > 0;
+		(((_sprite->_thickness & kTHasBlend) || _sprite->_ink == kInkTypeBlend) && _sprite->_blendAmount > 0);
 
 	Common::Rect bbox(getBbox());
 
@@ -255,7 +261,8 @@ bool Channel::isDirty(Sprite *nextSprite) {
 		// modified.
 		isDirtyFlag |= _sprite->_castId != nextSprite->_castId ||
 			_sprite->_ink != nextSprite->_ink || _sprite->_backColor != nextSprite->_backColor ||
-			_sprite->_foreColor != nextSprite->_foreColor;
+			_sprite->_foreColor != nextSprite->_foreColor ||
+			_sprite->_blendAmount != nextSprite->_blendAmount || _sprite->_thickness != nextSprite->_thickness;
 		if (!_sprite->_moveable)
 			isDirtyFlag |= _sprite->getPosition() != nextSprite->getPosition();
 		if (isStretched() && !hasTextCastMember(_sprite))
@@ -392,6 +399,7 @@ void Channel::setCast(CastMemberID memberID) {
 	if (_sprite->_cast)
 		_sprite->_cast->releaseWidget();
 
+	bool hasChanged = _sprite->_castId != memberID;
 	// Replace the cast member in the sprite.
 	// Only change the dimensions if the "stretch" flag is set,
 	// indicating that the sprite has already been warped away from cast
@@ -399,6 +407,24 @@ void Channel::setCast(CastMemberID memberID) {
 	// dimensions of the sprite, -then- change the cast ID, and expect
 	// those custom dimensions to stick around.
 	_sprite->setCast(memberID, !_sprite->_stretch);
+
+	// Duplicate of the special cases in setClean.
+	// Maybe it makes sense to force setClean to use setCast instead?
+	if (hasChanged && _sprite->_cast) {
+		if (_sprite->_cast->_type == kCastDigitalVideo) {
+			DigitalVideoCastMember *dv = (DigitalVideoCastMember *)_sprite->_cast;
+			if (dv->loadVideoFromCast()) {
+				_movieTime = 0;
+				dv->setChannel(this);
+				dv->startVideo();
+			}
+		} else if (_sprite->_cast->_type == kCastFilmLoop ||
+					_sprite->_cast->_type == kCastMovie) {
+			// brand new film loop, reset the frame counter.
+			_filmLoopFrame = 1;
+		}
+	}
+
 	replaceWidget();
 
 	// Based on Director in a Nutshell, page 15
@@ -450,7 +476,6 @@ void Channel::setClean(Sprite *nextSprite, bool partial) {
 	// for the dirty puppet sprites, we will always replaceWidget since previousCastId is 0, but we shouldn't replace the widget of there are only position changing
 	// e.g. we won't want a puppet editable text sprite changing because that will cause the loss of text.
 	if (replace) {
-		_sprite->updateEditable();
 		replaceWidget(previousCastId, dimsChanged || spriteTypeChanged);
 	}
 
@@ -487,8 +512,7 @@ void Channel::updateTextCast() {
 	if (!_sprite->_cast || _sprite->_cast->_type != kCastText)
 		return;
 
-	_sprite->updateEditable();
-	setEditable(_sprite->_editable);
+	setEditable(_sprite->getEditable());
 
 	if (_widget) {
 		Graphics::MacText *textWidget = (Graphics::MacText *)_widget;
@@ -586,6 +610,11 @@ void Channel::replaceSprite(Sprite *nextSprite) {
 		_sprite->_width = width;
 		_sprite->_height = height;
 	}
+
+	if (g_director->getVersion() >= 600) {
+		_startFrame = _sprite->_spriteInfo.startFrame;
+		_endFrame = _sprite->_spriteInfo.endFrame;
+	}
 }
 
 void Channel::setPosition(int x, int y, bool force) {
@@ -631,11 +660,7 @@ void Channel::replaceWidget(CastMemberID previousCastId, bool force) {
 	}
 
 	if (_widget) {
-		// Check if _widget is of type window, in which case we need to remove it from the window manager
-		if (dynamic_cast<Graphics::MacWindow *>(_widget))
-			g_director->_wm->removeWindow((Graphics::MacWindow *)_widget);
-		else
-			delete _widget;
+		delete _widget;
 		_widget = nullptr;
 	}
 
@@ -644,6 +669,10 @@ void Channel::replaceWidget(CastMemberID previousCastId, bool force) {
 		// if the type don't match, then we will set it as transparent. i.e. don't create widget
 		if (!_sprite->checkSpriteType())
 			return;
+
+		if (_sprite->_cast->needsReload()) {
+			_sprite->_cast->load();
+		}
 		// always use the unstretched dims.
 		// because only the stretched sprite will have different channel size and sprite size
 		// we need the original image to scale the sprite.
@@ -730,10 +759,6 @@ int Channel::getMouseLine(int x, int y) {
 		return -1;
 	}
 
-	// If widget is type textWindow, then we need to get the line from the window
-	if (dynamic_cast<Graphics::MacTextWindow *>(_widget))
-		return ((Graphics::MacTextWindow *)_widget)->getMouseLine(x, y);
-
 	return ((Graphics::MacText *)_widget)->getMouseLine(x, y);
 }
 
@@ -745,12 +770,37 @@ bool Channel::hasSubChannels() {
 }
 
 Common::Array<Channel> *Channel::getSubChannels() {
-	if ((!_sprite->_cast) || (_sprite->_cast->_type != kCastFilmLoop && _sprite->_cast->_type != kCastMovie)) {
-		warning("Channel doesn't have any sub-channels");
-		return nullptr;
+	if (_sprite->_cast) {
+		Common::Rect bbox = getBbox();
+		if (_sprite->_cast->_type == kCastFilmLoop)
+			return ((FilmLoopCastMember *)_sprite->_cast)->getSubChannels(bbox, _filmLoopFrame);
+		else if (_sprite->_cast->_type == kCastMovie)
+			return ((MovieCastMember *)_sprite->_cast)->getSubChannels(bbox, _filmLoopFrame);
 	}
-	Common::Rect bbox = getBbox();
-	return ((FilmLoopCastMember *)_sprite->_cast)->getSubChannels(bbox, this);
+	warning("Channel doesn't have any sub-channels");
+	return nullptr;
+}
+
+CastMemberID Channel::getSubChannelSound1() {
+	if (_sprite->_cast) {
+		if (_sprite->_cast->_type == kCastFilmLoop)
+			return ((FilmLoopCastMember *)_sprite->_cast)->getSubChannelSound1(_filmLoopFrame);
+		else if (_sprite->_cast->_type == kCastMovie)
+			return ((MovieCastMember *)_sprite->_cast)->getSubChannelSound2(_filmLoopFrame);
+	}
+	warning("Channel doesn't have any sub-channels");
+	return CastMemberID();
+}
+
+CastMemberID Channel::getSubChannelSound2() {
+	if (_sprite->_cast) {
+		if (_sprite->_cast->_type == kCastFilmLoop)
+			return ((FilmLoopCastMember *)_sprite->_cast)->getSubChannelSound1(_filmLoopFrame);
+		else if (_sprite->_cast->_type == kCastMovie)
+			return ((MovieCastMember *)_sprite->_cast)->getSubChannelSound2(_filmLoopFrame);
+	}
+	warning("Channel doesn't have any sub-channels");
+	return CastMemberID();
 }
 
 } // End of namespace Director

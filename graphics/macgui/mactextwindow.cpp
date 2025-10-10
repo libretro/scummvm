@@ -36,60 +36,42 @@ enum {
 	kConHPadding = 4,
 	kConOverscan = 3,
 	kConScrollStep = 12,
-
-	kCursorHeight = 12
 };
 
-static void cursorTimerHandler(void *refCon);
-
-MacTextWindow::MacTextWindow(MacWindowManager *wm, const MacFont *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, bool cursorHandler) :
+MacTextWindow::MacTextWindow(MacWindowManager *wm, const MacFont *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, int padding) :
 		MacWindow(wm->getLastId(), true, true, true, wm), _bgcolor(bgcolor), _maxWidth(maxWidth), _menu(menu) {
 
 	_font = font;
-	_mactext = new MacText(this, 0, 0, 0, 0, _wm, Common::U32String(""), font, fgcolor, bgcolor, maxWidth, textAlignment);
+	_mactext = new MacText(this, 0, 0, 0, 0, _wm, Common::U32String(""), font, fgcolor, bgcolor, maxWidth, textAlignment, 0, padding);
 
 	_fontRef = wm->_fontMan->getFont(*font);
 
-	init(cursorHandler);
+	init();
 }
 
-MacTextWindow::MacTextWindow(MacWindowManager *wm, const Font *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, bool cursorHandler) :
+MacTextWindow::MacTextWindow(MacWindowManager *wm, const Font *font, int fgcolor, int bgcolor, int maxWidth, TextAlign textAlignment, MacMenu *menu, int padding) :
 		MacWindow(wm->getLastId(), true, true, true, wm), _bgcolor(bgcolor), _maxWidth(maxWidth), _menu(menu) {
 
 	_font = nullptr;
-	_mactext = new MacText(Common::U32String(""), _wm, font, fgcolor, bgcolor, maxWidth, textAlignment);
+	_mactext = new MacText(Common::U32String(""), _wm, font, fgcolor, bgcolor, maxWidth, textAlignment, 0, padding);
 
 	_fontRef = font;
 
-	init(cursorHandler);
+	init();
 }
 
-void MacTextWindow::init(bool cursorHandler) {
+void MacTextWindow::init() {
 	_inputTextHeight = 0;
 
 	_inputIsDirty = true;
-	_inTextSelection = false;
 
-	_scrollPos = 0;
 	_editable = true;
 	_selectable = true;
 
-	_cursorX = 0;
-	_cursorY = 0;
-	_cursorState = false;
-	_cursorOff = false;
-
-	_cursorDirty = true;
-
-	_cursorRect = new Common::Rect(0, 0, 1, kCursorHeight);
-
-	_cursorSurface = new ManagedSurface(1, kCursorHeight);
-	_cursorSurface->fillRect(*_cursorRect, _wm->_colorBlack);
-
 	_textColorRGB = 0;
 
-	if (cursorHandler)
-		g_system->getTimerManager()->installTimerProc(&cursorTimerHandler, 200000, this, "textWindowCursor");
+	// Disable autoselect on activation
+	_mactext->setAutoSelect(false);
 
 	if (_wm->_mode & kWMModeWin95) {
 		// in win95 mode, we set scrollbar as default
@@ -141,9 +123,7 @@ void MacTextWindow::appendText(const Common::U32String &str, const MacFont *macF
 	_inputIsDirty = true;	//force it to redraw input
 
 	if (_editable) {
-		_scrollPos = MAX<int>(0, _mactext->getTextHeight() - getInnerDimensions().height());
-
-		updateCursorPos();
+		_mactext->_scrollPos = MAX<int>(0, _mactext->getTextHeight() - getInnerDimensions().height());
 	}
 
 	if (_wm->_mode & kWMModeWin95)
@@ -184,16 +164,10 @@ void MacTextWindow::clearText() {
 
 	_contentIsDirty = true;
 	_borderIsDirty = true;
-
-	updateCursorPos();
 }
 
 MacTextWindow::~MacTextWindow() {
-	delete _cursorRect;
-	delete _cursorSurface;
 	delete _mactext;
-
-	g_system->getTimerManager()->removeTimerProc(&cursorTimerHandler);
 }
 
 void MacTextWindow::setTextWindowFont(const MacFont *font) {
@@ -209,7 +183,7 @@ const MacFont *MacTextWindow::getTextWindowFont() {
 }
 
 bool MacTextWindow::draw(bool forceRedraw) {
-	if (!_borderIsDirty && !_contentIsDirty && !_cursorDirty && !_inputIsDirty && !forceRedraw)
+	if (!_borderIsDirty && !_contentIsDirty && !_mactext->needsRedraw() && !_inputIsDirty && !forceRedraw)
 		return false;
 
 	if (_borderIsDirty || forceRedraw) {
@@ -228,13 +202,9 @@ bool MacTextWindow::draw(bool forceRedraw) {
 	}
 
 	_contentIsDirty = false;
-	_cursorDirty = false;
 
 	// Compose
-	_mactext->draw(_composeSurface, true);
-
-	if (_cursorState)
-		_composeSurface->blitFrom(*_cursorSurface, *_cursorRect, Common::Point(_cursorX, _cursorY));
+	_mactext->draw(_composeSurface, _inputIsDirty || forceRedraw);
 
 	return true;
 }
@@ -254,119 +224,8 @@ void MacTextWindow::blit(ManagedSurface *g, Common::Rect &dest) {
 	g->transBlitFrom(*_composeSurface, _composeSurface->getBounds(), dest, _wm->_colorGreen2);
 }
 
-void MacTextWindow::drawSelection() {
-	if (_selectedText.endY == -1)
-		return;
-
-	SelectedText s = _selectedText;
-
-	if (s.startY > s.endY || (s.startY == s.endY && s.startX > s.endX)) {
-		SWAP(s.startX, s.endX);
-		SWAP(s.startY, s.endY);
-		SWAP(s.startRow, s.endRow);
-		SWAP(s.startCol, s.endCol);
-	}
-
-	int lastLineStart = s.endY;
-	s.endY += _mactext->getLineHeight(s.endRow);
-
-	int start = s.startY - _scrollPos;
-	start = MAX(0, start);
-
-	if (start > getInnerDimensions().height())
-		return;
-
-	int end = s.endY - _scrollPos;
-
-	if (end < 0)
-		return;
-
-	end = MIN((int)getInnerDimensions().height(), end);
-
-	int numLines = 0;
-	int x1 = 0, x2 = 0;
-
-	for (int y = start; y < end; y++) {
-		if (!numLines) {
-			x1 = 0;
-			x2 = getInnerDimensions().width() - 1;
-
-			if (y + _scrollPos == s.startY && s.startX > 0) {
-				numLines = _mactext->getLineHeight(s.startRow);
-				x1 = s.startX;
-			}
-			if (y + _scrollPos >= lastLineStart) {
-				numLines = _mactext->getLineHeight(s.endRow);
-				x2 = s.endX;
-			}
-		} else {
-			numLines--;
-		}
-
-		byte *ptr = (byte *)_composeSurface->getBasePtr(x1 + 1, y + 1);
-
-		for (int x = x1; x < x2; x++, ptr++)
-			if (*ptr == _wm->_colorBlack)
-				*ptr = _wm->_colorWhite;
-			else
-				*ptr = _wm->_colorBlack;
-	}
-}
-
 Common::U32String MacTextWindow::getSelection(bool formatted, bool newlines) {
-	if (_selectedText.endY == -1)
-		return Common::U32String();
-
-	SelectedText s = _selectedText;
-
-	if (s.startY > s.endY || (s.startY == s.endY && s.startX > s.endX)) {
-		SWAP(s.startRow, s.endRow);
-		SWAP(s.startCol, s.endCol);
-	}
-
-	return _mactext->getTextChunk(s.startRow, s.startCol, s.endRow, s.endCol, formatted, newlines);
-}
-
-void MacTextWindow::clearSelection() {
-	_selectedText.endY = _selectedText.startY = -1;
-}
-
-bool MacTextWindow::isCutAllowed() {
-	if (_selectedText.startRow >= (int)(_mactext->getLineCount() - _inputTextHeight) &&
-			_selectedText.endRow  >= (int)(_mactext->getLineCount() - _inputTextHeight))
-		return true;
-
-	return false;
-}
-
-Common::U32String MacTextWindow::cutSelection() {
-	if (!isCutAllowed())
-		return Common::U32String();
-
-	SelectedText s = _selectedText;
-
-	if (s.startY > s.endY || (s.startY == s.endY && s.startX > s.endX)) {
-		SWAP(s.startRow, s.endRow);
-		SWAP(s.startCol, s.endCol);
-	}
-
-	Common::U32String selection = _mactext->getTextChunk(s.startRow, s.startCol, s.endRow, s.endCol, false, false);
-
-	uint32 selPos = _inputText.find(selection);
-
-	if (selPos == Common::U32String::npos) {
-		//warning("Cannot find substring '%s' in '%s'", selection.c_str(), _inputText.c_str()); // Needed encode method
-
-		return Common::U32String();
-	}
-
-	Common::U32String newInput = _inputText.substr(0, selPos) + _inputText.substr(selPos + selection.size());
-
-	clearSelection();
-	clearInput();
-	appendInput(newInput);
-
-	return selection;
+	return _mactext->getSelection(formatted, newlines);
 }
 
 int MacTextWindow::getMouseLine(int x, int y) {
@@ -374,7 +233,7 @@ int MacTextWindow::getMouseLine(int x, int y) {
 	// sometimes error of +2 rows
 	x -= getInnerDimensions().left;
 	y -= getInnerDimensions().top + kConScrollStep;
-	return _mactext->getMouseLine(x, y); 
+	return _mactext->getMouseLine(x, y);
 }
 
 void MacTextWindow::calcScrollBar() {
@@ -399,7 +258,7 @@ void MacTextWindow::calcScrollBar() {
 		maxText = MAX<int>(_mactext->getTextHeight(), displayHeight);
 
 	float scrollSize = (float)maxScrollbar * (float)displayHeight / (float)maxText;
-	float scrollPos = (float)_scrollPos * (float)maxScrollbar / (float)maxText;
+	float scrollPos = (float)_mactext->_scrollPos * (float)maxScrollbar / (float)maxText;
 	setScroll(scrollPos, scrollSize);
 }
 
@@ -413,32 +272,14 @@ bool MacTextWindow::processEvent(Common::Event &event) {
 		_wm->setActiveWindow(getId());
 
 		if (event.kbd.flags & (Common::KBD_ALT | Common::KBD_CTRL | Common::KBD_META)) {
-			switch (event.kbd.keycode) {
-			case Common::KEYCODE_x:
-				_wm->setTextInClipboard(cutSelection());
-				return true;
-			case Common::KEYCODE_c:
-				_wm->setTextInClipboard(getSelection(true, false));
-				return true;
-			case Common::KEYCODE_v:
-				if (g_system->hasTextInClipboard()) {
-					if (_selectedText.endY != -1)
-						cutSelection();
-					appendInput(_wm->getTextFromClipboard());
-					_inputIsDirty = true;
-				}
-				return true;
-			default:
-				break;
-			}
-			return false;
+			return _mactext->processEvent(event);
 		}
 
 		switch (event.kbd.keycode) {
 		case Common::KEYCODE_BACKSPACE:
 			if (!_inputText.empty()) {
-				if (_selectedText.endY != -1) {
-					cutSelection();
+				if (_mactext->hasSelection()) {
+					_mactext->cutSelection();
 				} else {
 					_inputText.deleteLastChar();
 				}
@@ -456,8 +297,8 @@ bool MacTextWindow::processEvent(Common::Event &event) {
 				return false;
 
 			if (event.kbd.ascii >= 0x20 && event.kbd.ascii <= 0x7f) {
-				if (_selectedText.endY != -1)
-					cutSelection();
+				if (_mactext->hasSelection())
+					_mactext->cutSelection();
 				_inputText += (char)event.kbd.ascii;
 				_inputIsDirty = true;
 
@@ -468,19 +309,19 @@ bool MacTextWindow::processEvent(Common::Event &event) {
 		}
 	}
 
-	if (hasAllFocus())
+	if (hasAllFocus())	// We are being dragged or resized
 		return MacWindow::processEvent(event);	// Pass it to upstream
 
 	if (event.type == Common::EVENT_WHEELUP) {
-		setHighlight(kBorderScrollUp);
-		scroll(-2);
+		//setHighlight(kBorderScrollUp);
+		_mactext->scroll(-2);
 		calcScrollBar();
 		return true;
 	}
 
 	if (event.type == Common::EVENT_WHEELDOWN) {
-		setHighlight(kBorderScrollDown);
-		scroll(2);
+		//setHighlight(kBorderScrollDown);
+		_mactext->scroll(2);
 		calcScrollBar();
 		return true;
 	}
@@ -488,15 +329,18 @@ bool MacTextWindow::processEvent(Common::Event &event) {
 	if (click == kBorderScrollUp || click == kBorderScrollDown) {
 		if (event.type == Common::EVENT_LBUTTONDOWN) {
 			setHighlight(click);
+			_mactext->scroll(0);
 			calcScrollBar();
 			return true;
 		} else if (event.type == Common::EVENT_LBUTTONUP) {
 			switch (click) {
 			case kBorderScrollUp:
-				scroll(-1);
+				setHighlight(kBorderNone);
+				_mactext->scroll(-1);
 				break;
 			case kBorderScrollDown:
-				scroll(1);
+				setHighlight(kBorderNone);
+				_mactext->scroll(1);
 				break;
 			default:
 				return false;
@@ -516,87 +360,12 @@ bool MacTextWindow::processEvent(Common::Event &event) {
 		if (!_selectable)
 			return false;
 
-		if (event.type == Common::EVENT_LBUTTONDOWN) {
-			startMarking(event.mouse.x, event.mouse.y);
-
-			return true;
-		} else if (event.type == Common::EVENT_LBUTTONUP && _menu) {
-			if (_inTextSelection) {
-				_inTextSelection = false;
-
-				if (_selectedText.endY == -1 ||
-						(_selectedText.endX == _selectedText.startX && _selectedText.endY == _selectedText.startY)) {
-					_selectedText.startY = _selectedText.endY = -1;
-					_contentIsDirty = true;
-					_menu->enableCommand("Edit", "Copy", false);
-				} else {
-					_menu->enableCommand("Edit", "Copy", true);
-
-					bool cutAllowed = isCutAllowed();
-
-					_menu->enableCommand("Edit", "Cut", cutAllowed);
-					_menu->enableCommand("Edit", "Clear", cutAllowed);
-				}
-			}
-
-			return true;
-		} else if (event.type == Common::EVENT_MOUSEMOVE) {
-			if (_inTextSelection) {
-				updateTextSelection(event.mouse.x, event.mouse.y);
-				return true;
-			}
-		}
-
-		return false;
+		event.mouse.x -= _innerDims.left;
+		event.mouse.y -= _innerDims.top;
+		return _mactext->processEvent(event);
 	}
 
 	return MacWindow::processEvent(event);
-}
-
-void MacTextWindow::scroll(int delta) {
-	int oldScrollPos = _scrollPos;
-
-	_scrollPos += delta * kConScrollStep;
-
-	if (_editable)
-		_scrollPos = CLIP<int>(_scrollPos, 0, _mactext->getTextHeight() - kConScrollStep);
-	else
-		_scrollPos = CLIP<int>(_scrollPos, 0, MAX<int>(0, _mactext->getTextHeight() - getInnerDimensions().height()));
-
-	undrawCursor();
-	_cursorY -= (_scrollPos - oldScrollPos);
-	_contentIsDirty = true;
-	_borderIsDirty = true;
-
-	_mactext->scroll(delta);
-}
-
-void MacTextWindow::startMarking(int x, int y) {
-	x -= getInnerDimensions().left - 2;
-	y -= getInnerDimensions().top;
-
-	y += _scrollPos;
-
-	_mactext->getRowCol(x, y, &_selectedText.startX, &_selectedText.startY, &_selectedText.startRow, &_selectedText.startCol);
-
-	_selectedText.endY = -1;
-
-	_inTextSelection = true;
-}
-
-void MacTextWindow::updateTextSelection(int x, int y) {
-	x -= getInnerDimensions().left - 2;
-	y -= getInnerDimensions().top;
-
-	y += _scrollPos;
-
-	_mactext->getRowCol(x, y, &_selectedText.endX, &_selectedText.endY, &_selectedText.endRow, &_selectedText.endCol);
-
-	debug(3, "s: %d,%d (%d, %d) e: %d,%d (%d, %d)", _selectedText.startX, _selectedText.startY,
-			_selectedText.startRow, _selectedText.startCol, _selectedText.endX,
-			_selectedText.endY, _selectedText.endRow, _selectedText.endCol);
-
-	_contentIsDirty = true;
 }
 
 void MacTextWindow::undrawInput() {
@@ -618,17 +387,11 @@ void MacTextWindow::drawInput() {
 	// Now recalc new text height
 	int newLen = _mactext->getLineCount();
 	_inputTextHeight = newLen - oldLen;
-	_cursorX = _inputText.empty() ? 0 : _mactext->getLastLineWidth();
-
-	updateCursorPos();
 
 	_contentIsDirty = true;
 }
 
 void MacTextWindow::clearInput() {
-	undrawCursor();
-
-	_cursorX = 0;
 	_inputText.clear();
 }
 
@@ -641,28 +404,5 @@ void MacTextWindow::appendInput(const Common::U32String &str) {
 void MacTextWindow::appendInput(const Common::String &str) {
 	appendInput(Common::U32String(str));
 }
-
-//////////////////
-// Cursor stuff
-static void cursorTimerHandler(void *refCon) {
-	MacTextWindow *w = (MacTextWindow *)refCon;
-
-	if (!w->_cursorOff)
-		w->_cursorState = !w->_cursorState;
-
-	w->_cursorDirty = true;
-}
-
-void MacTextWindow::updateCursorPos() {
-	_cursorY = _mactext->getTextHeight() - _scrollPos - kCursorHeight;
-	_cursorY += _inputText.empty() ? 3 : 0;
-	_cursorDirty = true;
-}
-
-void MacTextWindow::undrawCursor() {
-	_cursorState = false;
-	_cursorDirty = true;
-}
-
 
 } // End of namespace Graphics

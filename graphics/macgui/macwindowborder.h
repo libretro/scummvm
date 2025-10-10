@@ -63,6 +63,11 @@ struct BorderOffsets {
 	int titleBottom;
 	bool dark;
 	int titlePos;
+	int closeButtonTop;
+	int closeButtonLeft;
+	int closeButtonWidth;
+	int resizeButtonTop;
+	int resizeButtonHeight;
 	int upperScrollHeight;
 	int lowerScrollHeight;
 };
@@ -125,6 +130,9 @@ public:
 	BorderOffsets &getOffset();
 	const BorderOffsets &getOffset() const;
 
+	int getMinWidth(uint32 flags) const;
+	int getMinHeight(uint32 flags) const;
+
 	/**
 	 * Blit the desired border (active or inactive) into a destination surface.
 	 * It automatically resizes the border to fit the given surface.
@@ -138,7 +146,7 @@ public:
 
 	void setScroll(int scrollPos, int scrollSize) { _scrollPos = scrollPos, _scrollSize = scrollSize; }
 
-	void drawTitle(ManagedSurface *g, int titleOffset);
+	void drawTitle(ManagedSurface *g, int titleOffset, int minWidth);
 
 	void drawScrollBar(ManagedSurface *g);
 
@@ -151,11 +159,11 @@ public:
 	void disableBorder();
 
 	void loadBorder(Common::SeekableReadStream &file, uint32 flags, int lo = -1, int ro = -1, int to = -1, int bo = -1);
-	void loadBorder(Common::SeekableReadStream &file, uint32 flags, BorderOffsets offsets);
+	void loadBorder(Common::SeekableReadStream &file, uint32 flags, const BorderOffsets &offsets);
 	void loadInternalBorder(uint32 flags);
 
 	void setBorder(Graphics::ManagedSurface *surface, uint32 flags, int lo = -1, int ro = -1, int to = -1, int bo = -1);
-	void setBorder(Graphics::ManagedSurface *surface, uint32 flags, BorderOffsets offsets);
+	void setBorder(Graphics::ManagedSurface *surface, uint32 flags, const BorderOffsets &offsets);
 private:
 	int _scrollPos, _scrollSize;
 	Common::String _title;

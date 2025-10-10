@@ -421,10 +421,8 @@ void PaperdollGump::ChildNotify(Gump *child, uint32 message) {
 			gump->setRelativePosition(BOTTOM_RIGHT, -5, -5);
 		} else {
 			// check if it is off-screen. If so, move it back
-			Rect rect;
-			desktop->GetDims(rect);
-			Rect sr;
-			statsgump->GetDims(sr);
+			Common::Rect32 rect = desktop->getDims();
+			Common::Rect32 sr = statsgump->getDims();
 			sr.grow(-2);
 			statsgump->GumpRectToScreenSpace(sr);
 			if (!sr.intersects(rect))

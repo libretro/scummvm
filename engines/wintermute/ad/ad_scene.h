@@ -38,6 +38,7 @@ class AdRegion;
 class BaseViewport;
 class AdLayer;
 class BasePoint;
+class Light3D;
 class AdWaypointGroup;
 class AdPath;
 class AdScaleLevel;
@@ -73,14 +74,13 @@ public:
 #endif
 	bool afterLoad();
 
-	void setMaxShadowType(TShadowType shadowType);
-
 #ifdef ENABLE_WME3D
 	float _nearClipPlane;
 	float _farClipPlane;
 	float _fov;
 	int32 _editorResolutionWidth;
 	int32 _editorResolutionHeight;
+	Light3D *getActiveLight();
 #endif
 	bool getRegionsAt(int x, int y, AdRegion **regionList, int numRegions);
 	bool handleItemAssociations(const char *itemName, bool show);
@@ -108,7 +108,7 @@ public:
 	DECLARE_PERSISTENT(AdScene, BaseObject)
 	bool displayRegionContent(AdRegion *region = nullptr, bool display3DOnly = false);
 	bool displayRegionContentOld(AdRegion *region = nullptr);
-	static int compareObjs(const void *obj1, const void *obj2);
+	static int32 compareObjs(const void *obj1, const void *obj2);
 
 	bool updateFreeObjects();
 	bool traverseNodes(bool update = false);
@@ -117,8 +117,8 @@ public:
 	bool sortRotLevels();
 	bool saveAsText(BaseDynamicBuffer *buffer, int indent) override;
 #ifdef ENABLE_WME3D
-	AdSceneGeometry *_geom;
 	bool _showGeometry;
+	AdSceneGeometry *_geom;
 #endif
 	uint32 getAlphaAt(int x, int y, bool colorCheck = false);
 	bool _paralaxScrolling;
@@ -145,11 +145,17 @@ public:
 	uint32 _pfMaxTime;
 	bool initLoop();
 	void pathFinderStep();
-	bool isBlockedAt(int x, int y, bool checkFreeObjects = false, BaseObject *requester = nullptr);
+	/*
+	 * Added the possibility to configure the default behaviour of this function. If neither free objects nor a main layer
+	 * exist, the function used to return "blocked". This results in all actors being "blocked" shortly after load.
+	 * The default behaviour is unchanged to avoid strange side effects. The actor class is now able to override this default.
+	 *
+	 */
+	bool isBlockedAt(int x, int y, bool checkFreeObjects = false, BaseObject *requester = nullptr, bool defaultBlock = true);
 	bool isWalkableAt(int x, int y, bool checkFreeObjects = false, BaseObject *requester = nullptr);
 	AdLayer *_mainLayer;
 	float getZoomAt(int x, int y);
-	bool getPath(const BasePoint &source, const BasePoint &target, AdPath *path, BaseObject *requester = nullptr);
+	bool getPath(BasePoint source, BasePoint target, AdPath *path, BaseObject *requester = nullptr);
 	AdScene(BaseGame *inGame);
 	~AdScene() override;
 	BaseArray<AdLayer *> _layers;
@@ -157,10 +163,10 @@ public:
 	BaseArray<AdWaypointGroup *> _waypointGroups;
 	bool loadFile(const char *filename);
 	bool loadBuffer(char *buffer, bool complete = true);
-	int32 _width;
-	int32 _height;
-	bool addObject(AdObject *Object);
-	bool removeObject(AdObject *Object);
+	int32 _width{};
+	int32 _height{};
+	bool addObject(AdObject *object);
+	bool removeObject(AdObject *object);
 	int32 _editorMarginH;
 	int32 _editorMarginV;
 	uint32 _editorColFrame;
@@ -185,18 +191,22 @@ public:
 	BaseArray<AdRotLevel *> _rotLevels;
 
 	bool restoreDeviceObjects() override;
-	int getPointsDist(const BasePoint &p1, const BasePoint &p2, BaseObject *requester = nullptr);
+	void setMaxShadowType(TShadowType shadowType);
+	int getPointsDist(BasePoint p1, BasePoint p2, BaseObject *requester = nullptr);
+
+	void onLayerResized(AdLayer *layer);
 
 	// scripting interface
-	ScValue *scGetProperty(const Common::String &name) override;
+	ScValue *scGetProperty(const char *name) override;
 	bool scSetProperty(const char *name, ScValue *value) override;
 	bool scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, const char *name) override;
 	const char *scToString() override;
+
 	Common::String debuggerToString() const override;
 
 private:
 	bool persistState(bool saving = true);
-	void pfAddWaypointGroup(AdWaypointGroup *Wpt, BaseObject *requester = nullptr);
+	void pfAddWaypointGroup(AdWaypointGroup *wpt, BaseObject *requester = nullptr);
 	bool _pfReady;
 	BasePoint *_pfTarget;
 	AdPath *_pfTargetPath;
@@ -205,7 +215,6 @@ private:
 
 	int32 _offsetTop;
 	int32 _offsetLeft;
-
 };
 
 } // End of namespace Wintermute

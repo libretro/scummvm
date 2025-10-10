@@ -20,6 +20,7 @@
  */
 
 #include "common/events.h"
+#include "common/keyboard.h"
 #include "common/system.h"
 #include "common/translation.h"
 
@@ -113,7 +114,7 @@ void DirectorEngine::processEventQUIT() {
 }
 
 bool Window::processEvent(Common::Event &event) {
-	bool flag = MacWindow::processEvent(event);
+	bool flag = false;
 
 	if (_currentMovie && _currentMovie->processEvent(event))
 		flag = true;
@@ -134,6 +135,15 @@ bool Movie::processEvent(Common::Event &event) {
 		return false;
 	}
 	uint16 spriteId = 0;
+
+	if (event.mouse != Common::Point(-1, -1)) {
+		if (g_director->getVersion() < 400)
+			spriteId = _score->getActiveSpriteIDFromPos(event.mouse);
+		else
+			spriteId = _score->getMouseSpriteIDFromPos(event.mouse);
+
+		_currentHoveredSpriteId = spriteId;
+	}
 
 	Common::Point pos;
 
@@ -162,11 +172,6 @@ bool Movie::processEvent(Common::Event &event) {
 
 		// for the list style button, we still have chance to trigger events though button.
 		if (!(g_director->_wm->_mode & Graphics::kWMModeButtonDialogStyle) && g_director->_wm->_mouseDown && g_director->_wm->_hilitingWidget) {
-			if (g_director->getVersion() < 400)
-				spriteId = sc->getActiveSpriteIDFromPos(pos);
-			else
-				spriteId = sc->getMouseSpriteIDFromPos(pos);
-
 			if (spriteId > 0 && sc->_channels[spriteId]->_sprite->shouldHilite()) {
 				_currentHiliteChannelId = spriteId;
 				g_director->getCurrentWindow()->setDirty(true);
@@ -187,6 +192,32 @@ bool Movie::processEvent(Common::Event &event) {
 				_currentDraggedChannel = nullptr;
 			}
 		}
+
+		// TODO: In the original, these events are generated only
+		// along with the kEventIdle event which depends on the idleHandlerPeriod property
+		if (g_director->getVersion() >= 500) {
+
+			// In D5, these events are only generated if a mouse button is pressed
+			if (g_director->getVersion() < 600)
+				if (g_system->getEventManager()->getButtonState() == 0)
+					return true;
+
+			if (spriteId > 0) {
+				if (spriteId != _lastEnteredChannelId) {
+					if (_lastEnteredChannelId) {
+						processEvent(kEventMouseLeave, _lastEnteredChannelId);
+					}
+
+					_lastEnteredChannelId = spriteId;
+					processEvent(kEventMouseEnter, spriteId);
+				}
+			} else {
+				if (_lastEnteredChannelId) {
+					processEvent(kEventMouseLeave, _lastEnteredChannelId);
+					_lastEnteredChannelId = 0;
+				}
+			}
+		}
 		return true;
 
 	case Common::EVENT_LBUTTONDOWN:
@@ -197,6 +228,12 @@ bool Movie::processEvent(Common::Event &event) {
 			sc->renderCursor(pos, true);
 		} else {
 			pos = event.mouse;
+
+			if (g_director->getVersion() >= 600) {
+				if (_lastClickedSpriteId && _lastClickedSpriteId != spriteId) {
+					queueInputEvent(kEventMouseUpOutSide, _lastClickedSpriteId, pos);
+				}
+			}
 
 			// FIXME: Check if these are tracked with the right mouse button
 			_lastEventTime = g_director->getMacTicks();
@@ -212,8 +249,24 @@ bool Movie::processEvent(Common::Event &event) {
 			if ((g_director->getVersion() >= 500) && event.type == Common::EVENT_RBUTTONDOWN)
 				ev = kEventRightMouseDown;
 
+			if (g_director->getVersion() >= 500 && event.type == Common::EVENT_LBUTTONDOWN && _vm->_emulateMultiButtonMouse) {
+				if (g_director->getPlatform() == Common::kPlatformMacintosh) {
+					// On Mac, when the mouse button and Control key are pressed
+					// at the same time, this simulates right button click
+					if (_keyFlags & Common::KBD_CTRL) {
+						ev = kEventRightMouseDown;
+					}
+				}
+			}
+
 			debugC(3, kDebugEvents, "Movie::processEvent(): Button Down @(%d, %d), movie '%s'", pos.x, pos.y, _macName.c_str());
 			queueInputEvent(ev, 0, pos);
+
+			// D5 has special behavior here
+			if (g_director->getVersion() >= 500 && g_director->getVersion() < 600) {
+				if (_lastClickedSpriteId)
+					queueInputEvent(kEventMouseEnter, _lastClickedSpriteId, pos);
+			}
 		}
 
 		return true;
@@ -231,7 +284,24 @@ bool Movie::processEvent(Common::Event &event) {
 			if ((g_director->getVersion() >= 500) && event.type == Common::EVENT_RBUTTONUP)
 				ev = kEventRightMouseUp;
 
+			if (g_director->getVersion() >= 500 && event.type == Common::EVENT_LBUTTONUP && _vm->_emulateMultiButtonMouse) {
+				if (g_director->getPlatform() == Common::kPlatformMacintosh) {
+					// On Mac, when the mouse button and Control key are pressed
+					// at the same time, this simulates right button click
+					if (_keyFlags & Common::KBD_CTRL) {
+						ev = kEventRightMouseUp;
+					}
+				}
+			}
+
 			queueInputEvent(ev, 0, pos);
+
+			// D5 has special behavior here
+			if (g_director->getVersion() >= 500 && g_director->getVersion() < 600) {
+				if (spriteId)
+					queueInputEvent(kEventMouseLeave, spriteId, pos);
+			}
+
 			sc->renderCursor(pos);
 		}
 		return true;
@@ -239,6 +309,24 @@ bool Movie::processEvent(Common::Event &event) {
 	case Common::EVENT_KEYDOWN:
 		_keyCode = _vm->_KeyCodes.contains(event.kbd.keycode) ? _vm->_KeyCodes[event.kbd.keycode] : 0;
 		_key = event.kbd.ascii;
+		// While most non-letter keys don't affect "the keyPress", there
+		// are some that do and (sadly) we have to account for that.
+		switch (event.kbd.keycode) {
+		case Common::KEYCODE_LEFT:
+			_key = 28;
+			break;
+		case Common::KEYCODE_RIGHT:
+			_key = 29;
+			break;
+		case Common::KEYCODE_UP:
+			_key = 30;
+			break;
+		case Common::KEYCODE_DOWN:
+			_key = 31;
+			break;
+		default:
+			break;
+		}
 		_keyFlags = event.kbd.flags;
 
 		if (event.kbd.keycode == Common::KEYCODE_LSHIFT || event.kbd.keycode == Common::KEYCODE_RSHIFT ||
@@ -256,11 +344,12 @@ bool Movie::processEvent(Common::Event &event) {
 		if (_timeOutKeyDown)
 			_lastTimeOut = _lastEventTime;
 
-		queueInputEvent(kEventKeyDown);
+		queueInputEvent(kEventKeyDown, sc->getSpriteIDOfActiveWidget());
 		g_director->loadSlowdownCooloff();
 		return true;
 
 	case Common::EVENT_KEYUP:
+		queueInputEvent(kEventKeyUp, sc->getSpriteIDOfActiveWidget());
 		_keyFlags = event.kbd.flags;
 		return true;
 
@@ -270,5 +359,63 @@ bool Movie::processEvent(Common::Event &event) {
 
 	return false;
 }
+
+bool Window::processWMEvent(Graphics::WindowClick click, Common::Event &event) {
+	bool flag = false;
+	switch (click) {
+	case Graphics::kBorderCloseButton:
+		if (_currentMovie && event.type == Common::EVENT_LBUTTONUP) {
+			_currentMovie->processEvent(kEventCloseWindow, 0);
+			setVisible(false);
+
+			flag = true;
+		}
+		break;
+
+	case Graphics::kBorderActivate:
+		sendWindowEvent(kEventActivateWindow);
+		flag = true;
+		break;
+
+	case Graphics::kBorderDeactivate:
+		sendWindowEvent(kEventDeactivateWindow);
+		flag = true;
+		break;
+
+	case Graphics::kBorderDragged:
+		sendWindowEvent(kEventMoveWindow);
+		flag = true;
+		break;
+
+	case Graphics::kBorderResized:
+		sendWindowEvent(kEventResizeWindow);
+		flag = true;
+		break;
+
+	case Graphics::kBorderMaximizeButton:
+		if (event.type == Common::EVENT_LBUTTONUP) {
+			sendWindowEvent(kEventZoomWindow);
+
+			flag = true;
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	flag |= processEvent(event);
+	return flag;
+}
+
+void Window::sendWindowEvent(LEvent event) {
+	if (_currentMovie && _window->isVisible() && !_isStage) {
+		// We cannot call processEvent here directly because it might
+		// be called from within another event processing (like 'on startMovie'	)
+		// which would mess up the Lingo state.
+		_currentMovie->queueInputEvent(event, 0, Common::Point(-1, -1));
+	}
+}
+
 
 } // End of namespace Director

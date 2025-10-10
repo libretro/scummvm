@@ -68,7 +68,62 @@ enum AccessDebugChannels {
 	kDebugSound,
 };
 
-extern const char *const _estTable[];
+enum ACCESSActions {
+	kActionNone,
+	kActionMoveUp,
+	kActionMoveDown,
+	kActionMoveLeft,
+	kActionMoveRight,
+	kActionMoveUpLeft,
+	kActionMoveUpRight,
+	kActionMoveDownLeft,
+	kActionMoveDownRight,
+	kActionLook,
+	kActionUse,
+	kActionTake,
+	kActionInventory,
+	kActionClimb,
+	kActionTalk,
+	kActionWalk,
+	kActionHelp,
+	kActionOpen,
+	kActionMove,
+	kActionTravel,
+	kActionSkip,
+	kActionSaveLoad,
+};
+
+struct AccessActionCode {
+	ACCESSActions _action;
+	int8 _code;
+};
+
+static const AccessActionCode AMAZON_ACTION_CODES[] = {
+	{ kActionLook, 1 },
+	{ kActionUse, 2 },
+	{ kActionTake, 3 },
+	{ kActionInventory, 4 },
+	{ kActionClimb, 5 },
+	{ kActionTalk, 6 },
+	{ kActionWalk, 7 },
+	{ kActionHelp, 8 },
+	{ kActionSaveLoad, -2 },
+	{ kActionNone, -1 },
+};
+
+static const AccessActionCode MARTIAN_ACTION_CODES[] = {
+	{ kActionLook, 0 },
+	{ kActionOpen, 1 },
+	{ kActionMove, 2 },
+	{ kActionTake, 3 },
+	{ kActionUse, 4 },
+	{ kActionWalk, 5 },
+	{ kActionTalk, 6 },
+	{ kActionTravel, 7 },
+	{ kActionHelp, 8 },
+	{ kActionSaveLoad, -2 },
+	{ kActionNone, -1 },
+};
 
 #define ACCESS_SAVEGAME_VERSION 1
 
@@ -84,6 +139,11 @@ struct AccessSavegameHeader {
 class AccessEngine : public Engine {
 private:
 	uint32 _lastTime, _curTime;
+
+	/**
+	 * A cache for the ICONS.LZ sprite data
+	 */
+	SpriteResource *_icons;
 
 	/**
 	 * Handles basic initialization
@@ -149,14 +209,12 @@ public:
 	ASurface _buffer2;
 	ASurface _vidBuf;
 	int _vidX, _vidY;
-	Common::Array<CharEntry *> _charTable;
 	SpriteResource *_objectsTable[100];
 	bool _establishTable[100];
 	bool _establishFlag;
 	int _establishMode;
 	int _establishGroup;
 	int _establishCtrlTblOfs;
-	int _numAnimTimers;
 	TimerList _timers;
 	DeathList _deaths;
 	FontManager _fonts;
@@ -198,8 +256,8 @@ public:
 
 	// Fields used by MM
 	// TODO: Refactor
-	int _travel[60];
-	int _ask[40];
+	byte _travel[60];
+	byte _ask[40];
 	int _startTravelItem;
 	int _startTravelBox;
 	int _startAboutItem;
@@ -211,9 +269,6 @@ public:
 	int _numLines;
 	byte _byte26CB5;
 	int _bcnt;
-	byte *_tempList;
-	int _pictureTaken;
-	//
 
 	bool _vidEnd;
 	bool _clearSummaryFlag;
@@ -223,6 +278,7 @@ public:
 	int &_useItem;
 	int &_startup;
 	int &_manScaleOff;
+	int &_pictureTaken;
 
 public:
 	AccessEngine(OSystem *syst, const AccessGameDescription *gameDesc);
@@ -242,7 +298,9 @@ public:
 
 	int getRandomNumber(int maxNumber);
 
-	void loadCells(Common::Array<CellIdent> &cells);
+	const SpriteResource *getIcons();
+
+	void loadCells(const Common::Array<CellIdent> &cells);
 
 	/**
 	* Free the sprites list
@@ -299,9 +357,6 @@ public:
 	 * Write out a savegame header
 	 */
 	void writeSavegameHeader(Common::OutSaveFile *out, AccessSavegameHeader &header);
-
-	void SPRINTCHR(char c, int fontNum);
-	void PRINTCHR(Common::String msg, int fontNum);
 
 	bool playMovie(const Common::Path &filename, const Common::Point &pos);
 };

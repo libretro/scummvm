@@ -38,6 +38,25 @@ struct GLContext;
 struct GLVertex;
 struct GLTexture;
 
+struct GLTextureEnvArgument {
+	GLTextureEnvArgument();
+
+	uint
+		sourceRGB,
+		operandRGB,
+		sourceAlpha,
+		operandAlpha;
+};
+
+struct GLTextureEnv {
+	GLTextureEnv();
+	bool isDefault() const;
+
+	uint envMode, combineRGB, combineAlpha;
+	byte constA, constR, constG, constB;
+	GLTextureEnvArgument arg0, arg1;
+};
+
 class DrawCall {
 public:
 
@@ -149,9 +168,9 @@ private:
 		int alphaRefValue;
 		bool stencilTestEnabled;
 		int stencilTestFunc;
-		int stencilValue;
-		uint stencilMask;
-		uint stencilWriteMask;
+		byte stencilValue;
+		byte stencilMask;
+		byte stencilWriteMask;
 		int stencilSfail;
 		int stencilDpfail;
 		int stencilDppass;
@@ -159,6 +178,7 @@ private:
 		byte polygonStipplePattern[128];
 		GLTexture *texture;
 		uint wrapS, wrapT;
+		GLTextureEnv textureEnv;
 		bool fogEnabled;
 		float fogColorR;
 		float fogColorG;

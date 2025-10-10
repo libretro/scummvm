@@ -45,6 +45,10 @@ _centerPitchWheelOnUnload(false),
 _sendSustainOffOnNotesOff(false),
 _disableAllNotesOffMidiEvents(false),
 _disableAutoStartPlayback(false),
+_loopStartPoint(0xFFFFFFFF),
+_loopEndPoint(0xFFFFFFFF),
+_loopStartPointMs(0xFFFFFFFF),
+_loopEndPointMs(0xFFFFFFFF),
 _numTracks(0),
 _activeTrack(255),
 _abortParse(false),
@@ -94,7 +98,7 @@ void MidiParser::sendToDriver(uint32 b) {
 	}
 }
 
-void MidiParser::sendMetaEventToDriver(byte type, byte *data, uint16 length) {
+void MidiParser::sendMetaEventToDriver(byte type, const byte *data, uint16 length) {
 	if (_source < 0) {
 		_driver->metaEvent(type, data, length);
 	} else {
@@ -109,7 +113,7 @@ void MidiParser::setTempo(uint32 tempo) {
 }
 
 // This is the conventional (i.e. SMF) variable length quantity
-uint32 MidiParser::readVLQ(byte * &data) {
+uint32 MidiParser::readVLQ(const byte * &data) {
 	byte str;
 	uint32 value = 0;
 	int i;
@@ -229,6 +233,23 @@ void MidiParser::onTimer() {
 
 		eventTick = _position._subtracks[subtrack]._lastEventTick + info.delta;
 		eventTime = _position._lastEventTime + (eventTick - _position._lastEventTick) * _psecPerTick;
+
+		if (_loopStartPoint == 0xFFFFFFFF && _loopStartPointMs != 0xFFFFFFFF && eventTime >= _loopStartPointMs) {
+			_loopStartPoint = eventTick;
+		}
+
+		if (_loopStartPoint != 0xFFFFFFFF && _loopEndPoint != 0) {
+			uint32 endTick = (endTime - _position._lastEventTime) / _psecPerTick + _position._lastEventTick;
+
+			if ((_loopEndPoint != 0xFFFFFFFF && eventTick > _loopEndPoint && endTick > _loopEndPoint) ||
+					(eventTime > _loopEndPointMs && endTime > _loopEndPointMs)) {
+				// Loop
+				jumpToTick(_loopStartPoint);
+				_abortParse = true;
+				break;
+			}
+		}
+
 		if (eventTime > endTime)
 			break;
 
@@ -373,9 +394,13 @@ bool MidiParser::processEvent(const EventInfo &info, bool fireEvents) {
 			_position.stopTracking(info.subtrack);
 			if (!_position.isTracking()) {
 				// All subtracks have finished playing
-				if (_autoLoop) {
+				if (_loopStartPoint != 0xFFFFFFFF && _loopEndPoint == 0) {
+					jumpToTick(_loopStartPoint);
+				}
+				else if (_autoLoop) {
 					jumpToTick(0);
-				} else {
+				}
+				else {
 					stopPlaying();
 					if (fireEvents)
 						sendMetaEventToDriver(info.ext.type, info.ext.data, (uint16)info.length);
@@ -436,6 +461,35 @@ void MidiParser::allNotesOff() {
 
 void MidiParser::resetTracking() {
 	_position.clear();
+}
+
+void MidiParser::setLoopSection(uint32 startPoint, uint32 endPoint) {
+	if (endPoint != 0 && endPoint <= startPoint) {
+		warning("MidiParser::setLoopSection - Attempt to set loop end point before start point");
+		return;
+	}
+
+	_loopStartPoint = startPoint;
+	_loopEndPoint = endPoint;
+}
+
+void MidiParser::setLoopSectionMicroseconds(uint32 startPoint, uint32 endPoint) {
+	if (endPoint != 0 && endPoint <= startPoint) {
+		warning("MidiParser::setLoopSectionMicroseconds - Attempt to set loop end point before start point");
+		return;
+	}
+
+	_loopStartPointMs = startPoint;
+	_loopEndPointMs = endPoint;
+	_loopStartPoint = (startPoint == 0 ? 0 : 0xFFFFFFFF);
+	_loopEndPoint = (endPoint == 0 ? 0 : 0xFFFFFFFF);
+}
+
+void MidiParser::clearLoopSection() {
+	_loopStartPoint = 0xFFFFFFFF;
+	_loopEndPoint = 0xFFFFFFFF;
+	_loopStartPointMs = 0xFFFFFFFF;
+	_loopEndPointMs = 0xFFFFFFFF;
 }
 
 bool MidiParser::setTrack(int track) {
@@ -683,6 +737,7 @@ void MidiParser::unloadMusic() {
 		_nextSubtrackEvents[i].subtrack = i;
 	}
 	_nextEvent = &_nextSubtrackEvents[0];
+	clearLoopSection();
 
 	if (_centerPitchWheelOnUnload) {
 		// Center the pitch wheels in preparation for the next piece of

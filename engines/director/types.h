@@ -36,6 +36,7 @@ enum {
 };
 
 #define kQuirksCacheArchive "quirks"
+#define kSavedFilesArchive "saved"
 
 enum MovieFlag {
 	kMovieFlagRemapPalettesWhenNeeded =  (1 << 6),
@@ -57,7 +58,8 @@ enum CastType {
 	kCastDigitalVideo = 10,
 	kCastLingoScript = 11,
 	kCastRichText = 12,
-	kCastTransition = 14,
+	kCastTransition = 14,		// D5
+	kCastXtra = 15,
 };
 
 enum ScriptType {
@@ -233,7 +235,11 @@ enum LEvent {
 
 	kEventStartUp, // 32
 
-	kEventMenuCallback // 33
+	kEventMenuCallback, // 33
+
+	kEventGetBehaviorDescription,
+	kEventGetPropertyDescriptionList,
+	kEventRunPropertyDialog,
 };
 
 enum TransitionType {
@@ -306,6 +312,8 @@ enum PaletteType {
 	kClutVivid = -5,
 	kClutNTSC = -6,
 	kClutMetallic = -7,
+	kClutWeb216 = -8,		// D7
+	kClutVGA = -9,			// D7
 	kClutSystemWin = -101,
 	kClutSystemWinD5 = -102
 };
@@ -465,7 +473,7 @@ const char *spriteType2str(SpriteType type);
 const char *inkType2str(InkType type);
 const char *symbolType2str(SymbolType type);
 Common::String objectType2str(int fl);
-
+\
 enum CollisionTest {
 	kCollisionNo = 0,
 	kCollisionYes,

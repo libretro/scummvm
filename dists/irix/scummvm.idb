@@ -2,7 +2,6 @@ f 0644 root sys usr/ScummVM/COPYING COPYING scummvm.man.readme
 f 0644 root sys usr/ScummVM/COPYING.Apache LICENSES/COPYING.Apache scummvm.man.readme
 f 0644 root sys usr/ScummVM/COPYING.BSD LICENSES/COPYING.BSD scummvm.man.readme
 f 0644 root sys usr/ScummVM/COPYING.BSL LICENSES/COPYING.BSL scummvm.man.readme
-f 0644 root sys usr/ScummVM/COPYING.FREEFONT LICENSES/COPYING.FREEFONT scummvm.man.readme
 f 0644 root sys usr/ScummVM/COPYING.GLAD LICENSES/COPYING.GLAD scummvm.man.readme
 f 0644 root sys usr/ScummVM/COPYING.ISC LICENSES/COPYING.ISC scummvm.man.readme
 f 0644 root sys usr/ScummVM/COPYING.LGPL LICENSES/COPYING.LGPL scummvm.man.readme
@@ -29,6 +28,7 @@ f 0644 root sys usr/ScummVM/share/scummvm/drascula.dat drascula.dat scummvm.sw.e
 f 0644 root sys usr/ScummVM/share/scummvm/encoding.dat encoding.dat scummvm.sw.eoe
 f 0644 root sys usr/ScummVM/share/scummvm/fonts.dat fonts.dat scummvm.sw.eoe
 f 0644 root sys usr/ScummVM/share/scummvm/fonts-cjk.dat fonts-cjk.dat scummvm.sw.eoe
+f 0644 root sys usr/ScummVM/share/scummvm/fonts-imgui.dat fonts-imgui.dat scummvm.sw.eoe
 f 0644 root sys usr/ScummVM/share/scummvm/freescape.dat freescape.dat scummvm.sw.eoe
 f 0644 root sys usr/ScummVM/share/scummvm/got.aud got.aud scummvm.sw.eoe
 f 0644 root sys usr/ScummVM/share/scummvm/got.gfx got.gfx scummvm.sw.eoe

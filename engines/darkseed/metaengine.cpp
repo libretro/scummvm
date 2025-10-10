@@ -26,43 +26,10 @@
 #include "darkseed/metaengine.h"
 #include "darkseed/detection.h"
 #include "darkseed/darkseed.h"
-
-namespace Darkseed {
-
-static const ADExtraGuiOptionsMap optionsList[] = {
-	{
-		GAMEOPTION_ORIGINAL_SAVELOAD,
-		{
-			_s("Use original save/load screens"),
-			_s("Use the original save/load screens instead of the ScummVM ones"),
-			"original_menus",
-			false,
-			0,
-			0
-		}
-	},
-	{
-		GAMEOPTION_FLOPPY_MUSIC,
-		{
-			_s("Use floppy version music"),
-			_s("Use the music from the floppy version. The floppy version's music files must be copied to the SOUND directory."),
-			"use_floppy_music",
-			false,
-			0,
-			0
-		}
-	},
-	AD_EXTRA_GUI_OPTIONS_TERMINATOR
-};
-
-} // End of namespace Darkseed
+#include "darkseed/dialogs.h"
 
 const char *DarkseedMetaEngine::getName() const {
 	return "darkseed";
-}
-
-const ADExtraGuiOptionsMap *DarkseedMetaEngine::getAdvancedExtraGuiOptions() const {
-	return Darkseed::optionsList;
 }
 
 Common::KeymapArray DarkseedMetaEngine::initKeymaps(const char *target) const {
@@ -95,6 +62,11 @@ Common::KeymapArray DarkseedMetaEngine::initKeymaps(const char *target) const {
 	act->addDefaultInputMapping("C+q");
 	engineKeyMap->addAction(act);
 
+	act = new Action("SKIPCUTSCENE", _("Skip Cutscene"));
+	act->setCustomEngineActionEvent(Darkseed::kDarkseedActionSkipCutscene);
+	act->addDefaultInputMapping("SPACE");
+	engineKeyMap->addAction(act);
+
 	return Keymap::arrayOf(engineKeyMap);
 }
 
@@ -106,6 +78,18 @@ Common::Error DarkseedMetaEngine::createInstance(OSystem *syst, Engine **engine,
 bool DarkseedMetaEngine::hasFeature(MetaEngineFeature f) const {
 	return checkExtendedSaves(f) ||
 		(f == kSupportsLoadingDuringStartup);
+}
+
+void DarkseedMetaEngine::registerDefaultSettings(const Common::String &target) const {
+	for (const ADExtraGuiOptionsMap *entry = Darkseed::optionsList; entry->guioFlag; ++entry)
+		ConfMan.registerDefault(entry->option.configOption, entry->option.defaultState);
+
+	for (const Darkseed::PopUpOptionsMap *entry = Darkseed::popUpOptionsList; entry->guioFlag; ++entry)
+		ConfMan.registerDefault(entry->configOption, entry->defaultState);
+}
+
+GUI::OptionsContainerWidget *DarkseedMetaEngine::buildEngineOptionsWidget(GUI::GuiObject *boss, const Common::String &name, const Common::String &target) const {
+	return new Darkseed::OptionsWidget(boss, name, target);
 }
 
 #if PLUGIN_ENABLED_DYNAMIC(DARKSEED)

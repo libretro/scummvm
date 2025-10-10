@@ -19,6 +19,7 @@
  *
  */
 
+#include "common/stream.h"
 #include "graphics/macgui/macwidget.h"
 
 #include "director/director.h"
@@ -39,7 +40,7 @@ RichTextCastMember::RichTextCastMember(Cast *cast, uint16 castId, Common::Seekab
 
 	_pf32 = Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0);
 
-	if (version >= kFileVer500 && version < kFileVer600) {
+	if (version >= kFileVer500 && version < kFileVer1100) {
 		if (debugChannelSet(5, kDebugLoading)) {
 			debugC(5, kDebugLoading, "RichTextCastMember():");
 			stream.hexdump(stream.size());
@@ -47,9 +48,14 @@ RichTextCastMember::RichTextCastMember(Cast *cast, uint16 castId, Common::Seekab
 
 		_initialRect = Movie::readRect(stream);
 		_boundingRect = Movie::readRect(stream);
-		stream.seek(8, SEEK_CUR);
+		_antialiasFlag = stream.readByte();
+		_cropFlags = stream.readByte();
+		_scrollPos = stream.readUint16BE();
+		_antialiasFontSize = stream.readUint16BE();
+		_displayHeight = stream.readUint16BE();
+
 		uint8 r = 0, g = 0, b = 0;
-		stream.readByte();
+		stream.readByte(); // skip one byte
 		r = stream.readByte();
 		g = stream.readByte();
 		b = stream.readByte();
@@ -59,8 +65,18 @@ RichTextCastMember::RichTextCastMember(Cast *cast, uint16 castId, Common::Seekab
 		g = (stream.readUint16BE() >> 8);
 		b = (stream.readUint16BE() >> 8);
 		_bgColor = _pf32.RGBToColor(r, g, b);
+
+		debugC(3, kDebugLoading, "  RichTextCastMember(): initialRect: [%s], boundingRect: [%s], antialiasFlag: 0x%02x, cropFlags: 0x%02x, scrollPos: %d, antialiasFontSize: %d, displayHeight: %d",
+			_initialRect.toString().c_str(),
+			_boundingRect.toString().c_str(),
+			_antialiasFlag,
+			_cropFlags,
+			_scrollPos,
+			_antialiasFontSize,
+			_displayHeight);
+		debugC(3, kDebugLoading, "  RichTextCastMember(): foreColor: 0x%08x, bgColor: 0x%08x", _foreColor, _bgColor);
 	} else {
-		warning("RichTextCastMember(): >D5 isn't handled");
+		warning("STUB: RichTextCastMember: RTE not yet supported for version v%d (%d)", humanVersion(_cast->_version), _cast->_version);
 	}
 
 	_type = kCastRichText;
@@ -88,6 +104,16 @@ void RichTextCastMember::load() {
 	if (_loaded)
 		return;
 
+	// RichText casts consist of 3 files:
+	// RTE0: Editor data, used only by the Authoring Tool
+	// RTE1: Plain text data
+	// RTE2: Bitmap representation for rendering
+	//
+	// RTE0 is using Paige editor by Hermes, which was recently
+	// open sourced. So, if anyone wants to look into internals,
+	// https://github.com/nmatavka/Hermes-Paige/tree/main
+	// the pgReadDoc() is the code entry:
+	// https://github.com/nmatavka/Hermes-Paige/blob/main/PGSOURCE/PGREAD.C#L767
 	uint rte0id = 0;
 	uint rte1id = 0;
 	uint rte2id = 0;
@@ -144,7 +170,7 @@ Graphics::MacWidget *RichTextCastMember::createWidget(Common::Rect &bbox, Channe
 	// Check if we need to dither the image
 	int dstBpp = g_director->_wm->_pixelformat.bytesPerPixel;
 
-	Graphics::MacWidget *widget = new Graphics::MacWidget(g_director->getCurrentWindow(), bbox.left, bbox.top, bbox.width(), bbox.height(), g_director->_wm, false);
+	Graphics::MacWidget *widget = new Graphics::MacWidget(g_director->getCurrentWindow()->getMacWindow(), bbox.left, bbox.top, bbox.width(), bbox.height(), g_director->_wm, false);
 
 	Graphics::Surface *dithered = nullptr;
 
@@ -200,19 +226,19 @@ Datum RichTextCastMember::getField(int field) {
 	return d;
 }
 
-bool RichTextCastMember::setField(int field, const Datum &d) {
+void RichTextCastMember::setField(int field, const Datum &d) {
 	switch (field) {
 	case kTheText:
 		_plainText = Common::U32String(d.asString());
 		warning("STUB: RichTextCastMember::setField: text set to \"%s\", but won't rerender!", d.asString().c_str());
-		break;
+		return;
 	case kThePageHeight:
 	case kTheScrollTop:
 	default:
 		break;
 	}
 
-	return CastMember::setField(field, d);
+	CastMember::setField(field, d);
 }
 
 Common::String RichTextCastMember::formatInfo() {
@@ -230,4 +256,42 @@ Common::String RichTextCastMember::formatInfo() {
 		format.c_str()
 	);
 }
+
+uint32 RichTextCastMember::getCastDataSize() {
+	if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		// 8 bytes (_initialRect)
+		// 8 bytes (_boundingRect)
+		// Ignored 9 bytes
+		// 3 bytes r, g, b (foreground, each a byte)
+		// 6 bytes r, g, b (background, each 2 bytes)
+		return 26;
+	} else {
+		warning("RichTextCastMember()::getCastDataSize():>D5 isn't handled");
+		return 0;
+	}
 }
+
+void RichTextCastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
+	if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		Movie::writeRect(writeStream, _initialRect);
+		Movie::writeRect(writeStream, _boundingRect);
+
+		writeStream->write(0, 8);
+		writeStream->writeByte(0);
+
+		uint8 r, g, b;
+		_pf32.colorToRGB(_foreColor, r, g, b);
+		writeStream->writeByte(r);
+		writeStream->writeByte(g);
+		writeStream->writeByte(b);
+
+		_pf32.colorToRGB(_bgColor, r, g, b);
+		writeStream->writeUint16BE(r << 8);
+		writeStream->writeUint16BE(g << 8);
+		writeStream->writeUint16BE(b << 8);
+	} else {
+		warning("RichTextCastMember()::writeCastData(): >D5 isn't handled");
+	}
+}
+
+}	// End of namespace Director

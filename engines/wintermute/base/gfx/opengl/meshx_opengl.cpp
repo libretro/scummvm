@@ -30,7 +30,7 @@
 #include "engines/wintermute/base/gfx/3deffect_params.h"
 #include "engines/wintermute/base/gfx/skin_mesh_helper.h"
 #include "engines/wintermute/base/base_game.h"
-#include "engines/wintermute/base/gfx/base_renderer3d.h"
+#include "engines/wintermute/base/base_engine.h"
 
 #include "graphics/opengl/system_headers.h"
 
@@ -57,7 +57,7 @@ bool XMeshOpenGL::render(XModel *model) {
 
 	// For WME DX, mesh model is not visible, possible it's clipped.
 	// For OpenGL, mesh is visible, skip draw it here instead in core.
-	if (!_gameRef->_renderer3D->_camera)
+	if (!_game->_renderer3D->_camera)
 		return false;
 
 	auto fvf = _blendedMesh->getFVF();
@@ -108,6 +108,9 @@ bool XMeshOpenGL::render(XModel *model) {
 			textureEnable = true;
 			glEnable(GL_TEXTURE_2D);
 			static_cast<BaseSurfaceOpenGL3D *>(mat->getSurface())->setTexture();
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glGenerateMipmap(GL_TEXTURE_2D);
 		} else {
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
@@ -156,7 +159,14 @@ bool XMeshOpenGL::renderFlatShadowModel(uint32 shadowColor) {
 
 	// For WME DX, mesh model is not visible, possible it's clipped.
 	// For OpenGL, mesh is visible, skip draw it here instead in core.
-	if (!_gameRef->_renderer3D->_camera)
+	if (!_game->_renderer3D->_camera)
+		return false;
+
+	// W/A for the scene with the table in the laboratory where the engine switches to flat shadows.
+	// Presumably, it's supposed to disable shadows.
+	// Instead, OpenGL draws graphical glitches.
+	// Original DX version does not have this issue due to rendering shadows differently.
+	if (BaseEngine::instance().getGameId() == "alphapolaris")
 		return false;
 
 	uint32 vertexSize = DXGetFVFVertexSize(_blendedMesh->getFVF()) / sizeof(float);

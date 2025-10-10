@@ -38,6 +38,9 @@ SpiderEngine::SpiderEngine(OSystem *syst, const ADGameDescription *gd)
 	_font = nullptr;
 }
 
+SpiderEngine::~SpiderEngine() {
+}
+
 void SpiderEngine::loadAssets() {
 	if (!isDemo())
 		loadAssetsFullGame();
@@ -1202,6 +1205,7 @@ void SpiderEngine::loadGame(const Common::String &nextLevel, int score, int puzz
 
 	// We don't want to continue with any sound from a previous game
 	stopSound();
+	stopMusic();
 	_sceneState["GS_PUZZLELEVEL"] = puzzleDifficulty;
 	_sceneState["GS_COMBATLEVEL"] = combatDifficulty;
 	_score = score;

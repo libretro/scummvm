@@ -58,7 +58,8 @@ enum DarkseedAction {
 	kDarkseedActionSelect,
 	kDarkseedActionChangeCommand,
 	kDarkseedActionTimeAdvance,
-	kDarkseedActionQuit
+	kDarkseedActionQuit,
+	kDarkseedActionSkipCutscene
 };
 
 enum ActionMode : uint8 {
@@ -258,7 +259,7 @@ public:
 	void drawFullscreenPic();
 	void lookCode(int objNum);
 	void handleObjCollision(int targetObjNum);
-	void playSound(uint8 sfxId, uint8 unk1, int16 unk2);
+	void playSound(uint8 sfxId, uint8 priority, int16 unk2);
 	void nextFrame(int nspAminIdx);
 
 	void throwmikeinjail();

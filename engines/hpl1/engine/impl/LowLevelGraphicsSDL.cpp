@@ -43,9 +43,8 @@
 #include "hpl1/debug.h"
 #include "hpl1/engine/impl/OcclusionQueryOGL.h"
 #include "hpl1/graphics.h"
-#include "hpl1/opengl.h"
 
-#ifdef USE_OPENGL
+#ifdef HPL1_USE_OPENGL
 
 namespace hpl {
 
@@ -271,7 +270,7 @@ int cLowLevelGraphicsSDL::GetCaps(eGraphicCaps type) const {
 		return 1; // gl 1.4
 
 	case eGraphicCaps_GL_MultiTexture:
-		return GLAD_GL_ARB_multitexture; // gl 1.4
+		return 1; // gl 1.2.1
 
 	default:
 		break;
@@ -1808,4 +1807,4 @@ void cLowLevelGraphicsSDL::SetMatrixMode(eMatrix type) {
 
 } // namespace hpl
 
-#endif // USE_OPENGL
+#endif // HPL1_USE_OPENGL

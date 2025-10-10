@@ -443,6 +443,54 @@ on exitFrame\r\
   go(1, \"C:\\PG_WORLD\\A_IN01\")\r\
 ";
 
+/*
+ * Mission Code: Millennium has some drive detection code which prevents the game from loading
+ * if it detects DESTINA.MLD is present "on the hard disk". Provide the same code without that check.
+ */
+const char *const mcmillenniumDriveDetectionFix = "\
+on initPaths\r\
+  global PD, theCDPath, theHDPath, theVCAudioPath, theNotePath, proxPath\r\
+  if the machineType = 256 then\r\
+    set PD to \"\\\"\r\
+  else\r\
+    set PD to \":\"\r\
+  end if\r\
+  if the machineType = 256 then\r\
+    set theCDPath to getAt(the searchPaths, 2)\r\
+  else\r\
+    if checkFileExists(the pathName & \"DESTINA.MLD\") = 1 then\r\
+      set theCDPath to the pathName\r\
+    else\
+      set theCDPath to \"Millennium:\"\r\
+    end if\r\
+  end if\r\
+  set theHDPath to the pathName\r\
+  set theVCAudioPath to theCDPath & \"AUDIO\" & PD & \"VIDCOM\" & PD\r\
+  set theNotePath to the pathName\r\
+  set proxPath to theCDPath & \"prox\" & PD\r\
+end\r\
+";
+
+/*
+ * Mission Code: Millennium has a bizarre method of checking the dimensions of the screen by
+ * measuring the stage position of a 512x384 movie and seeing if it matches 640x480.
+ * Even when forcing desktop mode this doesn't match up exactly, so patch it out.
+ */
+const char *const mcmillenniumResDetectionFix = "\
+on getRes\r\
+end\r\
+";
+
+/*
+ * GORD@K has a complicated CD detection method which includes writing a temp file to the CD
+ * drive. Since this always works, we have to stub out the entire method.
+ */
+const char *const gordakDetectionFix = "\
+on checkFiles\r\
+   go to movie \"gordak\\intro.dxr\"\r\
+end\r\
+";
+
 struct ScriptHandlerPatch {
 	const char *gameId;
 	const char *extra;
@@ -481,6 +529,11 @@ struct ScriptHandlerPatch {
 	{"gadgetpaf", nullptr, kPlatformWindows, "GADGET\\GADGET.EXE", kScoreScript, 9, DEFAULT_CAST_LIB, &gadgetPafDetectionFix9},
 	{"pinkgear", nullptr, kPlatformWindows, "GOTOPINK.EXE", kMovieScript, 4, DEFAULT_CAST_LIB, &pinkGearDriveDetectionFix1},
 	{"pinkgear", nullptr, kPlatformWindows, "GOTOPINK.EXE", kScoreScript, 6, DEFAULT_CAST_LIB, &pinkGearDriveDetectionFix2},
+	{"mcmillennium", nullptr, kPlatformWindows, "PC\\MILL.EXE", kMovieScript, 15, DEFAULT_CAST_LIB, &mcmillenniumResDetectionFix},
+	{"mcmillennium", nullptr, kPlatformMacintosh, "Mission Code Millennium:Mission Code Millennium", kMovieScript, 15, DEFAULT_CAST_LIB, &mcmillenniumResDetectionFix},
+	{"mcmillennium", nullptr, kPlatformWindows, "PC\\SHARED.DXR", kMovieScript, 1013, DEFAULT_CAST_LIB, &mcmillenniumDriveDetectionFix},
+	{"mcmillennium", nullptr, kPlatformMacintosh, "Mission Code Millennium:SHARED.Dxr", kMovieScript, 1013, DEFAULT_CAST_LIB, &mcmillenniumDriveDetectionFix},
+	{"gordak", nullptr, kPlatformWindows, "GORDAKCD.EXE", kMovieScript, 2, DEFAULT_CAST_LIB, &gordakDetectionFix},
 	{nullptr, nullptr, kPlatformUnknown, nullptr, kNoneScript, 0, 0, nullptr},
 
 };

@@ -29,6 +29,7 @@ namespace Common {
 struct Event;
 class ReadStreamEndian;
 class SeekableReadStreamEndian;
+class MemoryWriteStream;
 }
 
 namespace Director {
@@ -71,6 +72,7 @@ struct InfoEntry {
 	}
 
 	Common::String readString(bool pascal = true);
+	void writeString(Common::String string, bool pascal = true);
 };
 
 struct InfoEntries {
@@ -90,6 +92,9 @@ public:
 
 	static Common::Rect readRect(Common::ReadStreamEndian &stream);
 	static InfoEntries loadInfoEntries(Common::SeekableReadStreamEndian &stream, uint16 version);
+	static void saveInfoEntries(Common::SeekableWriteStream *writeStream, InfoEntries info);
+
+	static void writeRect(Common::WriteStream *writeStream, Common::Rect rect);
 
 	void loadCastLibMapping(Common::SeekableReadStreamEndian &stream);
 	bool loadArchive();
@@ -100,6 +105,7 @@ public:
 	DirectorEngine *getVM() const { return _vm; }
 	Cast *getCast() const { return _casts.getValOrDefault(DEFAULT_CAST_LIB, nullptr); }
 	Cast *getCast(CastMemberID memberID);
+	Cast *getCastByLibResourceID(int libresourceID);
 	Cast *getSharedCast() const { return _sharedCast; }
 	const Common::HashMap<int, Cast *> *getCasts() const { return &_casts; }
 	Score *getScore() const { return _score; }
@@ -128,8 +134,9 @@ public:
 	ScriptContext *getScriptContext(ScriptType type, CastMemberID id);
 	Symbol getHandler(const Common::String &name, uint16 castLibHint = 0);
 
-	// events.cpp
+	// lingo/lingo-events.cpp
 	bool processEvent(Common::Event &event);
+	void broadcastEvent(LEvent event);
 
 	// lingo/lingo-events.cpp
 	void setPrimaryEventHandler(LEvent event, const Common::String &code);
@@ -148,8 +155,9 @@ public:
 	uint16 _version;
 	Common::Platform _platform;
 	Common::Rect _movieRect;
-	uint16 _currentActiveSpriteId;
-	uint16 _currentMouseSpriteId;
+	uint16 _lastClickedSpriteId;
+	uint16 _currentHoveredSpriteId;
+	uint _currentSpriteNum;
 	CastMemberID _currentMouseDownCastID;
 	CastMemberID _currentMouseDownSpriteScriptID;
 	bool _currentMouseDownSpriteImmediate;
@@ -186,6 +194,7 @@ public:
 	int _checkBoxAccess;
 
 	uint16 _currentHiliteChannelId;
+	uint16 _lastEnteredChannelId;
 
 	int _lastTimeOut;
 	int _timeOutLength;

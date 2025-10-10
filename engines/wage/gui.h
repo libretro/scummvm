@@ -138,9 +138,14 @@ public:
 	void enableRevert();
 
 	bool processSceneEvents(WindowClick click, Common::Event &event);
+	bool processConsoleEvents(WindowClick click, Common::Event &event);
 	void executeMenuCommand(int action, Common::String &text);
 
 	void clearOutput();
+
+	void gameOver();
+	bool saveDialog();
+	void aboutDialog();
 
 private:
 	void drawScene();

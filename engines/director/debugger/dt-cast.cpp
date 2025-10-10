@@ -27,9 +27,12 @@
 #include "director/cast.h"
 #include "director/castmember/bitmap.h"
 #include "director/castmember/text.h"
+#include "director/castmember/shape.h"
+#include "director/castmember/richtext.h"
 #include "director/castmember/script.h"
 #include "director/movie.h"
 #include "director/types.h"
+#include "director/window.h"
 
 namespace Director {
 namespace DT {
@@ -111,9 +114,11 @@ void showCast() {
 		return;
 
 	ImGui::SetNextWindowPos(ImVec2(20, 160), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(520, 240), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(480, 480), ImGuiCond_FirstUseEver);
 
 	if (ImGui::Begin("Cast", &_state->_w.cast)) {
+		Window *selectedWindow = windowListCombo(&_state->_castWindow);
+
 		// display a toolbar with: grid/list/filters buttons + name filter
 		ImGuiEx::toggleButton(ICON_MS_LIST, &_state->_cast._listView);
 		ImGui::SetItemTooltip("List");
@@ -144,7 +149,7 @@ void showCast() {
 		// display a list or a grid
 		const float sliderHeight = _state->_cast._listView ? 0.f : 38.f;
 		const ImVec2 childsize = ImGui::GetContentRegionAvail();
-		Movie *movie = g_director->getCurrentMovie();
+		Movie *movie = selectedWindow->getCurrentMovie();
 		ImGui::BeginChild("##cast", ImVec2(childsize.x, childsize.y - sliderHeight));
 		if (_state->_cast._listView) {
 			if (ImGui::BeginTable("Resources", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg)) {
@@ -152,7 +157,7 @@ void showCast() {
 				ImGui::TableSetupColumn("#", 0, 20.f);
 				ImGui::TableSetupColumn("Script", 0, 80.f);
 				ImGui::TableSetupColumn("Type", 0, 80.f);
-				ImGui::TableSetupColumn("Preview", 0, 32.f);
+				ImGui::TableSetupColumn("Preview", ImGuiTableColumnFlags_WidthStretch, 50.f);
 				ImGui::TableHeadersRow();
 
 				for (auto it : *movie->getCasts()) {
@@ -186,13 +191,49 @@ void showCast() {
 						ImGui::Text("%s", toString(castMember._value->_type));
 
 						ImGui::TableNextColumn();
-						ImGuiImage imgID = getImageID(castMember._value);
-						if (imgID.id) {
-							showImage(imgID, name.c_str(), 32.f);
+						float columnWidth = ImGui::GetColumnWidth();
+
+						ImGuiImage imgID = {};
+						switch (castMember._value->_type) {
+						case kCastBitmap:
+							{
+								imgID = getImageID(castMember._value);
+								if (imgID.id) {
+									float offsetX = (columnWidth - 32.f) * 0.5f;
+									ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+									showImage(imgID, name.c_str(), 32.f);
+								}
+							}
+							break;
+
+						case kCastText:
+						case kCastRichText:
+						case kCastButton:
+							{
+								imgID = getTextID(castMember._value);
+								if (imgID.id) {
+									float offsetX = (columnWidth - 32.f) * 0.5f;
+									ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+									showImage(imgID, name.c_str(), 32.f);
+								}
+							}
+							break;
+
+						case kCastShape:
+							{
+								imgID = getShapeID(castMember._value);
+								if (imgID.id) {
+									float offsetX = (columnWidth - 32.f) * 0.5f;
+									ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+									showImage(imgID, name.c_str(), 32.f);
+								}
+							}
+							break;
+						default:
+							break;
 						}
 					}
 				}
-
 				ImGui::EndTable();
 			}
 		} else {
@@ -227,10 +268,41 @@ void showCast() {
 							textHeight *= (textSize.x / textWidth);
 						}
 
-						ImGuiImage imgID = getImageID(castMember._value);
-						if (imgID.id) {
-							showImage(imgID, name.c_str(), thumbnailSize);
-						} else {
+						ImGuiImage imgID = {};
+						switch (castMember._value->_type) {
+						case kCastBitmap:
+							{
+								imgID = getImageID(castMember._value);
+								if (imgID.id) {
+									showImage(imgID, name.c_str(), thumbnailSize);
+								}
+							}
+							break;
+
+						case kCastText:
+						case kCastRichText:
+						case kCastButton:
+							{
+								imgID = getTextID(castMember._value);
+								if (imgID.id) {
+									showImage(imgID, name.c_str(), thumbnailSize);
+								}
+							}
+							break;
+
+						case kCastShape:
+							{
+								imgID = getShapeID(castMember._value);
+								if (imgID.id) {
+									showImage(imgID, name.c_str(), thumbnailSize);
+								}
+							}
+							break;
+						default:
+							break;
+						}
+
+						if (!imgID.id) {
 							ImGui::PushID(castMember._key);
 							ImGui::InvisibleButton("##canvas", ImVec2(thumbnailSize, thumbnailSize));
 							ImGui::PopID();

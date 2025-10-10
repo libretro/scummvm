@@ -3,6 +3,7 @@ MODULE := engines/mediastation
 MODULE_OBJS = \
 	asset.o \
 	assets/canvas.o \
+	assets/document.o \
 	assets/font.o \
 	assets/hotspot.o \
 	assets/image.o \
@@ -20,6 +21,7 @@ MODULE_OBJS = \
 	context.o \
 	cursors.o \
 	datafile.o \
+	graphics.o \
 	mediascript/codechunk.o \
 	mediascript/collection.o \
 	mediascript/eventhandler.o \
@@ -27,8 +29,7 @@ MODULE_OBJS = \
 	mediascript/scriptconstants.o \
 	mediascript/scriptvalue.o \
 	mediastation.o \
-	metaengine.o \
-	transitions.o
+	metaengine.o
 
 # This module can be built as a plugin
 ifeq ($(ENABLE_MEDIASTATION), DYNAMIC_PLUGIN)

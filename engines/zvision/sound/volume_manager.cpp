@@ -28,7 +28,7 @@ namespace ZVision {
 
 // Power law with exponent 1.5.
 static constexpr uint8 powerLaw[256] = {
-  0,  0,  0,  0,  1,  1,  1,  1,  1,  2,  2,  2,  3,  3,  3,  4, 
+  0,  0,  0,  0,  1,  1,  1,  1,  1,  2,  2,  2,  3,  3,  3,  4,
   4,  4,  5,  5,  6,  6,  6,  7,  7,  8,  8,  9,  9, 10, 10, 11,
  11, 12, 12, 13, 14, 14, 15, 15, 16, 16, 17, 18, 18, 19, 20, 20,
  21, 21, 22, 23, 23, 24, 25, 26, 26, 27, 28, 28, 29, 30, 31, 31,
@@ -54,7 +54,7 @@ static constexpr uint8 logPower[256] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,
   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
   1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  3,  3,  3,  3,  3,
@@ -67,19 +67,19 @@ static constexpr uint8 logPower[256] = {
 
 // */
 static constexpr uint8 logAmplitude[256] = {
-  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  
-  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,  1,  
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,  1,
   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
-  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  
-  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2, 
-  2,  2,  2,  2,  2,  2,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3, 
-  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  5,  5,  5,  5,  
-  5,  5,  5,  6,  6,  6,  6,  6,  6,  7,  7,  7,  7,  7,  8,  8,  
-  8,  8,  8,  9,  9,  9,  9, 10, 10, 10, 10, 11, 11, 11, 12, 12, 
-  2, 13, 13, 13, 14, 14, 15, 15, 15, 16, 16, 17, 17, 18, 18, 19, 
- 19, 20, 20, 21, 21, 22, 23, 23, 24, 24, 25, 26, 27, 27, 28, 29, 
- 30, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 45, 
- 46, 47, 48, 50, 51, 52, 54, 55, 57, 58, 60, 62, 63, 65, 67, 69, 
+  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+  2,  2,  2,  2,  2,  2,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,
+  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  5,  5,  5,  5,
+  5,  5,  5,  6,  6,  6,  6,  6,  6,  7,  7,  7,  7,  7,  8,  8,
+  8,  8,  8,  9,  9,  9,  9, 10, 10, 10, 10, 11, 11, 11, 12, 12,
+  2, 13, 13, 13, 14, 14, 15, 15, 15, 16, 16, 17, 17, 18, 18, 19,
+ 19, 20, 20, 21, 21, 22, 23, 23, 24, 24, 25, 26, 27, 27, 28, 29,
+ 30, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 45,
+ 46, 47, 48, 50, 51, 52, 54, 55, 57, 58, 60, 62, 63, 65, 67, 69,
  71, 73, 75, 77, 79, 81, 83, 86, 88, 90, 93, 96, 98,101,104,107,
 110,113,116,119,122,126,129,133,136,140,144,148,152,156,160,165,
 169,174,179,184,189,194,200,205,211,217,222,229,235,241,248,255
@@ -133,17 +133,16 @@ static constexpr uint8 directionalAmplitude[181] = {
 };
 
 VolumeManager::VolumeManager(ZVision *engine, volumeScaling mode) :
-	_engine(engine),
 	_mode(mode) {
-};
+}
 
 uint8 VolumeManager::convert(uint8 inputValue) {
 	return convert(inputValue, _mode);
-};
+}
 
 uint8 VolumeManager::convert(uint8 inputValue, Math::Angle azimuth, uint8 directionality) {
 	return convert(inputValue, _mode, azimuth, directionality);
-};
+}
 
 uint8 VolumeManager::convert(uint8 inputValue, volumeScaling &mode, Math::Angle azimuth, uint8 directionality) {
 	uint8 index = abs(round(azimuth.getDegrees(-180)));
@@ -154,7 +153,7 @@ uint8 VolumeManager::convert(uint8 inputValue, volumeScaling &mode, Math::Angle 
 	output = (output + directionalOutput) / 0xFF;
 	debugC(4, kDebugSound, "Directionally converted output %d", output);
 	return output;
-};
+}
 
 uint8 VolumeManager::convert(uint8 inputValue, volumeScaling &mode) {
 	if (inputValue > _scriptScale)
@@ -192,6 +191,101 @@ uint8 VolumeManager::convert(uint8 inputValue, volumeScaling &mode) {
 	}
 	debugC(4, kDebugSound, "Scripted volume %d, scaled volume %d, converted output %d", inputValue, scaledInput, output);
 	return output;
-};
+}
+
+#if defined(USE_MPEG2) && defined(USE_A52)
+double VolumeManager::getVobAmplification(Common::String fileName) const {
+	// For some reason, we get much lower volume in the hi-res videos than
+	// in the low-res ones. So we artificially boost the volume. This is an
+	// approximation, but I've tried to match the old volumes reasonably
+	// well.
+	//
+	// Some of these will cause audio clipping. Hopefully not enough to be
+	// noticeable.
+	double amplification = 0.0;
+	if (fileName == "em00d011.vob") {
+		// The finale.
+		amplification = 10.0;
+	} else if (fileName == "em00d021.vob") {
+		// Jack's escape and arrival at Flathead Mesa.
+		amplification = 9.0;
+	} else if (fileName == "em00d032.vob") {
+		// The Grand Inquisitor's speech.
+		amplification = 11.0;
+	} else if (fileName == "em00d122.vob") {
+		// Jack orders you to the radio tower.
+		amplification = 17.0;
+	} else if (fileName == "em3ed012.vob") {
+		// The Grand Inquisitor gets the Coconut of Quendor.
+		amplification = 12.0;
+	} else if (fileName == "g000d101.vob") {
+		// Griff gets captured.
+		amplification = 11.0;
+	} else if (fileName == "g000d111.vob") {
+		// Brog gets totemized. The music seems to be mixed much softer
+		// in this than in the low-resolution version.
+		amplification = 12.0;
+	} else if (fileName == "g000d122.vob") {
+		// Lucy gets captured.
+		amplification = 14.0;
+	} else if (fileName == "g000d302.vob") {
+		// The Grand Inquisitor visits Jack in his cell.
+		amplification = 13.0;
+	} else if (fileName == "g000d312.vob") {
+		// You get captured.
+		amplification = 14.0;
+	} else if (fileName == "g000d411.vob") {
+		// Propaganda On Parade. No need to make it as loud as the
+		// low-resolution version.
+		amplification = 11.0;
+	} else if (fileName == "pe1ed012.vob") {
+		// Jack lets you in with the lantern.
+		amplification = 14.0;
+	} else if (fileName.hasPrefix("pe1ed")) {
+		// Jack answers the door. Several different ways.
+		amplification = 17.0;
+	} else if (fileName == "pe5ed052.vob") {
+		// You get killed by the guards
+		amplification = 12.0;
+	} else if (fileName == "pe6ed012.vob") {
+		// Jack gets captured by the guards
+		amplification = 17.0;
+	} else if (fileName == "pp1ed022.vob") {
+		// Jack examines the lantern
+		amplification = 10.0;
+	} else if (fileName == "qb1ed012.vob") {
+		// Lucy gets invited to the back room
+		amplification = 17.0;
+	} else if (fileName.hasPrefix("qe1ed")) {
+		// Floyd answers the door. Several different ways.
+		amplification = 17.0;
+	} else if (fileName == "qs1ed011.vob") {
+		// Jack explains the rules of the game.
+		amplification = 16.0;
+	} else if (fileName == "qs1ed021.vob") {
+		// Jack loses the game.
+		amplification = 14.0;
+	} else if (fileName == "uc1gd012.vob") {
+		// Y'Gael appears.
+		amplification = 12.0;
+	} else if (fileName == "ue1ud012.vob") {
+		// Jack gets totemized... or what?
+		amplification = 12.0;
+	} else if (fileName == "ue2qd012.vob") {
+		// Jack agrees to totemization.
+		amplification = 10.0;
+	} else if (fileName == "g000d981.vob") {
+		// The Enterprise logo. Has no low-res version. Its volume is
+		// louder than the other logo animations.
+		amplification = 6.2;
+	} else if (fileName.hasPrefix("g000d")) {
+		// The Dolby Digital and Activision logos. They have no low-res
+		// versions, but I've used the low-resolution Activision logo
+		// (slightly different) as reference.
+		amplification = 8.5;
+	}
+	return amplification;
+}
+#endif
 
 } // End of namespace ZVision

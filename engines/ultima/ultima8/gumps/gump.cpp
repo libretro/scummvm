@@ -228,13 +228,12 @@ void Gump::Paint(RenderSurface *surf, int32 lerp_factor, bool scaled) {
 	surf->SetOrigin(ox + nx, oy + ny);
 
 	// Get Old Clipping Rect
-	Rect old_rect;
-	surf->GetClippingRect(old_rect);
+	Common::Rect32 old_rect = surf->getClippingRect();
 
 	// Set new clipping rect
-	Rect new_rect = _dims;
+	Common::Rect32 new_rect(_dims);
 	new_rect.clip(old_rect);
-	surf->SetClippingRect(new_rect);
+	surf->setClippingRect(new_rect);
 
 	// Paint This
 	PaintThis(surf, lerp_factor, scaled);
@@ -243,7 +242,7 @@ void Gump::Paint(RenderSurface *surf, int32 lerp_factor, bool scaled) {
 	PaintChildren(surf, lerp_factor, scaled);
 
 	// Reset The Clipping Rect
-	surf->SetClippingRect(old_rect);
+	surf->setClippingRect(old_rect);
 
 	// Reset The Origin
 	surf->SetOrigin(ox, oy);
@@ -277,14 +276,13 @@ void Gump::PaintCompositing(RenderSurface *surf, int32 lerp_factor,
 	surf->SetOrigin(0, 0);
 
 	// Get Old Clipping Rect
-	Rect old_rect;
-	surf->GetClippingRect(old_rect);
+	Common::Rect32 old_rect = surf->getClippingRect();
 
 	// Set new clipping rect
-	Rect new_rect(_dims);
+	Common::Rect32 new_rect(_dims);
 	GumpRectToScreenSpace(new_rect, ROUND_OUTSIDE);
 	new_rect.clip(old_rect);
-	surf->SetClippingRect(new_rect);
+	surf->setClippingRect(new_rect);
 
 	// Iterate all children
 	Std::list<Gump *>::reverse_iterator it = _children.rbegin();
@@ -303,7 +301,7 @@ void Gump::PaintCompositing(RenderSurface *surf, int32 lerp_factor,
 	PaintComposited(surf, lerp_factor, sx, sy);
 
 	// Reset The Clipping Rect
-	surf->SetClippingRect(old_rect);
+	surf->setClippingRect(old_rect);
 
 	// Reset The Origin
 	surf->SetOrigin(ox, oy);
@@ -340,8 +338,7 @@ Gump *Gump::FindGump(int mx, int my) {
 
 void Gump::setRelativePosition(Gump::Position pos, int xoffset, int yoffset) {
 	if (_parent) {
-		Rect rect;
-		_parent->GetDims(rect);
+		Common::Rect32 rect = _parent->getDims();
 
 		switch (pos) {
 		case CENTER:
@@ -447,7 +444,7 @@ void Gump::GumpToParent(int32 &gx, int32 &gy, PointRoundDir) {
 }
 
 // Transform a rectangle to screenspace from gumpspace
-void Gump::GumpRectToScreenSpace(Rect &gr, RectRoundDir r) {
+void Gump::GumpRectToScreenSpace(Common::Rect32 &gr, RectRoundDir r) {
 	PointRoundDir tl = (r == ROUND_INSIDE ? ROUND_BOTTOMRIGHT : ROUND_TOPLEFT);
 	PointRoundDir br = (r == ROUND_OUTSIDE ? ROUND_BOTTOMRIGHT : ROUND_TOPLEFT);
 
@@ -463,7 +460,7 @@ void Gump::GumpRectToScreenSpace(Rect &gr, RectRoundDir r) {
 }
 
 // Transform a rectangle to gumpspace from screenspace
-void Gump::ScreenSpaceToGumpRect(Rect &sr, RectRoundDir r) {
+void Gump::ScreenSpaceToGumpRect(Common::Rect32 &sr, RectRoundDir r) {
 	PointRoundDir tl = (r == ROUND_INSIDE ? ROUND_BOTTOMRIGHT : ROUND_TOPLEFT);
 	PointRoundDir br = (r == ROUND_OUTSIDE ? ROUND_BOTTOMRIGHT : ROUND_TOPLEFT);
 

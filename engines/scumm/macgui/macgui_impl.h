@@ -746,7 +746,6 @@ public:
 		MacGuiImpl::MacEditText *addEditText(Common::Rect bounds, Common::String text, bool enabled);
 		MacGuiImpl::MacImage *addIcon(int x, int y, int id, bool enabled);
 		MacGuiImpl::MacImage *addPicture(Common::Rect bounds, int id, bool enabled);
-		MacGuiImpl::
 		MacGuiImpl::MacSlider *addSlider(int x, int y, int h, int minValue, int maxValue, int pageSize, bool enabled);
 		MacGuiImpl::MacImageSlider *addImageSlider(int backgroundId, int handleId, bool enabled, int minX, int maxX, int minValue, int maxValue, int leftMargin = 0, int rightMargin = 0);
 		MacGuiImpl::MacImageSlider *addImageSlider(Common::Rect bounds, MacImage *handle, bool enabled, int minX, int maxX, int minValue, int maxValue);
@@ -803,7 +802,7 @@ public:
 
 	static void menuCallback(int id, Common::String &name, void *data);
 	virtual bool initialize();
-	void updateWindowManager();
+	virtual void updateWindowManager();
 	virtual void updateMenus();
 
 	const Graphics::Font *getFont(FontId fontId);

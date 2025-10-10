@@ -305,6 +305,9 @@ void Animation::updateAnimation() {
 			if (_otherNspAnimationType_maybe == 8) {
 				_player->_frameIdx = _player->_animations.getAnimAt(0)._frameNo[_animIndexTbl[0]];
 			} else {
+				if (_player->_frameIdx == 3)
+					// Phone dial tone
+					g_engine->playSound(56, 5, -1);
 				_player->_frameIdx = _player->_animations.getAnimAt(2)._frameNo[_animIndexTbl[2]];
 			}
 		} else {
@@ -530,9 +533,13 @@ void Animation::updateAnimation() {
 		}
 		break;
 	case 30:
-	case 31: {
+	case 31: { // Have a drink of water
 		int animIdx = _otherNspAnimationType_maybe - 30;
 		advanceAnimationFrame(animIdx);
+		if (_frameAdvanced && _otherNspAnimationType_maybe == 30 && _animIndexTbl[animIdx] == 6) {
+			// This sound effect is missing in the CD version
+			g_engine->playSound(35, 5, -1); // water
+		}
 		if (_isPlayingAnimation_maybe) {
 			_player->_frameIdx = _player->_animations.getAnimAt(animIdx)._frameNo[_animIndexTbl[animIdx]];
 		}
@@ -955,6 +962,10 @@ void Animation::sargoAnim() {
 	_animIndexTbl[0] = 0;
 	_spriteAnimCountdownTimer[0] = _player->_animations.getAnimAt(0)._frameDuration[0];
 
+	// always play Sargo speech
+	g_engine->_sound->resetIndividualSpeech(916);
+	g_engine->_sound->resetIndividualSpeech(917);
+
 	g_engine->_console->printTosText(916);
 
 	uint8 dialogIdx = 79;
@@ -1328,7 +1339,7 @@ void Animation::libAnim(bool pickingUpReservedBook) {
 void Animation::wonGame() {
 	_player->loadAnimations("libparts.nsp");
 	g_engine->_room->loadLocationSprites("libmorph.nsp");
-	g_engine->showFullscreenPic("lib_babe.pic");
+	g_engine->showFullscreenPic(g_engine->isCdVersion() ? "lib_babe.pic" : "lib-babe.pic");
 
 	g_engine->_cursor.showCursor(false);
 	g_engine->_console->printTosText(925);

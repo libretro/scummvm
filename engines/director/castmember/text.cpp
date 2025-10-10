@@ -20,9 +20,11 @@
  */
 
 #include "common/events.h"
+#include "common/memstream.h"
 
 #include "graphics/macgui/macbutton.h"
 #include "graphics/macgui/macwindow.h"
+#include "graphics/macgui/macwindowmanager.h"
 
 #include "director/director.h"
 #include "director/cast.h"
@@ -115,7 +117,7 @@ TextCastMember::TextCastMember(Cast *cast, uint16 castId, Common::SeekableReadSt
 		if (debugChannelSet(2, kDebugLoading)) {
 			_initialRect.debugPrint(2, "TextCastMember(): rect:");
 		}
-	} else if (version >= kFileVer400 && version < kFileVer600) {
+	} else if (version >= kFileVer400 && version < kFileVer1100) {
 		_flags1 = flags1;
 		_borderSize = stream.readByte();
 		_gutterSize = stream.readByte();
@@ -141,11 +143,9 @@ TextCastMember::TextCastMember(Cast *cast, uint16 castId, Common::SeekableReadSt
 				_flags1, _borderSize, _gutterSize, _boxShadow, _textType, _textAlign);
 		debugC(2, kDebugLoading, "TextCastMember(): background rgb: 0x%04x 0x%04x 0x%04x, shadow: %d flags: %d textHeight: %d",
 				_bgpalinfo1, _bgpalinfo2, _bgpalinfo3, _textShadow, _textFlags, _textHeight);
-		if (debugChannelSet(2, kDebugLoading)) {
-			_initialRect.debugPrint(2, "TextCastMember(): rect:");
-		}
+		debugC(2, kDebugLoading, "TextCastMember(): rect: [%s]", _initialRect.toString().c_str());
 	} else {
-		warning("Text/ButtonCastMember(): >D5 isn't handled");
+		warning("STUB: Text/ButtonCastMember: Text not yet supported for version v%d (%d)", humanVersion(_cast->_version), _cast->_version);
 	}
 
 	if (asButton) {
@@ -259,6 +259,8 @@ void TextCastMember::setForeColor(uint32 fgCol, int start, int end) {
 
 void TextCastMember::importStxt(const Stxt *stxt) {
 	_fontId = stxt->_style.fontId;
+	_height = stxt->_style.height;
+	_ascent = stxt->_style.ascent;
 	_textSlant = stxt->_style.textSlant;
 	_fontSize = stxt->_style.fontSize;
 	_fgpalinfo1 = stxt->_style.r;
@@ -291,7 +293,7 @@ bool textWindowCallback(Graphics::WindowClick click, Common::Event &event, void 
 Graphics::MacWidget *TextCastMember::createWindowOrWidget(Common::Rect &bbox, Common::Rect dims, Graphics::MacFont *macFont) {
 	Graphics::MacText *widget = nullptr;
 
-	widget = new Graphics::MacText(g_director->getCurrentWindow(), bbox.left, bbox.top, dims.width(), dims.height(), g_director->_wm, _ftext, macFont, getForeColor(), getBackColor(), _initialRect.width(), getAlignment(), _lineSpacing, _borderSize, _gutterSize, _boxShadow, _textShadow, _textType == kTextTypeFixed || _textType == kTextTypeScrolling, _textType == kTextTypeScrolling);
+	widget = new Graphics::MacText(g_director->getCurrentWindow()->getMacWindow(), bbox.left, bbox.top, dims.width(), dims.height(), g_director->_wm, _ftext, macFont, getForeColor(), getBackColor(), _initialRect.width(), getAlignment(), _lineSpacing, _borderSize, _gutterSize, _boxShadow, _textShadow, _textType == kTextTypeFixed || _textType == kTextTypeScrolling, _textType == kTextTypeScrolling);
 	widget->setSelRange(g_director->getCurrentMovie()->_selStart, g_director->getCurrentMovie()->_selEnd);
 	widget->draw();
 
@@ -321,16 +323,16 @@ Graphics::MacWidget *TextCastMember::createWidget(Common::Rect &bbox, Channel *c
 			dims.bottom = MIN<int>(dims.bottom, dims.top + _initialRect.height());
 		} else if (_textType == kTextTypeFixed || _textType == kTextTypeScrolling) {
 			// use initialRect to create widget for fixed style text, this maybe related to version.
-			dims.right = MAX<int>(dims.right, dims.left + _initialRect.width());
-			dims.bottom = MAX<int>(dims.bottom, dims.top + MAX<int>(_initialRect.height(), _maxHeight));
+			dims.right = MIN<int>(dims.right, dims.left + _initialRect.width());
+			dims.bottom = MIN<int>(dims.bottom, dims.top + MAX<int>(_initialRect.height(), _maxHeight));
 		}
 		widget = createWindowOrWidget(bbox, dims, macFont);
 		if (_textType != kTextTypeScrolling) {
-			((Graphics::MacText *)widget)->setEditable(channel->_sprite->_editable);
+			((Graphics::MacText *)widget)->setEditable(channel->_sprite->_editable || _editable);
 		}
 
 		// since we disable the ability of setActive in setEdtiable, then we need to set active widget manually
-		if (channel->_sprite->_editable) {
+		if (channel->_sprite->_editable || _editable) {
 			Graphics::MacWidget *activeWidget = g_director->_wm->getActiveWidget();
 			if (activeWidget == nullptr || !activeWidget->isEditable())
 				g_director->_wm->setActiveWidget(widget);
@@ -340,7 +342,7 @@ Graphics::MacWidget *TextCastMember::createWidget(Common::Rect &bbox, Channel *c
 	case kCastButton:
 		// note that we use _initialRect for the dimensions of the button;
 		// the values provided in the sprite bounding box are ignored
-		widget = new Graphics::MacButton(Graphics::MacButtonType(buttonType), getAlignment(), g_director->getCurrentWindow(), bbox.left, bbox.top, _initialRect.width(), _initialRect.height(), g_director->_wm, _ftext, macFont, getForeColor(), g_director->_wm->_colorWhite);
+		widget = new Graphics::MacButton(Graphics::MacButtonType(buttonType), getAlignment(), g_director->getCurrentWindow()->getMacWindow(), bbox.left, bbox.top, _initialRect.width(), _initialRect.height(), g_director->_wm, _ftext, macFont, getForeColor(), getBackColor());
 		widget->_focusable = true;
 
 		((Graphics::MacButton *)widget)->setHilite(_hilite);
@@ -582,6 +584,11 @@ void TextCastMember::updateFromWidget(Graphics::MacWidget *widget, bool spriteEd
 		Common::String content = ((Graphics::MacText *)widget)->getEditedString();
 		content.replace('\n', '\r');
 		_ptext = content;
+
+		// This string will be formatted with the default formatting
+		Common::String format = Common::String::format("\001\016%04x%02x%04x%04x%04x%04x", _fontId, _textSlant, _fontSize, _fgpalinfo1, _fgpalinfo2, _fgpalinfo2);
+		_ftext = format;
+		_ftext += _ptext;
 	}
 }
 
@@ -761,23 +768,23 @@ Datum TextCastMember::getField(int field) {
 	return d;
 }
 
-bool TextCastMember::setField(int field, const Datum &d) {
+void TextCastMember::setField(int field, const Datum &d) {
 	switch (field) {
 	case kTheBackColor:
 		{
 			uint32 color = g_director->transformColor(d.asInt());
 			setColors(nullptr, &color);
 		}
-		return true;
+		return;
 	case kTheForeColor:
 		{
 			uint32 color = g_director->transformColor(d.asInt());
 			setColors(&color, nullptr);
 		}
-		return true;
+		return;
 	case kTheText:
 		setRawText(d.asString());
-		return true;
+		return;
 	case kTheTextAlign:
 		{
 			Common::String select = d.asString();
@@ -796,79 +803,80 @@ bool TextCastMember::setField(int field, const Datum &d) {
 			_textAlign = align;
 			_modified = true;
 		}
-		return true;
+		return;
 	case kTheTextFont:
 		setTextFont(d.asString());
-		return true;
+		return;
 	case kTheTextHeight:
 		_lineSpacing = d.asInt();
 		_modified = true;
-		return false;
+		return;
 	case kTheTextSize:
 		setTextSize(d.asInt());
-		return true;
+		return;
 	case kTheTextStyle:
 		setTextStyle(d.asString());
-		return true;
+		return;
 	case kTheAutoTab:
 		warning("STUB: TextCastMember::setField(): autoTab not implemented");
-		return false;
+		return;
 	case kTheBorder:
 		_borderSize = d.asInt();
 		setModified(true);
-		return true;
+		return;
 	case kTheBoxDropShadow:
 		warning("STUB: TextCastMember::setField(): boxDropShadow not implemented");
-		return false;
+		return;
 	case kTheBoxType:
+		// The possible values are #adjust, #scroll, #fixed, and #limit.
 		warning("STUB: TextCastMember::setField(): boxType not implemented");
-		return false;
+		return;
 	case kTheDropShadow:
 		warning("STUB: TextCastMember::setField(): dropShadow not implemented");
-		return false;
+		return;
 	case kTheEditable:
 		_editable = d.asInt();
 		setModified(true);
-		return true;
+		return;
 	case kTheLineCount:
 		warning("BUILDBOT: TextCastMember::setField(): Attempt to set read-only field %s of cast %d", g_lingo->entity2str(field), _castId);
-		return false;
+		return;
 	case kTheMargin:
 		warning("STUB: TextCastMember::setField(): margin not implemented");
-		return false;
+		return;
 	case kThePageHeight:
 		warning("BUILDBOT: TextCastMember::setField(): Attempt to set read-only field %s of cast %d", g_lingo->entity2str(field), _castId);
-		return false;
+		return;
 	case kTheScrollTop:
 		_scroll = d.asInt();
 		setModified(true);
-		return true;
+		return;
 	case kTheWordWrap:
 		warning("STUB: TextCastMember::setField(): wordWrap not implemented");
-		return false;
+		return;
 	case kTheButtonType:
 		if (d.type == SYMBOL) {
 			if (d.u.s->equalsIgnoreCase("pushButton")) {
 				_buttonType = kTypeButton;
 				setModified(true);
-				return true;
+				return;
 			} else if (d.u.s->equalsIgnoreCase("radioButton")) {
 				_buttonType = kTypeRadio;
 				setModified(true);
-				return true;
+				return;
 			} else if (d.u.s->equalsIgnoreCase("checkBox")) {
 				_buttonType = kTypeCheckBox;
 				setModified(true);
-				return true;
+				return;
 			}
 		}
 		warning("TextCastMember: invalid button type %s", d.asString(true).c_str());
-		return false;
+		return;
 	default:
 		break;
 	}
 
-	return CastMember::setField(field, d);
+	CastMember::setField(field, d);
 }
 
 // This isn't documented particularly well by the Lingo Dictionary;
@@ -944,4 +952,172 @@ bool TextCastMember::setChunkField(int field, int start, int end, const Datum &d
 	return false;
 }
 
+void TextCastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
+	writeStream->writeByte(_borderSize);	// 1 byte
+	writeStream->writeByte(_gutterSize);	// 2 bytes
+	writeStream->writeByte(_boxShadow);		// 3 bytes
+	writeStream->writeByte(_textType);		// 4 bytes
+	writeStream->writeSint16BE(_textAlign);		// 6 bytes
+	writeStream->writeUint16BE(_bgpalinfo1);	// 8 bytes
+	writeStream->writeUint16BE(_bgpalinfo2);	// 10 bytes
+	writeStream->writeUint16BE(_bgpalinfo3);	// 12 bytes
+	writeStream->writeUint16BE(_scroll);		// 14 bytes
+
+	Movie::writeRect(writeStream, _initialRect);	// (+8) 22 bytes
+	writeStream->writeUint16BE(_maxHeight);			// 24 bytes
+	writeStream->writeByte(_textShadow);			// 25 bytes
+	writeStream->writeByte(_textFlags);				// 26 bytes
+
+	writeStream->writeUint16BE(_textHeight);		// 28 bytes
+
+	if (_type == kCastButton) {
+		writeStream->writeUint16BE(_buttonType + 1);		// 30 bytes
+	}
 }
+
+uint32 TextCastMember::getCastDataSize() {
+	// In total 30 bytes for text and 28 for button
+	uint32 size = (_type == kCastButton) ? 30 : 28;
+
+	// See Cast::loadCastData
+	size += (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) ? 2 : 0;
+	return size;
+}
+
+uint32 TextCastMember::writeSTXTResource(Common::SeekableWriteStream *writeStream, uint32 offset) {
+	// Load it before writing
+	if (!_loaded) {
+		load();
+	}
+
+	debugC(3, kDebugSaving, "writeSTXTResource(): _ptext: %s\n_ftext = %s\n_rtext: %s",
+		_ptext.encode().c_str(), Common::toPrintable(_ftext).encode().c_str(), Common::toPrintable(_rtext).c_str());
+
+	uint32 stxtSize = getSTXTResourceSize() + 8;
+
+	writeStream->seek(offset);
+
+	writeStream->writeUint32LE(MKTAG('S', 'T', 'X', 'T'));
+	writeStream->writeUint32LE(getSTXTResourceSize());						// Size of the STXT resource without the header and size
+
+	writeStream->writeUint32BE(12);							// This is the offset, if it's not 12, we throw an error, other offsets are not handled
+
+	int8 formatting = getFormattingCount();
+
+	writeStream->writeUint32BE(_ptext.size());		// Length of the string
+	// Encode only in one format, original may be encoded in multiple formats
+	// Size of one Font Style is 20 + The number of encodings takes 2 bytes
+	writeStream->writeUint32BE(20 * formatting + 2);				// Data Length
+
+	uint64 textPos = writeStream->pos();
+	writeStream->seek(_ptext.size(), SEEK_CUR);
+	writeStream->writeUint16BE(formatting);
+
+	FontStyle style;
+	Common::String rawText;
+
+	uint32 it = 0;
+	uint32 pIndex = 0;
+
+	if (!_ftext.empty()) {
+		while (it < _ftext.size() - 1) {
+			if (_ftext[it] == '\001' && _ftext[it + 1] == '\016') {
+				// Styling header found
+				debugC(3, kDebugSaving, "Format start offset: %d, text: %s", style.formatStartOffset,
+					Common::toPrintable(_ptext.substr(style.formatStartOffset, pIndex - style.formatStartOffset)).encode().c_str());
+
+				Common::CodePage encoding = detectFontEncoding(_cast->_platform, style.fontId);
+				rawText += _ptext.substr(style.formatStartOffset, pIndex - style.formatStartOffset).encode(encoding);
+
+				debugC(3, kDebugSaving, "Formatting: %s", Common::toPrintable(_ftext.substr(it, 22)).encode().c_str());
+				it += 2;
+
+				if (it + 22 > _ftext.size()) {
+					warning("TextCastMember::writeSTXTResource: incorrect format sequence");
+					break;
+				}
+
+				// Ignoring height and ascent for now from FontStyle
+				uint16 temp;
+				style.formatStartOffset = pIndex;
+				const Common::u32char_type_t *s = _ftext.substr(it, 22).c_str();
+
+				s = Graphics::readHex(&style.fontId, s, 4);
+				s = Graphics::readHex(&temp, s, 2);
+				s = Graphics::readHex(&style.fontSize, s, 4);
+				s = Graphics::readHex(&style.r, s, 4);
+				s = Graphics::readHex(&style.g, s, 4);
+				s = Graphics::readHex(&style.b, s, 4);
+				style.textSlant = temp;
+				style.height = _height;
+				style.ascent = _ascent;
+
+				style.write(writeStream);
+				it += 22;
+				continue;
+			}
+
+			pIndex += 1;
+			it++;
+		}
+		// Because we iterate over _ftext.size() - 1
+		pIndex += 1;
+	} else {
+		pIndex = _ptext.size() - 1;
+	}
+
+	debugC(3, kDebugSaving, "format start offset: %d, text: %s", style.formatStartOffset,
+		Common::toPrintable(_ptext.substr(style.formatStartOffset, pIndex - style.formatStartOffset)).encode().c_str());
+
+	Common::CodePage encoding = detectFontEncoding(_cast->_platform, style.fontId);
+	_ptext.substr(style.formatStartOffset, pIndex - style.formatStartOffset).encode(encoding);
+	rawText += _ptext.substr(style.formatStartOffset, pIndex - style.formatStartOffset).encode(encoding);
+
+	uint64 currentPos = writeStream->pos();
+	writeStream->seek(textPos);
+	writeStream->writeString(rawText);
+	writeStream->seek(currentPos);
+
+	if (debugChannelSet(7, kDebugSaving)) {
+		byte *dumpData = nullptr;
+		dumpData = (byte *)calloc(stxtSize, sizeof(byte));
+		Common::MemoryWriteStream *dumpStream = new Common::SeekableMemoryWriteStream(dumpData, stxtSize);
+
+		currentPos = writeStream->pos();
+		writeStream->seek(offset);
+		dumpStream->write(writeStream, stxtSize);
+		writeStream->seek(currentPos);
+
+		dumpFile("TextData", _castId, MKTAG('S', 'T', 'X', 'T'), dumpData, getSTXTResourceSize() + 8);
+		free(dumpData);
+		delete dumpStream;
+	}
+
+	return stxtSize + 8;
+}
+
+uint32 TextCastMember::getSTXTResourceSize() {
+	// Header (offset, string length, data length) + text string + data (FontStyle)
+	return 12 + _ptext.size() + getFormattingCount() * 20 + 2;
+}
+
+uint8 TextCastMember::getFormattingCount() {
+	if (_ftext.c_str() == nullptr) {
+		warning("TextCastMember::getFormattingCount(): The Text cast member has invalid formatted text");
+		return 0;
+	}
+
+	if (_ftext.empty()) {
+		return 0;
+	}
+
+	uint8 count = 0;
+	for (uint32 i = 0; i < _ftext.size() - 1; i++) {
+		if (_ftext[i] == '\001' && _ftext[i + 1] == '\016') {
+			count++;
+		}
+	}
+	return count;
+}
+
+}	// End of namespace Director

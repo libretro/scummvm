@@ -32,6 +32,10 @@
 #include "teenagent/detection.h"
 #include "graphics/thumbnail.h"
 
+#include "backends/keymapper/action.h"
+#include "backends/keymapper/keymapper.h"
+#include "backends/keymapper/standard-actions.h"
+
 enum {
 	MAX_SAVES = 20
 };
@@ -40,11 +44,23 @@ enum {
 
 static const ADExtraGuiOptionsMap optionsList[] = {
 	{
-		GAMEOPTION_TTS,
+		GAMEOPTION_TTS_OBJECTS,
 		{
-			_s("Enable Text to Speech"),
-			_s("Use TTS to read text in the game (if TTS is available)"),
-			"tts_enabled",
+			_s("Enable Text to Speech for Objects and Options"),
+			_s("Use TTS to read the descriptions (if TTS is available)"),
+			"tts_enabled_objects",
+			false,
+			0,
+			0
+		}
+	},
+
+	{
+		GAMEOPTION_TTS_SPEECH,
+		{
+			_s("Enable Text to Speech for Subtitles"),
+			_s("Use TTS to read the subtitles (if TTS is available)"),
+			"tts_enabled_speech",
 			false,
 			0,
 			0
@@ -143,6 +159,19 @@ public:
 		Common::String desc = buf;
 
 		in->seek(TeenAgent::saveStateSize);
+
+		uint32 tag = in->readUint32BE();
+		if (tag == MKTAG('T', 'N', 'G', 'T')) {
+			// Skip save version
+			in->skip(1);
+
+			// Skip scene object data
+			uint32 size = in->readUint32LE();
+			in->skip(size);
+		} else {
+			in->seek(-4, SEEK_CUR);
+		}
+
 		if (!Graphics::checkThumbnailHeader(*in))
 			return SaveStateDescriptor(this, slot, desc);
 
@@ -157,7 +186,64 @@ public:
 
 		return ssd;
 	}
+
+		Common::KeymapArray initKeymaps(const char *target) const override;
 };
+
+Common::KeymapArray TeenAgentMetaEngine::initKeymaps(const char *target) const {
+	using namespace Common;
+	using namespace TeenAgent;
+
+	Keymap *engineKeyMap = new Keymap(Keymap::kKeymapTypeGame, "teenagent-default", _("Default keymappings"));
+
+	Common::Action *act;
+
+	act = new Common::Action(kStandardActionLeftClick, _("Move / Examine"));
+	act->setLeftClickEvent();
+	act->addDefaultInputMapping("MOUSE_LEFT");
+	act->addDefaultInputMapping("JOY_A");
+	engineKeyMap->addAction(act);
+
+	act = new Common::Action(kStandardActionRightClick, _("Interact"));
+	act->setRightClickEvent();
+	act->addDefaultInputMapping("MOUSE_RIGHT");
+	act->addDefaultInputMapping("JOY_B");
+	engineKeyMap->addAction(act);
+
+	act = new Common::Action("SKIPDLG", _("Skip dialog"));
+	act->setCustomEngineActionEvent(kActionSkipDialog);
+	act->addDefaultInputMapping("MOUSE_LEFT");
+	act->addDefaultInputMapping("MOUSE_RIGHT");
+	act->addDefaultInputMapping("SPACE");
+	act->addDefaultInputMapping("JOY_Y");
+	engineKeyMap->addAction(act);
+
+	act = new Common::Action("CLOSEINV", _("Close inventory"));
+	act->setCustomEngineActionEvent(kActionCloseInventory);
+	act->addDefaultInputMapping("ESCAPE");
+	engineKeyMap->addAction(act);
+
+	act = new Common::Action("TOGGLEINV", _("Toggle inventory"));
+	act->setCustomEngineActionEvent(kActionToggleInventory);
+	act->addDefaultInputMapping("RETURN");
+	act->addDefaultInputMapping("JOY_X");
+	engineKeyMap->addAction(act);
+
+	act = new Common::Action("SKIPINTRO", _("Skip intro"));
+	act->setCustomEngineActionEvent(kActionSkipIntro);
+	act->addDefaultInputMapping("ESCAPE");
+	act->addDefaultInputMapping("JOY_B");
+	engineKeyMap->addAction(act);
+
+	// I18N: Speeds up the game to twice its normal speed
+	act = new Common::Action("FASTMODE", _("Toggle fast mode"));
+	act->setCustomEngineActionEvent(kActionFastMode);
+	act->addDefaultInputMapping("C+f");
+	act->addDefaultInputMapping("JOY_UP");
+	engineKeyMap->addAction(act);
+
+	return Keymap::arrayOf(engineKeyMap);
+}
 
 #if PLUGIN_ENABLED_DYNAMIC(TEENAGENT)
 	REGISTER_PLUGIN_DYNAMIC(TEENAGENT, PLUGIN_TYPE_ENGINE, TeenAgentMetaEngine);

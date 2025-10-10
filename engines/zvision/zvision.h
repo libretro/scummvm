@@ -23,14 +23,14 @@
 #ifndef ZVISION_ZVISION_H
 #define ZVISION_ZVISION_H
 
-#include "common/random.h"
 #include "common/events.h"
+#include "common/random.h"
+#include "common/system.h"
 #include "engines/engine.h"
 #include "graphics/pixelformat.h"
 #include "gui/debugger.h"
 #include "zvision/detection.h"
 #include "zvision/core/clock.h"
-#include "zvision/file/search_manager.h"
 
 namespace Common {
 class Keymap;
@@ -59,6 +59,7 @@ class ScriptManager;
 class RenderManager;
 class CursorManager;
 class StringManager;
+class FileManager;
 class SaveManager;
 class RLFDecoder;
 class MenuManager;
@@ -76,7 +77,7 @@ struct ScreenLayout {
 };
 
 // NB Footage of original DOS Nemesis engine indicates playfield was centrally placed on screen.
-// Subtitle scripts, however, suggest playfield was higher up, otherwise they run off the bottom of the screen.  
+// Subtitle scripts, however, suggest playfield was higher up, otherwise they run off the bottom of the screen.
 // This could just be an error in the scripts or an artefact of the original game's development, so we will continue to use as-released central placement.
 
 static const ScreenLayout nemesisLayout {
@@ -142,9 +143,9 @@ private:
 	RenderManager *_renderManager;
 	CursorManager *_cursorManager;
 	StringManager *_stringManager;
-	SearchManager *_searchManager;
 	TextRenderer *_textRenderer;
 	MidiManager *_midiManager;
+	FileManager *_fileManager;
 	SaveManager *_saveManager;
 	MenuManager *_menu;
 	SubtitleManager *_subtitleManager;
@@ -190,14 +191,14 @@ public:
 	CursorManager *getCursorManager() const {
 		return _cursorManager;
 	}
+	FileManager *getFileManager() const {
+		return _fileManager;
+	}
 	SaveManager *getSaveManager() const {
 		return _saveManager;
 	}
 	StringManager *getStringManager() const {
 		return _stringManager;
-	}
-	SearchManager *getSearchManager() const {
-		return _searchManager;
 	}
 	TextRenderer *getTextRenderer() const {
 		return _textRenderer;
@@ -270,7 +271,7 @@ public:
 	void saveSettings();
 
 	bool quit(bool askFirst = true, bool streaming = false);
-	
+
 	// Engine features
 	bool hasFeature(EngineFeature f) const override;
 	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
@@ -278,9 +279,16 @@ public:
 	Common::Error loadGameState(int slot) override;
 	Common::Error saveGameState(int slot, const Common::String &desc, bool isAutosave = false) override;
 
+	// Used to update cursor on a location change
+	void onMouseMove() {
+		onMouseMove(_system->getEventManager()->getMousePos());
+	}
+
 private:
 	void initialize();
 	void initFonts();
+
+	void initializePath(const Common::FSNode &gamePath) override;
 
 	void parseStrFile(const Common::String &fileName);
 
@@ -295,8 +303,6 @@ private:
 	void pushKeyToCheatBuf(uint8 key);
 	bool checkCode(const char *code);
 	uint8 getBufferedKey(uint8 pos);
-
-	double getVobAmplification(Common::String fileName) const;
 };
 
 } // End of namespace ZVision

@@ -40,9 +40,12 @@ public:
 
 	bool hasField(int field) override;
 	Datum getField(int field) override;
-	bool setField(int field, const Datum &value) override;
+	void setField(int field, const Datum &value) override;
 
 	Common::String formatInfo() override;
+
+	uint32 getCastDataSize() override;
+	void writeCastData(Common::SeekableWriteStream *writeStream) override;
 
 	ShapeType _shapeType;
 	uint16 _pattern;

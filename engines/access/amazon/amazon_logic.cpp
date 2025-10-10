@@ -158,7 +158,7 @@ void CampScene::mWhileDoOpen() {
 
 		events.pollEventsAndWait();
 
-		if (_vm->_events->isKeyMousePressed()) {
+		if (_vm->_events->isKeyActionMousePressed()) {
 			_skipStart = true;
 			_vm->_midi->newMusic(10, 1);
 			break;
@@ -167,7 +167,7 @@ void CampScene::mWhileDoOpen() {
 		if (_xCam > 680) {
 			events._vbCount = 125;
 
-			while (!_vm->shouldQuit() && !events.isKeyMousePressed() && events._vbCount > 0) {
+			while (!_vm->shouldQuit() && !events.isKeyActionMousePressed() && events._vbCount > 0) {
 				events.pollEventsAndWait();
 			}
 			break;
@@ -181,7 +181,7 @@ void CampScene::mWhileDoOpen() {
 	_vm->freeCells();
 	_vm->_oldRects.clear();
 	_vm->_newRects.clear();
-	_vm->_numAnimTimers = 0;
+	_vm->_animation->clearTimers();
 	_vm->_images.clear();
 
 	if (_vm->isCD()) {
@@ -200,7 +200,7 @@ void CampScene::mWhileDoOpen() {
 		_vm->freeCells();
 		_vm->_oldRects.clear();
 		_vm->_newRects.clear();
-		_vm->_numAnimTimers = 0;
+		_vm->_animation->clearTimers();
 		_vm->_images.clear();
 	}
 }
@@ -385,7 +385,7 @@ void Opening::doTitle() {
 		screen.forceFadeIn();
 		_vm->_midi->newMusic(1, 0);
 		_vm->_events->_vbCount = 950;
-		while (!_vm->shouldQuit() && (_vm->_events->_vbCount > 0) && !_vm->_events->isKeyMousePressed()) {
+		while (!_vm->shouldQuit() && (_vm->_events->_vbCount > 0) && !_vm->_events->isKeyActionMousePressed()) {
 			_vm->_events->pollEventsAndWait();
 		}
 
@@ -398,7 +398,7 @@ void Opening::doTitle() {
 
 		_vm->_midi->newMusic(1, 1);
 		_vm->_midi->setLoop(false);
-		_vm->_events->zeroKeys();
+		_vm->_events->zeroKeysActions();
 	}
 
 	_vm->_buffer1.create(_vm->_screen->w + TILE_WIDTH, _vm->_screen->h);
@@ -419,7 +419,7 @@ void Opening::doTitle() {
 	_pCount = 0;
 
 	while (!_vm->shouldQuit()) {
-		if (_vm->_events->isKeyMousePressed()) {
+		if (_vm->_events->isKeyActionMousePressed()) {
 			if (_vm->_events->_rightButton)
 				_skipStart = true;
 			_vm->_room->clearRoom();
@@ -615,7 +615,7 @@ void Plane::doFallCell() {
 	if (_vm->_scaleI <= 20)
 		return;
 
-	SpriteFrame *frame = _vm->_objectsTable[20]->getFrame(_planeCount / 6);
+	const SpriteFrame *frame = _vm->_objectsTable[20]->getFrame(_planeCount / 6);
 	Common::Rect r(115, 11, 115 + _vm->_screen->_scaleTable1[frame->w],
 		11 + _vm->_screen->_scaleTable1[frame->h]);
 	_vm->_buffer2.sPlotF(frame, r);
@@ -678,7 +678,7 @@ void Plane::mWhileFly() {
 	_xCount = 0;
 	_position = Common::Point(20, 29);
 
-	while (!_vm->shouldQuit() && !events.isKeyMousePressed() &&
+	while (!_vm->shouldQuit() && !events.isKeyActionMousePressed() &&
 		((_vm->_scrollCol + screen._vWindowWidth) != _vm->_room->_playFieldWidth)) {
 		events._vbCount = 4;
 		_vm->_scrollX += player._scrollAmount;
@@ -728,7 +728,7 @@ void Plane::mWhileFall() {
 	_xCount = 0;
 	_planeCount = 0;
 
-	while (!_vm->shouldQuit() && !events.isKeyMousePressed() &&
+	while (!_vm->shouldQuit() && !events.isKeyActionMousePressed() &&
 		(_vm->_scrollCol + screen._vWindowWidth != _vm->_room->_playFieldWidth)) {
 		events._vbCount = 4;
 		_vm->_scrollX += _vm->_player->_scrollAmount;
@@ -901,7 +901,7 @@ void Jungle::mWhileJWalk() {
 		_pan[i]._pObjXl = _pan[i]._pObjYl = 0;
 	}
 
-	while (!_vm->shouldQuit() && !events.isKeyMousePressed() && (player._xFlag != 2)) {
+	while (!_vm->shouldQuit() && !events.isKeyActionMousePressed() && (player._xFlag != 2)) {
 		_vm->_images.clear();
 		events._vbCount = 6;
 
@@ -930,7 +930,7 @@ void Jungle::mWhileJWalk2() {
 
 	initJWalk2();
 
-	while (!_vm->shouldQuit() && !_vm->_events->isKeyMousePressed() &&
+	while (!_vm->shouldQuit() && !_vm->_events->isKeyActionMousePressed() &&
 		(_vm->_scrollCol + screen._vWindowWidth) != _vm->_room->_playFieldWidth) {
 		_vm->_images.clear();
 		_vm->_events->_vbCount = 6;
@@ -1316,7 +1316,7 @@ void Cast::doCast(int param1) {
 
 	_vm->_oldRects.clear();
 	_vm->_newRects.clear();
-	_vm->_numAnimTimers = 0;
+	_vm->_animation->clearTimers();
 
 	_vm->_midi->newMusic(58, 0);
 	screen.forceFadeIn();
@@ -1330,10 +1330,10 @@ void Cast::doCast(int param1) {
 		_vm->copyBlocks();
 
 		for (int idx = 0; idx < 5 && !_vm->shouldQuit() &&
-				!_vm->_events->isKeyMousePressed(); ++idx)
+				!_vm->_events->isKeyActionMousePressed(); ++idx)
 			_vm->_events->pollEventsAndWait();
 
-		if (_vm->_events->isKeyMousePressed())
+		if (_vm->_events->isKeyActionMousePressed())
 			break;
 
 		if (_yCam < -7550) {
@@ -1349,7 +1349,7 @@ void Cast::doCast(int param1) {
 	_vm->freeCells();
 	_vm->_oldRects.clear();
 	_vm->_newRects.clear();
-	_vm->_numAnimTimers = 0;
+	_vm->_animation->clearTimers();
 	_vm->_images.clear();
 	screen.forceFadeOut();
 
@@ -1792,7 +1792,7 @@ void River::mWhileDownRiver() {
 	_vm->_timers[4]._initTm = 350;
 	++_vm->_timers[4]._flag;
 
-	while (!_vm->shouldQuit() && !_vm->_events->isKeyMousePressed() &&
+	while (!_vm->shouldQuit() && !_vm->_events->isKeyActionMousePressed() &&
 		(_vm->_scrollCol + screen._vWindowWidth != _vm->_room->_playFieldWidth)) {
 		_vm->_images.clear();
 		_vm->_events->_vbCount = 6;
@@ -2181,7 +2181,6 @@ void Ant::doAnt() {
 						idx = antHandleRight(idx, buf);
 				} else {
 					// Handle movement based on keyboard keys
-					buf = Amazon::PITWALK;
 					if (_vm->_player->_move == UP)
 						idx = antHandleStab(idx, buf);
 					else if (_vm->_player->_move == LEFT)

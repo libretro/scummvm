@@ -43,6 +43,7 @@ enum AssetType {
 	kAssetTypeSprite = 0x000e, // SPR
 	kAssetTypeLKZazu = 0x000f,
 	kAssetTypeLKConstellations = 0x0010,
+	kAssetTypeDocument = 0x0011,
 	kAssetTypeImageSet = 0x001d,
 	kAssetTypeCursor = 0x000c, // CSR
 	kAssetTypePrinter = 0x0019, // PRT
@@ -134,8 +135,8 @@ public:
 	virtual void initFromParameterStream(Chunk &chunk);
 	virtual void readParameter(Chunk &chunk, AssetHeaderSectionType paramType);
 
-	// These are not pure virtual so if an asset doesnʻt read any chunks or
-	// subfiles it doesnʻt need to just implement these with an error message.
+	// These are not pure virtual so if an asset doesn't read any chunks or
+	// subfiles it doesn't need to just implement these with an error message.
 	virtual void readChunk(Chunk &chunk);
 	virtual void readSubfile(Subfile &subfile, Chunk &chunk);
 
@@ -167,20 +168,19 @@ class SpatialEntity : public Asset {
 public:
 	SpatialEntity(AssetType type) : Asset(type) {};
 
-	virtual void redraw(Common::Rect &rect) { return; }
+	virtual void draw(const Common::Array<Common::Rect> &dirtyRegion) { return; }
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
+	virtual void readParameter(Chunk &chunk, AssetHeaderSectionType paramType) override;
 
 	virtual bool isSpatialActor() const override { return true; }
 	virtual bool isVisible() const { return _isVisible; }
-
-	virtual void readParameter(Chunk &chunk, AssetHeaderSectionType paramType) override;
-
-	Common::Rect getBbox() const { return _boundingBox; }
+	virtual Common::Rect getBbox() const { return _boundingBox; }
 	int zIndex() const { return _zIndex; }
 
 protected:
 	uint _stageId = 0;
 	int _zIndex = 0;
+	double _dissolveFactor = 0.0;
 	Common::Rect _boundingBox;
 	bool _isVisible = false;
 	bool _hasTransparency = false;
@@ -191,6 +191,7 @@ protected:
 	void setBounds(const Common::Rect &bounds);
 	void setZIndex(int zIndex);
 
+	virtual void setDissolveFactor(double dissolveFactor);
 	virtual void invalidateLocalBounds();
 	virtual void invalidateLocalZIndex();
 };

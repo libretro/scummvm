@@ -26,6 +26,7 @@
 
 namespace Common {
 	class ReadStreamEndian;
+	class MemoryWriteStream;
 	struct Rect;
 	class SeekableReadStreamEndian;
 }
@@ -55,6 +56,7 @@ class ShapeCastMember;
 class TextCastMember;
 class PaletteCastMember;
 class SoundCastMember;
+struct ConfigChunk;
 
 typedef Common::HashMap<byte, byte> CharMap;
 typedef Common::HashMap<uint16, uint16> FontSizeMap;
@@ -103,6 +105,16 @@ public:
 	void loadLingoContext(Common::SeekableReadStreamEndian &stream);
 	void loadExternalSound(Common::SeekableReadStreamEndian &stream);
 	void loadSord(Common::SeekableReadStreamEndian &stream);
+	bool importFileInto(int castId, const Common::Path &path);
+
+	void saveConfig(Common::SeekableWriteStream *writeStream, uint32 offset);
+	void saveCastData(Common::SeekableWriteStream *writeStream, Resource *res);
+	void saveCastData();
+	void writeCastInfo(Common::SeekableWriteStream *writeStream, uint32 castId);
+	uint32 getCastInfoSize(uint32 castId);
+	uint32 getCastInfoStringLength(uint32 stringIndex, CastMemberInfo *ci);
+
+	uint32 getConfigSize();
 
 	int getCastSize();
 	int getCastMaxID();
@@ -115,6 +127,7 @@ public:
 	CastMember *getCastMember(int castId, bool load = true);
 	CastMember *getCastMemberByNameAndType(const Common::String &name, CastType type);
 	CastMember *getCastMemberByScriptId(int scriptId);
+	int getCastIdByScriptId(uint32 scriptId) const;
 	CastMemberInfo *getCastMemberInfo(int castId);
 	const Stxt *getStxt(int castId);
 	Common::String getLinkedPath(int castId);
@@ -142,9 +155,10 @@ private:
 	bool readFXmpLine(Common::SeekableReadStreamEndian &stream);
 	void loadVWTL(Common::SeekableReadStreamEndian &stream);
 
+	uint32 computeChecksum();
+
 public:
 	Archive *_castArchive;
-	uint16 _version;
 	Common::Platform _platform;
 	uint16 _castLibID;
 	uint16 _libResourceId;
@@ -163,19 +177,76 @@ public:
 	Common::HashMap<uint, const RTE1 *> _loadedRTE1s;
 	Common::HashMap<uint, const RTE2 *> _loadedRTE2s;
 	uint16 _castIDoffset;
-	uint16 _castArrayStart;
-	uint16 _castArrayEnd;
 
 	Common::Rect _movieRect;
-	uint16 _stageColor;
-	CastMemberID _defaultPalette;
-	int16 _frameRate;
 	TilePatternEntry _tiles[kNumBuiltinTiles];
 
 	LingoArchive *_lingoArchive;
 
 	LingoDec::ScriptContext *_lingodec = nullptr;
 	LingoDec::ChunkResolver *_chunkResolver = nullptr;
+
+	/* Config Data to be saved */
+	/*  0 */ uint16 _len;
+	/*  2 */ uint16 _fileVersion;
+	/*  4, 6, 8, 10 */ Common::Rect _checkRect;
+	/* 12 */ uint16 _castArrayStart;
+	/* 14 */ uint16 _castArrayEnd;
+	/* 16 */ byte _readRate;
+	/* 17 */ byte _lightswitch;
+
+	// Director 6 and below
+		/* 18 */ int16 _unk1;	// Mentioned in ProjectorRays as preD7field11
+
+	// Director 7 and above
+	// Currently not supporting Director 7
+		// /* 18 */ int8 D7stageColorG;
+		// /* 19 */ int8 D7stageColorB;
+
+	/* 20 */ uint16 _commentFont;
+	/* 22 */ uint16 _commentSize;
+	/* 24 */ uint16 _commentStyle;
+
+	// Director 6 and below
+		/* 26 */ uint16 _stageColor;
+	// Director 7 and above
+	// Currently not supporting Director 7
+		// /* 26 */ uint8 D7stageColorIsRGB;
+		// /* 27 */ uint8 D7stageColorR;
+
+	/* 28 */ uint16 _bitdepth;
+	/* 30 */ uint8 _field17;
+	/* 31 */ uint8 _field18;
+	/* 32 */ int32 _field19;
+	/* 36 */ int16 _version;
+	/* 38 */ int16 _movieDepth;
+	/* 40 */ int32 _field22;
+	/* 44 */ int32 _field23;
+	/* 48 */ int32 _field24;
+	/* 52 */ int8 _field25;
+	/* 53 */ uint8 _field26;
+	/* 54 */ int16 _frameRate;
+	/* 56 */ int16 _platformID;
+	/* 58 */ int16 _protection;
+	/* 60 */ int32 _field29;
+	/* 64 */ uint32 _checksum;
+	/* 68 */ uint16 _field30;	// Marked as remnants in ProjectorRays
+	/* 70 */ uint16 _defPaletteNum = 0; // _defaultPalette before D5, unused later
+	/* 72 */ uint32 _chunkBaseNum = 0;
+	/* 76 */ CastMemberID _defaultPalette;
+
+	/****** D6.0-D8.5 *******/
+	/* 80 */ int8 _netUnk1 = 0;
+	/* 81 */ int8 _netUnk2 = 0;
+	/* 82 */ int16 _netPreloadNumFrames = 0;
+
+	/****** post D9-D10 *******/
+	/* 84 */ uint32 _windowFlags = 0;
+	/* 88 */ CastMemberID _windowIconId;
+	/* 92 */ CastMemberID _windowMaskId;
+	/* 96 */ CastMemberID _windowDragRegionMaskId;
+
+	/* 100 */ // End of config
 
 private:
 	DirectorEngine *_vm;
@@ -192,6 +263,7 @@ private:
 	Common::HashMap<uint16, CastMemberInfo *> _castsInfo;
 	Common::HashMap<Common::String, int, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _castsNames;
 	Common::HashMap<uint16, int> _castsScriptIds;
+
 };
 
 } // End of namespace Director

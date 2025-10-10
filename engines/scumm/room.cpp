@@ -154,6 +154,15 @@ void ScummEngine::startScene(int room, Actor *a, int objectNr) {
 	_currentRoom = room;
 	VAR(VAR_ROOM) = room;
 
+#ifdef USE_TTS
+	if (_game.id == GID_PASS && _roomResource == 2 && room != _roomResource) {
+		for (uint index = 0; index < ARRAYSIZE(_passHelpButtons); ++index) {
+			_passHelpButtons[index].clear();
+		}
+		_voicePassHelpButtons = false;
+	}
+#endif
+
 	if (room >= 0x80 && _game.version < 7 && _game.heversion <= 71)
 		_roomResource = _resourceMapper[room & 0x7F];
 	else
@@ -227,6 +236,14 @@ void ScummEngine::startScene(int room, Actor *a, int objectNr) {
 		}
 	}
 
+	// WORKAROUND for bug #16111
+	// Due to a faulty box flag, ZAK FM-TOWNS will freeze when trying to load a game saved in
+	// room 138, but also when pressing F5 while in that room and then clicking the PLAY button
+	// in the save menu. The latter case is the reason why I put the workaround in here, and
+	// not just in ScummEngine_v3::scummLoop_handleSaveLoad() where it would be less visible.
+	if (_game.id == GID_ZAK && _game.platform == Common::kPlatformFMTowns && a == nullptr && room == 138)
+		setBoxFlags(4, 0);
+
 	showActors();
 
 	_egoPositioned = false;
@@ -234,7 +251,6 @@ void ScummEngine::startScene(int room, Actor *a, int objectNr) {
 #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
 	towns_resetPalCycleFields();
 #endif
-
 	runEntryScript();
 	if (_game.version >= 1 && _game.version <= 2) {
 		runScript(5, 0, 0, nullptr);

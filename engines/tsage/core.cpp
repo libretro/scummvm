@@ -335,7 +335,7 @@ void ObjectMover::dispatch() {
 	}
 
 	_sceneObject->_regionIndex = _sceneObject->checkRegion(currPos);
-	if (!_sceneObject->_regionIndex) {
+	if (_sceneObject->_regionIndex == 0) {
 		_sceneObject->setPosition(currPos, yDiff);
 		_sceneObject->getHorizBounds();
 
@@ -1766,7 +1766,7 @@ void SceneItem::display(int resNum, int lineNum, ...) {
 				// Set secondary fg color
 				int v = va_arg(va, int);
 				g_globals->_sceneText._color3 = v;
-				g_globals->gfxManager()._font._colors.foreground = v;
+				g_globals->gfxManager()._font._colors2.foreground = v;
 				break;
 			}
 			case SET_POS_MODE:
@@ -3034,16 +3034,35 @@ void SceneObjectList::draw() {
 	Common::Array<SceneObject *> objList;
 	int paneNum = 0;
 
+	// This code ensures that palette entry 0 is set to the black color
+	// and entry 255 is set to the white.
+	// This fixes a graphical artifact glitch in BlueForce intro scene 210 (Credits - Car Training)
+	// where the car would leave black spots on the screen. The bug was caused by the earlier scene (160)
+	// which uses a fader. Faders leave the game palette in a state that simply loading another palette does not fix.
+	BF_GLOBALS._scenePalette.setEntry(0, 0, 0, 0); // Black
+	BF_GLOBALS._scenePalette.setPalette(0, 1);
+
+	BF_GLOBALS._scenePalette.setEntry(255, 0xff, 0xff, 0xff);  // White
+	BF_GLOBALS._scenePalette.setPalette(255, 1);
+
+	g_globals->_sceneManager._scene->_sceneBounds.left &= ~3;
+	g_globals->_sceneManager._scene->_sceneBounds.right &= ~3;
+	g_globals->_sceneOffset.x &= ~3;
+
 	if (_objList.size() == 0) {
 		// Alternate draw mode
 
-		if (g_globals->_paneRefreshFlag[paneNum] == 1) {
+		if (g_globals->_paneRefreshFlag[paneNum] != 0) {
 			// Load the background
-			g_globals->_sceneManager._scene->refreshBackground(0, 0);
+			if (g_globals->_sceneManager._loadMode == 1) {
+				g_globals->_sceneManager._scene->refreshBackground(0, 0);
+				g_globals->_sceneManager._loadMode = 0;
+			}
 
 			Rect tempRect = g_globals->_sceneManager._scene->_sceneBounds;
 			tempRect.translate(-g_globals->_sceneOffset.x, -g_globals->_sceneOffset.y);
 			ScenePalette::changeBackground(tempRect, g_globals->_sceneManager._fadeMode);
+			g_globals->_paneRefreshFlag[paneNum] = 0;
 		} else {
 			g_globals->_paneRegions[CURRENT_PANENUM].draw();
 		}
@@ -3083,9 +3102,18 @@ void SceneObjectList::draw() {
 		}
 
 		if (g_globals->_sceneManager._sceneLoadCount > 0) {
-			--g_globals->_sceneManager._sceneLoadCount;
-			g_globals->_sceneManager._scene->loadBackground(g_globals->_sceneManager._sceneBgOffset.x,
-				g_globals->_sceneManager._sceneBgOffset.y);
+			// HACK Checking the value of g_globals->_paneRefreshFlag[1] is done so that
+			// the _sceneBounds are not updated faster than the scroller is "moving" resulting in stutters while scrolling
+			// The g_globals->_paneRefreshFlag[1] is unused by ScummVM otherwise, so it's safe to make use of it here.
+			// However, there's a broader issue with the engine doing things faster than it should eg. for fading as well,
+			// and resolving that issue could render this hack unnecessary.
+			if (g_globals->_paneRefreshFlag[1] <= 0) {
+				--g_globals->_sceneManager._sceneLoadCount;
+				g_globals->_sceneManager._scene->loadBackground(g_globals->_sceneManager._sceneBgOffset.x,
+					g_globals->_sceneManager._sceneBgOffset.y);
+			} else {
+				--g_globals->_paneRefreshFlag[1];
+			}
 		}
 
 		// Set up the flag mask. Currently, paneNum is always set to 0, so the check is meaningless
@@ -3119,7 +3147,7 @@ void SceneObjectList::draw() {
 		checkIntersection(objList, objList.size(), CURRENT_PANENUM);
 		sortList(objList);
 
-		if (g_globals->_paneRefreshFlag[paneNum] == 1) {
+		if (g_globals->_sceneManager._loadMode == 1) {
 			// Load the background
 			g_globals->_sceneManager._scene->refreshBackground(0, 0);
 		}
@@ -3188,6 +3216,7 @@ void SceneObjectList::draw() {
 					redrawFlag = true;
 				}
 			}
+			g_globals->_sceneManager._loadMode = 0;
 		}
 	}
 }
@@ -3555,6 +3584,9 @@ void Player::enableControl() {
 	case GType_BlueForce:
 	case GType_Ringworld2:
 		cursor = g_globals->_events.getCursor();
+		// Avoid keeping a CURSOR_NONE cursor (which is an issue mainly when jumping to scenes via debugger)
+		if (cursor == CURSOR_NONE)
+			g_globals->_events.setCursor(CURSOR_WALK);
 		g_globals->_events.setCursor(cursor);
 
 		if (g_vm->getGameID() == GType_BlueForce && T2_GLOBALS._uiElements._active)
@@ -4442,19 +4474,24 @@ void SceneHandler::process(Event &event) {
 			g_globals->_events.setCursorFromFlag();
 	}
 
-	// Check for displaying right-click dialog
-	if ((event.eventType == EVENT_BUTTON_DOWN) && (event.btnState == BTNSHIFT_RIGHT) &&
-			g_globals->_player._uiEnabled &&
-			((g_vm->getGameID() != GType_Ringworld2) || (R2_GLOBALS._sceneManager._sceneNumber != 1330))) {
-		g_globals->_game->rightClick();
+	if (!event.handled) {
+		// Check for displaying right-click dialog
+		if ((event.eventType == EVENT_BUTTON_DOWN) && (event.btnState == BTNSHIFT_RIGHT) &&
+				g_globals->_player._uiEnabled &&
+				((g_vm->getGameID() != GType_Ringworld2) || (R2_GLOBALS._sceneManager._sceneNumber != 1330)) &&
+				((g_vm->getGameID() != GType_BlueForce) || (R2_GLOBALS._sceneManager._sceneNumber != 100))) {
+			g_globals->_game->rightClick();
 
-		event.handled = true;
-		return;
+			event.handled = true;
+			return;
+		}
 	}
 
-	// If there is an active scene, pass the event to it
-	if (g_globals->_sceneManager._scene)
-		g_globals->_sceneManager._scene->process(event);
+	if (!event.handled) {
+		// If there is an active scene, pass the event to it
+		if (g_globals->_sceneManager._scene)
+			g_globals->_sceneManager._scene->process(event);
+	}
 
 	if (!event.handled) {
 		// Separate check for F5 - Save key

@@ -62,6 +62,8 @@ Access
      -
    * - Paul Gilbert
      -
+   * - Matthew Duggan
+     -
 
 ADL
 ^^^
@@ -202,6 +204,15 @@ AGS
      - AGS
    * - Berian Williams
      - AgsCreditz
+
+Alcachofa
+^^^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Hermann Noll
+     -
 
 Asylum
 ^^^^^^
@@ -1398,6 +1409,15 @@ Toon
    * - Sylvain Dupont
      -
 
+Tot
+^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Gabriel Sanmartín
+     -
+
 Touché
 ^^^^^^^
 
@@ -1553,6 +1573,8 @@ WAGE
 .. list-table::
    :widths: 35 65
 
+   * - Alikhan Balpykov
+     -
    * - Eugene Sandulenko
      -
 
@@ -1594,6 +1616,8 @@ Z-Vision
      -
    * - Anton Yarcev
      -
+   * - Thomas N McEwan
+     - Widescreen mod, HQ panoramas, 3D audio enhancement
 
 Backend Teams
 *************

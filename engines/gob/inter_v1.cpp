@@ -772,7 +772,7 @@ void Inter_v1::o1_loadCursor(OpFuncParams &params) {
 	int16 height = resource->getHeight();
 	_vm->_draw->adjustCoords(0, &width, &height);
 
-	_vm->_video->drawPackedSprite(resource->getData(),
+	_vm->_video->drawPackedSprite(resource->getData(), resource->getSize(),
 			width, height,
 			index * _vm->_draw->_cursorWidth, 0, 0, *_vm->_draw->_cursorSprites);
 	_vm->_draw->_cursorAnimLow[index] = 0;
@@ -1292,7 +1292,7 @@ void Inter_v1::o1_palLoad(OpFuncParams &params) {
 			_vm->_draw->_vgaPalette[0].blue  = 0;
 		}
 
-		if (_vm->getGameType() == kGameTypeAdibou2) {
+		if (_vm->getGameType() == kGameTypeAdibou2 || _vm->getGameType() == kGameTypeAdi4) {
 			_vm->_draw->_vgaPalette[0].red = 0;
 			_vm->_draw->_vgaPalette[0].green = 0;
 			_vm->_draw->_vgaPalette[0].blue = 0;
@@ -1313,7 +1313,7 @@ void Inter_v1::o1_palLoad(OpFuncParams &params) {
 	}
 
 	if (!_vm->_draw->_applyPal) {
-		if (_vm->getGameType() == kGameTypeAdibou2) {
+		if (_vm->getGameType() == kGameTypeAdibou2 || _vm->getGameType() == kGameTypeAdi4) {
 			if (_vm->_global->_pPaletteDesc)
 				_vm->_video->setFullPalette(_vm->_global->_pPaletteDesc);
 			else
@@ -1361,22 +1361,31 @@ void Inter_v1::o1_keyFunc(OpFuncParams &params) {
 	int16 cmd = _vm->_game->_script->readInt16();
 	int16 key;
 
+#ifdef USE_TTS
+	_vm->_game->_hotspots->voiceUnassignedHotspots();
+#endif
 	switch (cmd) {
 	case 0:
 		_vm->_draw->_showCursor &= ~2;
 		_vm->_util->longDelay(1);
 		key = _vm->_game->_hotspots->check(0, 0);
 		storeKey(key);
+#ifdef USE_TTS
+		_vm->stopTextToSpeech();
+		_vm->_game->_hotspots->clearHotspotTTSText();
+#endif
 
 		_vm->_util->clearKeyBuf();
 		break;
 
 	case -1:
-		if (_vm->getGameType() != kGameTypeAdibou2)
+		if (_vm->getGameType() != kGameTypeAdibou2 && _vm->getGameType() != kGameTypeAdi4)
 			break;
 		// fall through
 	case 1:
-		if (_vm->getGameType() != kGameTypeFascination && _vm->getGameType() != kGameTypeAdibou2)
+		if (_vm->getGameType() != kGameTypeFascination &&
+				_vm->getGameType() != kGameTypeAdibou2 &&
+				_vm->getGameType() != kGameTypeAdi4)
 			_vm->_util->forceMouseUp(true);
 
 		// FIXME This is a hack to fix an issue with "text" tool in Adibou2 paint game.
@@ -1385,16 +1394,25 @@ void Inter_v1::o1_keyFunc(OpFuncParams &params) {
 		// the key buffer, and the loop continues.
 		// Strangely in the original game it seems that the event is always caught by the
 		// second keyFunc.
-		if (_vm->getGameType() == kGameTypeAdibou2
-			&&
-			(_vm->_game->_script->pos() == 18750 || _vm->_game->_script->pos() == 18955)
-			&&
-			_vm->isCurrentTot("palette.tot"))
+		if (_vm->getGameType() == kGameTypeAdibou2 &&
+				(_vm->_game->_script->pos() == 18750 || _vm->_game->_script->pos() == 18955) &&
+				_vm->isCurrentTot("palette.tot"))
 			break;
 
 		key = _vm->_game->checkKeys(&_vm->_global->_inter_mouseX,
 				&_vm->_global->_inter_mouseY, &_vm->_game->_mouseButtons, 0);
 		storeKey(key);
+#ifdef USE_TTS
+		if (key) {
+			// After a key is pressed with the notepad open, no longer voice the notepad. This prevents very awkward voicing
+			// as the user types
+			if (_vm->getGameType() == kGameTypeWeen && _vm->isCurrentTot("edit.tot")) {
+				_vm->_weenVoiceNotepad = false;
+			}
+
+			_vm->stopTextToSpeech();
+		}
+#endif
 		break;
 
 	case 2:
@@ -1411,7 +1429,7 @@ void Inter_v1::o1_keyFunc(OpFuncParams &params) {
 			_vm->_util->delay(cmd);
 			_noBusyWait = true;
 		} else {
-			if (_vm->getGameType() == kGameTypeAdibou2) {
+			if (_vm->getGameType() == kGameTypeAdibou2 || _vm->getGameType() == kGameTypeAdi4) {
 				// The engine calls updateLive() every 100ms while waiting there
 				while (cmd > 100) {
 					_vm->_vidPlayer->updateLive();
@@ -1656,6 +1674,13 @@ void Inter_v1::o1_copySprite(OpFuncParams &params) {
 		warning("o1_copySprite(): Invalid destination surface index %d", _vm->_draw->_destSurface);
 		return;
 	}
+
+#ifdef USE_TTS
+	_vm->_game->_hotspots->adjustHotspotTTSTextRect(_vm->_draw->_spriteLeft, _vm->_draw->_spriteTop,
+											_vm->_draw->_spriteLeft + _vm->_draw->_spriteRight - 1, 
+											_vm->_draw->_spriteTop + _vm->_draw->_spriteBottom - 1,
+											_vm->_draw->_destSpriteX, _vm->_draw->_destSpriteY, _vm->_draw->_sourceSurface);
+#endif
 
 	_vm->_draw->spriteOperation(DRAW_BLITSURF);
 }

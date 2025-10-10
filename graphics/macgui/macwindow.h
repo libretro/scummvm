@@ -57,7 +57,12 @@ enum WindowClick {
 	kBorderCloseButton,
 	kBorderInner,
 	kBorderBorder,
-	kBorderResizeButton
+	kBorderResizeButton,
+	kBorderActivate,
+	kBorderDeactivate,
+	kBorderDragged,
+	kBorderResized,
+	kBorderMaximizeButton,
 };
 
 enum {
@@ -171,6 +176,12 @@ public:
 	 */
 	void setCallback(bool (*callback)(WindowClick, Common::Event &, void *), void *data) { _callback = callback; _dataPtr = data; }
 
+	/**
+	 * Mutator to change the draggable state of the window.
+	 * @param draggable Target state.
+	 */
+	void setDraggable(bool draggable) { _draggable = draggable; }
+
 protected:
 	int _id;
 	WindowType _type;
@@ -202,6 +213,13 @@ public:
 	 * @param wm See BaseMacWindow.
 	 */
 	MacWindow(int id, bool scrollable, bool resizable, bool editable, MacWindowManager *wm);
+
+	/**
+	 * Copy constructor for MacWindow
+	 * Needs defining because ManagedSurface has a deprecated default copy constructor
+	 * @param source Source window to copy from
+	 */
+	MacWindow(const MacWindow &source);
 	virtual ~MacWindow() {}
 
 	/**
@@ -331,8 +349,8 @@ public:
 	 * @param bo Width of the bottom side of the border, in pixels.
 	 */
 	void loadBorder(Common::SeekableReadStream &file, uint32 flags, int lo = -1, int ro = -1, int to = -1, int bo = -1);
-	void loadBorder(Common::SeekableReadStream &file, uint32 flags, BorderOffsets offsets);
-	void setBorder(Graphics::ManagedSurface *surface, uint32 flags, BorderOffsets offsets);
+	void loadBorder(Common::SeekableReadStream &file, uint32 flags, const BorderOffsets &offsets);
+	void setBorder(Graphics::ManagedSurface *surface, uint32 flags, const BorderOffsets &offsets);
 	void disableBorder();
 	void loadInternalBorder(uint32 flags);
 	/**
@@ -368,10 +386,14 @@ public:
 	void addDirtyRect(const Common::Rect &r);
 	void markAllDirty();
 	void mergeDirtyRects();
+	Common::Rect getDirtyRectBounds();
+	void clearDirtyRects() { _dirtyRects.clear(); }
+	Common::List<Common::Rect> &getDirtyRectList() { return _dirtyRects; }
 
 	bool isDirty() override { return _borderIsDirty || _contentIsDirty; }
 
 	void setBorderDirty(bool dirty) { _borderIsDirty = true; }
+	void setContentDirty(bool dirty) { _contentIsDirty = true; }
 	void resizeBorderSurface();
 
 	void setMode(uint32 mode) { _mode = mode; }
@@ -395,7 +417,7 @@ private:
 protected:
 	void drawBorder();
 	WindowClick isInBorder(int x, int y) const;
-	BorderOffsets getBorderOffsets() const { return _macBorder.getOffset(); }
+	const BorderOffsets &getBorderOffsets() const { return _macBorder.getOffset(); }
 
 protected:
 	ManagedSurface _borderSurface;

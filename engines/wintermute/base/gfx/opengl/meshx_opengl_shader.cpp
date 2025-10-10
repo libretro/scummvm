@@ -31,6 +31,7 @@
 #include "engines/wintermute/base/gfx/skin_mesh_helper.h"
 #include "engines/wintermute/base/gfx/base_renderer3d.h"
 #include "engines/wintermute/base/base_game.h"
+#include "engines/wintermute/base/base_engine.h"
 
 #include "graphics/opengl/system_headers.h"
 
@@ -55,7 +56,7 @@ XMeshOpenGLShader::~XMeshOpenGLShader() {
 	glDeleteBuffers(1, &_indexBuffer);
 }
 
-bool XMeshOpenGLShader::loadFromXData(const Common::String &filename, XFileData *xobj) {
+bool XMeshOpenGLShader::loadFromXData(const char *filename, XFileData *xobj) {
 	if (XMesh::loadFromXData(filename, xobj)) {
 		uint32 *indexData = (uint32 *)_blendedMesh->getIndexBuffer().ptr();
 		uint32 indexDataSize = _blendedMesh->getIndexBuffer().size() / sizeof(uint32);
@@ -82,7 +83,7 @@ bool XMeshOpenGLShader::render(XModel *model) {
 
 	// For WME DX, mesh model is not visible, possible it's clipped.
 	// For OpenGL, mesh is visible, skip draw it here instead in core.
-	if (!_gameRef->_renderer3D->_camera)
+	if (!_game->_renderer3D->_camera)
 		return false;
 
 	auto fvf = _blendedMesh->getFVF();
@@ -137,6 +138,9 @@ bool XMeshOpenGLShader::render(XModel *model) {
 		if (mat->getSurface()) {
 			glEnable(GL_TEXTURE_2D);
 			static_cast<BaseSurfaceOpenGL3D *>(mat->getSurface())->setTexture();
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glGenerateMipmap(GL_TEXTURE_2D);
 			_shader->setUniform("useTexture", true);
 		} else {
 			_shader->setUniform("useTexture", false);
@@ -175,9 +179,16 @@ bool XMeshOpenGLShader::renderFlatShadowModel(uint32 shadowColor) {
 
 	// For WME DX, mesh model is not visible, possible it's clipped.
 	// For OpenGL, mesh is visible, skip draw it here instead in core.
-	if (!_gameRef->_renderer3D->_camera)
+	if (!_game->_renderer3D->_camera)
 		return false;
 
+	// W/A for the scene with the table in the laboratory where the engine switches to flat shadows.
+	// Presumably, it's supposed to disable shadows.
+	// Instead, OpenGL draws graphical glitches.
+	// Original DX version does not have this issue due to rendering shadows differently.
+	if (BaseEngine::instance().getGameId() == "alphapolaris")
+		return false;
+	
 	uint32 vertexSize = DXGetFVFVertexSize(_blendedMesh->getFVF()) / sizeof(float);
 	float *vertexData = (float *)_blendedMesh->getVertexBuffer().ptr();
 	if (vertexData == nullptr) {

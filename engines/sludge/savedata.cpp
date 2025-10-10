@@ -19,9 +19,11 @@
  *
  */
 
+#include "common/file.h"
 #include "common/savefile.h"
 #include "common/system.h"
 
+#include "sludge/sludge.h"
 #include "sludge/newfatal.h"
 #include "sludge/savedata.h"
 #include "sludge/variable.h"
@@ -101,7 +103,20 @@ bool CustomSaveHelper::fileToStack(const Common::String &filename, StackHandler 
 	Common::InSaveFile *fp = g_system->getSavefileManager()->openForLoading(filename);
 
 	if (fp == NULL) {
-		return fatal("No such file", filename); //TODO: false value
+		// Try looking inside game folder
+		Common::File *f = new Common::File();
+		if (!f->open(Common::Path(filename)))
+			return fatal("No such file", filename); //TODO: false value
+		fp = f;
+
+		// WORKAROUND: For Otto Experiment, when looking for the otto.ini
+		// for the first time, include CRLF line ending to checker for both encoded and ASCII
+		// data. This is needed since the original otto.ini that comes with the installer
+		// have CRLF line ending.
+		Common::String gameId = g_sludge->getGameId();
+		if (gameId == "otto") {
+			checker = _saveEncoding ? "[Custom data (encoded)]\r\n" : "[Custom data (ASCII)]\r\n";
+		}
 	}
 
 	_encode1 = (byte)_saveEncoding & 255;

@@ -30,6 +30,7 @@
 #include "engines/wintermute/base/base_game.h"
 #include "engines/wintermute/base/gfx/3dloader_3ds.h"
 #include "engines/wintermute/base/gfx/3dmesh.h"
+#include "engines/wintermute/dcgf.h"
 
 namespace Wintermute {
 
@@ -53,12 +54,10 @@ Mesh3DS::~Mesh3DS() {
 
 //////////////////////////////////////////////////////////////////////////
 void Mesh3DS::cleanup() {
-	delete[] _vertices;
-	_vertices = nullptr;
+	SAFE_DELETE_ARRAY(_vertices);
 	_numVertices = 0;
 
-	delete[] _faces;
-	_faces = nullptr;
+	SAFE_DELETE_ARRAY(_faces);
 	_numFaces = 0;
 
 	_vb.free();
@@ -75,7 +74,7 @@ bool Mesh3DS::createVertexBuffer() {
 	int vbSize = _numFaces * sizeof(Mesh3DSVertex) * 3;
 	_vb = DXBuffer(vbSize);
 	if (_vb.ptr() == nullptr) {
-		_gameRef->LOG(0, "Error creating vertex buffer.");
+		_game->LOG(0, "Error creating vertex buffer.");
 		return false;
 	} else
 		return true;
@@ -92,7 +91,7 @@ bool Mesh3DS::fillVertexBuffer(uint32 color) {
 	int vbSize = _numFaces * sizeof(Mesh3DSVertex) * 3;
 	_vb = DXBuffer(vbSize);
 	if (_vb.ptr() == nullptr) {
-		_gameRef->LOG(0, "Error creating vertex buffer.");
+		_game->LOG(0, "Error creating vertex buffer.");
 		return false;
 	}
 
@@ -127,13 +126,13 @@ bool Mesh3DS::fillVertexBuffer(uint32 color) {
 //////////////////////////////////////////////////////////////////////////
 void Mesh3DS::computeNormals() {
 	DXVector3 *normals = new DXVector3[_numVertices];
-	for (int i = 0; i < _numVertices; ++i) {
+	for (uint32 i = 0; i < _numVertices; i++) {
 		normals[i]._x = 0.0f;
 		normals[i]._y = 0.0f;
 		normals[i]._z = 0.0f;
 	}
 
-	for (int i = 0; i < _numFaces; ++i) {
+	for (uint32 i = 0; i < _numFaces; i++) {
 		uint16 a = _faces[i]._vertices[0];
 		uint16 b = _faces[i]._vertices[1];
 		uint16 c = _faces[i]._vertices[2];
@@ -154,8 +153,8 @@ void Mesh3DS::computeNormals() {
 	}
 
 	// Assign the newly computed normals back to the vertices
-	for (int i = 0; i < _numFaces; ++i) {
-		for (int j = 0; j < 3; j++) {
+	for (uint32 i = 0; i < _numFaces; i++) {
+		for (uint32 j = 0; j < 3; j++) {
 			DXVec3Normalize(&_faces[i]._normals[j], &normals[_faces[i]._vertices[j]]);
 			//_faces[i]._normals[j] = normals[_faces[i]._vertices[j]];
 		}

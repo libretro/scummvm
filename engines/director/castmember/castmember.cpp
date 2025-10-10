@@ -20,12 +20,35 @@
  */
 
 #include "common/events.h"
+#include "common/stream.h"
+
 #include "director/director.h"
 #include "director/cast.h"
+#include "director/movie.h"
 #include "director/castmember/castmember.h"
 #include "director/lingo/lingo-the.h"
+#include "director/util.h"
 
 namespace Director {
+
+void EditInfo::read(Common::ReadStreamEndian *stream) {
+	rect = Movie::readRect(*stream);
+	selStart = stream->readUint32();
+	selEnd = stream->readUint32();
+	version = stream->readByte();
+	rulerFlag = stream->readByte();
+	// We're ignoring 2 bytes here
+	valid = true;
+	debugC(3, kDebugLoading, "  EditInfo: rect: [%s],  selStart: %d,  selEnd: %d,  version: %d,  rulerFlag: %d", rect.toString().c_str(), selStart, selEnd, version, rulerFlag);
+}
+
+void EditInfo::write(Common::WriteStream *stream) {
+	Movie::writeRect(stream, rect);
+	stream->writeUint32BE(selStart);
+	stream->writeUint32BE(selEnd);
+	stream->writeByte(version);
+	stream->writeByte(rulerFlag);
+}
 
 CastMember::CastMember(Cast *cast, uint16 castId, Common::SeekableReadStreamEndian &stream) : Object<CastMember>("CastMember") {
 	_type = kCastTypeNull;
@@ -45,6 +68,7 @@ CastMember::CastMember(Cast *cast, uint16 castId, Common::SeekableReadStreamEndi
 
 	_widget = nullptr;
 	_erase = false;
+	_index = -1;
 }
 
 CastMember::CastMember(Cast *cast, uint16 castId) : Object<CastMember>("CastMember") {
@@ -64,6 +88,7 @@ CastMember::CastMember(Cast *cast, uint16 castId) : Object<CastMember>("CastMemb
 
 	_widget = nullptr;
 	_erase = false;
+	_index = -1;
 }
 
 CastMember *CastMember::duplicate(Cast *cast, uint16 castId) {
@@ -106,14 +131,14 @@ Datum CastMember::getProp(const Common::String &propName) {
 	return Datum();
 }
 
-bool CastMember::setProp(const Common::String &propName, const Datum &value, bool force) {
+void CastMember::setProp(const Common::String &propName, const Datum &value, bool force) {
 	Common::String fieldName = Common::String::format("%d%s", kTheCast, propName.c_str());
 	if (g_lingo->_theEntityFields.contains(fieldName)) {
-		return setField(g_lingo->_theEntityFields[fieldName]->field, value);
+		setField(g_lingo->_theEntityFields[fieldName]->field, value);
+		return;
 	}
 
 	warning("CastMember::setProp: unknown property '%s'", propName.c_str());
-	return false;
 }
 
 bool CastMember::hasField(int field) {
@@ -126,11 +151,13 @@ bool CastMember::hasField(int field) {
 	case kTheHeight:
 	case kTheHilite:
 	case kTheLoaded:
+	case kTheMediaReady:
 	case kTheModified:
 	case kTheMemberNum:
 	case kTheName:
 	case kTheNumber:
 	case kTheRect:
+	case kThePreLoad:
 	case kThePurgePriority:
 	case kTheScriptText:
 	case kTheSize:
@@ -182,6 +209,9 @@ Datum CastMember::getField(int field) {
 	case kTheLoaded:
 		d = 1; // Not loaded handled in Lingo::getTheCast
 		break;
+	case kTheMediaReady:
+		d = 1;	// Media is always downloaded from internet in ScummVM
+		break;
 	case kTheModified:
 		d = (int)_isChanged;
 		break;
@@ -202,6 +232,15 @@ Datum CastMember::getField(int field) {
 	case kTheRect:
 		// not sure get the initial rect would be fine to castmember
 		d = Datum(_cast->getCastMember(_castId)->_initialRect);
+		break;
+	/*
+	ScummVM does not do preloading so we will always return false here.
+
+	simpsonscartoonstudio checks this flag and if set to true does an updateStage
+	in a loop which causes performance issues loading cartoons.
+	*/
+	case kThePreLoad:
+		d = 0;
 		break;
 	case kThePurgePriority:
 		d = _purgePriority;
@@ -224,65 +263,73 @@ Datum CastMember::getField(int field) {
 	return d;
 }
 
-bool CastMember::setField(int field, const Datum &d) {
+void CastMember::setField(int field, const Datum &d) {
 	CastMemberInfo *castInfo = _cast->getCastMemberInfo(_castId);
 
 	switch (field) {
 	case kTheBackColor:
 		_cast->getCastMember(_castId)->setBackColor(d.asInt());
-		return true;
+		return;
 	case kTheCastType:
 	case kTheType:
 		warning("BUILDBOT: CastMember::setField(): Attempt to set read-only field %s of cast %d", g_lingo->entity2str(field), _castId);
-		return false;
+		return;
 	case kTheFileName:
 		if (!castInfo) {
 			warning("CastMember::setField(): CastMember info for %d not found", _castId);
-			return false;
+			return;
+		} else {
+			Common::String rawPath = d.asString();
+			Common::String filename = getFileName(rawPath);
+			castInfo->fileName = filename;
+			castInfo->directory = rawPath.substr(0, MAX((uint)0, rawPath.size() - filename.size() - 1));
+			_needsReload = true;
+			_modified = true;
 		}
-		castInfo->fileName = d.asString();
-		_needsReload = true;
-		return true;
+		return;
 	case kTheForeColor:
 		_cast->getCastMember(_castId)->setForeColor(d.asInt());
-		return true;
+		return;
 	case kTheHeight:
 		warning("BUILDBOT: CastMember::setField(): Attempt to set read-only field \"%s\" of cast %d", g_lingo->field2str(field), _castId);
-		return false;
+		return;
 	case kTheHilite:
 		_hilite = (bool)d.asInt();
 		_modified = true;
-		return true;
+		return;
 	case kTheName:
 		if (!castInfo) {
 			warning("CastMember::setField(): CastMember info for %d not found", _castId);
-			return false;
+			return;
 		}
 		castInfo->name = d.asString();
 		_cast->rebuildCastNameCache();
-		return true;
+		return;
 	case kTheRect:
 		warning("CastMember::setField(): Attempt to set read-only field \"%s\" of cast %d", g_lingo->field2str(field), _castId);
-		return false;
+		return;
+	/*
+	ScummVM does not do preloading so we will make this a no-op.
+	*/
+	case kThePreLoad:
+		return;
 	case kThePurgePriority:
 		_purgePriority = CLIP<int>(d.asInt(), 0, 3);
-		return true;
+		return;
 	case kTheScriptText:
 		if (!castInfo) {
 			warning("CastMember::setField(): CastMember info for %d not found", _castId);
-			return false;
+			return;
 		}
 		_cast->_lingoArchive->replaceCode(*d.u.s, kCastScript, _castId);
 		castInfo->script = d.asString();
-		return true;
+		return;
 	case kTheWidth:
 		warning("BUILDBOT: CastMember::setField(): Attempt to set read-only field \"%s\" of cast %d", g_lingo->field2str(field), _castId);
-		return false;
+		return;
 	default:
 		warning("CastMember::setField(): Unprocessed setting field \"%s\" of cast %d", g_lingo->field2str(field), _castId);
 	}
-
-	return false;
 }
 
 CastMemberInfo *CastMember::getInfo() {
@@ -301,6 +348,103 @@ void CastMember::unload() {
 		return;
 
 	_loaded = false;
+}
+
+// Cast members have two types of "information", one is _data_ and the other is _info_
+// _data_ is the actual "data" (e.g. the pixel image data of a bitmap, sound data of a sound cast member)
+// Whereas _info_ is metadata (size, name, flags, etc.)
+// Some cast members have their _data_ as well as _info_ in this very 'CASt' resource, e.g. TextCastMember
+// Whereas some other have their _info_ in a 'CASt' resource and _data_ in a dedicated resource (e.g. PaletteCastMember has 'CLUT' resource)
+uint32 CastMember::writeCAStResource(Common::SeekableWriteStream *writeStream) {
+	uint32 castResourceSize = getCastResourceSize();
+
+	writeStream->writeUint32LE(MKTAG('C', 'A', 'S', 't'));
+	writeStream->writeUint32LE(castResourceSize);		// this is excluding the 'CASt' header and the size itself (- 8 bytes)
+
+	uint32 castDataToWrite = getCastDataSize();
+	uint32 castInfoToWrite = getCastInfoSize();
+
+	if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		writeStream->writeUint16BE(castDataToWrite);
+		writeStream->writeUint32BE(castInfoToWrite);
+		writeStream->writeByte((uint8)_type);
+		castDataToWrite -= 1;
+
+		if (_flags1 != 0xFF) {					// In case of TextCastMember, this should be true
+			writeStream->writeByte(_flags1);
+			castDataToWrite -= 1;
+		}
+
+		// For cast members with dedicated resources for data, the castDataToWrite is zero
+		if (castDataToWrite) {
+			writeCastData(writeStream);
+		}
+
+		if (castInfoToWrite) {
+			_cast->writeCastInfo(writeStream, _castId);
+		}
+	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		writeStream->writeUint32BE((uint32)_type);
+		writeStream->writeUint32BE(castInfoToWrite);
+		writeStream->writeUint32BE(castDataToWrite);
+
+		if (castInfoToWrite) {
+			_cast->writeCastInfo(writeStream, _castId);
+		}
+
+		// For cast members with dedicated resources for data, the castDataToWrite is zero
+		if (castDataToWrite) {
+			writeCastData(writeStream);
+		}
+	}
+	return 0;
+}
+
+// This is the data that is inside the 'CASt' resource
+// These functions (getCastDataSize() and writeCastData() default implementations, are not supposed to be called
+// If the data is modified in the cast member, we implement a custom getCastDataSize() and writeCastData() for that member
+// If it is not modified, then we write it as it is from the original source in the overridden
+// writeCAStResource(Common::MemoryWriteStream, uint32, uint32) function which doesn't call these default functions
+uint32 CastMember::getCastDataSize() {
+	warning("CastMember::getDataSize(): Defualt implementation of 'CASt' resource data size");
+	return _castDataSize;
+}
+
+void CastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
+	warning("CastMember::getDataSize(): Defualt implementation of 'CASt' resource data");
+
+	if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		if (_flags1 != 0xFF) {
+			writeStream->write(0, _castDataSize - 2);
+		} else {
+			writeStream->write(0, _castDataSize - 1);
+		}
+	} else {
+		writeStream->write(0, _castDataSize);
+	}
+}
+
+// This is the info that is inside the 'CASt' resource
+uint32 CastMember::getCastInfoSize() {
+	return _cast->getCastInfoSize(_castId);
+}
+
+// getCastResourceSize only returns the size of the resource without the header
+uint32 CastMember::getCastResourceSize() {
+	uint32 headerSize = 0;
+
+	if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		// Header size for director version 4
+		headerSize = 7;			// see Cast::loadCastData() for director version 4
+		if (_flags1 != 0xFF) {
+			headerSize += 1;
+		}
+	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+		// Header size for director version 5
+		headerSize = 12;		// See Cast::loadCastData() for director version 5
+	}
+
+	return headerSize + getCastInfoSize() + getCastDataSize();
 }
 
 } // End of namespace Director

@@ -118,6 +118,8 @@ private:
 	bool tryDestroyECD(int index);
 	bool tryDestroyECDFullGame(int index);
 	void addWalls(Area *area);
+	void drawVerticalCompass(Graphics::Surface *surface, int x, int y, float angle, uint32 color);
+	void drawHorizontalCompass(int x, int y, float angle, uint32 front, uint32 back, Graphics::Surface *surface);
 };
 
 }

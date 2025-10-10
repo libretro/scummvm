@@ -42,7 +42,7 @@
 #include "gui/widgets/popup.h"
 #include "gui/widgets/scrollcontainer.h"
 
-#if defined(USE_CLOUD) && defined(USE_LIBCURL)
+#ifdef USE_CLOUD
 #include "backends/cloud/cloudmanager.h"
 #endif
 
@@ -285,7 +285,7 @@ EditGameDialog::EditGameDialog(const Common::String &domain)
 	// These buttons have to be extra wide, or the text will be truncated
 	// in the small version of the GUI.
 
-#ifdef USE_LIBCURL
+#ifdef USE_HTTP
 	// GUI: Check integrity button
 	if (ConfMan.hasKey("enable_integrity_checking", Common::ConfigManager::kApplicationDomain))
 		new ButtonWidget(tab, "GameOptions_Paths.Checkintegrity", _("Check Integrity"), _("Perform integrity check for all game files"), kCmdCheckIntegrity);
@@ -381,7 +381,8 @@ void EditGameDialog::addGameControls(GuiObject *boss, const Common::String &pref
 	_platformPopUp->appendEntry("");
 	const Common::PlatformDescription *p = Common::g_platforms;
 	for (; p->code; ++p) {
-		_platformPopUp->appendEntry(p->description, p->id);
+		if (checkGameGUIOptionPlatform(p->id, _guioptionsString))
+			_platformPopUp->appendEntry(p->description, p->id);
 	}
 }
 
@@ -393,7 +394,6 @@ void EditGameDialog::setupGraphicsTab() {
 void EditGameDialog::open() {
 	OptionsDialog::open();
 
-	int sel, i;
 	bool e;
 
 	// En-/disable dialog items depending on whether overrides are active or not.
@@ -462,14 +462,21 @@ void EditGameDialog::open() {
 		_engineOptions->load();
 	}
 
-	const Common::PlatformDescription *p = Common::g_platforms;
 	const Common::Platform platform = Common::parsePlatform(ConfMan.get("platform", _domain));
-	sel = 0;
-	for (i = 0; p->code; ++p, ++i) {
-		if (platform == p->id)
-			sel = i + 2;
+
+	if (ConfMan.hasKey("platform", _domain)) {
+		_platformPopUp->setSelectedTag(platform);
+	} else {
+		_platformPopUp->setSelectedTag((uint32)Common::kPlatformUnknown);
 	}
-	_platformPopUp->setSelected(sel);
+
+	// First entry is <default>
+	// Second entry is ""
+	// So from third entry onwards are actual platforms - same logic as for language
+	if (_platformPopUp->numEntries() <= 3) {
+		_platformPopUpDesc->setEnabled(false);
+		_platformPopUp->setEnabled(false);
+	}
 }
 
 void EditGameDialog::close() {
@@ -619,7 +626,7 @@ void EditGameDialog::handleCommand(CommandSender *sender, uint32 cmd, uint32 dat
 				error.runModal();
 				return;
 			}
-#if defined(USE_CLOUD) && defined(USE_LIBCURL)
+#if defined(USE_CLOUD)
 			MessageDialog warningMessage(_("Saved games sync feature doesn't work with non-default directories. If you want your saved games to sync, use default directory."));
 			warningMessage.runModal();
 #endif
@@ -637,7 +644,7 @@ void EditGameDialog::handleCommand(CommandSender *sender, uint32 cmd, uint32 dat
 		_savePathWidget->setLabel(Common::Path());
 		break;
 
-#ifdef USE_LIBCURL
+#ifdef USE_HTTP
 	case kCmdCheckIntegrity: {
 		IntegrityDialog wizard("http://gamesdb.sev.zone/validate", _domain);
 		wizard.runModal();
