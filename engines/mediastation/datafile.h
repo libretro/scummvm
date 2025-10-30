@@ -44,7 +44,7 @@ typedef Common::Array<Common::Point> Polygon;
 // from some oddness at the start of the subfile, each subfile is basically
 // standard sequence of chunks inside a LIST chunk, like you'd see in any RIFF
 // file. These chunks have special IDs:
-//  - igod: Indicates a chunk that contains metadata about asset(s) in metadata sections.
+//  - igod: Indicates a chunk that contains metadata about actor(s) in metadata sections.
 //  - a000, where 000 is a string that represents a 3-digit hexadecimal number.
 //          Indicates a chunk that contains actor data (sounds and bitmaps).
 
@@ -68,7 +68,6 @@ enum DatumType {
 	kDatumTypeVersion = 0x13,
 	kDatumTypeChunkReference = 0x1b,
 	kDatumTypePolygon = 0x1d,
-	kDatumTypePalette = 0x05aa
 };
 
 class ParameterReadStream : public Common::SeekableReadStream {

@@ -37,7 +37,11 @@ using namespace Graphics;
 
 namespace Alcachofa {
 
-ITexture::ITexture(Point size) : _size(size) {}
+ITexture::ITexture(Point size) : _size(size) {
+	if ((!isPowerOfTwo(size.x) || !isPowerOfTwo(size.y)) &&
+		g_engine->renderer().requiresPoTTextures())
+		warning("Created unsupported NPOT texture (%dx%d)", size.x, size.y);
+}
 
 void IDebugRenderer::debugShape(const Shape &shape, Color color) {
 	constexpr uint kMaxPoints = 16;
@@ -56,7 +60,7 @@ void IDebugRenderer::debugShape(const Shape &shape, Color color) {
 }
 
 AnimationBase::AnimationBase(String fileName, AnimationFolder folder)
-	: _fileName(move(fileName))
+	: _fileName(reencode(fileName))
 	, _folder(folder) {}
 
 AnimationBase::~AnimationBase() {
@@ -192,7 +196,7 @@ ManagedSurface *AnimationBase::readImage(SeekableReadStream &stream) const {
 	const auto &palette = decoder.getPalette();
 	auto target = new ManagedSurface();
 	target->setPalette(palette.data(), 0, palette.size());
-	target->convertFrom(*source, BlendBlit::getSupportedPixelFormat());
+	target->convertFrom(*source, g_engine->renderer().getPixelFormat());
 	return target;
 }
 
@@ -214,8 +218,10 @@ void AnimationBase::loadMissingAnimation() {
 // unfortunately ScummVMs BLEND_NORMAL does not blend alpha
 // but this also bad, let's find/discuss a better solution later
 void AnimationBase::fullBlend(const ManagedSurface &source, ManagedSurface &destination, int offsetX, int offsetY) {
-	assert(source.format == BlendBlit::getSupportedPixelFormat());
-	assert(destination.format == BlendBlit::getSupportedPixelFormat());
+	// TODO: Support other pixel formats
+	assert(source.format == Graphics::PixelFormat::createFormatRGBA32() ||
+	       source.format == Graphics::PixelFormat::createFormatBGRA32());
+	assert(destination.format == source.format);
 	assert(offsetX >= 0 && offsetX + source.w <= destination.w);
 	assert(offsetY >= 0 && offsetY + source.h <= destination.h);
 
@@ -225,10 +231,10 @@ void AnimationBase::fullBlend(const ManagedSurface &source, ManagedSurface &dest
 		const byte *sourcePixel = sourceLine;
 		byte *destPixel = destinationLine;
 		for (int x = 0; x < source.w; x++) {
-			byte alpha = (*(const uint32 *)sourcePixel) & 0xff;
-			for (int i = 1; i < 4; i++)
+			byte alpha = sourcePixel[3];
+			for (int i = 0; i < 3; i++)
 				destPixel[i] = ((byte)(alpha * sourcePixel[i] / 255)) + ((byte)((255 - alpha) * destPixel[i] / 255));
-			destPixel[0] = alpha + ((byte)((255 - alpha) * destPixel[0] / 255));
+			destPixel[3] = alpha + ((byte)((255 - alpha) * destPixel[3] / 255));
 			sourcePixel += 4;
 			destPixel += 4;
 		}
@@ -250,8 +256,13 @@ void Animation::load() {
 		return;
 	AnimationBase::load();
 	Rect maxBounds = maxFrameBounds();
-	_renderedSurface.create(maxBounds.width(), maxBounds.height(), BlendBlit::getSupportedPixelFormat());
-	_renderedTexture = g_engine->renderer().createTexture(maxBounds.width(), maxBounds.height(), true);
+	int16 texWidth = maxBounds.width(), texHeight = maxBounds.height();
+	if (g_engine->renderer().requiresPoTTextures()) {
+		texWidth = nextHigher2(maxBounds.width());
+		texHeight = nextHigher2(maxBounds.height());
+	}
+	_renderedSurface.create(texWidth, texHeight, g_engine->renderer().getPixelFormat());
+	_renderedTexture = g_engine->renderer().createTexture(texWidth, texHeight, true);
 
 	// We always create mipmaps, even for the backgrounds that usually do not scale much,
 	// the exception to this is the thumbnails for the savestates.
@@ -321,22 +332,34 @@ int32 Animation::frameAtTime(uint32 time) const {
 }
 
 void Animation::overrideTexture(const ManagedSurface &surface) {
+	int16 texWidth = surface.w, texHeight = surface.h;
+	if (g_engine->renderer().requiresPoTTextures()) {
+		texWidth = nextHigher2(texWidth);
+		texHeight = nextHigher2(texHeight);
+	}
+
 	// In order to really use the overridden surface we have to override all
 	// values used for calculating the output size
 	_renderedFrameI = 0;
 	_renderedPremultiplyAlpha = _premultiplyAlpha;
 	_renderedSurface.free();
-	_renderedSurface.w = surface.w;
-	_renderedSurface.h = surface.h;
+	_renderedSurface.w = texWidth;
+	_renderedSurface.h = texHeight;
 	_images[0]->free();
 	_images[0]->w = surface.w;
 	_images[0]->h = surface.h;
 
-	if (_renderedTexture->size() != Point(surface.w, surface.h)) {
+	if (_renderedTexture->size() != Point(texWidth, texHeight)) {
 		_renderedTexture = Common::move(
-			g_engine->renderer().createTexture(surface.w, surface.h, false));
+			g_engine->renderer().createTexture(texWidth, texHeight, false));
 	}
-	_renderedTexture->update(surface);
+	if (surface.w == texWidth && surface.h == texHeight)
+		_renderedTexture->update(surface);
+	else {
+		ManagedSurface tmpSurface(texWidth, texHeight, g_engine->renderer().getPixelFormat());
+		tmpSurface.blitFrom(surface);
+		_renderedTexture->update(tmpSurface);
+	}
 }
 
 void Animation::prerenderFrame(int32 frameI) {
@@ -426,17 +449,6 @@ void Animation::drawEffect(int32 frameI, Vector3d topLeft, Vector2d size, Vector
 
 Font::Font(String fileName) : AnimationBase(fileName) {}
 
-static int16 nextPowerOfTwo(int16 v) {
-	// adapted from https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-	assert(v > 0);
-	v--;
-	v |= v >> 1;
-	v |= v >> 2;
-	v |= v >> 4;
-	v |= v >> 8;
-	return v + 1;
-}
-
 void Font::load() {
 	if (_isLoaded)
 		return;
@@ -456,7 +468,7 @@ void Font::load() {
 
 	_texMins.resize(_images.size());
 	_texMaxs.resize(_images.size());
-	ManagedSurface atlasSurface(nextPowerOfTwo(cellSize.x * 16), nextPowerOfTwo(cellSize.y * 16), BlendBlit::getSupportedPixelFormat());
+	ManagedSurface atlasSurface(nextHigher2(cellSize.x * 16), nextHigher2(cellSize.y * 16), g_engine->renderer().getPixelFormat());
 	cellSize.x = atlasSurface.w / 16;
 	cellSize.y = atlasSurface.h / 16;
 	const float invWidth = 1.0f / atlasSurface.w;

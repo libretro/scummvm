@@ -180,7 +180,7 @@ void TotEngine::processEvents(bool &escapePressed) {
 		soundControls();
 		g_engine->_events->zeroEvents();
 	} else if (_events->_gameKey == KEY_SAVELOAD) {
-		if (ConfMan.getBool("original_save_load_screen"))
+		if (ConfMan.getBool("originalsaveload"))
 			originalSaveLoadScreen();
 		else
 			openMainMenuDialog();
@@ -493,45 +493,50 @@ int TotEngine::startGame() {
 		switch (_gamePart) {
 		case 1:
 			if (_list1Complete && _list2Complete) {
-				_list1Complete = false;
-				_list2Complete = false;
-				_cpCounter = _cpCounter2;
-				_gamePart = 2;
-				_iframe = 0;
-				freeInventory();
-				clearAnimation();
-				clearScreenLayers();
-				_mouse->hide();
-				_graphics->partialFadeOut(234);
-				_sound->fadeOutMusic();
-				_sound->playMidi("CREDITOS", true);
-				_sound->fadeInMusic();
-				if (_cpCounter2 > 43)
-					showError(274);
-				sacrificeScene();
-				_graphics->clear();
-				loadInventory();
-				_graphics->loadPaletteFromFile("SEGUNDA");
-				_currentTrajectoryIndex = 0;
-				_characterPosX = 160;
-				_characterPosY = 60;
-				_trajectory[_currentTrajectoryIndex].x = _characterPosX;
-				_trajectory[_currentTrajectoryIndex].y = _characterPosY;
-				loadScreenData(20);
-				_sound->fadeOutMusic();
-				_sound->playMidi("SEGUNDA", true);
-				_sound->fadeInMusic();
-				_graphics->sceneTransition(false, _sceneBackground, 1);
-				drawInventoryMask();
-				_inventoryPosition = 0;
-				drawInventory();
-				_mouse->show();
-   				copyProtection();
-				_firstTimeTopicA[8] = true;
-				_oldGridX = 0;
-				_oldGridY = 0;
-				checkMouseGrid();
+				if (!isDemo()) {
+					_list1Complete = false;
+					_list2Complete = false;
+					_cpCounter = _cpCounter2;
+					_gamePart = 2;
+					_iframe = 0;
+					freeInventory();
+					clearAnimation();
+					clearScreenLayers();
+					_mouse->hide();
+					_graphics->partialFadeOut(234);
+					_sound->fadeOutMusic();
+					_sound->playMidi("CREDITOS", true);
+					_sound->fadeInMusic();
+					if (_cpCounter2 > 43)
+						showError(274);
+					sacrificeScene();
+					_graphics->clear();
+					loadInventory();
+					_graphics->loadPaletteFromFile("SEGUNDA");
+					_currentTrajectoryIndex = 0;
+					_characterPosX = 160;
+					_characterPosY = 60;
+					_trajectory[_currentTrajectoryIndex].x = _characterPosX;
+					_trajectory[_currentTrajectoryIndex].y = _characterPosY;
+					loadScreenData(20);
+					_sound->fadeOutMusic();
+					_sound->playMidi("SEGUNDA", true);
+					_sound->fadeInMusic();
+					_graphics->sceneTransition(false, _sceneBackground, 1);
+					drawInventoryMask();
+					_inventoryPosition = 0;
+					drawInventory();
+					_mouse->show();
+					copyProtection();
+					_firstTimeTopicA[8] = true;
+					_oldGridX = 0;
+					_oldGridY = 0;
+					checkMouseGrid();
+				} else {
+					_shouldQuitGame = true;
+				}
 			}
+
 			break;
 		}
 
@@ -571,7 +576,7 @@ int TotEngine::startGame() {
 		g_system->delayMillis(10);
 	}
 	_mouse->hide();
-	if (!shouldQuit()) {
+	if (!shouldQuit() && !isDemo()) {
 		ending();
 	}
 	Common::String photoFileName;
@@ -581,7 +586,7 @@ int TotEngine::startGame() {
 	if (!shouldQuit()) {
 		generateDiploma(photoFileName);
 	}
-	if (!shouldQuit()) {
+	if (!shouldQuit() && !isDemo()) {
 		credits();
 	}
 	return EXIT_SUCCESS;
@@ -1232,7 +1237,7 @@ void TotEngine::mainMenu(bool fade) {
 					}
 				} else if (x >= 18 && x <= 145) {
 					_isSavingDisabled = true;
-					if (ConfMan.getBool("original_save_load_screen")) {
+					if (ConfMan.getBool("originalsaveload")) {
 						originalSaveLoadScreen();
 						validOption = true;
 					} else {

@@ -28,6 +28,7 @@
 #include "image/jpeg.h"
 #include "image/pict.h"
 #include "image/png.h"
+#include "video/qt_data.h"
 
 #include "director/director.h"
 #include "director/cast.h"
@@ -193,7 +194,7 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, Common::SeekableRe
 		// 22 bytes
 		// This is color image flag
 		if (_pitch & 0x8000) {
-			_pitch &= 0x0fff;
+			_pitch &= 0x3fff;
 
 			_bitsPerPixel = stream.readByte();
 
@@ -292,7 +293,8 @@ BitmapCastMember::BitmapCastMember(Cast *cast, uint16 castId, BitmapCastMember &
 	_bitsPerPixel = source._bitsPerPixel;
 
 	_tag = source._tag;
-	_noMatte = source._noMatte;
+	_matte = nullptr;
+	_noMatte = false;
 	_external = source._external;
 
 	_version = source._version;
@@ -544,41 +546,46 @@ void BitmapCastMember::createMatte(const Common::Rect &bbox) {
 	Graphics::Surface tmp;
 	tmp.create(bbox.width(), bbox.height(), g_director->_pixelformat);
 
-	copyStretchImg(
-		_ditheredImg ? _ditheredImg : &_picture->_surface,
-		&tmp,
-		_initialRect,
-		bbox
-	);
+	copyStretchImg(&_picture->_surface, &tmp, _initialRect, bbox);
 
 	_noMatte = true;
 
 	// Searching white color in the corners
 	uint32 whiteColor = 0;
 	bool colorFound = false;
+	const byte *palette = g_director->getPalette();
 
-	if (g_director->_pixelformat.bytesPerPixel == 1) {
+	if (_picture->getPaletteCount() > 0) {
+		palette = _picture->_palette;
+	}
+
+	if (tmp.format.isCLUT8()) {
 		for (int y = 0; y < tmp.h; y++) {
 			for (int x = 0; x < tmp.w; x++) {
 				byte color = *(byte *)tmp.getBasePtr(x, y);
 
-				if (g_director->getPalette()[color * 3 + 0] == 0xff &&
-						g_director->getPalette()[color * 3 + 1] == 0xff &&
-						g_director->getPalette()[color * 3 + 2] == 0xff) {
+				if (palette[color * 3 + 0] == 0xff &&
+						palette[color * 3 + 1] == 0xff &&
+						palette[color * 3 + 2] == 0xff) {
 					whiteColor = color;
 					colorFound = true;
 					break;
 				}
+
+				// Skip entirety of image, scan only the corners
+				if (y > 0 && y < tmp.h - 1 && x == 0)
+					x = tmp.w - 2;
 			}
 		}
 	} else {
-		whiteColor = g_director->_wm->_colorWhite;
+		whiteColor = tmp.format.RGBToColor(0xff, 0xff, 0xff);
 		colorFound = true;
 	}
 
 	if (!colorFound) {
-		debugC(1, kDebugImages, "BitmapCastMember::createMatte(): No white color for matte image");
+		debugC(1, kDebugImages, "BitmapCastMember::createMatte(): No white color for matte image cast %d, name %s", _castId, _name.c_str());
 	} else {
+		debugC(1, kDebugImages, "BitmapCastMember::createMatte(): Will create matte for cast %d, name %s, whiteColor: 0x%08x", _castId, _name.c_str(), whiteColor);
 		if (_matte) {
 			_matte->free();
 			delete _matte;
@@ -618,6 +625,17 @@ Graphics::Surface *BitmapCastMember::getMatte(const Common::Rect &bbox) {
 	// Lazy loading of mattes
 	if (!_matte && !_noMatte) {
 		createMatte(bbox);
+
+		if (ConfMan.getBool("dump_scripts") && _matte) {
+			Common::String prepend = _cast->getMacName();
+			Common::String filename = Common::String::format("./dumps/%s-%s-%d-matte.png", encodePathForDump(prepend).c_str(), tag2str(_tag), _castId);
+			Common::DumpFile bitmapFile;
+
+			bitmapFile.open(Common::Path(filename), true);
+			Image::writePNG(bitmapFile, *_matte, Video::quickTimeDefaultPalette256);
+
+			bitmapFile.close();
+		}
 	}
 
 	// check for the scale matte
@@ -726,7 +744,7 @@ void BitmapCastMember::load() {
 
 					if (ConfMan.getBool("dump_scripts")) {
 
-						Common::String prepend = "stream";
+						Common::String prepend = _cast->getMacName();
 						Common::String filename = Common::String::format("./dumps/%s-%s-%d.png", encodePathForDump(prepend).c_str(), tag2str(tag), imgId);
 						Common::DumpFile bitmapFile;
 
@@ -809,12 +827,12 @@ void BitmapCastMember::load() {
 
 	if (ConfMan.getBool("dump_scripts")) {
 
-		Common::String prepend = "stream";
+		Common::String prepend = _cast->getMacName();
 		Common::String filename = Common::String::format("./dumps/%s-%s-%d.png", encodePathForDump(prepend).c_str(), tag2str(tag), imgId);
 		Common::DumpFile bitmapFile;
 
 		bitmapFile.open(Common::Path(filename), true);
-		Image::writePNG(bitmapFile, *img->getSurface(), img->getPalette().data());
+		Image::writePNG(bitmapFile, *img->getSurface(), img->getPalette());
 
 		bitmapFile.close();
 	}
@@ -822,7 +840,7 @@ void BitmapCastMember::load() {
 	delete img;
 	delete pic;
 
-	debugC(5, kDebugImages, "BitmapCastMember::load(): Bitmap: id: %d, w: %d, h: %d, flags1: %x, flags2: %x bytes: %x, bpp: %d clut: %s", imgId, w, h, _flags1, _flags2, _bytes, _bitsPerPixel, _clut.asString().c_str());
+	debugC(5, kDebugImages, "BitmapCastMember::load(): Bitmap: id: %d, w: %d, h: %d, flags1: %x, flags2: %x updateFlags: %x bytes: %x, bpp: %d clut: %s", imgId, w, h, _flags1, _flags2, _updateFlags, _bytes, _bitsPerPixel, _clut.asString().c_str());
 
 	_loaded = true;
 }

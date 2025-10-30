@@ -324,15 +324,25 @@ typedef void (AFX_MSG_CALL CCmdTarget:: *AFX_PMSG)();
  * With C++20, it may be possible to use the MessageMapFunctions enum and
  * avoid casting by using a designated initializer.
  */
-#ifdef __GNUC__
-#define BEGIN_SILENCE_CAST \
+// (Using *distinct* `#if` calls below is necessary for proper parsing)
+#if defined(__clang__) && defined(__has_warning)
+#  if __has_warning("-Wcast-function-type")
+#    define COMPILER_HAS_CAST_FUNCTION_TYPE_WARNING 1
+#  endif
+#elif GCC_ATLEAST(8, 1)
+#  define COMPILER_HAS_CAST_FUNCTION_TYPE_WARNING 1
+#endif
+
+#ifdef COMPILER_HAS_CAST_FUNCTION_TYPE_WARNING
+#  define BEGIN_SILENCE_CAST \
     _Pragma("GCC diagnostic push") \
     _Pragma("GCC diagnostic ignored \"-Wcast-function-type\"")
-#define END_SILENCE_CAST \
+#  define END_SILENCE_CAST \
     _Pragma("GCC diagnostic pop")
+#  undef COMPILER_HAS_CAST_FUNCTION_TYPE_WARNING
 #else
-#define BEGIN_SILENCE_CAST
-#define END_SILENCE_CAST
+#  define BEGIN_SILENCE_CAST
+#  define END_SILENCE_CAST
 #endif
 
 #define BEGIN_TEMPLATE_MESSAGE_MAP(theClass, type_name, baseClass)          \
@@ -434,6 +444,7 @@ union MessageMapFunctions {
 	void (AFX_MSG_CALL CWnd:: *pfn_vOWNER)(int, uint16 *);      // force return true
 	int (AFX_MSG_CALL CWnd:: *pfn_iis)(int, uint16 *);
 	unsigned int(AFX_MSG_CALL CWnd:: *pfn_wp)(CPoint);
+	bool(AFX_MSG_CALL CWnd:: *pfn_bv)();
 	unsigned int(AFX_MSG_CALL CWnd:: *pfn_wv)();
 	void (AFX_MSG_CALL CWnd:: *pfn_vPOS)(WINDOWPOS *);
 	void (AFX_MSG_CALL CWnd:: *pfn_vCALC)(bool, NCCALCSIZE_PARAMS *);
@@ -657,6 +668,7 @@ public:
 	struct Impl : public CGdiObjectImpl,
 			public Graphics::Palette {
 		Impl(const LPLOGPALETTE pal);
+		Impl(const Graphics::Palette &pal);
 		~Impl() override {}
 	};
 
@@ -733,10 +745,12 @@ public:
 		int _bkMode = TRANSPARENT;
 		COLORREF _textColor = 0;
 		uint _textAlign = TA_LEFT;
-		int _drawMode;
+		int _drawMode = 0;
+		bool _paletteRealized = false;
 
 		uint getPenColor() const;
 		uint getBrushColor() const;
+		uint32 *getPaletteMap(const CDC::Impl *srcImpl);
 
 	public:
 		HBITMAP _bitmap;
@@ -746,6 +760,7 @@ public:
 		HPALETTE _palette = nullptr;
 		CPalette *_cPalette = nullptr;
 		bool m_bForceBackground = false;
+		bool _hasLogicalPalette = false;
 
 	public:
 		Impl(CWnd *wndOwner = nullptr);
@@ -1198,9 +1213,6 @@ protected:
 	afx_msg bool OnQueryEndSession() {
 		return false;
 	}
-	afx_msg bool OnQueryNewPalette() {
-		return false;
-	}
 	afx_msg bool OnQueryOpen() {
 		return false;
 	}
@@ -1215,6 +1227,7 @@ protected:
 	afx_msg unsigned int OnQueryUIState() {
 		return 0;
 	}
+	afx_msg bool OnQueryNewPalette();
 
 	// Nonclient-Area message handler member functions
 	afx_msg bool OnNcActivate(bool bActive) {

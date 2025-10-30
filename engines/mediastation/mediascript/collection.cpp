@@ -119,7 +119,7 @@ ScriptValue Collection::callMethod(BuiltInMethod method, Common::Array<ScriptVal
 		break;
 
 	default:
-		error("Attempt to call unimplemented method %s (%d)", builtInMethodToStr(method), static_cast<uint>(method));
+		error("%s: Attempt to call unimplemented method %s (%d)", __func__, builtInMethodToStr(method), static_cast<uint>(method));
 	}
 	return returnValue;
 }
@@ -131,7 +131,7 @@ void Collection::apply(const Common::Array<ScriptValue> &args) {
 	for (const ScriptValue &item : *this) {
 		argsToApply[0] = item;
 		// TODO: Need to create and call FunctionManager.
-		warning("Applying function %d not implemented", functionId);
+		warning("%s: Applying function %d not implemented", __func__, functionId);
 	}
 }
 
@@ -146,10 +146,10 @@ void Collection::send(const Common::Array<ScriptValue> &args) {
 	BuiltInMethod methodToSend = static_cast<BuiltInMethod>(args[0].asMethodId());
 	Common::Array<ScriptValue> sendArgs;
 	for (const ScriptValue &item : *this) {
-		uint assetId = item.asAssetId();
-		Asset *targetAsset = g_engine->getAssetById(assetId);
-		if (targetAsset != nullptr) {
-			targetAsset->callMethod(methodToSend, argsToSend);
+		uint actorId = item.asActorId();
+		Actor *targetActor = g_engine->getActorById(actorId);
+		if (targetActor != nullptr) {
+			targetActor->callMethod(methodToSend, argsToSend);
 		}
 	}
 }

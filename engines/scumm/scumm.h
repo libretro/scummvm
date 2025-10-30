@@ -323,6 +323,9 @@ class ResourceManager;
 #define PIT_V7_SUBTIMER_INC            3977.0
 #define PIT_V7_SUBTIMER_THRESH         4971.0
 
+#define PIT_HE_PUTT_PUTT_DIVISOR       9362.0
+#define PIT_HE_FATTY_BEAR_DIVISOR      21845.0
+
 #define LOOM_STEAM_CDDA_RATE           240.0
 
 /**
@@ -851,7 +854,7 @@ protected:
 	int _numPalettes = 0;
 	int _numSprites = 0;
 	int _numTalkies = 0;
-	int _numUnk = 0;
+	int _numWindows = 0;
 	int _HEHeapSize = 0;
 
 public:
@@ -1893,6 +1896,11 @@ public:
 
 	// Exists both in V7 and in V72HE:
 	byte VAR_NUM_GLOBAL_OBJS = 0xFF;
+
+	byte VAR_LAST_FRAME_BURN_TIME = 0xFF;  // HE90+
+	byte VAR_LAST_FRAME_SCUMM_TIME = 0xFF; // HE90+
+
+	byte VAR_WINDEX_RUNNING = 0xFF;
 
 #ifdef USE_RGB_COLOR
 	// FM-Towns / PC-Engine specific

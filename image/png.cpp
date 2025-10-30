@@ -123,8 +123,8 @@ bool PNGDecoder::loadStream(Common::SeekableReadStream &stream) {
 	}
 
 	// The following is based on the guide provided in:
-	//http://www.libpng.org/pub/png/libpng-1.2.5-manual.html#section-3
-	//http://www.libpng.org/pub/png/libpng-1.4.0-manual.pdf
+	// https://www.libpng.org/pub/png/libpng-1.2.5-manual.html#section-3
+	// https://www.libpng.org/pub/png/libpng-1.4.0-manual.pdf
 	// along with the png-loading code used in the sword25-engine.
 	png_structp pngPtr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 	if (!pngPtr) {
@@ -293,7 +293,11 @@ bool PNGDecoder::loadStream(Common::SeekableReadStream &stream) {
 #endif
 }
 
-bool writePNG(Common::WriteStream &out, const Graphics::Surface &input, const byte *palette) {
+bool writePNG(Common::WriteStream &out, const Graphics::Surface &input, const Graphics::Palette &palette) {
+	return writePNG(out, input, palette.data(), palette.size());
+}
+
+bool writePNG(Common::WriteStream &out, const Graphics::Surface &input, const byte *palette, uint paletteCount) {
 #ifdef USE_PNG
 	const Graphics::PixelFormat requiredFormat_3byte = Graphics::PixelFormat::createFormatRGB24();
 	const Graphics::PixelFormat requiredFormat_4byte = Graphics::PixelFormat::createFormatRGBA32();
@@ -309,7 +313,7 @@ bool writePNG(Common::WriteStream &out, const Graphics::Surface &input, const by
 		if (input.format == requiredFormat_4byte) {
 			surface = &input;
 		} else {
-			surface = tmp = input.convertTo(requiredFormat_4byte, palette);
+			surface = tmp = input.convertTo(requiredFormat_4byte, palette, paletteCount);
 		}
 		colorType = PNG_COLOR_TYPE_RGB_ALPHA;
 	}

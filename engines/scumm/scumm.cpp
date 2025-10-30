@@ -260,7 +260,7 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 	g_scumm = this;
 
 	// Read settings from the detector & config manager
-	_debugMode = (gDebugLevel >= 0);
+	_debugMode = (gDebugLevel > 0);
 	_dumpScripts = ConfMan.getBool("dump_scripts");
 	_bootParam = ConfMan.getInt("boot_param");
 	// Boot params often need debugging switched on to work
@@ -817,11 +817,11 @@ ScummEngine_v90he::ScummEngine_v90he(OSystem *syst, const DetectorResult &dr)
 	VAR_NUM_SPRITE_GROUPS = 0xFF;
 	VAR_NUM_SPRITES = 0xFF;
 	VAR_NUM_PALETTES = 0xFF;
-	VAR_NUM_UNK = 0xFF;
+	VAR_NUM_WINDOWS = 0xFF;
 	VAR_SPRITE_IMAGE_CHANGE_DOES_NOT_RESET_SETTINGS = 0xFF;
 
 	VAR_U32_VERSION = 0xFF;
-	VAR_U32_ARRAY_UNK = 0xFF;
+	VAR_U32_RESERVED = 0xFF;
 }
 
 ScummEngine_v90he::~ScummEngine_v90he() {
@@ -2647,6 +2647,23 @@ Common::Error ScummEngine::go() {
 		}
 	}
 
+#ifdef ENABLE_HE
+	// Old "Spy Fox In: Cheese Chase" custom levels clash with the built-in levels.
+	// Assign them to the first player, 000.
+	if (strcmp(_game.gameid, "chase") == 0) {
+		Common::SaveFileManager *saveFileMan = g_system->getSavefileManager();
+		Common::StringArray filenames;
+		filenames = saveFileMan->listSavefiles(_targetName + "-chase???.???");
+
+		for (Common::StringArray::const_iterator file = filenames.begin(); file != filenames.end(); ++file) {
+			Common::String from = (*file).c_str();
+			Common::String to = (*file).c_str();
+			to.insertString("000-", from.size() - 12);
+			saveFileMan->renameSavefile(from, to);
+		}
+	}
+#endif // ENABLE_HE
+
 	while (!shouldQuit()) {
 		// Determine how long to wait before the next loop iteration should start
 		int delta = (VAR_TIMER_NEXT != 0xFF) ? VAR(VAR_TIMER_NEXT) : 4;
@@ -2733,6 +2750,9 @@ Common::Error ScummEngine::go() {
 			if (_game.heversion >= 60) {
 				((SoundHE *)_sound)->feedMixer();
 			}
+
+			if (VAR_LAST_FRAME_SCUMM_TIME != 0xFF)
+				VAR(VAR_LAST_FRAME_SCUMM_TIME) = _system->getMillis() - _lastWaitTime;
 		}
 
 		if (shouldQuit()) {
@@ -2757,6 +2777,9 @@ void ScummEngine::waitForTimer(int quarterFrames, bool freezeMacGui) {
 	uint32 diff = cur - _lastWaitTime;
 	msecDelay = (msecDelay > diff) ? msecDelay - diff : 0;
 	endTime = cur + msecDelay;
+
+	if (VAR_LAST_FRAME_BURN_TIME != 0xFF)
+		VAR(VAR_LAST_FRAME_BURN_TIME) = msecDelay;
 
 	while (!shouldQuit()) {
 		_sound->updateCD(); // Loop CD Audio if needed
@@ -2812,43 +2835,76 @@ uint32 ScummEngine::getIntegralTime(double fMsecs) {
 void ScummEngine::setTimerAndShakeFrequency() {
 	_shakeTimerRate = _timerFrequency = 240.0;
 
-	if (_game.platform == Common::kPlatformDOS || _game.platform == Common::kPlatformWindows || _game.platform == Common::kPlatformUnknown) {
-		switch (_game.version) {
-		case 1:
-			if (_game.id == GID_MANIAC) {
-				// In MANIAC V1, one tick represents three frames,
-				// i.e., 12 quarter-frames.
-				_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V1_DIVISOR * 12;
-			} else {
+	if (_game.heversion == 0) {
+		if (_game.platform == Common::kPlatformDOS || _game.platform == Common::kPlatformWindows || _game.platform == Common::kPlatformUnknown) {
+			switch (_game.version) {
+			case 1:
+				if (_game.id == GID_MANIAC) {
+					// In MANIAC V1, one tick represents three frames,
+					// i.e., 12 quarter-frames.
+					_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V1_DIVISOR * 12;
+				} else {
+					_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V2_4_DIVISOR;
+				}
+				break;
+			case 2:
+			case 3:
+			case 4:
 				_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V2_4_DIVISOR;
+				break;
+			case 5:
+				_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V5_6_ORCHESTRATOR_DIVISOR;
+				_timerFrequency *= PIT_V5_6_SUBTIMER_INC / PIT_V5_SUBTIMER_THRESH;
+				break;
+			case 6:
+				_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V5_6_ORCHESTRATOR_DIVISOR;
+				if (_game.id == GID_TENTACLE) {
+					_timerFrequency *= PIT_V5_6_SUBTIMER_INC / PIT_V6_DOTT_SUBTIMER_THRESH;
+				} else {
+					_timerFrequency *= PIT_V5_6_SUBTIMER_INC / PIT_V6_SAMNMAX_SUBTIMER_THRESH;
+				}
+				break;
+			case 7:
+				_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V7_ORCHESTRATOR_DIVISOR;
+				_timerFrequency *= PIT_V7_SUBTIMER_INC / PIT_V7_SUBTIMER_THRESH;
+				break;
+			default:
+				_shakeTimerRate = _timerFrequency = 240.0;
 			}
-			break;
-		case 2:
-		case 3:
-		case 4:
-			_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V2_4_DIVISOR;
-			break;
-		case 5:
-			_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V5_6_ORCHESTRATOR_DIVISOR;
-			_timerFrequency *= PIT_V5_6_SUBTIMER_INC / PIT_V5_SUBTIMER_THRESH;
-			break;
-		case 6:
-			_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V5_6_ORCHESTRATOR_DIVISOR;
-			if (_game.id == GID_TENTACLE) {
-				_timerFrequency *= PIT_V5_6_SUBTIMER_INC / PIT_V6_DOTT_SUBTIMER_THRESH;
+		} else if (_game.platform == Common::kPlatformAmiga && _game.id != GID_MONKEY_VGA) {
+			_shakeTimerRate = _timerFrequency = _isAmigaPALSystem ? AMIGA_PAL_VBLANK_RATE : AMIGA_NTSC_VBLANK_RATE;
+		}
+	} else {
+		if (_game.heversion < 70 && _game.platform == Common::kPlatformDOS) {
+			// HE6x DOS games use a slightly different (but not really...)
+			// mechanism to increment "piffies" (a quarter of a jiffy).
+			// 
+			// Fatty Bear, Putt-Putt's Fun Pack:
+			//   - PIT divisor: 0x5555 (21845) -> ~54.6 Hz timer interrupt
+			//   - The piffy value is directly incremented by 4 on every interrupt
+			//   - Effective jiffy rate: 54.6 Hz
+			// 
+			// Putt-Putt (1&2), Fatty Bear's Fun Pack, Putt-Putt & Fatty Bear's Activity Pack:
+			//   - PIT divisor: 0x2492 (9362) -> ~127.5 Hz timer interrupt
+			//   - The piffy value is directly incremented by 4 on every *other* interrupt
+			//   - Effective jiffy rate: 63.75 Hz
+			// 
+			// The multiplication by 4 below re-adapts these jiffy rates to our quarter-frame system.
+
+			if (_game.id == GID_FBEAR || _game.id == GID_FUNPACK) {
+				_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_HE_FATTY_BEAR_DIVISOR * 4.0;
+			} else if (_game.id == GID_PUTTDEMO ||
+					   _game.id == GID_PUTTMOON ||
+					   Common::String(_game.gameid).equals("puttputt") ||
+					   Common::String(_game.gameid).equals("activity") ||
+					   Common::String(_game.gameid).equals("fbpack")) {
+				_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_HE_PUTT_PUTT_DIVISOR / 2.0 * 4.0;
 			} else {
-				_timerFrequency *= PIT_V5_6_SUBTIMER_INC / PIT_V6_SAMNMAX_SUBTIMER_THRESH;
+				_shakeTimerRate = _timerFrequency = 240.0;
 			}
-			break;
-		case 7:
-			_shakeTimerRate = _timerFrequency = PIT_BASE_FREQUENCY / PIT_V7_ORCHESTRATOR_DIVISOR;
-			_timerFrequency *= PIT_V7_SUBTIMER_INC / PIT_V7_SUBTIMER_THRESH;
-			break;
-		default:
+		} else {
 			_shakeTimerRate = _timerFrequency = 240.0;
 		}
-	} else if (_game.platform == Common::kPlatformAmiga && _game.id != GID_MONKEY_VGA) {
-		_shakeTimerRate = _timerFrequency = _isAmigaPALSystem ? AMIGA_PAL_VBLANK_RATE : AMIGA_NTSC_VBLANK_RATE;
 	}
 }
 
@@ -4055,7 +4111,7 @@ bool ScummEngine::isUsingOriginalGUI() const {
 	if (_game.platform == Common::kPlatformPCEngine)
 		return false;
 
-	if (_game.heversion != 0)
+	if (_game.heversion >= 70)
 		return false;
 
 	return _useOriginalGUI;

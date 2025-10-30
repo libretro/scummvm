@@ -31,7 +31,7 @@
 
 namespace MediaStation {
 
-class Asset;
+class Actor;
 
 class ScriptValue {
 public:
@@ -55,8 +55,8 @@ public:
 	void setToParamToken(uint paramToken);
 	uint asParamToken() const;
 
-	void setToAssetId(uint assetId);
-	uint asAssetId() const;
+	void setToActorId(uint actorId);
+	uint asActorId() const;
 
 	void setToString(const Common::String &string);
 	Common::String asString() const;
@@ -94,7 +94,7 @@ private:
 		double d = 0;
 		bool b;
 		uint paramToken;
-		uint assetId;
+		uint actorId;
 		uint functionId;
 		BuiltInMethod methodId;
 	} _u;

@@ -976,8 +976,45 @@ Audio::AudioStream *AudioFileDecoder::getAudioStream(bool looping, bool forPuppe
 	return nullptr;
 }
 
-MoaSoundFormatDecoder::MoaSoundFormatDecoder() {
+MoaStreamDecoder::MoaStreamDecoder(Common::String &format, Common::SeekableReadStreamEndian *stream)
+		: AudioDecoder() {
+	_format = format;
+	_stream = stream;
+}
 
+MoaStreamDecoder::~MoaStreamDecoder() {
+	if (_stream) {
+		delete _stream;
+		_stream = nullptr;
+	}
+}
+
+Audio::AudioStream *MoaStreamDecoder::getAudioStream(bool looping, bool forPuppet, DisposeAfterUse::Flag disposeAfterUse) {
+	if (!_stream)
+		return nullptr;
+
+	// Make sure we're at the start of the stream
+	_stream->seek(0, SEEK_SET);
+
+	Audio::RewindableAudioStream *stream = nullptr;
+	if (_format.equalsIgnoreCase("kMoaCfFormat_AIFF")) {
+		stream = Audio::makeAIFFStream(_stream, DisposeAfterUse::NO);
+	} else {
+		warning("Unsupported Moa stream type '%s'", _format.c_str());
+		delete _stream;
+	}
+
+	if (stream) {
+		if (looping) {
+			return new Audio::LoopingAudioStream(stream, 0);
+		}
+		return stream;
+	}
+
+	return nullptr;
+}
+
+MoaSoundFormatDecoder::MoaSoundFormatDecoder() {
 }
 
 MoaSoundFormatDecoder::~MoaSoundFormatDecoder() {
@@ -1052,7 +1089,7 @@ Audio::AudioStream *MoaSoundFormatDecoder::getAudioStream(bool looping, bool for
 			disposeAfterUse);
 
 	if (looping) {
-		if (_format.loopEndFrame < _format.loopStartFrame) {
+		if (_format.loopEndFrame <= _format.loopStartFrame) {
 			return new Audio::LoopingAudioStream(stream, 0);
 		} else {
 			return new Audio::SubLoopingAudioStream(stream, 0, Audio::Timestamp(0, _format.loopStartFrame, _format.frameRate), Audio::Timestamp(0, _format.loopEndFrame, _format.frameRate));

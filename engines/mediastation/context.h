@@ -28,32 +28,29 @@
 #include "graphics/palette.h"
 
 #include "mediastation/datafile.h"
-#include "mediastation/asset.h"
-#include "mediastation/mediascript/function.h"
+#include "mediastation/actor.h"
 
 namespace MediaStation {
 
-enum ContextParametersSectionType {
-	kContextParametersEmptySection = 0x0000,
-	kContextParametersVariable = 0x0014,
-	kContextParametersName = 0x0bb9,
-	kContextParametersFileNumber = 0x0011,
-	kContextParametersBytecode = 0x0017
+enum StreamType {
+	kDocumentDefStream = 0x01,
+	kControlCommandsStream = 0x0D,
 };
 
 enum ContextSectionType {
-	kContextEmptySection = 0x0000,
-	kContextOldStyleSection = 0x000d,
-	kContextParametersSection = 0x000e,
-	kContextPaletteSection = 0x05aa,
-	kContextUnkAtEndSection = 0x0010,
-	kContextAssetHeaderSection = 0x0011,
-	kContextPoohSection = 0x057a,
-	kContextAssetLinkSection = 0x0013,
-	kContextFunctionSection = 0x0031
+	kEndOfContextData = 0x00,
+	kContextCreateData = 0x0e,
+	kContextDestroyData = 0x0f,
+	kContextLoadCompleteSection = 0x10,
+	kContextCreateActorData = 0x11,
+	kContextDestroyActorData = 0x12,
+	kContextActorLoadComplete = 0x13,
+	kContextCreateVariableData = 0x14,
+	kContextFunctionSection = 0x31,
+	kContextNameData = 0xbb8
 };
 
-class Screen;
+class ScreenActor;
 
 class Context : public Datafile {
 public:
@@ -63,36 +60,36 @@ public:
 	uint32 _unk1;
 	uint32 _subfileCount;
 	uint32 _fileSize;
-	Graphics::Palette *_palette = nullptr;
-	Screen *_screenAsset = nullptr;
+	ScreenActor *_screenActor = nullptr;
 
-	Asset *getAssetById(uint assetId);
-	Asset *getAssetByChunkReference(uint chunkReference);
-	Function *getFunctionById(uint functionId);
+	Actor *getActorById(uint actorId);
+	Actor *getActorByChunkReference(uint chunkReference);
 	ScriptValue *getVariable(uint variableId);
 
 private:
 	// This is not an internal file ID, but the number of the file
 	// as it appears in the filename. For instance, the context in
 	// "100.cxt" would have file number 100.
-	uint _fileNumber = 0;
+	uint _id = 0;
 	Common::String _contextName;
 
-	Common::HashMap<uint, Asset *> _assets;
-	Common::HashMap<uint, Function *> _functions;
-	Common::HashMap<uint, Asset *> _assetsByChunkReference;
+	Common::HashMap<uint, Actor *> _actors;
+	Common::HashMap<uint, Actor *> _actorsByChunkReference;
 	Common::HashMap<uint, ScriptValue *> _variables;
 
-	void readOldStyleHeaderSections(Subfile &subfile, Chunk &chunk);
-	void readNewStyleHeaderSections(Subfile &subfile, Chunk &chunk);
+	void readHeaderSections(Subfile &subfile, Chunk &chunk);
 
-	bool readHeaderSection(Chunk &chunk);
+	void readControlCommands(Chunk &chunk);
+	void readCommandFromStream(ContextSectionType sectionType, Chunk &chunk);
 	void readCreateContextData(Chunk &chunk);
-	Asset *readCreateAssetData(Chunk &chunk);
+	void readDestroyContextData(Chunk &chunk);
+	void readCreateActorData(Chunk &chunk);
+	void readDestroyActorData(Chunk &chunk);
+	void readActorLoadComplete(Chunk &chunk);
 	void readCreateVariableData(Chunk &chunk);
+	void readContextNameData(Chunk &chunk);
 
-	void readAssetInFirstSubfile(Chunk &chunk);
-	void readAssetFromLaterSubfile(Subfile &subfile);
+	void readActorFromLaterSubfile(Subfile &subfile);
 };
 
 } // End of namespace MediaStation

@@ -128,8 +128,7 @@ bool SaveGame(CWnd *pWnd, CPalette *pPalette, ERROR_CODE *pErrCode) {
 	return bSaved;
 }
 
-bool RestoreGame(CWnd *pWnd, CPalette *pPalette, ERROR_CODE *pErrCode) {
-	int iGameNum;
+bool RestoreGame(CWnd *pWnd, CPalette *pPalette, ERROR_CODE *pErrCode, int iGameNum) {
 	bool bRestored;
 
 	// Validate input
@@ -146,11 +145,16 @@ bool RestoreGame(CWnd *pWnd, CPalette *pPalette, ERROR_CODE *pErrCode) {
 	*pErrCode = GetSaveGameDescriptions();
 
 	if (*pErrCode == ERR_NONE) {
-		// Open the Restore Game dialog box
-		CRestoreDlg dlgRestore(pszDesc, pWnd, pPalette);
+		if (iGameNum == -1) {
+			// Open the Restore Game dialog box
+			CRestoreDlg dlgRestore(pszDesc, pWnd, pPalette);
+			iGameNum = dlgRestore.DoModal();
+			if (iGameNum != -1)
+				++iGameNum;
+		}
 
-		if ((iGameNum = dlgRestore.DoModal()) != -1) {
-			if (g_engine->loadGameState(iGameNum + 1).getCode() != Common::kNoError)
+		if (iGameNum != -1) {
+			if (g_engine->loadGameState(iGameNum).getCode() != Common::kNoError)
 				*pErrCode = ERR_FOPEN;
 		} else {
 			bRestored = false;
@@ -309,23 +313,13 @@ bool ValidateSGInfo(SAVEGAME_INFO *pSaveGameInfo) {
 		return false;
 	}
 
-	if (pSaveGameInfo->m_nFixedRecordSize != sizeof(SAVEGAME_INFO))
-		return false;
-
-	/*if (pSaveGameInfo->m_stPlayerInfo[0].m_lCrowns < 0)
-		return(false);
-
-	if (pSaveGameInfo->m_stPlayerInfo[1].m_lCrowns < 0)
-		return(false);*/
-
 	switch (pSaveGameInfo->m_iGameTime) {
-
 	case SHORT_GAME:
 	case MEDIUM_GAME:
 	case LONG_GAME:
 		break;
 
-		// not a valid game type
+	// not a valid game type
 	default:
 		return false;
 	}

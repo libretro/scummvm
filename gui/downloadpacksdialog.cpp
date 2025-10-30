@@ -88,6 +88,7 @@ void DialogState::downloadList() {
 
 void DialogState::proceedDownload() {
 	startTime = lastUpdate = g_system->getMillis();
+	downloadedSize = 0;
 	g_system->taskStarted(OSystem::kDataPackDownload);
 	takeOneFile();
 }
@@ -475,6 +476,7 @@ void DownloadPacksDialog::clearCache() {
 			// Overwrite previously downloaded pack files with dummy data
 			str->writeByte(0);
 			str->finalize();
+			delete str;
 		}
 		g_state->fileHash.clear();
 

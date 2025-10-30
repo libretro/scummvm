@@ -27,6 +27,7 @@
 #include "graphics/managed_surface.h"
 #include "graphics/screen.h"
 
+#include "mediastation/clients.h"
 #include "mediastation/mediascript/scriptvalue.h"
 
 namespace MediaStation {
@@ -61,10 +62,20 @@ enum TransitionType {
 	kTransitionCircleOut = 328
 };
 
-class VideoDisplayManager {
+enum VideoDisplayManagerSectionType {
+	kVideoDisplayManagerUpdateDirty = 0x578,
+	kVideoDisplayManagerUpdateAll = 0x579,
+	kVideoDisplayManagerEffectTransition = 0x57a,
+	kVideoDisplayManagerSetTime = 0x57b,
+	kVideoDisplayManagerLoadPalette = 0x5aa,
+};
+
+class VideoDisplayManager : public ParameterClient {
 public:
 	VideoDisplayManager(MediaStationEngine *vm);
 	~VideoDisplayManager();
+
+	virtual bool attemptToReadFromStream(Chunk &chunk, uint sectionType) override;
 
 	void updateScreen() { _screen->update(); }
 	Graphics::Palette *getRegisteredPalette() { return _registeredPalette; }
@@ -73,7 +84,7 @@ public:
 	void imageBlit(
 		const Common::Point &destinationPoint,
 		const Bitmap *image,
-		const double dissolveFactor,
+		double dissolveFactor,
 		const Common::Array<Common::Rect> &dirtyRegion,
 		Graphics::ManagedSurface *destinationImage = nullptr);
 
@@ -89,14 +100,18 @@ public:
 	void setTransitionOnSync(Common::Array<ScriptValue> &args) { _scheduledTransitionOnSync = args; }
 	void doTransitionOnSync();
 
-private:
-	static const uint SCREEN_WIDTH = 640;
-	static const uint SCREEN_HEIGHT = 480;
+	void performUpdateDirty();
+	void performUpdateAll();
 
+private:
 	MediaStationEngine *_vm = nullptr;
 	Graphics::Screen *_screen = nullptr;
 	Graphics::Palette *_registeredPalette = nullptr;
 	Common::Array<ScriptValue> _scheduledTransitionOnSync;
+	double _defaultTransitionTime = 0.0;
+
+	void readAndEffectTransition(Chunk &chunk);
+	void readAndRegisterPalette(Chunk &chunk);
 
 	// Blitting methods.
 	// blitRectsClip encompasses the functionality of both opaqueBlitRectsClip

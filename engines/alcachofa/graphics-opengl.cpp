@@ -19,6 +19,7 @@
  *
  */
 
+#include "alcachofa/alcachofa.h"
 #include "alcachofa/graphics.h"
 #include "alcachofa/detection.h"
 #include "alcachofa/graphics-opengl.h"
@@ -36,8 +37,13 @@ using namespace Graphics;
 
 namespace Alcachofa {
 
+//
+// OpenGL classes, calls to gl* are allowed here
+//
+
 OpenGLTexture::OpenGLTexture(int32 w, int32 h, bool withMipmaps)
-	: OpenGLTextureBase(w, h, withMipmaps) {
+	: ITexture({ (int16)w, (int16)h })
+	, _withMipmaps(withMipmaps) {
 	glEnable(GL_TEXTURE_2D); // will error on GLES2, but that is okay
 	OpenGL::clearGLError(); // we will just ignore it
 	GL_CALL(glGenTextures(1, &_handle));
@@ -46,10 +52,6 @@ OpenGLTexture::OpenGLTexture(int32 w, int32 h, bool withMipmaps)
 	GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
 	setMirrorWrap(false);
 }
-
-//
-// OpenGL classes, calls to gl* are allowed here
-//
 
 OpenGLTexture::~OpenGLTexture() {
 	if (_handle != 0)
@@ -75,7 +77,12 @@ void OpenGLTexture::setMirrorWrap(bool wrap) {
 	GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode));
 }
 
-void OpenGLTexture::updateInner(const void *pixels) {
+void OpenGLTexture::update(const Surface &surface) {
+	assert(surface.format == g_engine->renderer().getPixelFormat());
+	assert(surface.w == size().x && surface.h == size().y);
+
+	const void *pixels = surface.getPixels();
+
 	glEnable(GL_TEXTURE_2D);
 	OpenGL::clearGLError();
 	GL_CALL(glBindTexture(GL_TEXTURE_2D, _handle));
@@ -95,7 +102,7 @@ OpenGLRenderer::OpenGLRenderer(Point resolution) : OpenGLRendererBase(resolution
 	GL_CALL(glEnable(GL_BLEND));
 	GL_CALL(glDepthMask(GL_FALSE));
 
-	if (!OpenGLContext.NPOTSupported || !OpenGLContext.textureMirrorRepeatSupported) {
+	if (!OpenGLContext.textureMirrorRepeatSupported) {
 		GUI::displayErrorDialog(_("Old OpenGL detected, some graphical errors will occur."));
 	}
 }
@@ -103,6 +110,14 @@ OpenGLRenderer::OpenGLRenderer(Point resolution) : OpenGLRendererBase(resolution
 ScopedPtr<ITexture> OpenGLRenderer::createTexture(int32 w, int32 h, bool withMipmaps) {
 	assert(w >= 0 && h >= 0);
 	return ScopedPtr<ITexture>(new OpenGLTexture(w, h, withMipmaps));
+}
+
+PixelFormat OpenGLRenderer::getPixelFormat() const {
+	return PixelFormat::createFormatRGBA32();
+}
+
+bool OpenGLRenderer::requiresPoTTextures() const {
+	return !OpenGLContext.NPOTSupported;
 }
 
 void OpenGLRenderer::end() {
@@ -119,11 +134,6 @@ void OpenGLRenderer::end() {
 			GL_UNSIGNED_BYTE,
 			_currentOutput->getPixels()
 		));
-		if (_currentOutput->format != PixelFormat::createFormatRGBA32()) {
-			auto targetFormat = _currentOutput->format;
-			_currentOutput->format = PixelFormat::createFormatRGBA32();
-			_currentOutput->convertToInPlace(targetFormat);
-		}
 	}
 }
 
@@ -161,7 +171,7 @@ void OpenGLRenderer::setOutput(Surface &output) {
 		debugC(0, kDebugGraphics, "Output is larger than screen, output will be cropped (%d, %d) > (%d, %d)",
 			output.w, output.h, g_system->getWidth(), g_system->getHeight());
 
-	if (!isCompatibleFormat(output.format)) {
+	if (output.format != getPixelFormat()) {
 		auto formatString = output.format.toString();
 		debugC(0, kDebugGraphics, "Cannot use pixelformat of given output surface: %s", formatString.c_str());
 		_currentOutput = nullptr;

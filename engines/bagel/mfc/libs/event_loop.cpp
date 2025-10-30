@@ -52,6 +52,9 @@ void EventLoop::runEventLoop() {
 
 void EventLoop::SetActiveWindow(CWnd *wnd) {
 	assert(_quitFlag == QUIT_NONE);
+	if (wnd == GetActiveWindow())
+		// Already the active window
+		return;
 
 	// If it's the first window added, and we don't have
 	// a main window defined, set it as the main window
@@ -63,11 +66,15 @@ void EventLoop::SetActiveWindow(CWnd *wnd) {
 	// open windows at the same time. Each new window
 	// is effectively a dialog on top of previous ones
 
-	if (!_activeWindows.empty())
-		_activeWindows.top()->SendMessage(WM_ACTIVATE, MAKEWPARAM(WA_INACTIVE, 0), 0);
+	if (!_activeWindows.empty()) {
+		auto *win = _activeWindows.top();
+		win->SendMessage(WM_ACTIVATE, MAKEWPARAM(WA_INACTIVE, 0), 0);
+		win->SendMessage(WM_PALETTECHANGED, (WPARAM)wnd);
+	}
 
 	_activeWindows.push(wnd);
 	wnd->SendMessage(WM_ACTIVATE, MAKEWPARAM(WA_ACTIVE, 0), 0);
+	wnd->SendMessage(WM_QUERYNEWPALETTE, 0, 0);
 }
 
 void EventLoop::PopActiveWindow() {

@@ -90,8 +90,6 @@ Sprite& Sprite::operator=(const Sprite &sprite) {
 		return *this;
 	}
 
-	this->~Sprite();
-
 	_frame = sprite._frame;
 	_score = sprite._score;
 	_movie = sprite._movie;
@@ -111,6 +109,9 @@ Sprite& Sprite::operator=(const Sprite &sprite) {
 	_trails = sprite._trails;
 
 	_cast = sprite._cast;
+
+	if (_matte)
+		delete _matte;
 	_matte = nullptr;
 
 	_thickness = sprite._thickness;

@@ -47,6 +47,22 @@ static const struct CustomTarget {
 	{"d4-win", "win", "400" },
 	{"d5-mac", "mac", "500" },
 	{"d5-win", "win", "500" },
+	{"d6-mac", "mac", "600" },
+	{"d6-win", "win", "600" },
+	{"d65-mac", "mac", "650" },
+	{"d65-win", "win", "650" },
+	{"d7-mac", "mac", "700" },
+	{"d7-win", "win", "700" },
+	{"d8-mac", "mac", "800" },
+	{"d8-win", "win", "800" },
+	{"d9-mac", "mac", "900" },
+	{"d9-win", "win", "900" },
+	{"d10-mac", "mac", "1000" },
+	{"d10-win", "win", "1000" },
+	{"d11-mac", "mac", "1100" },
+	{"d11-win", "win", "1100" },
+	{"d12-mac", "mac", "1200" },
+	{"d12-win", "win", "1200" },
 	{"director-movie", "win", "400" },
 	{ nullptr, nullptr, nullptr }
 };
@@ -79,6 +95,7 @@ static const DebugChannelDef debugFlagList[] = {
 	{Director::kDebugPaused, "paused", "Pause first movie right after start"},
 	{Director::kDebugPauseOnLoad, "pauseonload", "Pause every movie right after loading"},
 	{Director::kDebugSaving, "saving", "Show Debug output while saving movies"},
+	{Director::kDebugPaths, "paths", "Show path resolving"},
 	DEBUG_CHANNEL_END
 };
 
@@ -97,6 +114,7 @@ public:
 		_fallback_blacklisted_names["Projector Skeleton"] = true;
 		_fallback_blacklisted_names["Director Player"] = true;
 		_fallback_blacklisted_names["Projector"] = true;
+		_fallback_blacklisted_names[""] = true;
 
 		// initialize customTarget hashmap here
 		for (int i = 0; customTargetList[i].name != nullptr; i++)

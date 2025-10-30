@@ -1052,6 +1052,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "suderhof",			"Geschichten vom Süderhof" },
 	{ "technicus",			"Technicus: Ten Hours Left" },
 	{ "tiefsee",			"S.O.S. Tiefsee" },
+	{ "tivolaspielebox",	"Die tolle Spiele-Box" },
 	{ "tkkgkit",			"TKKG: Identikit" },
 	{ "vorsichthund",		"Vorsicht, bissiger Hund!" },
 	{ "www",				"Wellen, Wracks und Wassermänner" },
@@ -1574,6 +1575,9 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "ypl2", 				"勇者泡泡龍2" },							// Yongzhe Paopao Long 2, aka Brave Bubble Dragon 2, aka Bubble Hero 2
 	{ "creativenursery",	"创意学前华文(一)" },						// Creative Nursery Chinese
 
+	// Korean titles
+	{ "neoguri",			"일곱마리 너구리의 한글교실" }, // Seven Raccoon-Dogs' Hangul Class
+
 	// Titles containing Director extras
 	{ "acrosstherhine",		"Across the Rhine" }, // Lou Reda documentary from disc 2 of "Across the Rhine" (Microprose)
 	{ "amgpremiere",		"The American Girls Premiere" },
@@ -1759,6 +1763,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "iliad",				"Iliad" },
 	{ "illustrator",		"Adobe Illustrator" },
 	{ "it1d",				"In the First Degree" },
+	{ "kidpix",				"Kid Pix" },
 	{ "landdesigner",		"Sierra Land Designer" },
 	{ "lbt8",				"The Land Before Time: The Big Freeze" },
 	{ "leopardspots",		"How the Leopard Got His Spots" },
@@ -8708,7 +8713,7 @@ static const DirectorGameDescription gameDescriptions[] = {
 
 	// French: "Le Maître des éléments", published by Gallimard Multimédia
 	// Mac version requires installation, installer in file "Installeur", created with VISE Lite 3.6 from MindVision Software
-	WINGAME1_l("melements", "", "MDE.EXE", "t:8db5c7ffd823515b341cee7acb72b9a8", 2256946, Common::FR_FRA, 602),
+	WINGAME1_l("melements", "", "MDE.EXE", "t:8db5c7ffd823515b341cee7acb72b9a8", 2256946, Common::FR_FRA, 650),
 
 	// Dutch: "Meesters van Macht", Netherlands/Belgium release by Karakter Interactive
 	// Game files likely match the original 1997 release since it is the only variant built with Director 6.0.1
@@ -8791,6 +8796,8 @@ static const DirectorGameDescription gameDescriptions[] = {
 								  "ENGINE/ZSCR0102.Cxt", "d:d0248fdf4d4726f7b2693dae9ad12004",	  71224, Common::JA_JPN, 602),
 	WINGAME2_l("ngebrowser7", "", "BROWSE32.EXE",		 "t:d6250fd82cb0d6eb7c0c3a02d61a289a",  1826827,
 								  "ENGINE/ZSCR0102.Cxt", "f:d0248fdf4d4726f7b2693dae9ad12004",	  71224, Common::JA_JPN, 602),
+
+	WINDEMO1_l("neoguri", "", "Sevendem.exe", "t:763f6a1e5ff37a71d7548f7561002521", 5212676, Common::KO_KOR, 601),
 
 	// Study guide from The Daily Telegraph
 	// Mac executable filename does indeed end in .exe
@@ -9068,6 +9075,13 @@ static const DirectorGameDescription gameDescriptions[] = {
 							"dir/sims1.dir", "f:8c6ccc894cce347ddec675ebe56505c0", 11132824, 650),
 
 	WINGAME1_l("tiefsee", "", "Tiefsee.exe", "t:c932fbb3da13e4fdecd49f877531e422", 1508764, Common::DE_DEU, 650),
+
+	// "Die tolle Spiele-Box" is a collection of mini-games released by Tivola based on their
+	// full titles. One of the mini-games is an enhanced version of the juggling game in
+	// "Masters of the Elements", sharing some code and behavior.
+	// Requires installation.
+	WINGAME2_l("tivolaspielebox", "", "START16.EXE",  "t:a7fbc5507e75ea320562965671db3e0d", 1396929,
+									  "SELECTOR.DXR", "f:058a411d0ca623bd76a5c9b61a69a4ba", 9859616, Common::DE_DEU, 601),
 
 	// Tivola demo/sampler disc, Fall 1998, released in Germany
 	MACGAME2f_l("tivolafall1998", "Sampler", "Start",        "r:d549c6d331cf1c6354f1f2b93b34c0f4", 1026645,
@@ -9456,6 +9470,8 @@ static const DirectorGameDescription gameDescriptions[] = {
 	WINGAME2("kgbpocahontas", "", "CDGe.EXE",	 "t:7d1d6dba1026a1be63d60b7f14111619", 3037522,
 								  "CBAIOBJ.dir", "f:5f374ed90aca597fd43a0726ff2cf710",	204224, 702),
 
+	WINDEMO1_l("kidpix", "Demo", "kidpix.exe", "t:edb63181702824aaacfffe73012cbff3", 7445882, Common::KO_KOR, 702),
+
 	// Extra activities on Little Bear Thinking Adventures
 	MACGAME1("lbfamfun", "", "Little Bear Family Fun", "0944b962ebb00f4b5d5149d220f8449b", 112758, 702),
 	WINGAME1("lbfamfun", "", "Little Bear Family Fun.exe", "7c18c9a6af2694156bf09ed195c1ab09", 4214763, 702),
@@ -9485,6 +9501,9 @@ static const DirectorGameDescription gameDescriptions[] = {
 
 	MACGAME1("maisybday", "", "Maisy BDay",		"r:0944b962ebb00f4b5d5149d220f8449b", 113458,  702),
 	WINGAME1("maisybday", "", "Maisy BDay.exe", "t:26fc28194d1991645a9a42794bcb1b36", 2619122, 702),
+
+	// Korean title is 수학교실
+	WINDEMO1_l("mathsworkshop", "Preview", "Math.exe", "t:5e2d026147a09b063a2e8db2dba0ab94", 10146326, Common::KO_KOR, 702),
 
 	// Max i Duch Zamku
 	// Other languages are D4
@@ -9521,6 +9540,9 @@ static const DirectorGameDescription gameDescriptions[] = {
 
 	WINGAME2("nyknicks2000", "", "KNICKS.exe", "c1a2e8b7e41fa204009324a9c7db1030", 2834311,
 								 "Garden.dxr", "fe309424e95c3f0435c8f8a6e9a7883f", 322042, 700),
+
+	// Korean title is 올리의 그림 동화 만들기
+	WINDEMO1_l("orly", "Director Demo", "Orlydemo.exe", "t:191f9410b357d81d6fb183a5a968c8a7", 12936499, Common::KO_KOR, 702),
 
 	// Found on German releases of Silly Noisy House, The Great Green Mouse Disaster and possibly others
 	WINGAME2_l("otelo", "Demo", "PEARL.EXE", "t:fc853cf158e7eff823b6c8236bbfde4d", 8036549,
@@ -10502,10 +10524,11 @@ static const DirectorGameDescription gameDescriptions[] = {
 	MACGAME1("heuther", "OS X", "HuetherOSX", "d483e955df901222145267d2ad729ea2", 228355, 900),
 	WINGAME1("heuther", "", "Huether.exe", "c612aa43e7ef55aa4fd2e1085fb1ef7a", 3353374, 900),
 
-	WINGAME1t_l("loewe2", "", "Loewenzahn 2.exe", "861c0ac98a672fc3e537a26b8cc543be", 95970, Common::DE_DEU, 900),
-	WINGAME1t_l("loewe3", "", "Loewenzahn 3.exe", "46243628b1d79872340993bdc4a156d8", 87791, Common::DE_DEU, 900),
-	WINGAME1t_l("loewe4", "", "Loewenzahn 4.exe", "fcd7e3e7b9b1080f848c518b6e66d860", 87795, Common::DE_DEU, 900),
-	WINGAME1t_l("loewe6", "", "Loewenzahn 6.exe", "c4135f262abdbf3f2dc660e341b8a192", 87820, Common::DE_DEU, 900),
+	// Re-releases, released as part of the "Jubiläums-Paket" 25th anniversary bundle
+	WINGAME1t_l("loewe2", "Jubiläums-Paket", "Loewenzahn 2.exe", "861c0ac98a672fc3e537a26b8cc543be", 95970, Common::DE_DEU, 900),
+	WINGAME1t_l("loewe3", "Jubiläums-Paket", "Loewenzahn 3.exe", "46243628b1d79872340993bdc4a156d8", 87791, Common::DE_DEU, 900),
+	WINGAME1t_l("loewe4", "Jubiläums-Paket", "Loewenzahn 4.exe", "fcd7e3e7b9b1080f848c518b6e66d860", 87795, Common::DE_DEU, 900),
+	WINGAME1t_l("loewe6", "Jubiläums-Paket", "Loewenzahn 6.exe", "c4135f262abdbf3f2dc660e341b8a192", 87820, Common::DE_DEU, 900),
 
 	// Mac versions are D8
 	WINGAME1_l("loewespielebox", "",			"Setup/WinRoot/Terzio/LZ_Spielebox/LZ_Spielebox.exe", "t:2e0749bd71f312abdf445e958f6fd737", 95544, Common::DE_DEU, 900),
@@ -10727,7 +10750,8 @@ static const DirectorGameDescription gameDescriptions[] = {
 	// Selection of Spanish, Catalan, English at start
 	WINGAME1("limit0", "", "Limit 0.exe", "827e5af88f4c096652a1523dc28c9bf4", 4664824, 1000),
 
-	WINGAME1t_l("loewe1", "", "Loewe1.exe", "854989b2e1f7b9d55988ca1387859da2", 96316, Common::DE_DEU, 1010),
+	// Re-release, released as part of the "Jubiläums-Paket" 25th anniversary bundle
+	WINGAME1t_l("loewe1", "Jubiläums-Paket", "Loewe1.exe", "854989b2e1f7b9d55988ca1387859da2", 96316, Common::DE_DEU, 1010),
 
 	MACGAME1_l("mathica", "Classic", "Mathica.classic",	"r:afc5296d3ffc3a638d32ccbe867e7465", 219361, Common::DE_DEU, 1010),
 	MACGAME1_l("mathica", "OS X", 	 "Mathica.osx",		"r:dd763caab8c8e5b61fafd6306f7c4f1f", 270277, Common::DE_DEU, 1010),

@@ -85,9 +85,9 @@ const ADGameDescription gameDescriptions[] = {
 		"lionking",
 		"v2.0/GB",
 		AD_ENTRY3s(
-			"LIONKING.EXE", "9cc25600be13c402f4edf15772989393", 358368,
-			"BOOT.STM", "72e9211eb97b968e8db20c0fec919eb4", 23610,
-			"100.CXT", "069b86f0912627bc1fffb1dee9b68afa", 1455740
+			"LIONKING.EXE", "3239451c477eaa16015110502be031a5", 363232,
+			"BOOT.STM", "dd83fd1fb899b680f00c586404cc7b7c", 23610,
+			"100.CXT", "d5dc4d49df2ea6f2ff0aa33a3f385506", 1455740
 		),
 		Common::EN_GRB,
 		Common::kPlatformWindows,
@@ -136,6 +136,34 @@ const ADGameDescription gameDescriptions[] = {
 		),
 		Common::EN_USA,
 		Common::kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+
+	{
+		"honeytree",
+		"v2.0/SE", // Also includes English as an in-game language option.
+		AD_ENTRY3s(
+			"WPHTASB.EXE", "8cbb2b365a1073ca5c8c1fde301094ea", 443008,
+			"BOOT.STM", "448efdc32f4ce36b5e4f91b34f44437a", 55284,
+			"100.CXT", "76bd87d2692b6ab7b034bbc50957156b", 1966658
+		),
+		Common::SV_SWE,
+		Common::kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+
+	{
+		"honeytree",
+		"v2.0/SE", // Also includes English as an in-game language option.
+		AD_ENTRY3s(
+			"Nalle Puh", "r:3c061bff404de99c69a0b0187018a7da", 765688,
+			"BOOT.STM", "448efdc32f4ce36b5e4f91b34f44437a", 55284,
+			"100.CXT", "00239a03730b8e1c3c730050b8872d33", 2267499
+		),
+		Common::SV_SWE,
+		Common::kPlatformMacintosh,
 		ADGF_UNSTABLE,
 		GUIO1(GUIO_NOASPECT)
 	},

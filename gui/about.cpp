@@ -65,7 +65,7 @@ enum {
 
 static const char *const copyright_text[] = {
 "",
-"C0""Copyright (C) 2001-2024 The ScummVM Team",
+"C0""Copyright (C) 2001-2025 The ScummVM Team",
 "C0""https://www.scummvm.org",
 "",
 "C0""ScummVM is the legal property of its developers, whose names are too numerous to list here. Please refer to the COPYRIGHT file distributed with this binary.",
@@ -142,7 +142,7 @@ AboutDialog::AboutDialog(bool inGame)
 	extensionsInfo += _("CPU extensions support:");
 	addLine(extensionsInfo);
 	Common::U32String compiledExtensionsList("C0");
-	compiledExtensionsList += Common::U32String::format("SSE2(%S) AVX2(%S) NEON(%S)",
+	compiledExtensionsList += Common::U32String::format("SSE2: %S, AVX2: %S, NEON: %S",
 		extensionSupportString[sse2Support].c_str(),
 		extensionSupportString[avx2Support].c_str(),
 		extensionSupportString[neonSupport].c_str());

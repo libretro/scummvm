@@ -278,12 +278,17 @@ void Archive::dumpChunk(Resource &res, Common::DumpFile &out) {
 	}
 	uint32 len = resStream->size();
 
+	if (res.tag == MKTAG('f','r','e','e') || res.tag == MKTAG('j','u','n','k')) {
+		if (len == 0)
+			return;
+	}
+
 	if (dataSize < len) {
 		data = (byte *)malloc(resStream->size());
 		dataSize = resStream->size();
 	}
 
-	Common::Path prepend = _pathName.empty() ? _pathName : "stream";
+	Common::Path prepend = _pathName.empty() ? Common::Path(g_director->getEXEName()) : _pathName;
 	Common::Path filename(Common::String::format("./dumps/%s-%s-%d", encodePathForDump(prepend.toString(g_director->_dirSeparator)).c_str(), tag2str(res.tag), res.index), '/');
 	resStream->read(data, len);
 

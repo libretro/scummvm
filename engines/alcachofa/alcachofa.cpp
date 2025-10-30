@@ -28,6 +28,7 @@
 #include "graphics/paletteman.h"
 #include "graphics/framelimiter.h"
 #include "graphics/thumbnail.h"
+#include "graphics/managed_surface.h"
 #include "image/png.h"
 #include "video/avi_decoder.h"
 #include "video/mpegps_decoder.h"
@@ -45,6 +46,7 @@
 #include "alcachofa/game.h"
 
 using namespace Math;
+using namespace Graphics;
 
 namespace Alcachofa {
 
@@ -52,7 +54,7 @@ constexpr uint kDefaultFramerate = 100; // the original target framerate, not cr
 
 AlcachofaEngine *g_engine;
 
-AlcachofaEngine::AlcachofaEngine(OSystem *syst, const ADGameDescription *gameDesc)
+AlcachofaEngine::AlcachofaEngine(OSystem *syst, const AlcachofaGameDescription *gameDesc)
 	: Engine(syst)
 	, _gameDescription(gameDesc)
 	, _eventLoopSemaphore("engine") {
@@ -66,11 +68,11 @@ AlcachofaEngine::~AlcachofaEngine() {
 }
 
 uint32 AlcachofaEngine::getFeatures() const {
-	return _gameDescription->flags;
+	return _gameDescription->desc.flags;
 }
 
 Common::String AlcachofaEngine::getGameId() const {
-	return _gameDescription->gameId;
+	return _gameDescription->desc.gameId;
 }
 
 Common::Error AlcachofaEngine::run() {
@@ -162,21 +164,48 @@ void AlcachofaEngine::playVideo(int32 videoId) {
 		game().invalidVideo(videoId, "decode video");
 		return;
 	}
+	decoder->setOutputPixelFormat(g_engine->renderer().getPixelFormat());
 
-	_sounds.stopAll();
-	auto texture = _renderer->createTexture(decoder->getWidth(), decoder->getHeight(), false);
+	Vector2d texMax(1.0f, 1.0f);
+	int16 texWidth = decoder->getWidth(), texHeight = decoder->getHeight();
+	ManagedSurface tmpSurface;
+	if (_renderer->requiresPoTTextures() &&
+		(!isPowerOfTwo(texWidth) || !isPowerOfTwo(texHeight))) {
+		texWidth = nextHigher2(texWidth);
+		texHeight = nextHigher2(texHeight);
+		texMax = {
+			decoder->getWidth() / (float)texWidth,
+			decoder->getHeight() / (float)texHeight,
+		};
+		tmpSurface.create(texWidth, texHeight, _renderer->getPixelFormat());
+	}
+	auto texture = _renderer->createTexture(texWidth, texHeight, false);
+
 	Common::Event e;
+	_sounds.stopAll();
 	decoder->start();
 	while (!decoder->endOfVideo() && !shouldQuit()) {
 		if (decoder->needsUpdate()) {
 			auto surface = decoder->decodeNextFrame();
-			if (surface)
-				texture->update(*surface);
+			if (surface) {
+				if (tmpSurface.empty())
+					texture->update(*surface);
+				else {
+					tmpSurface.blitFrom(*surface);
+					texture->update(tmpSurface);
+				}
+			}
 			_renderer->begin();
 			_renderer->setBlendMode(BlendMode::Alpha);
 			_renderer->setLodBias(0.0f);
 			_renderer->setTexture(texture.get());
-			_renderer->quad({}, { (float)g_system->getWidth(), (float)g_system->getHeight() });
+			_renderer->quad(
+				{},
+				{ (float)g_system->getWidth(), (float)g_system->getHeight() },
+				kWhite,
+				{},
+				{},
+				texMax);
 			_renderer->end();
 			g_system->updateScreen();
 		}
@@ -383,7 +412,7 @@ void AlcachofaEngine::getSavegameThumbnail(Graphics::Surface &thumbnail) {
 	}
 
 	// otherwise we have to rerender
-	thumbnail.create(kBigThumbnailWidth, kBigThumbnailHeight, Graphics::PixelFormat::createFormatRGBA32());
+	thumbnail.create(kBigThumbnailWidth, kBigThumbnailHeight, g_engine->renderer().getPixelFormat());
 	if (g_engine->player().currentRoom() == nullptr)
 		return; // but without a room we would render only black anyway
 

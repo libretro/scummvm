@@ -40,7 +40,7 @@ enum ScriptDebugLevel {
 };
 
 ScriptInstruction::ScriptInstruction(ReadStream &stream)
-	: _op((ScriptOp)stream.readSint32LE())
+	: _op(stream.readSint32LE())
 	, _arg(stream.readSint32LE()) {}
 
 Script::Script() {
@@ -237,6 +237,7 @@ struct ScriptTask final : public Task {
 			handleReturnFromKernelCall(process().returnValue());
 		}
 		_isFirstExecution = _returnsFromKernelCall = false;
+		auto opMap = g_engine->game().getScriptOpMap();
 
 		while (true) {
 			if (_pc >= _script._instructions.size())
@@ -269,7 +270,11 @@ struct ScriptTask final : public Task {
 				}
 			}
 
-			switch (instruction._op) {
+			if (instruction._op < 0 || (uint32)instruction._op >= opMap.size()) {
+				g_engine->game().unknownInstruction(instruction);
+				continue;
+			}
+			switch (opMap[instruction._op]) {
 			case ScriptOp::Nop: break;
 			case ScriptOp::Dup:
 				if (_stack.empty())
@@ -294,7 +299,6 @@ struct ScriptTask final : public Task {
 				pushNumber(value);
 			}break;
 			case ScriptOp::LoadString:
-			case ScriptOp::LoadString2:
 				pushString(popNumber());
 				break;
 			case ScriptOp::ScriptCall:
@@ -302,7 +306,7 @@ struct ScriptTask final : public Task {
 				_pc = instruction._arg - 1;
 				break;
 			case ScriptOp::KernelCall: {
-				TaskReturn kernelReturn = kernelCall((ScriptKernelTask)instruction._arg);
+				TaskReturn kernelReturn = kernelCall(instruction._arg);
 				if (kernelReturn.type() == TaskReturnType::Waiting) {
 					_returnsFromKernelCall = true;
 					return kernelReturn;
@@ -360,7 +364,7 @@ struct ScriptTask final : public Task {
 			case ScriptOp::BitOr:
 				pushNumber(popNumber() | popNumber()); //-V501
 				break;
-			case ScriptOp::Return: {
+			case ScriptOp::ReturnValue: {
 				int32 returnValue = popNumber();
 				_pc = popInstruction();
 				if (_pc == UINT_MAX)
@@ -414,7 +418,9 @@ private:
 	void handleReturnFromKernelCall(int32 returnValue) {
 		// this is also original done, every KernelCall is followed by a PopN of the arguments
 		// only *after* the PopN the return value is pushed so that the following script can use it
-		scumm_assert(_pc < _script._instructions.size() && _script._instructions[_pc]._op == ScriptOp::PopN);
+		scumm_assert(
+			_pc < _script._instructions.size() &&
+			g_engine->game().getScriptOpMap()[_script._instructions[_pc]._op] == ScriptOp::PopN);
 		popN(_script._instructions[_pc++]._arg);
 		pushNumber(returnValue);
 	}
@@ -540,10 +546,16 @@ private:
 			g_engine->player().activeCharacterKind() != process().character();
 	}
 
-	TaskReturn kernelCall(ScriptKernelTask task) {
+	TaskReturn kernelCall(int32 taskI) {
+		const auto taskMap = g_engine->game().getScriptKernelTaskMap();
+		if (taskI < 0 || (uint32)taskI >= taskMap.size()) {
+			g_engine->game().unknownKernelTask(taskI);
+			return TaskReturn::finish(-1);
+		}
+		const auto task = taskMap[taskI];
+
 		debugC(SCRIPT_DEBUG_LVL_KERNELCALLS, kDebugScript, "%u: %5u Kernel %-25s",
 			process().pid(), _pc - 1, KernelCallNames[(int)task]);
-
 		switch (task) {
 		// sound/video
 		case ScriptKernelTask::PlayVideo:
@@ -814,11 +826,13 @@ private:
 		// Camera tasks
 		case ScriptKernelTask::WaitCamStopping:
 			return TaskReturn::waitFor(g_engine->camera().waitToStop(process()));
-		case ScriptKernelTask::CamFollow:
-			g_engine->camera().setFollow(
-				&g_engine->world().getMainCharacterByKind((MainCharacterKind)getNumberArg(0)),
-				getNumberArg(1) != 0);
+		case ScriptKernelTask::CamFollow: {
+			WalkingCharacter *target = nullptr;
+			if (getNumberArg(0) != 0)
+				target = &g_engine->world().getMainCharacterByKind((MainCharacterKind)getNumberArg(0));
+			g_engine->camera().setFollow(target, getNumberArg(1) != 0);
 			return TaskReturn::finish(1);
+		}
 		case ScriptKernelTask::CamShake:
 			return TaskReturn::waitFor(g_engine->camera().shake(process(),
 				Vector2d(getNumberArg(1), getNumberArg(2)),
@@ -923,12 +937,10 @@ private:
 		case ScriptKernelTask::FadeType2:
 			warning("STUB KERNEL CALL: FadeType2"); // Crossfade, unused from script
 			return TaskReturn::finish(0);
-		case ScriptKernelTask::Nop10:
-		case ScriptKernelTask::Nop24:
-		case ScriptKernelTask::Nop34:
+		case ScriptKernelTask::Nop:
 			return TaskReturn::finish(0);
 		default:
-			g_engine->game().unknownKernelTask((int)task);
+			g_engine->game().unknownKernelTask(taskI);
 			return TaskReturn::finish(0);
 		}
 	}
@@ -980,19 +992,12 @@ Process *Script::createProcess(MainCharacterKind character, const String &proced
 	return process;
 }
 
-void Script::updateCommonVariables() {
-	if (g_engine->input().wasAnyMousePressed()) // yes, this variable is never reset by the engine (only by script)
-		variable("SeHaPulsadoRaton") = 1;
-
-	if (variable("CalcularTiempoSinPulsarRaton")) {
-		if (_scriptTimer == 0)
-			_scriptTimer = g_engine->getMillis();
-	} else
+void Script::setScriptTimer(bool reset) {
+	// Used for the V3 exclusive kernel task HadNoMousePressFor
+	if (reset)
 		_scriptTimer = 0;
-
-	variable("EstanAmbos") = g_engine->world().mortadelo().room() == g_engine->world().filemon().room();
-	variable("textoson") = g_engine->config().subtitles() ? 1 : 0;
-	variable("modored") = 0; // this is signalling whether a network connection is established
+	else if (_scriptTimer == 0)
+		_scriptTimer = g_engine->getMillis();
 }
 
 }

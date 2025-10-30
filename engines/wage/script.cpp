@@ -640,11 +640,9 @@ enum {
 	kCompEqChrChr,
 	kCompEqSceneScene,
 	kCompEqStringTextInput,
-	kCompEqStringString,
 	kCompEqTextInputString,
 	kCompEqNumberTextInput,
 	kCompEqTextInputNumber,
-	kCompEqStringChr,
 	kCompLtNumNum,
 	kCompLtStringTextInput,
 	kCompLtTextInputString,
@@ -658,6 +656,40 @@ enum {
 	kMoveObjScene,
 	kMoveChrScene
 };
+
+#define defEnum(x) #x
+
+static const char *compList[] = {
+	defEnum(kCompEqNumNum),
+	defEnum(kCompEqObjScene),
+	defEnum(kCompEqChrScene),
+	defEnum(kCompEqObjChr),
+	defEnum(kCompEqChrChr),
+	defEnum(kCompEqSceneScene),
+	defEnum(kCompEqStringTextInput),
+	defEnum(kCompEqTextInputString),
+	defEnum(kCompEqNumberTextInput),
+	defEnum(kCompEqTextInputNumber),
+	defEnum(kCompLtNumNum),
+	defEnum(kCompLtStringTextInput),
+	defEnum(kCompLtTextInputString),
+	defEnum(kCompLtObjChr),
+	defEnum(kCompLtChrObj),
+	defEnum(kCompLtObjScene),
+	defEnum(kCompGtNumNum),
+	defEnum(kCompGtStringString),
+	defEnum(kCompGtChrScene),
+	defEnum(kMoveObjChr),
+	defEnum(kMoveObjScene),
+	defEnum(kMoveChrScene),
+};
+
+Common::String comp2str(int fl) {
+	if (fl >= ARRAYSIZE(compList) || fl < 0)
+		return Common::String::format("<%d>", fl);
+
+	return compList[fl];
+}
 
 static const char *typeNames[] = {
 	"OBJ",
@@ -690,10 +722,8 @@ struct Comparator {
 	{ '=', SCENE, SCENE, kCompEqSceneScene },
 	{ '=', STRING, TEXT_INPUT, kCompEqStringTextInput },
 	{ '=', TEXT_INPUT, STRING, kCompEqTextInputString },
-	{ '=', STRING, STRING, kCompEqStringString },
 	{ '=', NUMBER, TEXT_INPUT, kCompEqNumberTextInput },
 	{ '=', TEXT_INPUT, NUMBER, kCompEqTextInputNumber },
-	{ '=', STRING, CHR, kCompEqStringChr },
 
 	{ '<', NUMBER, NUMBER, kCompLtNumNum },
 	{ '<', STRING, TEXT_INPUT, kCompLtStringTextInput },
@@ -730,6 +760,8 @@ bool Script::compare(Operand *o1, Operand *o2, int comparator) {
 		return false;
 	}
 
+	debug(9, "     comparator %s with %s with %s", typeNames[o1->_type], typeNames[o2->_type], comp2str(comparator).c_str());
+
 	switch(comparator) {
 	case kCompEqNumNum:
 		return o1->_value.number == o2->_value.number;
@@ -761,15 +793,6 @@ bool Script::compare(Operand *o1, Operand *o2, int comparator) {
 					return true;
 		}
 		return false;
-	case kCompEqStringChr:
-		if (o2->_value.chr == NULL) {
-			debug(1, "%s() o2->_value.chr is null", __func__);
-		} else {
-			for (const auto &obj : o2->_value.chr->_inventory)
-				if (obj->_name.equalsIgnoreCase(*o1->_value.string))
-					return true;
-		}
-		return false;
 	case kCompEqChrChr:
 		return o1->_value.chr == o2->_value.chr;
 	case kCompEqSceneScene:
@@ -786,14 +809,6 @@ bool Script::compare(Operand *o1, Operand *o2, int comparator) {
 		}
 	case kCompEqTextInputString:
 		return compare(o2, o1, kCompEqStringTextInput);
-	case kCompEqStringString:
-		{
-			Common::String s1(*o1->_value.string), s2(*o2->_value.string);
-			s1.toLowercase();
-			s2.toLowercase();
-
-			return s1.contains(s2);
-		}
 	case kCompEqNumberTextInput:
 		if (_inputText == NULL) {
 			return false;
@@ -889,6 +904,7 @@ bool Script::evaluatePair(Operand *lhs, const char *op, Operand *rhs) {
 
 	// Now, try partial matches.
 	Operand *c1, *c2;
+	debug(8, "   no direct comparators, trying partial matches");
 	for (int cmp = 0; comparators[cmp].op != 0; cmp++) {
 		if (comparators[cmp].op != op[0])
 			continue;
@@ -907,6 +923,7 @@ bool Script::evaluatePair(Operand *lhs, const char *op, Operand *rhs) {
 	}
 
 	// Now, try double conversion.
+	debug(8, "   no direct comparators, trying double conversion");
 	for (int cmp = 0; comparators[cmp].op != 0; cmp++) {
 		if (comparators[cmp].op != op[0])
 			continue;

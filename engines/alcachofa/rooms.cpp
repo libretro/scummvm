@@ -164,7 +164,7 @@ void Room::draw() {
 }
 
 void Room::updateScripts() {
-	g_engine->script().updateCommonVariables();
+	g_engine->game().updateScriptVariables();
 	if (!g_engine->scheduler().hasProcessWithName("ACTUALIZAR_" + _name))
 		g_engine->script().createProcess(MainCharacterKind::None, "ACTUALIZAR_" + _name, ScriptFlags::AllowMissing | ScriptFlags::IsBackground);
 	g_engine->scheduler().run();
@@ -784,7 +784,7 @@ void World::loadDialogLines() {
 			if (cursor > dialogLineEnd)
 				g_engine->game().invalidDialogLine(_dialogLines.size());
 			cursor = lineStart; // store an empty string
-			dialogLineEnd = lineStart + 1;
+			dialogLineEnd = lineStart;
 		}
 
 		*dialogLineEnd = 0;

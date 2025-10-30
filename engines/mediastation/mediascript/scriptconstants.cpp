@@ -103,6 +103,8 @@ const char *variableScopeToStr(VariableScope scope) {
 		return "Local";
 	case kVariableScopeParameter:
 		return "Parameter";
+	case kVariableScopeIndirectParameter:
+		return "IndirectParameter";
 	case kVariableScopeGlobal:
 		return "Global";
 	default:
@@ -135,6 +137,8 @@ const char *builtInMethodToStr(BuiltInMethod method) {
 		return "SpatialHide";
 	case kSpatialMoveToMethod:
 		return "SpatialMoveTo";
+	case kSpatialMoveToByOffsetMethod:
+		return "SpatialMoveToByOffset";
 	case kSpatialZMoveToMethod:
 		return "SpatialZMoveTo";
 	case kSpatialCenterMoveToMethod:
@@ -167,8 +171,33 @@ const char *builtInMethodToStr(BuiltInMethod method) {
 		return "GetWidth";
 	case kGetHeightMethod:
 		return "GetHeight";
+	case kGetCenterXMethod:
+		return "GetCenterX";
+	case kGetCenterYMethod:
+		return "GetCenterY";
+	case kGetZCoordinateMethod:
+		return "GetZCoordinate";
+	case kIsPointInsideMethod:
+		return "IsPointInside";
+	case kGetMouseXOffsetMethod:
+		return "GetMouseXOffset";
+	case kGetMouseYOffsetMethod:
+		return "GetMouseYOffset";
 	case kIsVisibleMethod:
 		return "IsVisible";
+	case kSetMousePositionMethod:
+		return "SetMousePosition";
+	case kGetXScaleMethod1:
+	case kGetXScaleMethod2:
+		return "GetXScale";
+	case kSetScaleMethod:
+		return "SetScale";
+	case kSetXScaleMethod:
+		return "SetXScale";
+	case kGetYScaleMethod:
+		return "GetYScale";
+	case kSetYScaleMethod:
+		return "SetYScale";
 	case kMovieResetMethod:
 		return "MovieReset";
 	case kSetCurrentClipMethod:
@@ -183,6 +212,10 @@ const char *builtInMethodToStr(BuiltInMethod method) {
 		return "SetWorldSpaceExtent";
 	case kSetBoundsMethod:
 		return "SetBounds";
+	case kStageGetWidthMethod:
+		return "StageGetWidth";
+	case kStageGetHeightMethod:
+		return "StageGetHeight";
 	case kStopPanMethod:
 		return "StopPan";
 	case kViewportMoveToMethod:
@@ -329,8 +362,8 @@ const char *operandTypeToStr(OperandType type) {
 		return "String";
 	case kOperandTypeParamToken:
 		return "DollarSignVariable";
-	case kOperandTypeAssetId:
-		return "AssetId";
+	case kOperandTypeActorId:
+		return "ActorId";
 	case kOperandTypeTime:
 		return "Time";
 	case kOperandTypeVariable:
@@ -358,8 +391,8 @@ const char *scriptValueTypeToStr(ScriptValueType type) {
 		return "Time";
 	case kScriptValueTypeParamToken:
 		return "Int";
-	case kScriptValueTypeAssetId:
-		return "AssetId";
+	case kScriptValueTypeActorId:
+		return "ActorId";
 	case kScriptValueTypeString:
 		return "String";
 	case kScriptValueTypeCollection:

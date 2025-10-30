@@ -107,8 +107,38 @@ void SoundCastMember::load() {
 				delete sndData;
 			} else if (it.tag == MKTAG('e', 'd', 'i', 'M')) {
 				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
-				warning("SoundCastMember::load(): STUB: ediM resource in sound cast member %d", _castId);
+				Common::String format =  _cast->getCastMemberInfo(_castId)->mediaFormatName.c_str();
+
+				if (!_audio) {
+					if (format.equalsIgnoreCase("kMoaCfFormat_AIFF")) {
+						_audio = new MoaStreamDecoder(format, sndData);
+						_loaded = true;
+						return;
+					} else {
+						warning("SoundCastMember::load(): Unsupported ediM format '%s' in sound cast member %d", format.c_str(), _castId);
+					}
+				} else {
+					warning("SoundCastMember::load(): Multiple ediM resources in sound cast member %d", _castId);
+				}
 				delete sndData;
+			} else if (it.tag == MKTAG('c', 'u', 'p', 't')) {
+				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
+
+				int32 numCuePoints = sndData->readSint32BE();
+				char cuePointName[32];
+
+				for (int i = 0; i < numCuePoints; i++) {
+					int32 cuePoint = sndData->readSint32BE();
+					_cuePoints.push_back(cuePoint);
+
+					sndData->read(cuePointName, 32);
+					cuePointName[31] = '\0';
+					_cuePointNames.push_back(cuePointName);
+
+					debugC(2, kDebugLoading, "    Cue point %d: %d (%s) in sound cast member %d", i, cuePoint, cuePointName, _castId);
+				}
+			} else {
+				debugC(2, kDebugLoading, "SoundCastMember::load(): Ignoring unknown tag '%s' in sound cast member %d", tag2str(it.tag), _castId);
 			}
 		}
 
@@ -194,6 +224,7 @@ bool SoundCastMember::hasField(int field) {
 	case kTheCuePointNames:		// D6
 	case kTheCuePointTimes:		// D6
 	case kTheCurrentTime:		// D6
+	case kTheLoop:
 	case kTheSampleRate:
 	case kTheSampleSize:
 		return true;
@@ -215,6 +246,29 @@ Datum SoundCastMember::getField(int field) {
 	case kTheChannelCount:
 		d = _audio->getChannelCount();
 		break;
+	case kTheCuePointNames:
+		{
+			FArray *arr = new FArray();
+			for (size_t i = 0; i < _cuePointNames.size(); i++) {
+				arr->arr.push_back(Datum(_cuePointNames[i]));
+			}
+			d.type = ARRAY;
+			d.u.farr = arr;
+		}
+		break;
+	case kTheCuePointTimes:
+		{
+			FArray *arr = new FArray();
+			for (size_t i = 0; i < _cuePoints.size(); i++) {
+				arr->arr.push_back(Datum((int)_cuePoints[i]));
+			}
+			d.type = ARRAY;
+			d.u.farr = arr;
+		}
+		break;
+	case kTheLoop:
+		d = _looping ? 1 : 0;
+		break;
 	case kTheSampleRate:
 		d = _audio->getSampleRate();
 		break;
@@ -235,6 +289,10 @@ void SoundCastMember::setField(int field, const Datum &d) {
 	case kTheSampleSize:
 		warning("SoundCastMember::setField(): Attempt to set read-only field %s of cast %d", g_lingo->field2str(field), _castId);
 		return;
+	case kTheLoop:
+		_looping = bool(d.asInt());
+		warning("STUB: SoundCastMember::setField(): Set looping to %d for cast %d", _looping, _castId);
+		break;
 	default:
 		break;
 	}

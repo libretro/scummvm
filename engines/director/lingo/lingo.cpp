@@ -621,6 +621,7 @@ Common::String Lingo::formatFunctionBody(Symbol &sym) {
 
 bool Lingo::execute(int targetFrame) {
 	uint localCounter = 0;
+	uint lastUpdate = 0;
 
 	while (!_abort && !_freezeState && !_playDone && _state->script && (*_state->script)[_state->pc] != STOP) {
 		if (targetFrame != -1 && (int)_state->callstack.size() == targetFrame)
@@ -653,7 +654,10 @@ bool Lingo::execute(int targetFrame) {
 			Score *score = movie->getScore();
 			score->updateWidgets(true);
 
-			g_system->updateScreen();
+			if (g_system->getMillis() - lastUpdate > 20) {
+				lastUpdate = g_system->getMillis();
+				g_system->updateScreen();
+			}
 		}
 
 		uint current = _state->pc;
@@ -675,6 +679,11 @@ bool Lingo::execute(int targetFrame) {
 
 		g_debugger->stepHook();
 
+		if (_state->script == nullptr) {
+			debugC(1, kDebugLingoExec, "Lingo::execute(): PANIC: No script to execute (1)");
+			break;
+		}
+
 		_state->pc++;
 		(*((*_state->script)[_state->pc - 1]))();
 
@@ -688,6 +697,11 @@ bool Lingo::execute(int targetFrame) {
 
 		_globalCounter++;
 		localCounter++;
+
+		if (_state->script == nullptr) {
+			debugC(1, kDebugLingoExec, "Lingo::execute(): PANIC: No script to execute (2)");
+			break;
+		}
 
 		if (!_abort && _state->pc >= (*_state->script).size()) {
 			warning("Lingo::execute(): Bad PC (%d)", _state->pc);

@@ -19,9 +19,12 @@
  *
  */
 
+#include "common/config-manager.h"
 #include "common/debug.h"
-#include "common/stream.h"
+#include "common/file.h"
 #include "common/memstream.h"
+
+#include "image/png.h"
 
 #include "director/director.h"
 #include "director/cast.h"
@@ -50,7 +53,7 @@ RTE1::RTE1(Cast *cast, Common::SeekableReadStreamEndian &stream) : _cast(cast) {
 		stream.read(&data[0], stream.size());
 }
 
-RTE2::RTE2(Cast *cast, Common::SeekableReadStreamEndian &stream) : _cast(cast) {
+RTE2::RTE2(Cast *cast, Common::SeekableReadStreamEndian &stream, uint16 id) : _cast(cast), _id(id) {
 	if (debugChannelSet(9, kDebugLoading)) {
 		debugC(9, kDebugLoading, "RTE2:");
 		stream.hexdump(stream.size());
@@ -70,7 +73,7 @@ RTE2::RTE2(Cast *cast, Common::SeekableReadStreamEndian &stream) : _cast(cast) {
 	debugC(5, kDebugLoading, "RTE2: _width: %d, _height: %d, _bpp: %d, _rle: %d bytes", _width, _height, _bpp, rleCount);
 }
 
-Graphics::ManagedSurface *RTE2::createSurface(uint32 foreColor, uint32 bgColor, const Graphics::PixelFormat &pf) const {
+Graphics::ManagedSurface *RTE2::createSurface(uint32 foreColor, uint32 bgColor, const Graphics::PixelFormat &pf, bool renderBg) const {
 	if (_rle.empty())
 		return nullptr;
 	Common::MemoryReadStream stream(_rle.data(), _rle.size());
@@ -88,13 +91,13 @@ Graphics::ManagedSurface *RTE2::createSurface(uint32 foreColor, uint32 bgColor, 
 				r = stream.readByte();
 				g = stream.readByte();
 				b = stream.readByte();
-				debugC(9, kDebugLoading, "[%04x] (%d, %d): color %d %d %d", pos, x, y, r, g, b);
+				debugC(8, kDebugLoading, "[%04x] (%d, %d): color %d %d %d", pos, x, y, r, g, b);
 				continue;
 			}
 			a = ((uint32)check*0xff/((1 << _bpp) - 1));
 			if (check == 0 || check == checkMax) {
 				byte count = stream.readByte();
-				debugC(9, kDebugLoading, "[%04x] (%d, %d): %02x, count %d", pos, x, y, check, count);
+				debugC(8, kDebugLoading, "[%04x] (%d, %d): %02x, count %d", pos, x, y, check, count);
 				if (count == 0x00 && check == 0x00) {
 					// end of line, fill the remaining colour
 					a = 0;
@@ -111,7 +114,7 @@ Graphics::ManagedSurface *RTE2::createSurface(uint32 foreColor, uint32 bgColor, 
 						break;
 				}
 			} else {
-				debugC(9, kDebugLoading, "[%04x] (%d, %d): %02x", pos, x, y, check);
+				debugC(8, kDebugLoading, "[%04x] (%d, %d): %02x", pos, x, y, check);
 				*(uint32 *)surface.getBasePtr(x, y) = pf.ARGBToColor(a, r, g, b);
 				x += 1;
 			}
@@ -119,12 +122,32 @@ Graphics::ManagedSurface *RTE2::createSurface(uint32 foreColor, uint32 bgColor, 
 	}
 	Graphics::ManagedSurface *result = new Graphics::ManagedSurface();
 	result->create((int16)_width, (int16)_height, pf);
-	// Fill it with the background colour
-	result->fillRect(Common::Rect(_width, _height), bgColor);
+
+	if (renderBg) {
+		// Fill it with the background colour
+		result->fillRect(Common::Rect(_width, _height), bgColor);
+	}
+
 	// Blit the alpha text map
 	result->blitFrom(surface, nullptr);
 
 	surface.free();
+
+	if (ConfMan.getBool("dump_scripts")) {
+
+		Common::String prepend = _cast->getMacName();
+		Common::String filename = Common::String::format("./dumps/%s-%s%s-%d.png",
+				encodePathForDump(prepend).c_str(), "RTE2", (renderBg ? "-bg" : ""), _id);
+		Common::DumpFile bitmapFile;
+
+		warning("RTE2::createSurface(): Dumping RTE2 to '%s'", filename.c_str());
+
+		bitmapFile.open(Common::Path(filename), true);
+		Image::writePNG(bitmapFile, *result->surfacePtr(), nullptr);
+
+		bitmapFile.close();
+	}
+
 	return result;
 }
 
