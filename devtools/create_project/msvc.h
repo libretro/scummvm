@@ -31,6 +31,7 @@ public:
 	MSVCProvider(StringList &global_warnings, std::map<std::string, StringList> &project_warnings, StringList &global_errors, const int version, const MSVCVersion &msvcVersion);
 
 protected:
+	const int _version;
 	const MSVCVersion _msvcVersion;
 
 	StringList _enableLanguageExtensions;
@@ -100,7 +101,7 @@ protected:
 	/**
 	 * Get the command line for the revision tool (shared between all Visual Studio based providers)
 	 */
-	std::string getPreBuildEvent() const;
+	std::string getPreBuildEvent(const BuildSetup &setup) const;
 
 	/**
 	* Get the command line for the test generator

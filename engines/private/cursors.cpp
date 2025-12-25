@@ -22,6 +22,8 @@
 #include "common/rect.h"
 #include "graphics/cursorman.h"
 
+#include "common/compression/installshieldv3_archive.h"
+
 #include "common/formats/winexe_ne.h"
 #include "common/formats/winexe_pe.h"
 
@@ -39,37 +41,50 @@ namespace Private {
 struct CursorEntry {
 	const char *name;
  	const char *aname;
-	uint id;
+	uint windowsId;
+	uint japaneseWindowsId;
+	uint macId;
 };
 
 void PrivateEngine::loadCursors() {
-	if (_platform == Common::kPlatformWindows) {
-		const CursorEntry cursorIDReference[] = {
-			{ "kTurnLeft",  "k1", 23 },
-			{ "kTurnRight", "k2", 9  },
-			{ "kZoomIn",    "k3", 17 },
-			{ "kZoomOut",   "k4", 11 },
-			{ "kExit",      "k5", 7  },
-			{ "kPhone",     "k6", 25 },
-			{ "kInventory", "k7", 19 },
-			{ nullptr, nullptr,   0  }
-		};
+	const CursorEntry cursorIDReference[] = {
+		{ "kTurnLeft",  "k1", 23, 17, 133 },
+		{ "kTurnRight", "k2", 9,  3,  132 },
+		{ "kZoomIn",    "k3", 17, 11, 138 },
+		{ "kZoomOut",   "k4", 11, 5,  135 },
+		{ "kExit",      "k5", 7,  1,  130 },
+		{ "kPhone",     "k6", 25, 19, 141 },
+		{ "kInventory", "k7", 19, 13, 139 }
+	};
 
+	_defaultCursor = Graphics::makeDefaultWinCursor();
+
+	if (_platform == Common::kPlatformWindows) {
 		Common::WinResources *exe = nullptr;
+		Common::SeekableReadStream *exeStream = nullptr;
 		Common::ArchiveMemberList members;
-		if (_installerArchive.open("SUPPORT/PVTEYE.Z"))
-			if (_language == Common::JA_JPN)
-				exe = Common::WinResources::createFromEXE(_installerArchive.createReadStreamForMember("PvteyeJ.EXE"));
-			else
-				exe = Common::WinResources::createFromEXE(_installerArchive.createReadStreamForMember("PVTEYE.EXE"));
-		else  {
-			Common::File file;
-			if (!file.open("SUPPORT/PVTEYE.EX_")) {
+		Common::InstallShieldV3 installerArchive;
+		if (installerArchive.open("SUPPORT/PVTEYE.Z")) {
+			const char *exeNames[] = {
+				"PVTEYE.EXE",
+				"PvteyeJ.EXE", // Japan
+				"PVTDEMO.EXE"
+			};
+			for (uint i = 0; i < ARRAYSIZE(exeNames) && exeStream == nullptr; i++) {
+				exeStream = installerArchive.createReadStreamForMember(exeNames[i]);
+			}
+			if (exeStream == nullptr) {
+				error("Executable not found in PVTEYE.Z");
+			}
+		} else {
+			Common::File *file = new Common::File();
+			if (!file->open("SUPPORT/PVTEYE.EX_")) {
 				error("PVTEYE.EX_ not found");
 			}
-			exe = Common::WinResources::createFromEXE(file.readStream(file.size()));
+			exeStream = file;
 		}
 
+		exe = Common::WinResources::createFromEXE(exeStream);
 		if (exe == nullptr) {
 			error("Executable not found");
 		}
@@ -82,32 +97,26 @@ void PrivateEngine::loadCursors() {
 			_cursors[i].winCursorGroup = Graphics::WinCursorGroup::createCursorGroup(exe, cursorIDs[i]);
 			_cursors[i].cursor = _cursors[i].winCursorGroup->cursors[0].cursor;
 
-			const CursorEntry *entry = cursorIDReference;
-			while (entry->name != nullptr) {
-				if (entry->id == _cursors[i].winCursorGroup->cursors[0].id.getID()) {
-					_cursors[i].name = entry->name;
-					_cursors[i].aname = entry->aname;
+			for (uint j = 0; j < ARRAYSIZE(cursorIDReference); j++) {
+				const CursorEntry &entry = cursorIDReference[j];
+
+				uint entryId = (_language == Common::JA_JPN) ? entry.japaneseWindowsId : entry.windowsId;
+				if (entryId == _cursors[i].winCursorGroup->cursors[0].id.getID()) {
+					_cursors[i].name = entry.name;
+					_cursors[i].aname = entry.aname;
 					break;
 				}
-				entry++;
 			}
 		}
+
+		delete exe;
+		delete exeStream;
 	} else {
-		const CursorEntry cursorIDReference[] = {
-			{ "kTurnLeft",  "k1", 133 },
-			{ "kTurnRight", "k2", 132 },
-			{ "kZoomIn",    "k3", 138 },
-			{ "kZoomOut",   "k4", 135 },
-			{ "kExit",      "k5", 130 },
-			{ "kPhone",     "k6", 141 },
-			{ "kInventory", "k7", 139 },
-			{ nullptr, nullptr,   0   }
-		};
-
 		Common::MacResManager resMan;
-
-		Common::String path = isDemo() ? "SUPPORT/Private Eye Demo" : "SUPPORT/Private Eye";
-		if (resMan.open(path.c_str())) {
+		const char *executableFilePath = isDemo() ? "SUPPORT/Private Eye Demo" : "SUPPORT/Private Eye";
+		const char *executableInstallerPath = isDemo() ? "Private Eye Demo" : "Private Eye";
+		Common::ScopedPtr<Common::Archive> macInstaller(loadMacInstaller());
+		if (resMan.open(executableFilePath) || (macInstaller && resMan.open(executableInstallerPath, *macInstaller))) {
 			const Common::MacResIDArray cursorResIDs = resMan.getResIDArray(MKTAG('C', 'U', 'R', 'S'));
 			_cursors.resize(cursorResIDs.size());
 
@@ -118,14 +127,14 @@ void PrivateEngine::loadCursors() {
 				_cursors[i].cursor = cursor;
 				_cursors[i].winCursorGroup = nullptr;
 
-				const CursorEntry *entry = cursorIDReference;
-				while (entry->name != nullptr) {
-					if (entry->id == cursorResIDs[i]) {
-						_cursors[i].name = entry->name;
-						_cursors[i].aname = entry->aname;
+				for (uint j = 0; j < ARRAYSIZE(cursorIDReference); j++) {
+					const CursorEntry &entry = cursorIDReference[j];
+
+					if (entry.macId == cursorResIDs[i]) {
+						_cursors[i].name = entry.name;
+						_cursors[i].aname = entry.aname;
 						break;
 					}
-					entry++;
 				}
 			}
 		}
@@ -138,7 +147,7 @@ void PrivateEngine::changeCursor(const Common::String &cursor) {
 	}
 
 	if (cursor == "default") {
-		CursorMan.replaceCursor(Graphics::makeDefaultWinCursor());
+		CursorMan.replaceCursor(_defaultCursor);
 	} else {
 		for (uint i = 0; i < _cursors.size(); i++) {
 			if (_cursors[i].name == cursor || _cursors[i].aname == cursor) {

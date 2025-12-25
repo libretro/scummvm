@@ -485,9 +485,11 @@ uint16 FreescapeEngine::playSoundDOSSpeaker(uint16 frequencyStart, soundSpeakerF
 	int waveDuration = waveDurationMultipler * (frequencyDuration + 1);
 
 	while (true) {
-		float hzFreq = 1193180.0 / freq;
-		debugC(1, kFreescapeDebugMedia, "raw %d, hz: %f, duration: %d", freq, hzFreq, waveDuration);
-		_speaker->playQueue(Audio::PCSpeaker::kWaveFormSquare, hzFreq, waveDuration);
+		if (freq > 0) {
+			float hzFreq = 1193180.0 / freq;
+			debugC(1, kFreescapeDebugMedia, "raw %d, hz: %f, duration: %d", freq, hzFreq, waveDuration);
+			_speaker->playQueue(Audio::PCSpeaker::kWaveFormSquare, hzFreq, waveDuration);
+		}
 		if (frequencyStepsNumber > 0) {
 			// Ascending initial portions of cycle
 			freq += frequencyStep;
@@ -506,13 +508,13 @@ void FreescapeEngine::playSoundZX(Common::Array<soundUnitZX> *data, Audio::Sound
 		if (value.isRaw) {
 			debugC(1, kFreescapeDebugMedia, "raw hz: %f, duration: %d", value.rawFreq, value.rawLengthus);
 			if (value.rawFreq == 0) {
-				_speaker->playQueue(Audio::PCSpeaker::kWaveFormSilence, 0, 5 * value.rawLengthus);
+				_speaker->playQueue(Audio::PCSpeaker::kWaveFormSilence, 1, 5 * value.rawLengthus);
 				continue;
 			}
 			_speaker->playQueue(Audio::PCSpeaker::kWaveFormSquare, value.rawFreq, 5 * value.rawLengthus);
 		} else {
 			if (value.freqTimesSeconds == 0 && value.tStates == 0) {
-				_speaker->playQueue(Audio::PCSpeaker::kWaveFormSilence, 0, 1000 * value.multiplier);
+				_speaker->playQueue(Audio::PCSpeaker::kWaveFormSilence, 1, 1000 * value.multiplier);
 				continue;
 			}
 

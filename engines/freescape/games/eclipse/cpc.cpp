@@ -166,8 +166,7 @@ void EclipseEngine::drawCPCUI(Graphics::Surface *surface) {
 	} else if (!_currentAreaMessages.empty())
 		drawStringInSurface(_currentArea->_name, 102, 135, back, front, surface);
 
-	Common::String encodedScoreStr = getScoreString(score);
-	drawStringInSurface(encodedScoreStr, 136, 6, back, other, surface);
+	drawScoreString(score, 136, 6, back, other, surface);
 
 	int x = 171;
 	if (shield < 10)
@@ -190,13 +189,11 @@ void EclipseEngine::drawCPCUI(Graphics::Surface *surface) {
 	drawIndicator(surface, 45, 4, 12);
 	drawEclipseIndicator(surface, 228, 0, front, other);
 
-	uint32 blue = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x55, 0x55, 0xFF);
-
 	Common::Rect jarBackground(124, 165, 148, 192);
 	surface->fillRect(jarBackground, back);
 
 	Common::Rect jarWater(124, 192 - _gameStateVars[k8bitVariableEnergy], 148, 192);
-	surface->fillRect(jarWater, blue);
+	surface->fillRect(jarWater, color);
 
 	surface->fillRect(Common::Rect(225, 168, 235, 187), front);
 	drawCompass(surface, 229, 177, _yaw, 10, back);

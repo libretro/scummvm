@@ -36,9 +36,11 @@ SAVED_ASFLAGS=$ASFLAGS
 SAVED_CPPFLAGS=$CPPFLAGS
 SAVED_CXX=$CXX
 SAVED_CXXFLAGS=$CXXFLAGS
+SAVED_CXXFILT=$CXXFILT
 SAVED_DWP=$DWP
 SAVED_LD=$LD
 SAVED_LDFLAGS=$LDFLAGS
+SAVED_NM=$NM
 SAVED_PKG_CONFIG_LIBDIR=${PKG_CONFIG_LIBDIR:-unset}
 SAVED_RANLIB=$RANLIB
 SAVED_SDL_CONFIG=$SDL_CONFIG
@@ -247,10 +249,12 @@ _ext_sse2=auto
 _ext_avx2=auto
 _ext_neon=auto
 # Default commands
-_ranlib="ranlib"
-_strip="strip"
 _ar="ar cr"
 _as="as"
+_cxxfilt="c++filt"
+_ranlib="ranlib"
+_nm="nm"
+_strip="strip"
 _dwp="dwp"
 _windres="windres"
 _ldd="ldd"
@@ -668,13 +672,7 @@ get_system_exe_extension() {
 		_exeext=".exe"
 		;;
 	mint)
-		if test "$_backend" = "atari"; then
-			# ATARI backend
-			_exeext=".ttp"
-		else
-			# SDL backend
-			_exeext=".gtp"
-		fi
+		_exeext=".prg"
 		;;
 	emscripten)
 		_exeext=".html"
@@ -1204,10 +1202,12 @@ Some influential environment variables:
                      headers in a nonstandard directory <include dir>
   CXX                C++ compiler command
   CXXFLAGS           C++ compiler flags
+  CXXFILT            demangle C++ symbols command
   DWP                DWARF packing utility command
   LD                 linker command
   LDFLAGS            linker flags, e.g. -L<lib dir> if you have libraries in a
                      nonstandard directory <lib dir>
+  NM                 list symbols command
   PKG_CONFIG_LIBDIR  list of directories where pkg-config '.pc' files are
                      looked up
   RANLIB             archive indexer command
@@ -1231,7 +1231,7 @@ cat >> $TMPLOG <<EOF
 Invocation command line was:
 $0 $@
 Saved environment variables:
-AR="$SAVED_AR" AS="$SAVED_AS" ASFLAGS="$SAVED_ASFLAGS" CPPFLAGS="$SAVED_CPPFLAGS" CXX="$SAVED_CXX" CXXFLAGS="$SAVED_CXXFLAGS" DWP="$SAVED_DWP" LD="$SAVED_LD" LDFLAGS="$SAVED_LDFLAGS" PKG_CONFIG_LIBDIR="$SAVED_PKG_CONFIG_LIBDIR" RANLIB="$SAVED_RANLIB" SDL_CONFIG="$SAVED_SDL_CONFIG" STRIP="$SAVED_STRIP" WINDRES="$SAVED_WINDRES" WINDRESFLAGS="$SAVED_WINDRESFLAGS"
+AR="$SAVED_AR" AS="$SAVED_AS" ASFLAGS="$SAVED_ASFLAGS" CPPFLAGS="$SAVED_CPPFLAGS" CXX="$SAVED_CXX" CXXFLAGS="$SAVED_CXXFLAGS" CXXFILT="$SAVED_CXXFILT" DWP="$SAVED_DWP" LD="$SAVED_LD" LDFLAGS="$SAVED_LDFLAGS" NM="$SAVED_NM" PKG_CONFIG_LIBDIR="$SAVED_PKG_CONFIG_LIBDIR" RANLIB="$SAVED_RANLIB" SDL_CONFIG="$SAVED_SDL_CONFIG" STRIP="$SAVED_STRIP" WINDRES="$SAVED_WINDRES" WINDRESFLAGS="$SAVED_WINDRESFLAGS"
 EOF
 
 JPEG_LIBS=-ljpeg
@@ -1986,10 +1986,12 @@ if test -z "$_host_alias"; then
 	_host_alias="$_host_cpu-$_host_os"
 else
 	# if _host_alias was set, default to the standard GNU tools
+	_ar="$_host_alias-ar cr"
+	_as=$_host_alias-as
+	_cxxfilt=$_host_alias-c++filt
+	_nm=$_host_alias-nm
 	_ranlib=$_host_alias-ranlib
 	_strip=$_host_alias-strip
-	_ar="$_host_alias-ar cr"
-	_as="$_host_alias-as"
 	_dwp=$_host_alias-dwp
 	_windres=$_host_alias-windres
 fi
@@ -2306,20 +2308,28 @@ if test -z "$CXX"; then
 	exit 1
 fi
 
-if test -n "$RANLIB"; then
-	_ranlib=$RANLIB
-fi
-
-if test -n "$STRIP"; then
-	_strip=$STRIP
-fi
-
 if test -n "$AR"; then
 	_ar="$AR cr"
 fi
 
 if test -n "$AS"; then
 	_as=$AS
+fi
+
+if test -n "$CXXFILT"; then
+	_cxxfilt=$CXXFILT
+fi
+
+if test -n "$NM"; then
+	_nm=$NM
+fi
+
+if test -n "$RANLIB"; then
+	_ranlib=$RANLIB
+fi
+
+if test -n "$STRIP"; then
+	_strip=$STRIP
 fi
 
 if test -n "$DWP"; then
@@ -3435,7 +3445,6 @@ EOF
 	mint*)
 		append_var DEFINES "-DSYSTEM_NOT_SUPPORTING_D_TYPE"
 		append_var DEFINES "-D_GNU_SOURCE"
-		append_var DEFINES "-D_ISOC11_SOURCE"
 		;;
 	morphos*)
 		if test "$_debug_build" = no; then
@@ -3648,6 +3657,7 @@ if test -n "$_host"; then
 			_build_aspect=no
 			_seq_midi=no
 			_timidity=no
+			_libcurl=no # Android backend uses Java HTTP client
 			;;
 		arm-linux|arm*-linux-gnueabi|arm-*-linux)
 			;;
@@ -3837,7 +3847,6 @@ if test -n "$_host"; then
 			if test "$_optimizations" = "yes"; then
 				# --enable-release, --enable-optimizations
 				append_var CXXFLAGS "-fomit-frame-pointer"
-				append_var CXXFLAGS "-fno-exceptions"
 				append_var CXXFLAGS "-ffast-math -fno-unsafe-math-optimizations"
 			fi
 
@@ -3852,8 +3861,41 @@ if test -n "$_host"; then
 			append_var LDFLAGS "-Wl,--msuper-memory"
 			append_var LDFLAGS "-Wl,--stack,256k"
 
+			# common defines for atari and firebee/sdl backends
+			_sdlnet=no
+			_libcurl=no
+			_enet=no
+			_flac=no
+			_alsa=no
 			_seq_midi=no
+			_sndio=no
 			_timidity=no
+			_mpeg2=no
+			_a52=no
+			_vpx=no
+			_faad=no
+			_fluidsynth=no
+			_fluidlite=no
+			_sonivox=no
+			_opengl_mode=none
+			_tinygl=no
+			_tts=no
+			_fribidi=no
+			_discord=no
+			_text_console=yes # USE_TEXT_CONSOLE_FOR_DEBUGGER
+			_mt32emu=no
+			_lua=no
+			_build_hq_scalers=no
+			_cloud=no
+			_curl=no
+			_translation=no
+			_lua=no
+			_sid_audio=no
+			_tinygl=no
+			_nuked_opl=no
+			_detection_features_full=no
+
+			_port_mk="backends/platform/atari/atari.mk"
 			;;
 		maemo)
 			_optimization_level=-Os
@@ -4162,7 +4204,21 @@ case $_backend in
 		append_var DEFINES "-DDISABLE_NES_APU"
 		#append_var DEFINES "-DDISABLE_DOSBOX_OPL"
 		append_var LIBS "-lgem"
-		_sid_audio=no
+		_ogg=no
+		_vorbis=no
+		_tremor=no
+		_mad=no
+		_jpeg=no
+		_png=no
+		_gif=no
+		_theoradec=no
+		_readline=no
+		_freetype2=no
+		_libmikmod=no
+		_libopenmpt=no
+		_libmpcdec=no
+		_build_scalers=no
+		_build_aspect=no
 		;;
 	dc)
 		append_var INCLUDES '-I$(srcdir)/backends/platform/dc'
@@ -4728,7 +4784,7 @@ fi
 # Enable 16bit support only for backends which support it
 #
 case $_backend in
-	3ds | android | dc | ds | emscripten |ios7 | kolibrios | maemo | null | opendingux | miyoomini | miyoo | openpandora | psp | psp2 | sailfish | samsungtv | sdl | switch | wii)
+	3ds | android | dc | ds | emscripten | ios7 | kolibrios | maemo | null | opendingux | miyoomini | miyoo | openpandora | psp | psp2 | sailfish | samsungtv | sdl | switch | wii)
 		if test "$_16bit" = auto ; then
 			_16bit=yes
 		else
@@ -5996,18 +6052,26 @@ echo "$_libcurl"
 
 define_in_config_if_yes "$_libcurl" "USE_LIBCURL"
 
-echocheck "HTTP client"
-if test "$_host_os" = "emscripten" &&  test "$_cloud" = "yes"; then
+echocheck "Network client"
+if test "$_backend" = "emscripten" && test "$_cloud" = "yes"; then
 	append_var LDFLAGS "-sFETCH"
+	_basicnet=no
 	_http=yes
-	echo "Emscripten"
+	echo "Emscripten (HTTP only)"
+elif test "$_backend" = "android"; then
+	_basicnet=yes
+	_http=yes
+	echo "Android"
 elif test "$_libcurl" = "yes"; then
+	_basicnet=yes
 	_http=yes
 	echo "libcurl"
 else
+	_basicnet=no
 	_http=no
 	echo "no"
 fi
+define_in_config_if_yes $_basicnet 'USE_BASIC_NET'
 define_in_config_if_yes $_http 'USE_HTTP'
 
 #
@@ -7577,7 +7641,7 @@ case $_host_os in
 		system_libs=''
 		for lib in $LIBS; do
 			case $lib in
-			-lz|-lm|-ldl)
+			-lz|-lm|-ldl|-llog)
 				system_libs="$system_libs $lib"
 				;;
 			*)
@@ -7719,9 +7783,11 @@ SAVED_ASFLAGS           := $SAVED_ASFLAGS
 SAVED_CPPFLAGS          := $SAVED_CPPFLAGS
 SAVED_CXX               := $SAVED_CXX
 SAVED_CXXFLAGS          := $SAVED_CXXFLAGS
+SAVED_CXXFILT           := $SAVED_CXXFILT
 SAVED_DWP               := $SAVED_DWP
 SAVED_LD                := $SAVED_LD
 SAVED_LDFLAGS           := $SAVED_LDFLAGS
+SAVED_NM                := $SAVED_NM
 SAVED_PKG_CONFIG_LIBDIR := $SAVED_PKG_CONFIG_LIBDIR
 SAVED_RANLIB            := $SAVED_RANLIB
 SAVED_SDL_CONFIG        := $SAVED_SDL_CONFIG
@@ -7729,15 +7795,17 @@ SAVED_STRIP             := $SAVED_STRIP
 SAVED_WINDRES           := $SAVED_WINDRES
 SAVED_WINDRESFLAGS      := $SAVED_WINDRESFLAGS
 
-CXX := $CXX
-CXXFLAGS := $CXXFLAGS
-LD := $LD
-LIBS += $LIBS
-RANLIB := $_ranlib
-STRIP := $_strip
 AR := $_ar
 AS := $_as
 ASFLAGS := $ASFLAGS
+CXX := $CXX
+CXXFLAGS := $CXXFLAGS
+CXXFILT := $_cxxfilt
+LD := $LD
+LIBS += $LIBS
+NM := $_nm
+RANLIB := $_ranlib
+STRIP := $_strip
 DWP := $_dwp
 WINDRES := $_windres
 LDD := $_ldd

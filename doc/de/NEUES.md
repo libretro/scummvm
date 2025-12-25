@@ -40,6 +40,8 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
 
  AGI:
    - Unterstützung für Text-to-speech hinzugefügt.
+   - Unterstützung für die französische Übersetzung von SQ2 hinzugefügt.
+   - Unterstützung für die hebräischen Übersetzungen von KQ1, KQ2 und KQ3 hinzugefügt.
    - Ton-Wiedergabeprobleme in Mickey's Space Adventure auf PS3, Wii und weiteren
      Big-Endian-Plattformen korrigiert.
 
@@ -51,6 +53,9 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
 
  Cruise:
    - Unterstützung für Text-to-speech hinzugefügt.
+
+ Cryomni3D:
+   - Unterstützung für die chinesische DOS/Win95-CD-Version von Versailles hinzugefügt.
 
  Draci:
    - Unterstützung für Text-to-speech hinzugefügt.
@@ -70,6 +75,9 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
 
  Freescape:
    - Unterstützung für Rotation/Rollen in Driller und Dark Side hinzugefügt.
+   - Vollständige Unterstützung für TinyGL in allen Spielen hinzugefügt.
+   - Mehrere kleine Detail-Verbesserungen in allen Spielen vorgenommen, einschließlich
+     fehlender Grafiken und Sounds.
 
  Gob:
    - Unterstützung für Text-to-speech hinzugefügt.
@@ -81,9 +89,16 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
  Hypno:
    - Unterstützung für Tastenkürzel hinzugefügt.
 
+ Illusions:
+   - Absturz behoben, der dann auftritt, wenn früh im Spiel das Hauptmenü aufgerufen wird.
+
  Kyra:
    - CPU-Auslastung im Hauptmenü von LoL reduziert.
    - CPU-Auslastung in EoB 1 und 2 reduziert.
+   - Neues Auswahlfeld in der Benutzeroberfläche für Eye of the Beholder 1 und 2 hinzugefügt,
+     mit der geworfene Waffen jetzt intelligenter aus dem Inventar ersetzt werden können.
+   - Die Spieldatenkorrektur für die NPCs Ileria und Beohram wird in Eye of the Beholder 1 jetzt
+     hinter einem Feature-Flag und einem Auswahlfeld in der ScummVM-Benutzeroberfläche verborgen.
 
  Lab:
    - Unterstütung für Tastenkürzel hinzugefügt.
@@ -129,16 +144,27 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
    - Unterstützung für Tastenkürzel hinzugefügt.
 
  Private:
+   - Einige wichtige fehlende Grafiken und Sounds hinzugefügt.
+     Der Funktionsumfang der Engine entspricht nun dem Original-Spiel.
+   - Einige nicht zugängliche Orte sowie fehlende Interaktionen oder Unterhaltungen wurden hinzugefügt.
+   - Zur Verbesserung der Benutzerfreundlichkeit können entscheidende Bereiche hervorgehoben werden.
+   - Unterstützung für von Dritten erstellte Untertitel hinzugefügt.
+   - Einige fehlende Funktionen zum Desktop-Bildschirm hinzugefügt; Fehlerkorrekturen.
+   - Einige kleinere Fehler in Grafiken und der Cursor-Darstellung korrigiert.
    - Unterstützung für Tastenkürzel hinzugefügt.
 
  Queen:
    - Unterstützung für Tastenkürzel hinzugefügt.
 
  SCI:
-   - Farbpalette in SLATER Mac korrigiert.
-   - Fehler behoben, der LSL6 einfrieren lässt, wenn das Control-Panel genutzt wird.
-   - Fehlerkorrektur in Ben Frankin's workshop.
-   - Aktivierung zusätzlicher Nachrichten in LSL6, wenn Larry angeklickt wird.
+   - Fehler korrigiert, der zum Verlust von Spielständen in PHANT1 geführt hat (Fehler in ScummVM 2.9.0)
+   - Absturz in der deutschen Version von QFG4 v1.1 hinzugefügt, der auftritt, wenn die Höhle am Ende des Spiels betreten wird.
+   - Fehler in der japanischen PC-98-Version von PQ2 korrigiert, der zu fehlender Text-Darstellung in einigen Bereichen geführt hat.
+   - Absturz in der Amiga-Version von KQ1 behoben, der auftritt, wenn der Name des Gnoms falsch geraten wird.
+   - Absturz in der Amiga-Version von LONGBOW behoben, der auftritt, wenn die Abtei betreten wird.
+   - Fehler in der Amiga-Version von SQ4 korrigiert, der dazu führt, dass es drei Minuten dauert, bis der Titel-Bildschirm angezeigt wird.
+   - Skript-Fehler in ECO1, LSL6 und PEPPER korrigiert.
+   - Unterstützung für die Macintosh-Version von SLATER hinzugefügt.
    - Die virtuelle Tastatur wird jetzt korrekt ausgelöst, wenn eine Text-Eingabe erwartet wird.
 
  SCUMM:
@@ -192,6 +218,13 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
  Toltecs:
    - Unterstützung für Tastenkürzel hinzugefügt.
 
+ Toon:
+   - Die Gift-O-Matic-Maschine läuft jetzt in der korrekten Geschwindigkeit, sodass
+     das Verhalten jetzt der originalen Hardware entspricht.
+
+ Touche:
+   - Absturz behoben, der auftritt, wenn das Spiel kurz vor der Sprachausgabe beendet wird.
+
  TwinE:
    - Ursprüngliche Fehlerkorrekturen aktiviert (Tür zum Hauptquartier von FunFrock und Probleme beim Speichern).
 
@@ -205,6 +238,39 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
  Wintermute:
    - Der 3D-Renderer wird jetzt auch standardmäßig für 2D-Spiele genutzt.
    - Unterstützung für Text-to-speech hinzugefügt.
+
+ Desktop-Portierungen:
+   - Die Benutzer können das Ändern der Größe des ScummVM-Fensters jetzt deaktivieren (mit Strg+R).
+   - Unterstützung für SDL3 hinzugefügt (auch wenn SDL2 aktuell noch als Standard genutzt wird).
+   - Unterstützung für skalierende Shader in 3D-Engines hinzugefügt.
+   - Letzte Überbleibsel des ResidualVM-Merges entfernt: Die Code-Basis ist jetzt vollständig zusammengeführt.
+
+ Android-Portierung:
+   - Unterstützung für Android 16 hinzugefügt.
+   - Unterstützung für skalierende Shader in 3D-Engines hinzugefügt.
+   - Letzte Überbleibsel des ResidualVM-Merges entfernt: Die Code-Basis ist jetzt vollständig zusammengeführt.
+   - Gesperrte Bildbereiche werden jetzt berücksichtigt.
+   - Statt libcurl wird jetzt die Android-Netzwerkimplementierung genutzt: Ab sofort werden HTTPS-Zertifikate des Systems verwendet.
+   - In aktuellen Android-Versionen funktioniert das drücken und halten des "Zurück"-Buttons jetzt korrekt.
+
+ Atari-Portierung:
+   - Pfad-Angaben unter FreeMiNT und TOS in scummvm.cfg vereinheitlicht
+     (am Besten löschst Du die alte Konfigurationsdatei).
+   - .dat-Dateinamen, die länger als 8+3 sind, werden jetzt korrekt übersetzt.
+   - Langsame Darstellung in Eco Quests Intro korrigiert.
+   - Langsame Cursor-Darstellung in Phantasmagoria, KQ7 und anderen SCI32-Spielen korrigiert.
+   - Stack-Größe auf 256k angehoben, um einen Stack-Overflow in einigen Engines (wie Supernova)
+     zu vermeiden.
+   - Spiele können jetzt wieder korrekt über die Kommandozeile gestartet werden.
+
+ DS-Portierung:
+   - Aktualisierung auf das aktuelle devkitPRO SDK.
+
+ iOS-Portierung:
+   - Unterstützung für skalierende Shader in 3D-Engines hinzugefügt.
+   - Unterstützung für Kantenglättung in 3D-Engines hinzugefügt.
+   - Letzte Überbleibsel des ResidualVM-Merges entfernt: Die Code-Basis ist jetzt vollständig zusammengeführt.
+   - Gesperrte Bildbereiche werden jetzt berücksichtigt.
 
 #### 2.9.1 "Slappin da BASS" (25.05.2025)
 

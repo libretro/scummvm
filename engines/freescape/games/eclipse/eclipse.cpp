@@ -45,6 +45,12 @@ EclipseEngine::EclipseEngine(OSystem *syst, const ADGameDescription *gd) : Frees
 	_soundIndexCrushed = -1;
 	_soundIndexMissionComplete = -1;
 
+	_maxEnergy = 27;
+	_maxShield = 50;
+
+	_initialEnergy = 16;
+	_initialShield = 50;
+
 	if (isDOS())
 		initDOS();
 	else if (isCPC())
@@ -73,12 +79,6 @@ EclipseEngine::EclipseEngine(OSystem *syst, const ADGameDescription *gd) : Frees
 	_angleRotations.push_back(5);
 	_angleRotations.push_back(10);
 	_angleRotations.push_back(15);
-
-	_maxEnergy = 27;
-	_maxShield = 50;
-
-	_initialEnergy = 16;
-	_initialShield = 50;
 
 	_endArea = 1;
 	_endEntrance = 33;
@@ -271,11 +271,13 @@ void EclipseEngine::initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *in
 
 	act = new Common::Action("TGGLHEIGHT", _("Toggle Height"));
 	act->setCustomEngineActionEvent(kActionToggleRiseLower);
+	act->addDefaultInputMapping("JOY_B");
 	act->addDefaultInputMapping("h");
 	engineKeyMap->addAction(act);
 
 	act = new Common::Action("REST", _("Rest"));
 	act->setCustomEngineActionEvent(kActionRest);
+	act->addDefaultInputMapping("JOY_Y");
 	act->addDefaultInputMapping("r");
 	engineKeyMap->addAction(act);
 
@@ -723,23 +725,30 @@ void EclipseEngine::drawSensorShoot(Sensor *sensor) {
 	}
 }
 
-Common::String EclipseEngine::getScoreString(int score) {
+void EclipseEngine::drawScoreString(int score, int x, int y, uint32 front, uint32 back, Graphics::Surface *surface) {
 	Common::String scoreStr = Common::String::format("%07d", score);
 
 	if (isDOS() || isCPC() || isSpectrum()) {
 		scoreStr = shiftStr(scoreStr, 'Z' - '0' + 1);
-		if (_renderMode == Common::RenderMode::kRenderEGA || isSpectrum())
-			return scoreStr;
+		if (_renderMode == Common::RenderMode::kRenderEGA || isSpectrum()) {
+			drawStringInSurface(scoreStr, x, y, front, back, surface);
+			return;
+		}
+
 	}
-	Common::String encodedScoreStr;
+
+	// Start in x,y and draw each digit, from left to right, adding a gap every 3 digits
+	int gapSize = isC64() ? 8 : 4;
 
 	for (int i = 0; i < int(scoreStr.size()); i++) {
-		encodedScoreStr.insertChar(scoreStr[int(scoreStr.size()) - i - 1], 0);
-		if ((i + 1) % 3 == 0 && i > 0)
-		encodedScoreStr.insertChar(',', 0);
+		drawStringInSurface(Common::String(scoreStr[i]), x, y, front, back, surface);
+		x += 8;
+		if ((i - scoreStr.size() + 1) % 3 == 1)
+			x += gapSize;
 	}
-	return encodedScoreStr;
+
 }
+
 
 void EclipseEngine::updateTimeVariables() {
 	if (isEclipse2() && _gameStateControl == kFreescapeGameStateStart) {

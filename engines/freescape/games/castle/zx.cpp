@@ -33,7 +33,7 @@ void CastleEngine::initZX() {
 	_soundIndexCollide = 3;
 	_soundIndexStartFalling = -1;
 	_soundIndexFallen = 1;
-	_soundIndexFall = 6; 
+	_soundIndexFall = 6;
 	_soundIndexStepUp = 12;
 	_soundIndexStepDown = 12;
 	_soundIndexMenu = 3;
@@ -230,29 +230,6 @@ void CastleEngine::loadAssetsZXFullGame() {
 	tmp->free();
 	delete tmp;
 	_riddleBottomFrame->convertToInPlace(_gfx->_texturePixelFormat);
-
-	for (auto &it : _areaMap) {
-		it._value->addStructure(_areaMap[255]);
-
-		it._value->addObjectFromArea(164, _areaMap[255]);
-		it._value->addObjectFromArea(174, _areaMap[255]);
-		it._value->addObjectFromArea(175, _areaMap[255]);
-		for (int16 id = 136; id < 140; id++) {
-			it._value->addObjectFromArea(id, _areaMap[255]);
-		}
-
-		it._value->addObjectFromArea(195, _areaMap[255]);
-		for (int16 id = 214; id < 228; id++) {
-			it._value->addObjectFromArea(id, _areaMap[255]);
-		}
-	}
-	// Discard some global conditions
-	// It is unclear why they hide/unhide objects that formed the spirits
-	for (int i = 0; i < 3; i++) {
-		debugC(kFreescapeDebugParser, "Discarding condition %s", _conditionSources[0].c_str());
-		_conditions.remove_at(0);
-		_conditionSources.remove_at(0);
-	}
 }
 
 void CastleEngine::drawZXUI(Graphics::Surface *surface) {
@@ -282,7 +259,10 @@ void CastleEngine::drawZXUI(Graphics::Surface *surface) {
 		_temporaryMessageDeadlines.push_back(deadline);
 	} else {
 		if (_gameStateControl != kFreescapeGameStateEnd) {
-			drawStringInSurface(_currentArea->_name, 120, 179, front, black, surface);
+			if (getGameBit(31)) { // The final cutscene is playing but it is not ended yet
+				drawStringInSurface(_messagesList[5], 120, 179, front, black, surface); // "You did it!"
+			} else
+				drawStringInSurface(_currentArea->_name, 120, 179, front, black, surface);
 		}
 	}
 

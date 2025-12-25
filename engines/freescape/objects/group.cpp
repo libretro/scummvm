@@ -30,6 +30,7 @@ const Common::Array<uint16> objectIds_,
 const Math::Vector3d offset1_,
 const Math::Vector3d offset2_,
 const Common::Array<AnimationOpcode *> operations_) {
+	_type = kGroupType;
 	_objectID = objectID_;
 	_flags = flags_;
 	_scale = 0;
@@ -213,6 +214,13 @@ bool Group::collides(const Math::AABB &aabb) {
 		}
 	}
 	return false;
+}
+
+void Group::makePartsInvisible() {
+	uint32 groupSize = _objects.size();
+	for (uint32 i = 0; i < groupSize ; i++) {
+		_objects[i]->makeInvisible();
+	}
 }
 
 } // End of namespace Freescape

@@ -148,19 +148,18 @@ jobs:
           path: ${{ env.VCPKG_INSTALLED_DIR }}\\${{ matrix.triplet }}\\bin\\*.pdb
   xcode:
     name: Xcode
-    # macos-14 is arm64. macosx build currently fails on macos-14.
-    runs-on: macos-13
+    runs-on: macos-15-intel
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macosx
             buildFlags: -scheme ScummVM-macOS -destination 'platform=macOS,arch=x86_64'
-            configFlags: --disable-nasm --enable-faad --enable-gif --enable-mikmod --enable-mpeg2 --enable-vpx
+            configFlags: --enable-faad --enable-gif --enable-mikmod --enable-mpeg2 --enable-vpx
             brewPackages: a52dec faad2 flac fluid-synth freetype fribidi giflib jpeg mad libmikmod libmpeg2 libogg libpng libvorbis libvpx sdl2 sdl2_net theora
           - platform: ios7
             buildFlags: -scheme ScummVM-iOS CODE_SIGN_IDENTITY="" CODE_SIGNING_ALLOWED=NO
-            configFlags: --use-xcframework --enable-faad --enable-gif --enable-mikmod --enable-vpx --enable-mpc --disable-nasm --disable-taskbar --disable-tts
+            configFlags: --ios --use-xcframework --enable-faad --enable-gif --enable-mikmod --enable-vpx --enable-mpc --enable-a52 --disable-taskbar --disable-tts
             packagesUrl: https://downloads.scummvm.org/frs/build/scummvm-ios7-libs-v4.zip
     defaults:
       run:

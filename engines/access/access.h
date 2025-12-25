@@ -68,7 +68,8 @@ enum AccessDebugChannels {
 	kDebugSound,
 };
 
-enum ACCESSActions {
+/* typed enum to match unsignedness of Common::CustomEventType */
+enum ACCESSActions : Common::CustomEventType {
 	kActionNone,
 	kActionMoveUp,
 	kActionMoveDown,
@@ -327,6 +328,8 @@ public:
 	 */
 	void printText(BaseSurface *s, const Common::String &msg);
 	void speakText(BaseSurface *s, const Common::String &msg);
+
+	void syncSoundSettings() override;
 
 	/**
 	 * Load a savegame

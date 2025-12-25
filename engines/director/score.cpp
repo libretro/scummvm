@@ -337,9 +337,6 @@ void Score::startPlay() {
 			_channels.push_back(new Channel(this, _currentFrame->_sprites[i], i));
 
 	updateSprites(kRenderForceUpdate, true);
-
-	_soundManager->disablePuppetSound(1);
-	_soundManager->disablePuppetSound(2);
 }
 
 void Score::step() {
@@ -359,6 +356,8 @@ void Score::step() {
 			if (_movie->_currentHoveredSpriteId) {
 				_movie->processEvent(kEventMouseWithin, _movie->_currentHoveredSpriteId);
 			}
+
+			_soundManager->processCuePoints();
 		} else 	if (_version >= kFileVer500) {
 			// In D5, these events are only generated if a mouse button is pressed
 			if (_movie->_currentHoveredSpriteId && g_system->getEventManager()->getButtonState() != 0) {
@@ -771,7 +770,7 @@ void Score::update() {
 	bool sound1Changed = true;
 	bool sound2Changed = true;
 
-	if (!_firstRun) {
+	if (_version >= kFileVer600 && !_firstRun) {
 		// We check if the sound channels have changed, and only restart
 		// the sound if they have. Even if the sound was stopped
 		//
@@ -1847,7 +1846,7 @@ void Score::loadFrames(Common::SeekableReadStreamEndian &stream, uint16 version)
 		_numChannelsDisplayed = 30;
 
 		_firstFramePosition = _framesStream->pos();
-	} else if (version >= kFileVer600 && version < kFileVer1100) {
+	} else if (version >= kFileVer600) {
 		_framesStreamSize = _framesStream->readUint32();
 		int32 ver = (int32)_framesStream->readUint32();
 		uint32 listStart = _framesStream->readUint32();
@@ -1890,7 +1889,7 @@ void Score::loadFrames(Common::SeekableReadStreamEndian &stream, uint16 version)
 		_spriteDetailAccessed[0] = true;
 	}
 
-	if (version >= kFileVer400 && version < kFileVer1100) {
+	if (version >= kFileVer400) {
 		_framesStreamSize = _framesStream->readUint32();
 		_frame1Offset = _framesStream->readUint32();
 		_numOfFrames = _framesStream->readUint32();
@@ -1913,10 +1912,6 @@ void Score::loadFrames(Common::SeekableReadStreamEndian &stream, uint16 version)
 
 		debugC(1, kDebugLoading, "Score::loadFrames(): size: %d, frame1Offset: %d, numOfFrames: %d, version: %d, spriteRecordSize: %d, numChannels: %d, numChannelsDisplayed: %d",
 			_framesStreamSize, _frame1Offset, _numOfFrames, _framesVersion, _spriteRecordSize, _numChannels, _numChannelsDisplayed);
-	}
-
-	if (version >= kFileVer1100) {
-		error("STUB: Score::loadFrames(): score not yet supported for version v%d (%d)", humanVersion(version), version);
 	}
 
 	// partically by channels, hence we keep it and read the score from left to right

@@ -29,11 +29,11 @@ namespace Freescape {
 
 void EclipseEngine::initZX() {
 	_viewArea = Common::Rect(56, 36, 265, 139);
-	_maxEnergy = 63;
-	_maxShield = 63;
+	_maxEnergy = 25;
+	_maxShield = 50;
 
 	_soundIndexShoot = 5;
-	_soundIndexCollide = -1; // Scripted 
+	_soundIndexCollide = -1; // Scripted
 	_soundIndexStepDown = 12;
 	_soundIndexStepUp = 12;
 	_soundIndexMenu = -1;
@@ -179,8 +179,7 @@ void EclipseEngine::drawZXUI(Graphics::Surface *surface) {
 	} else if (!_currentAreaMessages.empty())
 		drawStringInSurface(_currentArea->_name, 102, 141, back, yellow, surface);
 
-	Common::String encodedScoreStr = getScoreString(score);
-	drawStringInSurface(encodedScoreStr, 135, 11, back, gray, surface);
+	drawScoreString(score, 135, 11, back, gray, surface);
 
 	Common::String shieldStr = Common::String::format("%d", shield);
 

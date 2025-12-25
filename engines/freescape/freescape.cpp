@@ -162,7 +162,9 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_extraBuffer = nullptr;
 
 	_lastFrame = 0;
-	_nearClipPlane = 2;
+	// The near clip plane of 2 is useful for Driller and Dark Side as they have open spaces without too much
+	// close-up detail. Other games need a smaller value to avoid clipping of nearby objects
+	_nearClipPlane = (isDriller() || isDark()) ? 2 : 0.5;
 	_farClipPlane = 8192 + 1802; // Added some extra distance to avoid flickering
 
 	// These depends on the specific game
@@ -473,6 +475,11 @@ void FreescapeEngine::drawFrame() {
 				drawSensorShoot(sensor);
 		}
 		_underFireFrames--;
+
+		if (_underFireFrames == 0) {
+			_currentArea->unremapColor(_currentArea->_usualBackgroundColor);
+			_currentArea->unremapColor(_currentArea->_skyColor);
+		}
 	}
 
 	if (_shootingFrames > 0) {
@@ -488,11 +495,6 @@ void FreescapeEngine::drawFrame() {
 
 	drawBorder();
 	drawUI();
-
-	if (_underFireFrames == 0) {
-		_currentArea->unremapColor(_currentArea->_usualBackgroundColor);
-		_currentArea->unremapColor(_currentArea->_skyColor);
-	}
 }
 
 void FreescapeEngine::pressedKey(const int keycode) {}
@@ -821,7 +823,7 @@ Common::Error FreescapeEngine::run() {
 	if (saveSlot >= 0) { // load the savegame
 		initGameState();
 		loadGameState(saveSlot);
-	} 
+	}
 
 	g_system->showMouse(false);
 	g_system->lockMouse(true);
@@ -1243,7 +1245,7 @@ Graphics::ManagedSurface *FreescapeEngine::loadAndConvertScrImage(Common::Seekab
 	Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
 	const Graphics::Surface *decoded = decoder.getSurface();
 	surface->create(320, 200, _gfx->_texturePixelFormat);
-	surface->simpleBlitFrom(*decoded, Common::Point((320 - decoded->w) / 2, (200 - decoded->h) / 2), &decoder.getPalette());
+	surface->simpleBlitFrom(*decoded, Common::Point((320 - decoded->w) / 2, (200 - decoded->h) / 2), Graphics::FLIP_NONE, false, 255, &decoder.getPalette());
 	return surface;
 }
 
@@ -1281,12 +1283,14 @@ void FreescapeEngine::removeTimers() {
 }
 
 void FreescapeEngine::pauseEngineIntern(bool pause) {
-	drawFrame();
-	if (_savedScreen) {
-		_savedScreen->free();
-		delete _savedScreen;
+	if (_currentArea) {
+		drawFrame();
+		if (_savedScreen) {
+			_savedScreen->free();
+			delete _savedScreen;
+		}
+		_savedScreen = _gfx->getScreenshot();
 	}
-	_savedScreen = _gfx->getScreenshot();
 
 	Engine::pauseEngineIntern(pause);
 

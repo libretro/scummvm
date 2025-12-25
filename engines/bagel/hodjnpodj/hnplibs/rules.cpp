@@ -258,16 +258,17 @@ void CRules::OnDestroy() {
 	//if (hNewCursor != nullptr);
 	SetCursor(hNewCursor);
 
-	if (pNarrative != nullptr)                         // end the narration
-		delete pNarrative;
-
-	if (pOKButton != nullptr)                          // release the button
-		delete pOKButton;
-
-	delete pFont;                                   // release the font file
+	// Free the objects
+	delete pNarrative;
+	pNarrative = nullptr;
+	delete pOKButton;
+	pOKButton = nullptr;
+	delete pFont;
+	pFont = nullptr;
 
 	(*pHelpFile).Close();                           // close and release the rules file
 	delete pHelpFile;
+	pHelpFile = nullptr;
 
 	if (pBackgroundBitmap != nullptr) {
 		bUpdateNeeded = (*pParentWnd).GetUpdateRect(nullptr, false);
@@ -359,7 +360,7 @@ void CRules::OnPaint() {
 	CPalette    *pPalOld = nullptr;
 	CDibDoc     *pDibDoc;
 
-	DoWaitCursor();                                 // put up the hourglass cursor
+	ShowWaitCursor();                                 // put up the hourglass cursor
 
 	if (pScrollPalette != nullptr) {                   // map in our palette
 		pPalOld = dc.SelectPalette(pScrollPalette, false);
@@ -1422,7 +1423,7 @@ bool CRules::OnSetCursor(CWnd *pWnd, unsigned int nHitTest, unsigned int message
 }
 
 
-void CRules::DoWaitCursor() {
+void CRules::ShowWaitCursor() {
 	CWinApp *pMyApp;
 
 	pMyApp = AfxGetApp();

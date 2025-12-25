@@ -80,8 +80,13 @@ public:
 	static  void UpdateCrowns(CDC *pDC);
 	static  void ClearDialogImage();
 	static  void RefreshBackground();
-	static  void DoWaitCursor();
+	static  void ShowWaitCursor();
 	static  void DoArrowCursor();
+
+	// Included to stop warning about the static DoWaitCursor hiding inherited version
+	void DoWaitCursor(int nCode) override {
+		CDialog::DoWaitCursor(nCode);
+	}
 
 private:
 	bool SetupKeyboardHook();

@@ -31,7 +31,7 @@ namespace CreateProjectTool {
 
 class XcodeProvider final : public ProjectProvider {
 public:
-	XcodeProvider(StringList &global_warnings, std::map<std::string, StringList> &project_warnings, StringList &global_errors, const int version = 0);
+	XcodeProvider(StringList &global_warnings, std::map<std::string, StringList> &project_warnings, StringList &global_errors);
 
 protected:
 
@@ -169,6 +169,7 @@ private:
 
 			addProperty("isa", objectType, "", kSettingsNoQuote | kSettingsNoValue);
 		}
+		virtual ~Object() {}
 
 		// Add a simple Property with just a name and a value
 		void addProperty(std::string propName, std::string propValue, std::string propComment = "", int propFlags = 0, int propIndent = 0) {
@@ -223,12 +224,20 @@ private:
 	public:
 		std::vector<Object *> _objects;
 		std::string _comment;
-		int _flags;
+		int _flags = 0;
+
+		~ObjectList() {
+			for (Object *obj : _objects) {
+				delete obj;
+			}
+		}
 
 		void add(Object *obj) {
 			std::map<std::string, bool>::iterator it = _objectMap.find(obj->_id);
-			if (it != _objectMap.end() && it->second == true)
+			if (it != _objectMap.end() && it->second == true) {
+				delete obj;
 				return;
+			}
 
 			_objects.push_back(obj);
 			_objectMap[obj->_id] = true;

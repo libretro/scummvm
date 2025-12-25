@@ -24,6 +24,8 @@
 #include "common/memstream.h"
 #include "common/textconsole.h"
 #include "graphics/paletteman.h"
+#include "image/bmp.h"
+#include "image/png.h"
 #include "mm/shared/xeen/sprites.h"
 #include "mm/mm.h"
 
@@ -103,6 +105,19 @@ void SpriteResource::load(Common::SeekableReadStream &f) {
 	for (int i = 0; i < count; ++i) {
 		_index[i]._offset1 = f.readUint16LE();
 		_index[i]._offset2 = f.readUint16LE();
+
+		// Check for any images overriding the default Xeen sprites for M&M1 Enhanced mode
+		const Common::String fnPNG = Common::String::format("gfx/%s/image%.2d.png", _filename.baseName().c_str(), i);
+		const Common::String fnBitmap = Common::String::format("gfx/%s/image%.2d.bmp", _filename.baseName().c_str(), i);
+		Image::PNGDecoder pngDecoder;
+		Image::BitmapDecoder bmpDecoder;
+		Common::File imgFile;
+
+		if (imgFile.open(fnPNG.c_str()) && pngDecoder.loadStream(imgFile)) {
+			_index[i]._override.copyFrom(*pngDecoder.getSurface());
+		} else if (imgFile.open(fnBitmap.c_str()) && bmpDecoder.loadStream(imgFile)) {
+			_index[i]._override.copyFrom(*bmpDecoder.getSurface());
+		}
 	}
 }
 
@@ -149,10 +164,17 @@ void SpriteResource::draw(XSurface &dest, int frame, const Common::Point &destPo
 
 	// WORKAROUND: Crash clicking Vertigo well in Clouds
 	if (frame < (int)_index.size()) {
-		// Sprites can consist of separate background & foreground
-		drawer->draw(dest, _index[frame]._offset1, destPos, r, flags, scale);
-		if (_index[frame]._offset2)
-			drawer->draw(dest, _index[frame]._offset2, destPos, r, flags, scale);
+		if (!_index[frame]._override.empty()) {
+			const Graphics::ManagedSurface &src = _index[frame]._override;
+			if (flags & Shared::Xeen::SPRFLAG_RESIZE)
+				dest.create(src.w, src.h);
+			dest.blitFrom(src, destPos);
+		} else {
+			// Sprites can consist of separate background & foreground
+			drawer->draw(dest, _index[frame]._offset1, destPos, r, flags, scale);
+			if (_index[frame]._offset2)
+				drawer->draw(dest, _index[frame]._offset2, destPos, r, flags, scale);
+		}
 	}
 
 	delete drawer;

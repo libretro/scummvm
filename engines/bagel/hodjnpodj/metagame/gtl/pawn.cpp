@@ -40,7 +40,7 @@ namespace Gtl {
 #define MORE_TEXT_LENGTH    8                       // # characters in "more" indicator string
 
 #define BUTTON_DY           15                      // offset for Okay button from pawn base
-
+#define FONT_SIZE			14
 
 extern CBfcMgr      *lpMetaGameStruct;
 
@@ -374,7 +374,7 @@ void CPawnShop::OnPaint() {
 void CPawnShop::UpdatePawn(CDC *pDC) {
 	CPalette    *pPalOld;
 
-	DoWaitCursor();                                             // put up the hourglass cursor
+	ShowWaitCursor();                                             // put up the hourglass cursor
 
 	pPalOld = (*pDC).SelectPalette(pBackgroundPalette, false);      // setup the proper palette
 	(*pDC).RealizePalette();
@@ -407,7 +407,7 @@ void CPawnShop::UpdatePage(CDC *pDC) {
 	if (pWorkDC == nullptr)                                        // update everything if no work area
 		(*pPawnDialog).InvalidateRect(nullptr, false);
 	else {                                                      // otherwise just update central area
-		DoWaitCursor();                                         // put up the hourglass cursor
+		ShowWaitCursor();                                         // put up the hourglass cursor
 		pPalOld = (*pDC).SelectPalette(pBackgroundPalette, false); // setup the proper palette
 		(*pDC).RealizePalette();
 		if (pBackgroundBitmap != nullptr)
@@ -541,7 +541,7 @@ void CPawnShop::UpdateCrowns(CDC *pDC) {
 		else
 			Common::sprintf_s(chBuffer, "Podj has %ld Crowns", (*pItem).GetQuantity());
 	}
-	(*pItemCost).DisplayString(pDC, chBuffer, 18, TEXT_BOLD, PAWN_TEXT_COLOR);
+	(*pItemCost).DisplayString(pDC, chBuffer, FONT_SIZE, TEXT_BOLD, PAWN_TEXT_COLOR);
 }
 
 
@@ -728,8 +728,8 @@ void CPawnShop::OnMouseMove(unsigned int nFlags, CPoint point) {
 						Common::sprintf_s(chBuffer, "One can be sold for %d Crowns", nPrice);
 					hNewCursor = (*pMyApp).LoadCursor(IDC_PAWN_DOLLAR);
 				}
-				(*pItemText).DisplayString(pDC, (*pItem).GetDescription(), 18, TEXT_BOLD, PAWN_TEXT_COLOR);
-				(*pItemCost).DisplayString(pDC, chBuffer, 18, TEXT_BOLD, PAWN_TEXT_COLOR);
+				(*pItemText).DisplayString(pDC, (*pItem).GetDescription(), FONT_SIZE, TEXT_BOLD, PAWN_TEXT_COLOR);
+				(*pItemCost).DisplayString(pDC, chBuffer, FONT_SIZE, TEXT_BOLD, PAWN_TEXT_COLOR);
 				ReleaseDC(pDC);
 			}
 		}
@@ -738,7 +738,7 @@ void CPawnShop::OnMouseMove(unsigned int nFlags, CPoint point) {
 	if (hNewCursor == nullptr) {                       // use default cursor if not specified
 		hNewCursor = (*pMyApp).LoadStandardCursor(IDC_ARROW);
 		pDC = GetDC();
-		(*pItemText).DisplayString(pDC, "", 18, TEXT_BOLD, PAWN_TEXT_COLOR);
+		(*pItemText).DisplayString(pDC, "", FONT_SIZE, TEXT_BOLD, PAWN_TEXT_COLOR);
 		UpdateCrowns(pDC);
 		ReleaseDC(pDC);
 	}
@@ -790,7 +790,7 @@ void CPawnShop::OnLButtonDown(unsigned int nFlags, CPoint point) {
 						(*pInventory).RemoveItem(pItem);
 						(*pGeneralStore).AddItem(pItem);
 					}
-					(*pItemText).DisplayString(pDC, "Thank you!!!", 18, TEXT_BOLD, PAWN_BLURB_COLOR);
+					(*pItemText).DisplayString(pDC, "Thank you!!!", FONT_SIZE, TEXT_BOLD, PAWN_BLURB_COLOR);
 					(*pItemCost).RestoreBackground(pDC);
 					ReleaseDC(pDC);
 					bNeedsUpdate = true;
@@ -841,7 +841,7 @@ bool CPawnShop::OnSetCursor(CWnd *pWnd, unsigned int /*nHitTest*/, unsigned int 
 }
 
 
-void CPawnShop::DoWaitCursor() {
+void CPawnShop::ShowWaitCursor() {
 	CWinApp *pMyApp;
 
 	pMyApp = AfxGetApp();
