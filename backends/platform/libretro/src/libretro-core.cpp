@@ -65,6 +65,9 @@ static retro_environment_t environ_cb = NULL;
 static retro_input_poll_t poll_cb = NULL;
 static int retro_input_device = RETRO_DEVICE_JOYPAD;
 
+// MIDI interface
+struct retro_midi_interface *retro_midi_interface = nullptr;
+
 // Default deadzone: 15%
 static int analog_deadzone = (int)(0.15f * ANALOG_RANGE);
 
@@ -880,6 +883,18 @@ void retro_init(void) {
 	if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
 		input_bitmask_supported = true;
 
+	// Initialize MIDI interface
+	static struct retro_midi_interface midi_interface;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_MIDI_INTERFACE, &midi_interface)) {
+		retro_midi_interface = &midi_interface;
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO, "MIDI interface initialized\n");
+	} else {
+		retro_midi_interface = nullptr;
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO, "MIDI interface unavailable\n");
+	}
+
 	g_system = new OSystem_libretro();
 }
 
@@ -1096,6 +1111,11 @@ void retro_run(void) {
 
 		poll_cb();
 		LIBRETRO_G_SYSTEM->processInputs();
+	}
+
+	// Flush MIDI output
+	if (retro_midi_interface && retro_midi_interface->output_enabled()) {
+		retro_midi_interface->flush();
 	}
 }
 

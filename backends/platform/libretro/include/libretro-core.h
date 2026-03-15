@@ -22,6 +22,7 @@
 
 extern retro_log_printf_t retro_log_cb;
 extern retro_input_state_t retro_input_cb;
+extern struct retro_midi_interface *retro_midi_interface;
 
 bool retro_get_input_bitmask_supported(void);
 void retro_osd_notification(const char *msg);
