@@ -213,49 +213,49 @@ void OSystem_libretro::processInputs(void) {
 	if (retro_setting_get_gamepad_cursor_only())
 		return;
 
-#if defined(WIIU) || defined(__SWITCH__)
-	int p_x = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
-	int p_y = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
-	int p_press = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
-	int px = (int)((p_x + 0x7fff) * getScreenWidth() / 0xffff);
-	int py = (int)((p_y + 0x7fff) * getScreenHeight() / 0xffff);
+	if (retro_setting_get_pointer_device() == RETRO_DEVICE_POINTER) {
+		int p_x = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
+		int p_y = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
+		int p_press = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
+		int px = (int)((p_x + 0x7fff) * getScreenWidth() / 0xffff);
+		int py = (int)((p_y + 0x7fff) * getScreenHeight() / 0xffff);
 
-	static int ptrhold = 0;
+		static int ptrhold = 0;
 
-	if (p_press)
-		ptrhold++;
-	else
-		ptrhold = 0;
+		if (p_press)
+			ptrhold++;
+		else
+			ptrhold = 0;
 
-	if (ptrhold > 0) {
-		_mouseX = px;
-		_mouseY = py;
+		if (ptrhold > 0) {
+			_mouseX = px;
+			_mouseY = py;
 
-		Common::Event ev;
-		ev.type = Common::EVENT_MOUSEMOVE;
-		ev.mouse.x = _mouseX;
-		ev.mouse.y = _mouseY;
-		_events.push_back(ev);
-		setMousePosition(_mouseX, _mouseY);
+			Common::Event ev;
+			ev.type = Common::EVENT_MOUSEMOVE;
+			ev.mouse.x = _mouseX;
+			ev.mouse.y = _mouseY;
+			_events.push_back(ev);
+			setMousePosition(_mouseX, _mouseY);
+		}
+
+		if (ptrhold > 10 && _ptrmouseButton == 0) {
+			_ptrmouseButton = 1;
+			Common::Event ev;
+			ev.type = eventID[0][_ptrmouseButton ? 0 : 1];
+			ev.mouse.x = _mouseX;
+			ev.mouse.y = _mouseY;
+			_events.push_back(ev);
+		} else if (ptrhold == 0 && _ptrmouseButton == 1) {
+			_ptrmouseButton = 0;
+			Common::Event ev;
+			ev.type = eventID[0][_ptrmouseButton ? 0 : 1];
+			ev.mouse.x = _mouseX;
+			ev.mouse.y = _mouseY;
+			_events.push_back(ev);
+		}
+		return;
 	}
-
-	if (ptrhold > 10 && _ptrmouseButton == 0) {
-		_ptrmouseButton = 1;
-		Common::Event ev;
-		ev.type = eventID[0][_ptrmouseButton ? 0 : 1];
-		ev.mouse.x = _mouseX;
-		ev.mouse.y = _mouseY;
-		_events.push_back(ev);
-	} else if (ptrhold == 0 && _ptrmouseButton == 1) {
-		_ptrmouseButton = 0;
-		Common::Event ev;
-		ev.type = eventID[0][_ptrmouseButton ? 0 : 1];
-		ev.mouse.x = _mouseX;
-		ev.mouse.y = _mouseY;
-		_events.push_back(ev);
-	}
-
-#endif
 
 	// Process input from physical mouse
 	x = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
