@@ -609,7 +609,7 @@ int retro_setting_get_pointer_device(void) {
 #if defined(WIIU) || defined(__SWITCH__)
 		return RETRO_DEVICE_POINTER;
 #else
-		return RETRO_DEVICE_MOUSE
+		return RETRO_DEVICE_MOUSE;
 #endif
 	}
 	return pointer_device;
