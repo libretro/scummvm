@@ -46,7 +46,7 @@ class MidiDriver_Libretro : public MidiDriver_MPU401 {
 public:
 	MidiDriver_Libretro() : _isOpen(false) { }
 	int open();
-	bool isOpen() const { return _isOpen && (retro_midi_interface != nullptr) && retro_midi_interface->output_enabled(); }
+	bool isOpen() const { return _isOpen; }
 	void close();
 	void send(uint32 b) override;
 	void sysEx(const byte *msg, uint16 length) override;
@@ -145,6 +145,7 @@ public:
 
 	MusicDevices getDevices() const;
 	Common::Error createInstance(MidiDriver **mididriver, MidiDriver::DeviceHandle = 0) const;
+	bool checkDevice(MidiDriver::DeviceHandle hdl, int checkFlags, bool quiet) const override;
 };
 
 MusicDevices LibretroMusicPlugin::getDevices() const {
@@ -158,6 +159,19 @@ Common::Error LibretroMusicPlugin::createInstance(MidiDriver **mididriver, MidiD
 	*mididriver = new MidiDriver_Libretro();
 
 	return Common::kNoError;
+}
+
+bool LibretroMusicPlugin::checkDevice(MidiDriver::DeviceHandle hdl, int checkFlags, bool quiet) const{
+	if (!hdl)
+		return false;
+
+	if (!retro_midi_interface || !retro_midi_interface->output_enabled()) {
+		if (!quiet)
+			warning("Libretro MIDI: interface not available or output disabled");
+		return false;
+	}
+
+	return true;
 }
 
 REGISTER_PLUGIN_STATIC(LIBRETRO_MIDI, PLUGIN_TYPE_MUSIC, LibretroMusicPlugin);
