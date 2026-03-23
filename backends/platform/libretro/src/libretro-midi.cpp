@@ -28,11 +28,8 @@
 // Disable symbol overrides so that we can use system headers.
 #define FORBIDDEN_SYMBOL_ALLOW_ALL
 
-#include "common/scummsys.h"
-
-#if defined(__LIBRETRO__)
-
 #include <libretro.h>
+#include "common/scummsys.h"
 #include "audio/mpu401.h"
 #include "common/error.h"
 #include "common/util.h"
@@ -46,7 +43,9 @@ class MidiDriver_Libretro : public MidiDriver_MPU401 {
 public:
 	MidiDriver_Libretro() : _isOpen(false) { }
 	int open();
-	bool isOpen() const { return _isOpen; }
+	bool isOpen() const {
+		return _isOpen;
+	}
 	void close();
 	void send(uint32 b) override;
 	void sysEx(const byte *msg, uint16 length) override;
@@ -92,16 +91,16 @@ void MidiDriver_Libretro::send(uint32 b) {
 	retro_midi_interface->write(status_byte, 0);
 
 	switch (b & 0xF0) {
-	case 0x80:	// Note Off
-	case 0x90:	// Note On
-	case 0xA0:	// Polyphonic Key Pressure
-	case 0xB0:	// Controller
-	case 0xE0:	// Pitch Bend
+	case 0x80:  // Note Off
+	case 0x90:  // Note On
+	case 0xA0:  // Polyphonic Key Pressure
+	case 0xB0:  // Controller
+	case 0xE0:  // Pitch Bend
 		retro_midi_interface->write(first_byte, 0);
 		retro_midi_interface->write(second_byte, 0);
 		break;
-	case 0xC0:	// Program Change
-	case 0xD0:	// Aftertouch
+	case 0xC0:  // Program Change
+	case 0xD0:  // Aftertouch
 		retro_midi_interface->write(first_byte, 0);
 		break;
 	default:
@@ -161,7 +160,7 @@ Common::Error LibretroMusicPlugin::createInstance(MidiDriver **mididriver, MidiD
 	return Common::kNoError;
 }
 
-bool LibretroMusicPlugin::checkDevice(MidiDriver::DeviceHandle hdl, int checkFlags, bool quiet) const{
+bool LibretroMusicPlugin::checkDevice(MidiDriver::DeviceHandle hdl, int checkFlags, bool quiet) const {
 	if (!hdl)
 		return false;
 
@@ -175,5 +174,3 @@ bool LibretroMusicPlugin::checkDevice(MidiDriver::DeviceHandle hdl, int checkFla
 }
 
 REGISTER_PLUGIN_STATIC(LIBRETRO_MIDI, PLUGIN_TYPE_MUSIC, LibretroMusicPlugin);
-
-#endif
