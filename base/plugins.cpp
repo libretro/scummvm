@@ -162,6 +162,9 @@ public:
 		#if defined(USE_TIMIDITY)
 		LINK_PLUGIN(TIMIDITY)
 		#endif
+		#if defined(__LIBRETRO__)
+		LINK_PLUGIN(LIBRETRO_MIDI)
+		#endif
 
 		// Scaler plugins
 		LINK_PLUGIN(NORMAL)
