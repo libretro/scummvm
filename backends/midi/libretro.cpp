@@ -136,11 +136,11 @@ void MidiDriver_Libretro::sysEx(const byte *msg, uint16 length) {
 class LibretroMusicPlugin : public MusicPluginObject {
 public:
 	const char *getName() const {
-		return "Libretro";
+		return "Libretro MIDI Out";
 	}
 
 	const char *getId() const {
-		return "libretro";
+		return "libretro_midi";
 	}
 
 	MusicDevices getDevices() const;
@@ -160,6 +160,6 @@ Common::Error LibretroMusicPlugin::createInstance(MidiDriver **mididriver, MidiD
 	return Common::kNoError;
 }
 
-REGISTER_PLUGIN_STATIC(LIBRETRO, PLUGIN_TYPE_MUSIC, LibretroMusicPlugin);
+REGISTER_PLUGIN_STATIC(LIBRETRO_MIDI, PLUGIN_TYPE_MUSIC, LibretroMusicPlugin);
 
 #endif
