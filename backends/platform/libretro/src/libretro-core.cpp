@@ -75,6 +75,7 @@ static bool gamepad_cursor_only = false;
 static float mouse_speed = 1.0f;
 static float gamepad_acceleration_time = 0.2f;
 static int mouse_fine_control_speed_reduction = 4;
+static int pointer_device = RETRO_DEVICE_NONE; // default pointer/mouse device
 
 char cmd_params[20][200];
 char cmd_params_num;
@@ -259,6 +260,16 @@ void retro_osd_notification(const char *msg) {
 static void update_variables(void) {
 	struct retro_variable var;
 	updating_variables = true;
+
+	var.key = "scummvm_pointer_device";
+	var.value = NULL;
+	pointer_device = RETRO_DEVICE_NONE;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		if (strcmp(var.value, "mouse") == 0)
+			pointer_device = RETRO_DEVICE_MOUSE;
+		else if (strcmp(var.value, "pointer") == 0)
+			pointer_device = RETRO_DEVICE_POINTER;
+	}
 
 	var.key = "scummvm_gamepad_cursor_only";
 	var.value = NULL;
@@ -591,6 +602,17 @@ int retro_setting_get_mouse_fine_control_speed_reduction(void) {
 
 float retro_setting_get_gamepad_acceleration_time(void) {
 	return gamepad_acceleration_time;
+}
+
+int retro_setting_get_pointer_device(void) {
+	if (pointer_device == RETRO_DEVICE_NONE) {
+#if defined(WIIU) || defined(__SWITCH__)
+		return RETRO_DEVICE_POINTER;
+#else
+		return RETRO_DEVICE_MOUSE;
+#endif
+	}
+	return pointer_device;
 }
 
 float retro_setting_get_frame_rate(void) {

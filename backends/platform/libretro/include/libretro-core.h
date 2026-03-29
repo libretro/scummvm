@@ -41,6 +41,15 @@ int retro_setting_get_mouse_fine_control_speed_reduction(void);
 bool retro_setting_get_gamepad_cursor_only(void);
 float retro_setting_get_gamepad_cursor_speed(void);
 float retro_setting_get_gamepad_acceleration_time(void);
+
+/**
+ * Retrieves the desired mouse pointer device.
+ *
+ * @return An integer representing which input device to use for the pointer:
+ *    - RETRO_DEVICE_MOUSE
+ *    - RETRO_DEVICE_POINTER
+ */
+int retro_setting_get_pointer_device(void);
 int retro_setting_get_gui_res_w(void);
 int retro_setting_get_gui_res_h(void);
 

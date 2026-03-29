@@ -97,6 +97,21 @@ struct retro_core_option_v2_category option_cats_us[] = {
 
 struct retro_core_option_v2_definition option_defs_us[] = {
 	{
+		"scummvm_pointer_device",
+		"Cursor > Pointer Device",
+		"Pointer Device",
+		"Select which device to control the pointer.",
+		NULL,
+		"cursor",
+		{
+			{"default", "Default"},
+			{"pointer", "Pointer"},
+			{"mouse", "Mouse"},
+			{NULL, NULL},
+		},
+		"default"
+	},
+	{
 		"scummvm_gamepad_cursor_only",
 		"Cursor > Exclusive cursor control with RetroPad",
 		"Exclusive cursor control with RetroPad",
