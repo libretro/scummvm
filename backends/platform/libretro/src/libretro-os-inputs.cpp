@@ -210,9 +210,6 @@ void OSystem_libretro::processInputs(void) {
 		}
 	}
 
-	if (retro_setting_get_gamepad_cursor_only())
-		return;
-
 	if (retro_setting_get_pointer_device() == RETRO_DEVICE_POINTER) {
 		int p_x = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
 		int p_y = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
@@ -254,62 +251,61 @@ void OSystem_libretro::processInputs(void) {
 			ev.mouse.y = _mouseY;
 			_events.push_back(ev);
 		}
-		return;
-	}
+	} else if (retro_setting_get_pointer_device() == RETRO_DEVICE_MOUSE) {
+		// Process input from physical mouse
+		x = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
+		y = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
 
-	// Process input from physical mouse
-	x = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
-	y = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
+		// > X Axis
+		if (x != 0) {
+			_cursorStatus |= (CURSOR_STATUS_DOING_MOUSE | CURSOR_STATUS_DOING_X);
+			if (x > 0) {
+				// Reset accumulator when changing direction
+				_mouseXAcc = (_mouseXAcc < 0.0) ? 0.0 : _mouseXAcc;
+			}
+			if (x < 0) {
+				// Reset accumulator when changing direction
+				_mouseXAcc = (_mouseXAcc > 0.0) ? 0.0 : _mouseXAcc;
+			}
+			deltaAcc = (float)x * retro_setting_get_mouse_speed();
+			updateMouseXY(deltaAcc, &_mouseXAcc, 1);
+		}
+		// > Y Axis
+		if (y != 0) {
+			_cursorStatus |= (CURSOR_STATUS_DOING_MOUSE | CURSOR_STATUS_DOING_Y);
+			if (y > 0) {
+				// Reset accumulator when changing direction
+				_mouseYAcc = (_mouseYAcc < 0.0) ? 0.0 : _mouseYAcc;
+			}
+			if (y < 0) {
+				// Reset accumulator when changing direction
+				_mouseYAcc = (_mouseYAcc > 0.0) ? 0.0 : _mouseYAcc;
+			}
+			deltaAcc = (float)y * retro_setting_get_mouse_speed();
+			updateMouseXY(deltaAcc, &_mouseYAcc, 0);
+		}
 
-	// > X Axis
-	if (x != 0) {
-		_cursorStatus |= (CURSOR_STATUS_DOING_MOUSE | CURSOR_STATUS_DOING_X);
-		if (x > 0) {
-			// Reset accumulator when changing direction
-			_mouseXAcc = (_mouseXAcc < 0.0) ? 0.0 : _mouseXAcc;
-		}
-		if (x < 0) {
-			// Reset accumulator when changing direction
-			_mouseXAcc = (_mouseXAcc > 0.0) ? 0.0 : _mouseXAcc;
-		}
-		deltaAcc = (float)x * retro_setting_get_mouse_speed();
-		updateMouseXY(deltaAcc, &_mouseXAcc, 1);
-	}
-	// > Y Axis
-	if (y != 0) {
-		_cursorStatus |= (CURSOR_STATUS_DOING_MOUSE | CURSOR_STATUS_DOING_Y);
-		if (y > 0) {
-			// Reset accumulator when changing direction
-			_mouseYAcc = (_mouseYAcc < 0.0) ? 0.0 : _mouseYAcc;
-		}
-		if (y < 0) {
-			// Reset accumulator when changing direction
-			_mouseYAcc = (_mouseYAcc > 0.0) ? 0.0 : _mouseYAcc;
-		}
-		deltaAcc = (float)y * retro_setting_get_mouse_speed();
-		updateMouseXY(deltaAcc, &_mouseYAcc, 0);
-	}
-
-	if (_cursorStatus & CURSOR_STATUS_DOING_MOUSE) {
-		Common::Event ev;
-		ev.type = Common::EVENT_MOUSEMOVE;
-		ev.mouse.x = _mouseX;
-		ev.mouse.y = _mouseY;
-		ev.relMouse.x = _cursorStatus & CURSOR_STATUS_DOING_X ? _relMouseX : 0;
-		ev.relMouse.y = _cursorStatus & CURSOR_STATUS_DOING_Y ? _relMouseY : 0;
-		_events.push_back(ev);
-		setMousePosition(_mouseX, _mouseY);
-	}
-
-	for (int i = 0; i < 2; i++) {
-		Common::Event ev;
-		bool down = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, retroButtons[i]);
-		if (down != _mouseButtons[i]) {
-			_mouseButtons[i] = down;
-			ev.type = eventID[i][down ? 0 : 1];
+		if (_cursorStatus & CURSOR_STATUS_DOING_MOUSE) {
+			Common::Event ev;
+			ev.type = Common::EVENT_MOUSEMOVE;
 			ev.mouse.x = _mouseX;
 			ev.mouse.y = _mouseY;
+			ev.relMouse.x = _cursorStatus & CURSOR_STATUS_DOING_X ? _relMouseX : 0;
+			ev.relMouse.y = _cursorStatus & CURSOR_STATUS_DOING_Y ? _relMouseY : 0;
 			_events.push_back(ev);
+			setMousePosition(_mouseX, _mouseY);
+		}
+
+		for (int i = 0; i < 2; i++) {
+			Common::Event ev;
+			bool down = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, retroButtons[i]);
+			if (down != _mouseButtons[i]) {
+				_mouseButtons[i] = down;
+				ev.type = eventID[i][down ? 0 : 1];
+				ev.mouse.x = _mouseX;
+				ev.mouse.y = _mouseY;
+				_events.push_back(ev);
+			}
 		}
 	}
 }
