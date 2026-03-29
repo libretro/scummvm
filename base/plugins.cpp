@@ -101,6 +101,9 @@ public:
 		// static/dynamic plugin, like it's done for the engines
 		LINK_PLUGIN(AUTO)
 		LINK_PLUGIN(NULL)
+		#if defined(__LIBRETRO__)
+		LINK_PLUGIN(LIBRETRO_MIDI)
+		#endif
 		#if defined(WIN32)
 		LINK_PLUGIN(WINDOWS)
 		#endif
@@ -161,9 +164,6 @@ public:
 		#endif
 		#if defined(USE_TIMIDITY)
 		LINK_PLUGIN(TIMIDITY)
-		#endif
-		#if defined(__LIBRETRO__)
-		LINK_PLUGIN(LIBRETRO_MIDI)
 		#endif
 
 		// Scaler plugins
