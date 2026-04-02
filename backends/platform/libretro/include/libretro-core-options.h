@@ -100,7 +100,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
 		"scummvm_pointer_device",
 		"Cursor > Pointer Device",
 		"Pointer Device",
-		"Select which device to control the pointer.",
+		"Select which device controls the cursor.",
 		NULL,
 		"cursor",
 		{

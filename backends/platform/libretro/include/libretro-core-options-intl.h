@@ -95,6 +95,19 @@ struct retro_core_option_v2_category option_cats_it[] = {
 
 struct retro_core_option_v2_definition option_defs_it[] = {
 	{
+		"scummvm_pointer_device",
+		"Cursore > Dispositivo di Puntamento",
+		"Dispositivo di Puntamento",
+		"Selezione del dispositivo che controlla il cursore.",
+		NULL,
+		NULL,
+		{
+			{"retropad", "solo RetroPad"},
+			{NULL, NULL},
+		},
+		NULL
+	},
+	{
 		"scummvm_gamepad_cursor_speed",
 		"Cursore > Velocità del cursore",
 		"Velocità del cursore",
