@@ -91,6 +91,9 @@ int MidiDriver_Libretro::open() {
 }
 
 void MidiDriver_Libretro::close() {
+	if (_isOpen && outputAvailable())
+		stopAllNotes(true);
+
 	MidiDriver_MPU401::close();
 	_isOpen = false;
 }
