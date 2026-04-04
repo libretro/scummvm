@@ -33,6 +33,7 @@
 #include "audio/mpu401.h"
 #include "common/error.h"
 #include "common/util.h"
+#include "common/system.h"
 #include "audio/musicplugin.h"
 #include "backends/platform/libretro/include/libretro-defs.h"
 
@@ -41,7 +42,7 @@ extern struct retro_midi_interface *retro_midi_interface;
 
 class MidiDriver_Libretro : public MidiDriver_MPU401 {
 public:
-	MidiDriver_Libretro() : _isOpen(false) { }
+	MidiDriver_Libretro() : _isOpen(false), _lastWriteUs(0) { }
 	int open();
 	bool isOpen() const {
 		return _isOpen;
@@ -52,11 +53,25 @@ public:
 
 private:
 	bool _isOpen;
+	uint64 _lastWriteUs;
+	uint32 calcDeltaUs();
 	inline bool outputAvailable() const {
 		return retro_midi_interface && retro_midi_interface->output_enabled();
 	}
 
 };
+
+uint32 MidiDriver_Libretro::calcDeltaUs() {
+	uint64 nowUs = (uint64)g_system->getMillis() * 1000ULL;
+	uint32 delta = 0;
+	if (_lastWriteUs && nowUs >= _lastWriteUs) {
+		uint64 d = nowUs - _lastWriteUs;
+		delta = (d > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : (uint32)d;
+	}
+	_lastWriteUs = nowUs;
+	return delta;
+}
+
 
 int MidiDriver_Libretro::open() {
 	if (_isOpen)
@@ -71,6 +86,7 @@ int MidiDriver_Libretro::open() {
 	}
 
 	_isOpen = true;
+	_lastWriteUs = 0;
 	return 0;
 }
 
@@ -97,47 +113,47 @@ void MidiDriver_Libretro::send(uint32 b) {
 
 	// Realtime messages: 1 byte (F8..FF)
 	if (status >= 0xF8) {
-		retro_midi_interface->write(status, 0);
+		retro_midi_interface->write(status, calcDeltaUs());
 		return;
 	}
 
 	// System Common
 	switch (status) {
 	case 0xF1: // MTC quarter frame (2 bytes total)
-		retro_midi_interface->write(status, 0);
-		retro_midi_interface->write(d1, 0);
+		retro_midi_interface->write(status, calcDeltaUs());
+		retro_midi_interface->write(d1, calcDeltaUs());
 		return;
 	case 0xF2: // Song Position Pointer (3 bytes total)
-		retro_midi_interface->write(status, 0);
-		retro_midi_interface->write(d1, 0);
-		retro_midi_interface->write(d2, 0);
+		retro_midi_interface->write(status, calcDeltaUs());
+		retro_midi_interface->write(d1, calcDeltaUs());
+		retro_midi_interface->write(d2, calcDeltaUs());
 		return;
 	case 0xF3: // Song Select (2 bytes total)
-		retro_midi_interface->write(status, 0);
-		retro_midi_interface->write(d1, 0);
+		retro_midi_interface->write(status, calcDeltaUs());
+		retro_midi_interface->write(d1, calcDeltaUs());
 		return;
 	case 0xF6: // Tune request (1 byte)
 	case 0xF7: // EOX
-		retro_midi_interface->write(status, 0);
+		retro_midi_interface->write(status, calcDeltaUs());
 		return;
 	default:
 		break;
 	}
 
 	// Channel voice
-	retro_midi_interface->write(status, 0);
+	retro_midi_interface->write(status, calcDeltaUs());
 	switch (status & 0xF0) {
 	case 0xC0: // Program change: 1 data
 	case 0xD0: // Channel pressure: 1 data
-		retro_midi_interface->write(d1, 0);
+		retro_midi_interface->write(d1, calcDeltaUs());
 		break;
 	case 0x80:
 	case 0x90:
 	case 0xA0:
 	case 0xB0:
 	case 0xE0:
-		retro_midi_interface->write(d1, 0);
-		retro_midi_interface->write(d2, 0);
+		retro_midi_interface->write(d1, calcDeltaUs());
+		retro_midi_interface->write(d2, calcDeltaUs());
 		break;
 	default:
 		break;
@@ -159,15 +175,15 @@ void MidiDriver_Libretro::sysEx(const byte *msg, uint16 length) {
 		length = 268;
 
 	// Send SysEx start
-	retro_midi_interface->write(0xF0, 0);
+	retro_midi_interface->write(0xF0, calcDeltaUs());
 
 	// Send SysEx data (excluding F0 start and F7 end)
 	for (uint16 i = 0; i < length; i++) {
-		retro_midi_interface->write(msg[i], 0);
+		retro_midi_interface->write(msg[i], calcDeltaUs());
 	}
 
 	// Send SysEx end
-	retro_midi_interface->write(0xF7, 0);
+	retro_midi_interface->write(0xF7, calcDeltaUs());
 
 	// Flush to ensure all data is sent
 	retro_midi_interface->flush();
