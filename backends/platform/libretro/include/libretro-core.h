@@ -52,4 +52,11 @@ uint8 retro_get_video_hw_mode(void);
 uintptr_t retro_get_hw_fb(void);
 void *retro_get_proc_address(const char *name);
 #endif
+
+typedef struct {
+	uint8  byte;
+	uint32 delta_us;
+} retro_midi_event_t;
+void retro_midi_queue_push(uint8 byte, uint32 delta_us);
+
 #endif // LIBRETRO_CORE_H

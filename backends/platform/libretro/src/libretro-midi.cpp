@@ -36,6 +36,7 @@
 #include "common/system.h"
 #include "audio/musicplugin.h"
 #include "backends/platform/libretro/include/libretro-defs.h"
+#include "backends/platform/libretro/include/libretro-core.h"
 
 // External libretro MIDI interface
 extern struct retro_midi_interface *retro_midi_interface;
@@ -93,7 +94,6 @@ int MidiDriver_Libretro::open() {
 void MidiDriver_Libretro::close() {
 	if (_isOpen && outputAvailable())
 		stopAllNotes(true);
-
 	MidiDriver_MPU401::close();
 	_isOpen = false;
 }
@@ -116,47 +116,47 @@ void MidiDriver_Libretro::send(uint32 b) {
 
 	// Realtime messages: 1 byte (F8..FF)
 	if (status >= 0xF8) {
-		retro_midi_interface->write(status, calcDeltaUs());
+		retro_midi_queue_push(status, calcDeltaUs());
 		return;
 	}
 
 	// System Common
 	switch (status) {
 	case 0xF1: // MTC quarter frame (2 bytes total)
-		retro_midi_interface->write(status, calcDeltaUs());
-		retro_midi_interface->write(d1, calcDeltaUs());
+		retro_midi_queue_push(status, calcDeltaUs());
+		retro_midi_queue_push(d1, calcDeltaUs());
 		return;
 	case 0xF2: // Song Position Pointer (3 bytes total)
-		retro_midi_interface->write(status, calcDeltaUs());
-		retro_midi_interface->write(d1, calcDeltaUs());
-		retro_midi_interface->write(d2, calcDeltaUs());
+		retro_midi_queue_push(status, calcDeltaUs());
+		retro_midi_queue_push(d1, calcDeltaUs());
+		retro_midi_queue_push(d2, calcDeltaUs());
 		return;
 	case 0xF3: // Song Select (2 bytes total)
-		retro_midi_interface->write(status, calcDeltaUs());
-		retro_midi_interface->write(d1, calcDeltaUs());
+		retro_midi_queue_push(status, calcDeltaUs());
+		retro_midi_queue_push(d1, calcDeltaUs());
 		return;
 	case 0xF6: // Tune request (1 byte)
 	case 0xF7: // EOX
-		retro_midi_interface->write(status, calcDeltaUs());
+		retro_midi_queue_push(status, calcDeltaUs());
 		return;
 	default:
 		break;
 	}
 
 	// Channel voice
-	retro_midi_interface->write(status, calcDeltaUs());
+	retro_midi_queue_push(status, calcDeltaUs());
 	switch (status & 0xF0) {
 	case 0xC0: // Program change: 1 data
 	case 0xD0: // Channel pressure: 1 data
-		retro_midi_interface->write(d1, calcDeltaUs());
+		retro_midi_queue_push(d1, calcDeltaUs());
 		break;
 	case 0x80:
 	case 0x90:
 	case 0xA0:
 	case 0xB0:
 	case 0xE0:
-		retro_midi_interface->write(d1, calcDeltaUs());
-		retro_midi_interface->write(d2, calcDeltaUs());
+		retro_midi_queue_push(d1, calcDeltaUs());
+		retro_midi_queue_push(d2, calcDeltaUs());
 		break;
 	default:
 		break;
@@ -178,18 +178,15 @@ void MidiDriver_Libretro::sysEx(const byte *msg, uint16 length) {
 		length = 268;
 
 	// Send SysEx start
-	retro_midi_interface->write(0xF0, calcDeltaUs());
+	retro_midi_queue_push(0xF0, calcDeltaUs());
 
 	// Send SysEx data (excluding F0 start and F7 end)
 	for (uint16 i = 0; i < length; i++) {
-		retro_midi_interface->write(msg[i], calcDeltaUs());
+		retro_midi_queue_push(msg[i], calcDeltaUs());
 	}
 
 	// Send SysEx end
-	retro_midi_interface->write(0xF7, calcDeltaUs());
-
-	// Flush to ensure all data is sent
-	retro_midi_interface->flush();
+	retro_midi_queue_push(0xF7, calcDeltaUs());
 }
 
 // Plugin interface

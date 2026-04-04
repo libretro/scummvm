@@ -106,6 +106,10 @@ static bool updating_variables = false;
 #ifdef USE_OPENGL
 static struct retro_hw_render_callback hw_render;
 
+static retro_midi_event_t midi_queue[MIDI_QUEUE_SIZE];
+static volatile uint32 midi_head = 0; /* producer writes */
+static volatile uint32 midi_tail = 0; /* consumer writes */
+
 static void context_reset(void) {
 	retro_log_cb(RETRO_LOG_DEBUG, "HW context reset\n");
 	if (retro_emu_thread_started())
@@ -854,6 +858,41 @@ const char *retro_get_playlist_dir(void) {
 	return playlistdir;
 }
 
+void retro_midi_queue_push(uint8 byte, uint32 delta_us) {
+	uint32 next = (midi_head + 1) & (MIDI_QUEUE_SIZE - 1);
+
+	if (next == midi_tail) {
+		/* Queue full → drop event (acceptable for MIDI) */
+		return;
+	}
+
+	midi_queue[midi_head].byte     = byte;
+	midi_queue[midi_head].delta_us = delta_us;
+	midi_head = next;
+}
+
+static void retro_midi_queue_drain(void) {
+	if (!retro_midi_interface)
+		return;
+	if (!retro_midi_interface->output_enabled)
+		return;
+	if (!retro_midi_interface->output_enabled())
+		return;
+
+	bool did_write = false;
+
+	while (midi_tail != midi_head) {
+		retro_midi_event_t ev = midi_queue[midi_tail];
+		midi_tail = (midi_tail + 1) & (MIDI_QUEUE_SIZE - 1);
+
+		retro_midi_interface->write(ev.byte, ev.delta_us);
+		did_write = true;
+	}
+
+	if (did_write)
+		retro_midi_interface->flush();
+}
+
 void retro_init(void) {
 	struct retro_log_callback log;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
@@ -1113,10 +1152,7 @@ void retro_run(void) {
 		LIBRETRO_G_SYSTEM->processInputs();
 	}
 
-	// Flush MIDI output
-	if (retro_midi_interface && retro_midi_interface->output_enabled()) {
-		retro_midi_interface->flush();
-	}
+	retro_midi_queue_drain();
 }
 
 void retro_unload_game(void) {
