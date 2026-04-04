@@ -223,16 +223,18 @@ Common::Error LibretroMusicPlugin::createInstance(MidiDriver **mididriver, MidiD
 }
 
 bool LibretroMusicPlugin::checkDevice(MidiDriver::DeviceHandle hdl, int checkFlags, bool quiet) const {
-	if (!hdl)
-		return false;
-
 	if (!retro_midi_interface || !retro_midi_interface->output_enabled()) {
 		if (!quiet)
 			warning("Libretro MIDI: interface not available or output disabled");
 		return false;
 	}
 
-	return true;
+	// Allow auto selection if available
+	if (checkFlags & MDCK_AUTO)
+		return true;
+
+	// For explicit selection, handle should normally be non-zero
+	return hdl != 0;
 }
 
 REGISTER_PLUGIN_STATIC(LIBRETRO_MIDI, PLUGIN_TYPE_MUSIC, LibretroMusicPlugin);
