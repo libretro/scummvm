@@ -52,6 +52,10 @@ public:
 
 private:
 	bool _isOpen;
+	inline bool outputAvailable() const {
+		return retro_midi_interface && retro_midi_interface->output_enabled();
+	}
+
 };
 
 int MidiDriver_Libretro::open() {
@@ -78,7 +82,9 @@ void MidiDriver_Libretro::close() {
 void MidiDriver_Libretro::send(uint32 b) {
 	midiDriverCommonSend(b);
 
-	if (!retro_midi_interface || !retro_midi_interface->output_enabled())
+	if (!_isOpen)
+		return;
+	if (!outputAvailable())
 		return;
 
 	byte status_byte = (b & 0x000000FF);
@@ -112,7 +118,11 @@ void MidiDriver_Libretro::send(uint32 b) {
 void MidiDriver_Libretro::sysEx(const byte *msg, uint16 length) {
 	midiDriverCommonSysEx(msg, length);
 
-	if (!retro_midi_interface || !retro_midi_interface->output_enabled())
+	if (!_isOpen)
+		return;
+	if (!outputAvailable())
+		return;
+	if (!msg || length == 0)
 		return;
 
 	// Send SysEx start
