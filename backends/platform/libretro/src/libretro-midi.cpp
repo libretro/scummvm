@@ -87,30 +87,59 @@ void MidiDriver_Libretro::send(uint32 b) {
 	if (!outputAvailable())
 		return;
 
-	byte status_byte = (b & 0x000000FF);
-	byte first_byte = (b & 0x0000FF00) >> 8;
-	byte second_byte = (b & 0x00FF0000) >> 16;
+	byte status = (byte)(b & 0xFF);
+	byte d1	 = (byte)((b >> 8) & 0xFF);
+	byte d2	 = (byte)((b >> 16) & 0xFF);
 
-	// Calculate delta time (in microseconds since last write)
-	// For simplicity, we use 0 delta time for all messages
-	// This is acceptable for most MIDI output scenarios
-	retro_midi_interface->write(status_byte, 0);
+	// to be handled by sysEx()
+	if (status == 0xF0)
+		return;
 
-	switch (b & 0xF0) {
-	case 0x80:  // Note Off
-	case 0x90:  // Note On
-	case 0xA0:  // Polyphonic Key Pressure
-	case 0xB0:  // Controller
-	case 0xE0:  // Pitch Bend
-		retro_midi_interface->write(first_byte, 0);
-		retro_midi_interface->write(second_byte, 0);
+	// Realtime messages: 1 byte (F8..FF)
+	if (status >= 0xF8) {
+		retro_midi_interface->write(status, 0);
+		return;
+	}
+
+	// System Common
+	switch (status) {
+	case 0xF1: // MTC quarter frame (2 bytes total)
+		retro_midi_interface->write(status, 0);
+		retro_midi_interface->write(d1, 0);
+		return;
+	case 0xF2: // Song Position Pointer (3 bytes total)
+		retro_midi_interface->write(status, 0);
+		retro_midi_interface->write(d1, 0);
+		retro_midi_interface->write(d2, 0);
+		return;
+	case 0xF3: // Song Select (2 bytes total)
+		retro_midi_interface->write(status, 0);
+		retro_midi_interface->write(d1, 0);
+		return;
+	case 0xF6: // Tune request (1 byte)
+	case 0xF7: // EOX
+		retro_midi_interface->write(status, 0);
+		return;
+	default:
 		break;
-	case 0xC0:  // Program Change
-	case 0xD0:  // Aftertouch
-		retro_midi_interface->write(first_byte, 0);
+	}
+
+	// Channel voice
+	retro_midi_interface->write(status, 0);
+	switch (status & 0xF0) {
+	case 0xC0: // Program change: 1 data
+	case 0xD0: // Channel pressure: 1 data
+		retro_midi_interface->write(d1, 0);
+		break;
+	case 0x80:
+	case 0x90:
+	case 0xA0:
+	case 0xB0:
+	case 0xE0:
+		retro_midi_interface->write(d1, 0);
+		retro_midi_interface->write(d2, 0);
 		break;
 	default:
-		// Unknown message type
 		break;
 	}
 }
