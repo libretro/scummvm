@@ -125,6 +125,10 @@ void MidiDriver_Libretro::sysEx(const byte *msg, uint16 length) {
 	if (!msg || length == 0)
 		return;
 
+	// Per MidiDriver_BASE info: SysEx max 268 bytes
+	if (length > 268)
+		length = 268;
+
 	// Send SysEx start
 	retro_midi_interface->write(0xF0, 0);
 
