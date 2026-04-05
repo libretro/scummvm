@@ -904,7 +904,8 @@ void retro_init(void) {
 	else
 		retro_log_cb = NULL;
 
-	retro_log_cb(RETRO_LOG_DEBUG, "ScummVM core version: %s\n", __GIT_VERSION);
+	if (retro_log_cb)
+		retro_log_cb(RETRO_LOG_DEBUG, "ScummVM core version: %s\n", __GIT_VERSION);
 
 	update_variables();
 	max_width = gui_width > max_width ? gui_width : max_width;
