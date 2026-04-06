@@ -106,10 +106,6 @@ static bool updating_variables = false;
 #ifdef USE_OPENGL
 static struct retro_hw_render_callback hw_render;
 
-static retro_midi_event_t midi_queue[MIDI_QUEUE_SIZE];
-static volatile uint32 midi_head = 0; /* producer writes */
-static volatile uint32 midi_tail = 0; /* consumer writes */
-
 static void context_reset(void) {
 	retro_log_cb(RETRO_LOG_DEBUG, "HW context reset\n");
 	if (retro_emu_thread_started())
@@ -138,6 +134,10 @@ static void retro_gui_res_reset() {
 	}
 }
 #endif
+
+static retro_midi_event_t midi_queue[MIDI_QUEUE_SIZE];
+static volatile uint32 midi_head = 0; /* producer writes */
+static volatile uint32 midi_tail = 0; /* consumer writes */
 
 static void setup_hw_rendering(void) {
 
