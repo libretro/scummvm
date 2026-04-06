@@ -62,12 +62,12 @@ struct PlainPoMessageEntry {
 			Common::strlcpy(msgstr, translation, len);
 		}
 		if (message != NULL && *message != '\0') {
-			size_t len = 1 + strlen(translation);
+			size_t len = 1 + strlen(message);
 			msgid = new char[len];
 			Common::strlcpy(msgid, message, len);
 		}
 		if (context != NULL && *context != '\0') {
-			size_t len = 1 + strlen(translation);
+			size_t len = 1 + strlen(context);
 			msgctxt = new char[len];
 			Common::strlcpy(msgctxt, context, len);
 		}

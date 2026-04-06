@@ -284,6 +284,17 @@ void DrillerEngine::loadAssetsAtariFullGame() {
 			load8bitBinary(stream, 0x29b3c, 16);
 			loadPalettes(stream, 0x296fa);
 			loadSoundsFx(stream, 0x30da6, 25);
+
+			// Budget Atari full-game indicator blocks match the Amiga retail data
+			// shifted by -0xDA in the validated 293062-byte x.prg layout.
+			byte *palette = getPaletteFromNeoImage(stream, 0x1371a);
+			loadRigSprites(stream, 0x23FA0, palette);
+			if (palette) {
+				loadIndicatorSprites(stream, palette, 0x26EC0, 0x27148, 0x24CAE, 0x26838);
+				loadCompassStrips(stream, palette, 0x2323C, 0x26E72);
+				loadEarthquakeSprites(stream, palette, 0x27486);
+			}
+			free(palette);
 		}
 	} else
 		error("Unknown Atari ST Driller variant");
@@ -350,6 +361,22 @@ void DrillerEngine::loadAssetsAtariDemo() {
 		loadFonts(&file, 0x7bc);
 		loadMessagesFixedSize(&file, 0x3b90, 14, 20);
 		loadGlobalObjects(&file, 0x3946, 8);
+
+		byte *palette = nullptr;
+		Common::File neoFile;
+		neoFile.open("console.neo");
+		if (neoFile.isOpen())
+			palette = getPaletteFromNeoImage(&neoFile, 0);
+
+		loadRigSprites(&file, 0x1AB9A);
+		if (palette) {
+			// The rolling Atari demo carries the same indicator blocks here,
+			// but the current bundled vehicle fallback is already good enough.
+			loadIndicatorSprites(&file, palette, 0x1D55A, 0x1D7E2, -1, 0x1CED2);
+			loadCompassStrips(&file, palette, 0x19E36, 0x1D50C);
+			loadEarthquakeSprites(&file, palette, 0x1DB20);
+		}
+		free(palette);
 	}
 
 	file.close();

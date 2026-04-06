@@ -517,7 +517,9 @@ Common::Error Ultima8Engine::startupGame() {
 
 	int width = ConfMan.getInt("width");
 	int height = ConfMan.getInt("height");
-	changeVideoMode(width, height);
+	Common::Error err = changeVideoMode(width, height);
+	if (err.getCode() != Common::kNoError)
+		return err;
 
 	// Show the splash screen immediately now that the screen has been set up
 	_mouse->setMouseCursor(Mouse::MOUSE_NONE);
@@ -733,31 +735,25 @@ void Ultima8Engine::paint() {
 		screen->update();
 }
 
-void Ultima8Engine::changeVideoMode(int width, int height) {
+Common::Error Ultima8Engine::changeVideoMode(int width, int height) {
 	if (_screen) {
 		Common::Rect32 old_dims = _screen->getSurfaceDims();
 		if (width == old_dims.width() && height == old_dims.height())
-			return;
-
-		delete _screen;
+			return Common::kNoError;
 	}
 
 	// Set Screen Resolution
 	debug(1, "Setting Video Mode %dx%d...", width, height);
 
-	auto tryModes = g_system->getSupportedFormats();
-	for (auto g = tryModes.begin(); g != tryModes.end(); ++g) {
-		if (g->bytesPerPixel != 2 && g->bytesPerPixel != 4) {
-			g = tryModes.reverse_erase(g);
-		}
-	}
-
-	initGraphics(width, height, tryModes);
+	initGraphics(width, height, nullptr);
 
 	Graphics::PixelFormat format = g_system->getScreenFormat();
 	if (format.bytesPerPixel != 2 && format.bytesPerPixel != 4) {
-		error("Only 16 bit and 32 bit video modes supported");
+		return Common::kUnsupportedColorMode;
 	}
+
+	if (_screen)
+		delete _screen;
 
 	// Set up blitting surface
 	Graphics::ManagedSurface *surface = new Graphics::Screen(width, height, format);
@@ -779,6 +775,8 @@ void Ultima8Engine::changeVideoMode(int width, int height) {
 	}
 
 	paint();
+
+	return Common::kNoError;
 }
 
 void Ultima8Engine::handleEvent(const Common::Event &event) {

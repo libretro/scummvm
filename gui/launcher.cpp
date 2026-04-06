@@ -461,6 +461,10 @@ void LauncherDialog::removeGame(int item) {
 		// This will be used to select the next item.
 		// If grouping method is None then updateListing() will
 		// ignore selPos and use the current selection instead.
+		int selPos = -1;
+		if (_groupBy != kGroupByNone) {
+			selPos = getItemPos(item);
+		}
 
 		// Remove the currently selected game from the list
 		assert(item >= 0);
@@ -478,7 +482,7 @@ void LauncherDialog::removeGame(int item) {
 		ConfMan.flushToDisk();
 
 		// Update the ListWidget/GridWidget and force a redraw
-		updateListing();
+		updateListing(selPos);
 		g_gui.scheduleTopDialogRedraw();
 	}
 }
@@ -1241,11 +1245,17 @@ void LauncherSimple::updateListing(int selPos) {
 	}
 
 	const int oldSel = _list->getSelected();
+
+	// Preserve the current collapsed groups before rebuilding the grouped list
+	if (_groupBy != kGroupByNone) {
+		_list->saveClosedGroups(Common::U32String(groupingModes[_groupBy].name));
+	}
+
 	_list->setList(l);
 
 	groupEntries(domainList);
 
-	// Close groups that the user closed earlier
+	// Restore collapsed groups after rebuilding
 	_list->loadClosedGroups(Common::U32String(groupingModes[_groupBy].name));
 
 	// Update the filter settings, those are lost when "setList"
@@ -1720,13 +1730,17 @@ void LauncherGrid::updateListing(int selPos) {
 		Common::String platform;
 		Common::String extra;
 		Common::String path;
+		Common::String guioptions;
 		bool valid_path = false;
+		bool canLoad;
 		curDomain.domain->tryGetVal("engineid", engineid);
 		curDomain.domain->tryGetVal("language", language);
 		curDomain.domain->tryGetVal("platform", platform);
 		curDomain.domain->tryGetVal("extra", extra);
+		curDomain.domain->tryGetVal("guioptions", guioptions);
 		valid_path = (!curDomain.domain->tryGetVal("path", path) || !Common::FSNode(Common::Path::fromConfig(path)).isDirectory()) ? false : true;
-		gridList.push_back(GridItemInfo(k++, engineid, gameid, curDomain.description, curDomain.title, extra, Common::parseLanguage(language), Common::parsePlatform(platform), valid_path));
+		canLoad = !Common::checkGameGUIOption(GUIO_NOLAUNCHLOAD, guioptions);
+		gridList.push_back(GridItemInfo(k++, engineid, gameid, curDomain.description, curDomain.title, extra, Common::parseLanguage(language), Common::parsePlatform(platform), valid_path, canLoad));
 		_domains.push_back(curDomain.key);
 		_domainTitles.push_back(curDomain.description); // Store the game description (user's name for it)
 	}
@@ -1820,10 +1834,6 @@ void LauncherGrid::updateSelectionAfterRemoval() {
 #endif // !DISABLE_LAUNCHERDISPLAY_GRID
 
 void LauncherDialog::confirmRemoveGames(const Common::Array<bool> &selectedItems) {
-	// Validate that at least one item is selected
-	if (!hasAnySelection(selectedItems))
-		return;
-
 	// Count selected items
 	int selectedCount = 0;
 	for (int i = 0; i < (int)selectedItems.size(); ++i) {
@@ -1832,9 +1842,19 @@ void LauncherDialog::confirmRemoveGames(const Common::Array<bool> &selectedItems
 		}
 	}
 
+	// Validate that at least one item is selected
+	if (selectedCount == 0) {
+		return;
+	}
+
+	// Use standard message box if only one item is selected
+	if (selectedCount == 1) {
+		removeGame(getSelected());
+		return;
+	}
 	// Build the confirmation message with count
 	Common::U32String message = Common::U32String::format(
-		_("Do you really want to remove the following %d game configuration(s)?\n\n"),
+		_("Do you really want to remove the following %d game configurations?\n\n"),
 		selectedCount);
 
 	// Build array of game titles to display
@@ -1856,9 +1876,6 @@ void LauncherDialog::confirmRemoveGames(const Common::Array<bool> &selectedItems
 }
 
 void LauncherDialog::removeGames(const Common::Array<bool> &selectedItems, bool isGrid) {
-	if (selectedItems.empty())
-		return;
-
 	// Check if any items are selected
 	if (!hasAnySelection(selectedItems))
 		return;
@@ -1906,8 +1923,8 @@ RemovalConfirmationDialog::RemovalConfirmationDialog(const Common::U32String &me
 	}
 
 	// Create Button Widgets with bogus size (will be sized in reflowLayout)
-	_buttons.push_back(new ButtonWidget(this, 0, 0, 0, 0, Common::U32String(_("Yes")), Common::U32String(), kRemovalYes, 'y'));
-	_buttons.push_back(new ButtonWidget(this, 0, 0, 0, 0, Common::U32String(_("No")), Common::U32String(), kRemovalNo, 'n'));
+	_buttons.push_back(new ButtonWidget(this, 0, 0, 0, 0, Common::U32String(_("Yes")), Common::U32String(), kRemovalYes, Common::ASCII_RETURN));
+	_buttons.push_back(new ButtonWidget(this, 0, 0, 0, 0, Common::U32String(_("No")), Common::U32String(), kRemovalNo, Common::ASCII_ESCAPE));
 
 	reflowLayout();
 }

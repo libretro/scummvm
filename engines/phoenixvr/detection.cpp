@@ -25,7 +25,6 @@
 #include "common/file.h"
 #include "common/md5.h"
 #include "common/str-array.h"
-#include "common/translation.h"
 #include "common/util.h"
 #include "phoenixvr/detection_tables.h"
 
@@ -39,6 +38,7 @@ const DebugChannelDef PhoenixVRMetaEngineDetection::debugFlagList[] = {
 
 PhoenixVRMetaEngineDetection::PhoenixVRMetaEngineDetection() : AdvancedMetaEngineDetection(
 																   PhoenixVR::gameDescriptions, PhoenixVR::phoenixvrGames) {
+	_flags = kADFlagMatchFullPaths;
 }
 
 REGISTER_PLUGIN_STATIC(PHOENIXVR_DETECTION, PLUGIN_TYPE_ENGINE_DETECTION, PhoenixVRMetaEngineDetection);

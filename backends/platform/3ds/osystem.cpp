@@ -77,7 +77,6 @@ OSystem_3DS::OSystem_3DS():
 	_magY(0),
 	_magWidth(400),
 	_magHeight(240),
-	_gameTextureDirty(false),
 	_filteringEnabled(true),
 	_overlayVisible(false),
 	_overlayInGUI(false),
@@ -89,7 +88,8 @@ OSystem_3DS::OSystem_3DS():
 	_showCursor(true),
 	_snapToBorder(true),
 	_stretchToFit(false),
-	_screen(kScreenBoth)
+	_screen(kScreenBoth),
+	_blitFunc(nullptr)
 {
 	chdir("sdmc:/");
 

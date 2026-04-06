@@ -36,7 +36,8 @@ enum AlcachofaDebugChannels {
 
 enum class EngineVersion {
 	V1_0 = 10, // edicion orginal, vaqueros and terror
-	V2_0 = 20, // the rest
+	V2_0 = 20, // secta, moscu and escarabajo
+	V2_1 = 21, // corvino, balones and mamelucos
 	V3_0 = 30, // Remastered movie adventure (used for original spanish release)
 	V3_1 = 31, // Remastered movie adventure (for german release and english/spanish steam release)
 };

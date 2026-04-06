@@ -70,6 +70,7 @@ static const char *const KernelCallNames[] = {
 	"StopAndTurnMe",
 	"ChangeCharacter",
 	"SayText",
+	"SayTextV2",
 	"Go",
 	"Put",
 	"ChangeCharacterRoom",
@@ -107,15 +108,13 @@ static const char *const KernelCallNames[] = {
 	"LerpCamToObjectWithScale",
 	"LerpCamToObjectResettingZ",
 	"LerpCamRotation",
+	"LerpOrSetCam",
 	"FadeIn",
 	"FadeOut",
 	"FadeIn2",
 	"FadeOut2",
 	"LerpCamXYZ",
 	"LerpCamToObjectKeepingZ",
-
-	"SheriffTakesCharacter",
-	"ChangeDoor",
 	"Disguise"
 };
 

@@ -45,7 +45,15 @@ char Video_v6::spriteUncompressor(byte *sprBuf, int16 srcWidth, int16 srcHeight,
 	    int16 x, int16 y, int16 transp, Surface &destDesc) {
 
 	if ((sprBuf[0] == 1) && (sprBuf[1] == 3)) {
-		drawPacked(sprBuf, x, y, destDesc);
+		if (transp != 0) {
+			int16 width = READ_LE_UINT16(sprBuf + 2);
+			int16 height = READ_LE_UINT16(sprBuf + 4);
+			Surface tempSurf(width, height, destDesc.getBPP());
+			drawPacked(sprBuf, 0, 0, tempSurf);
+			destDesc.blit(tempSurf, 0, 0, width - 1, height - 1, x, y, 0);
+		} else {
+			drawPacked(sprBuf, x, y, destDesc);
+		}
 		return 1;
 	}
 

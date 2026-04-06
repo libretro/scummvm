@@ -485,6 +485,62 @@ struct MARK : public EngineData {
 	Common::Array<Common::Rect> _markSrcs;
 };
 
+// Shared UI elements. Introduced in Nancy 10
+struct SHUI : public EngineData {
+	SHUI(Common::SeekableReadStream *chunkStream);
+
+	Common::Array<Common::Rect> _closeRects;	// Close/"X" button rects
+	Common::Array<Common::Rect> _sliderRects;	// Slider rects
+};
+
+// Scheduled talk (?) UI. Introduced in Nancy 11
+struct SCTB : public EngineData {
+	SCTB(Common::SeekableReadStream *chunkStream);
+
+	Common::Path imageName;
+};
+
+// New task list UI. Introduced in Nancy 10
+struct TASK : public EngineData {
+	TASK(Common::SeekableReadStream *chunkStream);
+
+	Common::Path imageName;
+};
+
+// New web browser UI. Introduced in Nancy 10
+struct UIBW : public EngineData {
+	UIBW(Common::SeekableReadStream *chunkStream);
+
+	Common::Path imageName;
+};
+
+// New cell phone popup UI. Introduced in Nancy 10
+struct UICL : public EngineData {
+	UICL(Common::SeekableReadStream *chunkStream);
+
+	Common::Path imageName;
+};
+
+// New conversation popup UI. Introduced in Nancy 10
+struct UICO : public EngineData {
+	UICO(Common::SeekableReadStream *chunkStream);
+
+	Common::Path imageName;
+};
+
+// New inventory UI. Introduced in Nancy 10
+struct UIIV : public EngineData {
+	UIIV(Common::SeekableReadStream *chunkStream);
+
+	Common::Path imageName;
+};
+
+// New notebook UI. Introduced in Nancy 10
+struct UINB : public EngineData {
+	UINB(Common::SeekableReadStream *chunkStream);
+
+	Common::Path imageName;
+};
 } // End of namespace Nancy
 
 #endif // NANCY_ENGINEDATA_H

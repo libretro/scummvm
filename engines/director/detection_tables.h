@@ -172,6 +172,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "fff",				"Four Footed Friends" },
 	{ "finegardening",		"Fine Gardening Propagation" },
 	{ "finkletimes",		"Professor Finkle's Times Table Factory" },
+	{ "finklemania",		"Professor Finkle's Math Mania" },
 	{ "fishwish",			"The Fish Who Could Wish" },
 	{ "flipper",			"Flipper" },
 	{ "flipper1",           "The Three Worlds of Flipper & Lopaka" },
@@ -315,6 +316,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "letsdiscover",		"Let's Discover" },
 	{ "letters",			"Letters" },
 	{ "lostfoundvol1",		"Lost & Found: Volume 1" },
+	{ "lotusspring",		"The Legend of Lotus Spring" },
 	{ "louiscatorze",		"Louis Cat Orze: The Mystery of the Queen's Necklace" },
 	{ "luxor",				"Secrets of the Luxor" },
 	{ "madcc12",			"Madeline Classroom Companion: 1st & 2nd Grade" },
@@ -1056,6 +1058,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "otelo",				"o.tel.o Online 01011" },
 	{ "physicus2",			"Physicus: Die Rückkehr" },
 	{ "ponkymath12",		"Durchstarten mit Ponky: Mathe 1. + 2. Klasse" },
+	{ "rainbowfishjr2",		"Der Regenbogenfisch Junior 2: Kraktors Geburtstag" },
 	{ "ravecard2001",		"Ravecard 2001" },
 	{ "ravensburger",		"Ravensburger Interactive Demo-Sampler" },
 	{ "raveshuttle",		"Rave Shuttle: The Cosmic Challenge" },
@@ -1263,6 +1266,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "schoolworld",		"A-L: Artificial Life: School World" },
 	{ "seesawc1",			"SeesawC1" },
 	{ "shikiotabisuru",		"四季を旅する" },
+	{ "shouchan",			"しょうちゃんの大冒険" },
 	{ "smallhouse",			"Small House" },
 	{ "startover",			"Start Over ROM" },
 	{ "tantei",				"完全探偵マニュアル" },								// Perfect Detective Manual
@@ -4264,8 +4268,8 @@ static const DirectorGameDescription gameDescriptions[] = {
 	WINGAME1("elroycostume", "", "ECCLOSET.EXE", "f2fb9b1c60d3d1ee2b664165f4199391", 1327420, 404),
 	WINDEMO1("elroycostume", "Demo", "elroy.exe", "9d18c6a224dd0e5be4ad03a05c74254b", 854349, 404),
 
-	MACGAME1("elroypave", "", "Elroy Hits the Pavement", "17efee018a660458fae80de4364021ac", 525584, 404),
-	WINGAME1("elroypave", "", "PAVEMENT.EXE", "7937f42747788b558bc32cced3d8f66b", 758491, 404),
+	MACGAME1("elroypave", "", "Elroy Hits the Pavement", "r:17efee018a660458fae80de4364021ac", 525584, 404),
+	WINGAME1("elroypave", "", "PAVEMENT.EXE", "t:e49b3ba79da895a934461146ee642d16", 758491, 404),
 	MACDEMO1("elroypave", "Demo", "Pavement Demo", "17efee018a660458fae80de4364021ac", 520880, 404),
 	WINDEMO2("elroypave", "Demo", "PAVEDEMO.EXE",			 "073eb1dd818796efe9513b11a8a4bb2d", 802180,
 								  "PAVEDEMO/P12/SHARED.DXR", "7fe5e2fa28260cbfa2d8675d948401b8", 112470, 404),
@@ -5964,6 +5968,9 @@ static const DirectorGameDescription gameDescriptions[] = {
 	MACGAME1_l("shine", "", "Shine PPC",   "rt:5ee46e7c000032b39780a90478df5f13", 137904, Common::DE_DEU, 404),
 	WINGAME2_l("shine", "", "Shine.exe",   "t:60469b7f995ca4fa7dc10edd3092841f", 1937650,
 							"TRAILER.DXR", "f:5d295bbffb2a4cc0e124503b39bfaf42",  171382, Common::DE_DEU, 404),
+
+	// Original filename is 'しょうちゃんの大冒険'
+	MACGAME1_l("shouchan", "",		   "xn--p8j7a5a2cyfva1gr294adjoqv8l", "r:3555cb434e61f33790783b23113b4f52",  502617, Common::JA_JPN, 404),
 
 	// Original filename is '心象風景'
 	MACGAME1_l("shinshofukei", "",		   "xn--15t91mv19ahjk", "r:8b138db44d4421cc7294a9dc792ccf1b",  502617, Common::JA_JPN, 404),
@@ -8504,6 +8511,11 @@ static const DirectorGameDescription gameDescriptions[] = {
 	MACGAME1("exploder", "", "Winblows Exploder", "r:089658f6d7d68f07eece8a68e5fdc35e",  115391, 600),
 	WINGAME1("exploder", "", "EXPLODER.EXE",	  "t:ae488c615d7ecb621c96c59b98eccf9b", 4712625, 600),
 
+	WINGAME2f("finklemania", "CD 1", "MANIA.EXE",	  "t:870ffc676c55b1fb7b1b489ce6d17f3e", 1708689,
+			"MAIN.DXR", "f:f16e0cf9386e52d8bd961ddf12c56a69", 7034800, 600, GF_32BPP),
+	WINGAME2f("finklemania", "CD 2", "MANIA.EXE",	  "t:870ffc676c55b1fb7b1b489ce6d17f3e", 1708689,
+			"MAIN.DXR", "f:027b5108850dd528bcee19c2a5ef4624", 7047084, 600, GF_32BPP),
+
 	MACGAME1("flingshot", "", "FlingShot", "769cbb727ae2dda3f8ab6682d65ab439", 1031461, 650),
 
 	MACGAME1_l("forestia", "", "FORESTIA", "r:3c0d928e84acac2ee6739a4360e70fc6", 1032406, Common::FR_FRA, 602),
@@ -8787,6 +8799,12 @@ static const DirectorGameDescription gameDescriptions[] = {
 	// Original Mac filename is Löwenzahn 3
 	MACGAME1_l("loewe3", "", "xn--Lwenzahn 3-ecb",					"rt:e03c6cc5f2cdeef199f75c02928edafe", 1032378, Common::DE_DEU, 602),
 	WINGAME1_l("loewe3", "", "DATA/LOEWE3/SETUP/WIN95/LOEWE95.exe",	"t:0772adacde0f8fa5a9767de25be13527",  1514451, Common::DE_DEU, 602),
+
+	// Windows version requires installation, setup.exe, Setup Factory v4
+	MACGAME2("lotusspring", "", "LotusSpring/LS",				"r:4ea19c8b2483a9ae71df8000cae1097d", 1034669,
+								"LotusSpring/DXR/ChangeCD.dxr", "t:f1fc18e4479a4e26299cef2160315f19", 459346, 650),
+	WINGAME2("lotusspring", "", "LS.exe",						"t:c7e3b8162d6ab37b1960872efbb44ada", 1722439,
+								"DXR/ChangeCD.dxr", 			"t:f1fc18e4479a4e26299cef2160315f19", 459326, 600),
 
 	MACDEMO1("macos85", "Demo", "Mac OS 8.5 Demo", "49cc011560110af5e19d0cd1ee22b821", 1032397, 650),
 
@@ -9837,6 +9855,16 @@ static const DirectorGameDescription gameDescriptions[] = {
 	WINGAME2("webmaster", "", "Webmaster.exe",  "t:b757ff13f0f10c94b1b9fc5f2ceac6ec", 1820594,
 							  "Data/chaos.dxr", "d:1d3e9f04eb1ba627d8b0bba826a042f4",  556601, 702),
 
+	// German: "Webmaster: Fantastische Abenteuer in der Welt des Internets",
+	// developed by IJsfontein, published by Tivola, disc pressing timestamp "11/00"
+	WINGAME2_l("webmaster", "", "Webmaster.exe",  "t:b757ff13f0f10c94b1b9fc5f2ceac6ec", 1820594,
+								"Data/chaos.dxr", "d:a61309dc913a5f99041dbcd60372fb2e", 556781, Common::DE_DEU, 702),
+
+	// US variant
+	// developed by IJsfontein, published by Tivola, disc pressing timestamp "01/01"
+	WINGAME2_l("webmaster", "", "Webmaster.exe",  "t:b757ff13f0f10c94b1b9fc5f2ceac6ec", 1820594,
+								"Data/chaos.dxr", "d:a974288bad555038af8a0791b1ae0292", 556715, Common::EN_ANY, 702),
+
 	// Published by The Wine CD Corp (1999)
 	// Windows version needs installation
 	MACGAME1("winecd", "", "Start Wine CD", "rt:40cc0f0d9595e19d6e9f78ad29456f02", 109134, 700),
@@ -10714,6 +10742,10 @@ static const DirectorGameDescription gameDescriptions[] = {
 	MACGAME1_l("pixeline9", "", "Pixeline - I Det Vilde Westen", "bb6be483050bd1524c5440229b595f7a", 236019, Common::DA_DNK, 900),
 	MACGAME1_l("pixeline9", "OS X", "Pixeline - Mac OS X", 		 "4a522e1da5d5b8570e3ab625945b19cf", 234733, Common::DA_DNK, 900),
 	WINGAME1_l("pixeline9", "", "Pixeline 9 DK.exe",			 "c612aa43e7ef55aa4fd2e1085fb1ef7a", 2816536, Common::DA_DNK, 900),
+
+	// Published by EMME, only in Germany?
+	// TRAC report #16387
+	WINGAME1_l("rainbowfishjr2", "", "regenbogenfisch jr 2.exe", "t:d2a055700b5410886197c4c72d9edf1f", 2188712, Common::DE_DEU, 900),
 
 	WINGAME1("sajaklucky", "Deluxe", "LuckyLettersDeluxe.exe", "001d65a360a61861118f3cfa92c68ef3", 14018695, 900),
 

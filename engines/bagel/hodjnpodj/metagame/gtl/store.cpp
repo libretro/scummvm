@@ -772,15 +772,15 @@ void CGeneralStore::OnLButtonDown(unsigned int nFlags, CPoint point) {
 					if ((pCrowns == nullptr) ||
 					        ((*pCrowns).GetQuantity() < nPrice)) {
 						(*pItemText).DisplayString(pDC, "Not have enough crowns to buy that!", FONT_SIZE, TEXT_BOLD, STORE_BLURB_COLOR);
-						pSound = new CSound(this, (bPlayingHodj ? ".\\sound\\gsps5.wav" : ".\\sound\\gsps6.wav"), SOUND_WAVE | SOUND_QUEUE | SOUND_AUTODELETE);
+						pSound = new CSound(this, (bPlayingHodj ? "sound\\gsps5.wav" : "sound\\gsps6.wav"), SOUND_WAVE | SOUND_QUEUE | SOUND_AUTODELETE);
 						(*pSound).setDrivePath(lpMetaGameStruct->m_chCDPath);
 						(*pSound).play();
 					} else {
 						(*pItemText).DisplayString(pDC, "Thanks for the purchase!", FONT_SIZE, TEXT_BOLD, STORE_BLURB_COLOR);
 						if (brand() & 1)
-							pSound = new CSound(this, (bPlayingHodj ? ".\\sound\\gsps1.wav" : ".\\sound\\gsps2.wav"), SOUND_WAVE | SOUND_QUEUE | SOUND_AUTODELETE);
+							pSound = new CSound(this, (bPlayingHodj ? "sound\\gsps1.wav" : "sound\\gsps2.wav"), SOUND_WAVE | SOUND_QUEUE | SOUND_AUTODELETE);
 						else
-							pSound = new CSound(this, (bPlayingHodj ? ".\\sound\\gsps3.wav" : ".\\sound\\gsps4.wav"), SOUND_WAVE | SOUND_QUEUE | SOUND_AUTODELETE);
+							pSound = new CSound(this, (bPlayingHodj ? "sound\\gsps3.wav" : "sound\\gsps4.wav"), SOUND_WAVE | SOUND_QUEUE | SOUND_AUTODELETE);
 						(*pSound).setDrivePath(lpMetaGameStruct->m_chCDPath);
 						(*pSound).play();
 						(*pInventory).DiscardItem(pCrowns, nPrice);

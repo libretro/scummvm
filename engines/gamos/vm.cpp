@@ -361,8 +361,12 @@ uint32 VM::Context::execute(uint32 scriptAddress, byte *storage) {
 
 		case OP_DIV:
 			ECX = EAX;
-            EAX.setVal( (int32)EDX.getVal() / (int32)ECX.getVal() );
-            EDX.setVal( (int32)EDX.getVal() % (int32)ECX.getVal() );
+			if (ECX.getVal() != 0) {
+				EAX.setVal( (int32)EDX.getVal() / (int32)ECX.getVal() );
+				EDX.setVal( (int32)EDX.getVal() % (int32)ECX.getVal() );
+			} else {
+				warning("Division by 0 at %x", ESI);
+			}
 			break;
 
 		case OP_MOV_EAX_BPTR_EDI:
@@ -420,7 +424,7 @@ uint32 VM::doScript(uint32 scriptAddress, byte *storage) {
 	if (_interrupt)
 		return 0;
 
-	for (int i = 0; i < THREADS_COUNT; i++) {
+	for (uint i = 0; i < THREADS_COUNT; i++) {
 		if (!_threads[i]._inUse) {
 			_threads[i]._inUse = true;
 			uint32 res = _threads[i].execute(scriptAddress, storage);
@@ -484,8 +488,15 @@ uint32 VM::Context::getMem32(int memtype, uint32 offset) {
 	case REF_UNK:
 		return 0; // Set here breakpoint for find what is going wrong
 
-	case REF_STACK:
-		return getU32(_stack + offset);
+	case REF_STACK:	{
+		if (offset < (sizeof(_stack) - 4))
+			return getU32(_stack + offset);
+		else {
+			error("getMem32(): Out of bounds read, memType: REF_STACK  offset: 0x%02X", offset);
+			return 0;
+		}
+	}
+
 
 	case REF_EBX:
 		return getU32(EBX + offset);
@@ -505,8 +516,15 @@ uint8 VM::Context::getMem8(int memtype, uint32 offset) {
 	case REF_UNK:
 		return 0; // Set here breakpoint for find what is going wrong
 
-	case REF_STACK:
-		return _stack[offset];
+	case REF_STACK: {
+		if (offset < sizeof(_stack))
+			return _stack[offset];
+		else {
+			error("getMem8(): Out of bounds read, memType: REF_STACK  offset: 0x%02X", offset);
+			return 0;
+		}
+	}
+
 
 	case REF_EBX:
 		return EBX[offset];
@@ -525,9 +543,13 @@ void VM::Context::setMem32(int memtype, uint32 offset, uint32 val) {
 	default:
 	case REF_UNK:
 		break; // Set here breakpoint for find what is going wrong
-	case REF_STACK:
-		setU32(_stack + offset, val);
-		break;
+	case REF_STACK: {
+		if (offset < (sizeof(_stack) - 4))
+			setU32(_stack + offset, val);
+		else
+			error("setMem32(): Out of bounds write, memType: REF_STACK  offset: 0x%02X", offset);
+	} break;
+
 	case REF_EBX:
 		setU32(EBX + offset, val);
 		break;
@@ -547,9 +569,13 @@ void VM::Context::setMem8(int memtype, uint32 offset, uint8 val) {
 	default:
 	case REF_UNK:
 		break; // Set here breakpoint for find what is going wrong
-	case REF_STACK:
-		_stack[offset] = val;
-		break;
+	case REF_STACK:	{
+		if (offset < sizeof(_stack))
+			_stack[offset] = val;
+		else
+			error("setMem8(): Out of bounds write, memType: REF_STACK  offset: 0x%02X", offset);
+	} break;
+
 	case REF_EBX:
 		EBX[offset] = val;
 		break;
@@ -699,11 +725,17 @@ Common::String VM::Context::getString(int memtype, uint32 offset, uint32 maxLen)
 		return Common::String();
 
 	case REF_STACK: {
+		if (offset >= sizeof(_stack)) {
+			error("getString(): Out of bounds read, memType: REF_STACK  offset: 0x%02X", offset);
+			return Common::String();
+		}
+
 		Common::String s = Common::String((const char *)_stack + offset);
 		if (s.size() > maxLen)
 			s.erase(maxLen);
 		return s;
 	}
+
 	case REF_EBX: {
 		Common::String s = Common::String((const char *)EBX + offset);
 		if (s.size() > maxLen)

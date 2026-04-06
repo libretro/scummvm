@@ -36,6 +36,7 @@ gui/updates-dialog.cpp
 gui/widget.cpp
 gui/widgets/grid.cpp
 gui/widgets/groupedlist.cpp
+gui/widgets/richtext.cpp
 
 base/main.cpp
 

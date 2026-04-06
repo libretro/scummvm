@@ -51,8 +51,6 @@ XeenFont *TextView::getFont() const {
 		&g_globals->_fontNormal;
 }
 
-static bool flag = false;
-
 void TextView::writeChar(unsigned char c) {
 	XeenFont::setColors(_colorsNum);
 	XeenFont &font = *getFont();

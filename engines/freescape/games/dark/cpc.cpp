@@ -60,6 +60,60 @@ byte kCPCPaletteDarkTitle[16][3] = {
 	{0x00, 0x80, 0x00}, // 15: X
 };
 
+void DarkEngine::loadCPCIndicatorData(const byte *data, int widthBytes, int height, Common::Array<Graphics::ManagedSurface *> &target) {
+	Graphics::ManagedSurface *surface = new Graphics::ManagedSurface();
+	surface->create(widthBytes * 4, height, Graphics::PixelFormat::createFormatCLUT8());
+	surface->fillRect(Common::Rect(0, 0, surface->w, surface->h), 0);
+	Common::MemoryReadStream stream(data, widthBytes * height);
+	target.push_back(loadFrameCPCIndexed(&stream, surface, widthBytes, height));
+}
+
+void DarkEngine::loadCPCIndicator(Common::SeekableReadStream *file, uint32 offset, Common::Array<Graphics::ManagedSurface *> &target) {
+	// The HUD blitter at 0x7938 consumes records as { height, widthBytes, mode-1 row data... }.
+	file->seek(offset);
+	int height = file->readByte();
+	int widthBytes = file->readByte();
+	Common::Array<byte> data;
+	data.resize(widthBytes * height);
+	file->read(data.data(), data.size());
+	loadCPCIndicatorData(data.data(), widthBytes, height, target);
+}
+
+void DarkEngine::loadCPCIndicators(Common::SeekableReadStream *file) {
+	for (auto &indicator : _cpcIndicators) {
+		indicator->free();
+		delete indicator;
+	}
+	_cpcIndicators.clear();
+	for (auto &indicator : _cpcJetpackIndicators) {
+		indicator->free();
+		delete indicator;
+	}
+	_cpcJetpackIndicators.clear();
+	for (auto &indicator : _cpcActionIndicators) {
+		indicator->free();
+		delete indicator;
+	}
+	_cpcActionIndicators.clear();
+
+	loadCPCIndicator(file, 0x0F04, _cpcIndicators); // 0x6BFE -> 0x2AE6
+	loadCPCIndicator(file, 0x0E8A, _cpcIndicators); // 0x6C11 -> 0x2A6C
+	loadCPCIndicator(file, 0x0E10, _cpcIndicators); // 0x6C1B -> 0x29F2
+	loadCPCIndicator(file, 0x0D8F, _cpcIndicators); // 0x6C08 -> 0x2971
+
+	byte frame0[6];
+	byte frame1[6];
+	file->seek(0x0E09); // 0x52C6 -> 0x29EB
+	file->read(frame0, 6);
+	file->seek(0x0E0A); // 0x52CB -> 0x29EC
+	file->read(frame1, 6);
+	loadCPCIndicatorData(frame0, 1, 6, _cpcJetpackIndicators);
+	loadCPCIndicatorData(frame1, 1, 6, _cpcJetpackIndicators);
+
+	loadCPCIndicator(file, 0x0F7E, _cpcActionIndicators); // 0x507E -> 0x2B60
+	loadCPCIndicator(file, 0x0FB2, _cpcActionIndicators); // 0x508B -> 0x2B94
+}
+
 
 void DarkEngine::loadAssetsCPCFullGame() {
 	Common::File file;
@@ -90,13 +144,7 @@ void DarkEngine::loadAssetsCPCFullGame() {
 	loadGlobalObjects(&file, 0x9a, 23);
 	load8bitBinary(&file, 0x6255, 16);
 	loadSoundsCPC(&file, 0x09B7, 160, 0x0A57, 284, 0x0B73, 203);
-	_indicators.push_back(loadBundledImage("dark_fallen_indicator"));
-	_indicators.push_back(loadBundledImage("dark_crouch_indicator"));
-	_indicators.push_back(loadBundledImage("dark_walk_indicator"));
-	_indicators.push_back(loadBundledImage("dark_jet_indicator"));
-
-	for (auto &it : _indicators)
-		it->convertToInPlace(_gfx->_texturePixelFormat);
+	loadCPCIndicators(&file);
 }
 
 void DarkEngine::drawCPCUI(Graphics::Surface *surface) {
@@ -165,7 +213,7 @@ void DarkEngine::drawCPCUI(Graphics::Surface *surface) {
 		surface->fillRect(energyBar, front);
 	}
 	drawBinaryClock(surface, 300, 124, front, back);
-	drawIndicator(surface, 160, 136);
+	drawIndicator(surface, 160, 140);
 	drawVerticalCompass(surface, 24, 76, _pitch, front);
 }
 

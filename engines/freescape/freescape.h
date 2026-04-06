@@ -53,6 +53,10 @@ namespace Freescape {
 class Renderer;
 class Debugger;
 
+bool isEncodedCPCDirectColor(uint8 index);
+uint8 encodeCPCDirectColor(uint8 index);
+uint8 decodeCPCDirectColor(uint8 index);
+
 #define FREESCAPE_DATA_BUNDLE "freescape.dat"
 
 enum CameraMovement {
@@ -104,6 +108,7 @@ enum FreescapeAction {
 	kActionRunMode,
 	kActionWalkMode,
 	kActionCrawlMode,
+	kActionRunModifier, // Shift-to-run: held = run, released = walk
 	kActionSelectPrince,
 	kActionSelectPrincess,
 	kActionQuit,
@@ -138,6 +143,13 @@ enum GameStateControl {
 	kFreescapeGameStateRestart,
 };
 
+extern byte kEGADefaultPalette[16][3];
+extern byte kCGAPaletteRedGreen[4][3];
+extern byte kCGAPalettePinkBlue[4][3];
+extern byte kCGAPalettePinkBlueBright[4][3];
+extern byte kCGAPaletteRedGreenBright[4][3];
+extern byte kHerculesPaletteGreen[2][3];
+
 struct CGAPaletteEntry {
 	int areaId;
 	byte *palette;
@@ -169,7 +181,8 @@ private:
 	Common::EventManager *_delegate;
 
 	Common::KeyState _currentKeyDown;
-	Common::CustomEventType _currentActionDown;
+	Common::CustomEventType _currentActionDown; // last action for key repeat
+	Common::Array<Common::CustomEventType> _activeActions; // all currently held actions
 	uint32 _keyRepeatTime;
 };
 
@@ -192,6 +205,7 @@ public:
 	bool isEclipse() { return _targetName.hasPrefix("totaleclipse"); } // This will match Total Eclipse 1 and 2.
 	bool isEclipse2() { return _targetName.hasPrefix("totaleclipse2"); }
 	bool isCastle() { return _targetName.hasPrefix("castle"); }
+	bool isCastleMaster2() { return _targetName.hasPrefix("castlemaster2"); }
 	bool isAmiga() { return _gameDescription->platform == Common::kPlatformAmiga; }
 	bool isAtariST() { return _gameDescription->platform == Common::kPlatformAtariST; }
 	bool isDOS() { return _gameDescription->platform == Common::kPlatformDOS; }
@@ -218,6 +232,7 @@ public:
 	void drawTitle();
 	virtual void drawBackground();
 	void clearBackground();
+	void drawPlatformUI(Graphics::Surface *surface);
 	virtual void drawUI();
 	virtual void drawInfoMenu();
 	void drawBorderScreenAndWait(Graphics::Surface *surface, int maxWait = INT_MAX);
@@ -271,7 +286,11 @@ public:
 	Graphics::Surface *loadBundledImage(const Common::String &name, bool appendRenderMode = true);
 	byte *getPaletteFromNeoImage(Common::SeekableReadStream *stream, int offset);
 	Graphics::ManagedSurface *loadAndConvertNeoImage(Common::SeekableReadStream *stream, int offset, byte *palette = nullptr);
+	void decodeAmigaSprite(Common::SeekableReadStream *file, Graphics::ManagedSurface *surf,
+		int dataOffset, int widthWords, int height, byte *palette);
 	Graphics::ManagedSurface *loadAndConvertScrImage(Common::SeekableReadStream *stream);
+	Graphics::ManagedSurface *loadFrame(Common::SeekableReadStream *file, Graphics::ManagedSurface *surface, int width, int height, uint32 front);
+	Graphics::ManagedSurface *loadFrameCPCIndexed(Common::SeekableReadStream *file, Graphics::ManagedSurface *surface, int widthBytes, int height);
 	Graphics::ManagedSurface *loadAndConvertDoodleImage(Common::SeekableReadStream *bitmap, Common::SeekableReadStream *color1, Common::SeekableReadStream *color2, byte *palette);
 
 	void loadPalettes(Common::SeekableReadStream *file, int offset);
@@ -344,6 +363,9 @@ public:
 	bool _invertY;
 
 	bool _smoothMovement;
+	bool _useWASDControls;
+	bool _debugSimulateTouchscreen;
+	bool isTouchscreenActive() const;
 	// Player movement state
 	bool _moveForward;
 	bool _moveBackward;
@@ -422,6 +444,7 @@ public:
 	uint16 _stepUpDistance;
 
 	int _playerStepIndex;
+	int _savedPlayerStepIndex; // saved before shift-to-run, restored on release
 	Common::Array<int> _playerSteps;
 
 	Common::Point crossairPosToMousePos(const Common::Point &crossairPos);
@@ -492,6 +515,7 @@ public:
 	void playSoundDOS(soundSpeakerFx *speakerFxInfo, bool sync, Audio::SoundHandle &handle);
 
 	void playSoundCPC(int index, Audio::SoundHandle &handle);
+	virtual void playSoundC64(int index);
 	virtual void playSoundFx(int index, bool sync);
 	virtual void loadSoundsFx(Common::SeekableReadStream *file, int offset, int number);
 	Common::HashMap<uint16, soundFx *> _soundsFx;
@@ -595,6 +619,7 @@ public:
 	StateVars _gameStateVars;
 	uint32 _gameStateBits;
 	void checkIfPlayerWasCrushed();
+	virtual bool triggerWinCondition();
 	virtual bool checkIfGameEnded();
 	virtual void endGame();
 	int _endGameDelayTicks;
@@ -630,6 +655,7 @@ public:
 	int _ticksFromEnd;
 	int _lastTick;
 	int _lastMinute;
+	bool _inWaitLoop;
 
 	void getTimeFromCountdown(int &seconds, int &minutes, int &hours);
 	virtual void updateTimeVariables();

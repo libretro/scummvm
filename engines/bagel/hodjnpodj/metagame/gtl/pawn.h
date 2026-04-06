@@ -30,7 +30,7 @@ namespace HodjNPodj {
 namespace Metagame {
 namespace Gtl {
 
-#define PAWN_SPEC   ".\\art\\mlscroll.bmp"      // path for pawn's DIB on disk
+#define PAWN_SPEC   "art\\mlscroll.bmp"      // path for pawn's DIB on disk
 #define PAWN_DX         502
 #define PAWN_DY         395
 #define PAWN_CURL_DX        500

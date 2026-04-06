@@ -34,6 +34,9 @@ class SeekableReadStream;
 
 namespace PhoenixVR {
 namespace {
+inline float toRadian(float deg) {
+	return kPi * deg / 180;
+}
 inline float toAngle(int a) {
 	static const float angleToFloat = kPi / 4096.0f;
 	return angleToFloat * static_cast<float>(a);
@@ -57,6 +60,8 @@ public:
 	struct Command {
 		virtual ~Command() {}
 		virtual void exec(ExecutionContext &ctx) const = 0;
+
+		static int valueOf(const Common::String &value);
 	};
 	using CommandPtr = Common::SharedPtr<Command>;
 

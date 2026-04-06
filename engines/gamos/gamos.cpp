@@ -47,7 +47,10 @@ GamosEngine::GamosEngine(OSystem *syst, const GamosGameDescription *gameDesc) : 
 	_messageProc(this),
 	_vm(this, callbackVMCallDispatcher),
 	_txtInputVMAccess(_vm),
-	_randomSource("gamos") {}
+	_randomSource("gamos") {
+	for(uint i = 0; i < 256; i++)
+		_txtInputObjects[i] = nullptr;
+}
 
 GamosEngine::~GamosEngine() {
 	freeImages();
@@ -1216,7 +1219,6 @@ void GamosEngine::readData2(const RawData &data) {
 		_messageProc._keyCodes[9] = KeyCodes::WIN_RETURN;
 		_messageProc._keyCodes[10] = KeyCodes::WIN_TAB;
 		_messageProc._keyCodes[11] = KeyCodes::WIN_INVALID;
-		_messageProc._keyCodes[12] = KeyCodes::WIN_INVALID;
 	}
 }
 

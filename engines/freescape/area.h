@@ -51,6 +51,8 @@ public:
 	ObjectArray getSensors();
 	uint16 getAreaID();
 	Common::Array<Object *> &getSortedObjects() { return _sortedObjects; }
+	ObjectMap *getObjectsByID() { return _objectsByID; }
+	ObjectMap *getEntrancesByID() { return _entrancesByID; }
 	uint16 getAreaFlags();
 	uint8 getScale();
 	void remapColor(int index, int color);
@@ -98,6 +100,7 @@ public:
 	uint8 _inkColor;
 	uint8 _paperColor;
 	uint8 _extraColor[4];
+	bool _colorCycling; // Amiga/Atari: bit 14 of area header enables COLOR15 cycling
 	ColorReMap _colorRemaps;
 
 	uint32 _lastTick;

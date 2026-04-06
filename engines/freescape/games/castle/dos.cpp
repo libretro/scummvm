@@ -49,7 +49,6 @@ Common::SeekableReadStream *CastleEngine::decryptFile(const Common::Path &filena
 	return (new Common::MemoryReadStream(encryptedBuffer, size));
 }
 
-extern byte kEGADefaultPalette[16][3];
 extern Common::MemoryReadStream *unpackEXE(Common::File &ms);
 
 byte kEGARiddleFontPalette[16][3] = {
@@ -467,7 +466,7 @@ void CastleEngine::drawDOSUI(Graphics::Surface *surface) {
 	} else {
 		if (_gameStateControl != kFreescapeGameStateEnd) {
 			if (ghostInArea())
-				drawStringInSurface(_messagesList[116], 97, 182, front, back, surface);
+				drawStringInSurface(_ghostInAreaMessage, 97, 182, front, back, surface);
 			else
 				drawStringInSurface(_currentArea->_name, 97, 182, front, back, surface);
 		}

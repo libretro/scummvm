@@ -39,6 +39,20 @@ namespace Freescape {
 
 FreescapeEngine *g_freescape;
 
+bool isEncodedCPCDirectColor(uint8 index) {
+	return index >= 64 && index < 96;
+}
+
+uint8 encodeCPCDirectColor(uint8 index) {
+	assert(index < 32);
+	return index + 64;
+}
+
+uint8 decodeCPCDirectColor(uint8 index) {
+	assert(isEncodedCPCDirectColor(index));
+	return index - 64;
+}
+
 byte getCPCPixelMode1(byte cpc_byte, int index) {
 	if (index == 0)
 		return ((cpc_byte & 0x08) >> 2) | ((cpc_byte & 0x80) >> 7);
@@ -131,6 +145,12 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	if (!Common::parseBool(ConfMan.get("smooth_movement"), _smoothMovement))
 		error("Failed to parse bool from smooth_movement option");
 
+	_useWASDControls = false;
+	if (ConfMan.hasKey("wasd_controls"))
+		Common::parseBool(ConfMan.get("wasd_controls"), _useWASDControls);
+
+	_debugSimulateTouchscreen = ConfMan.hasKey("debug_touchscreen") && ConfMan.getBool("debug_touchscreen");
+
 	if (isDriller() || isSpaceStationOblivion() || isDark())
 		_smoothMovement = false;
 
@@ -181,6 +201,7 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 
 	// TODO: this is not the same for every game
 	_playerStepIndex = 6;
+	_savedPlayerStepIndex = -1;
 	_playerSteps.push_back(1);
 	_playerSteps.push_back(2);
 	_playerSteps.push_back(5);
@@ -199,6 +220,7 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_fontLoaded = false;
 	_dataBundle = nullptr;
 	_extraBuffer = nullptr;
+	_inWaitLoop = false;
 
 	_lastFrame = 0;
 	// The near clip plane of 2 is useful for Driller and Dark Side as they have open spaces without too much
@@ -273,6 +295,10 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	g_freescape = this;
 	g_debugger = new Debugger(g_freescape);
 	setDebugger(g_debugger);
+}
+
+bool FreescapeEngine::isTouchscreenActive() const {
+	return _debugSimulateTouchscreen || g_system->hasFeature(OSystem::kFeatureTouchscreen);
 }
 
 FreescapeEngine::~FreescapeEngine() {
@@ -446,8 +472,13 @@ void FreescapeEngine::checkSensors() {
 void FreescapeEngine::drawSensorShoot(Sensor *sensor) {}
 
 void FreescapeEngine::flashScreen(int backgroundColor) {
-	if (backgroundColor >= 16)
+	if (isCPC()) {
+		if (backgroundColor >= 32 && !isEncodedCPCDirectColor(backgroundColor))
+			return;
+	} else if (backgroundColor >= 16) {
 		return;
+	}
+
 	_currentArea->remapColor(_currentArea->_usualBackgroundColor, backgroundColor);
 	_currentArea->remapColor(_currentArea->_skyColor, backgroundColor);
 	drawFrame();
@@ -473,6 +504,7 @@ void FreescapeEngine::drawBackground() {
 }
 
 void FreescapeEngine::drawFrame() {
+	_gfx->updateColorCycling();
 	int farClipPlane = _farClipPlane;
 	if (_currentArea->isOutside())
 		farClipPlane *= 100;
@@ -615,12 +647,6 @@ void FreescapeEngine::processInput() {
 				break;
 			case kActionMoveRight:
 				_strafeRight = true;
-				break;
-			case kActionRiseOrFlyUp:
-				_moveUp = true;
-				break;
-			case kActionLowerOrFlyDown:
-				_moveDown = true;
 				break;
 			case kActionShoot:
 				shoot();
@@ -843,13 +869,8 @@ Common::Error FreescapeEngine::run() {
 	loadAssets();
 	loadColorPalette();
 
-	if (g_system->getFeatureState(OSystem::kFeatureTouchscreen)) {
-		g_system->showMouse(true);
-		g_system->lockMouse(false);
-	} else {
-		g_system->showMouse(false);
-		g_system->lockMouse(true);
-	}
+	g_system->showMouse(false);
+	g_system->lockMouse(true);
 
 	// Simple main event loop
 	int saveSlot = ConfMan.getInt("save_slot");
@@ -932,10 +953,14 @@ void FreescapeEngine::endGame() {
 
 	_shootingFrames = 0;
 	_delayedShootObject = nullptr;
-	if (_gameStateControl == kFreescapeGameStateEnd && !isPlayingSound() && !_endGamePlayerEndArea) {
+	if (_gameStateControl == kFreescapeGameStateEnd && !_endGamePlayerEndArea) {
 		_endGamePlayerEndArea = true;
 		gotoArea(_endArea, _endEntrance);
 	}
+}
+
+bool FreescapeEngine::triggerWinCondition() {
+	return false;
 }
 
 void FreescapeEngine::loadBorder() {
@@ -1173,14 +1198,25 @@ Common::Error FreescapeEngine::loadGameStream(Common::SeekableReadStream *stream
 
 	_flyMode = stream->readByte();
 	_noClipMode = false;
-	_playerHeightNumber = stream->readUint32LE();
+	_playerHeightNumber = stream->readSint32LE();
 	_playerStepIndex = stream->readUint32LE();
 	_countdown = stream->readUint32LE();
 	_ticks = 0;
 	if (!_currentArea || _currentArea->getAreaID() != areaID)
 		gotoArea(areaID, -1); // Do not change position nor rotation
 
-	_playerHeight = 32 * (_playerHeightNumber + 1) - 16 / float(_currentArea->_scale);
+	if (isDriller() && _playerHeightNumber == -1) {
+		_playerHeight = 2;
+	} else {
+		int playerHeightIndex = _playerHeightNumber;
+		if (playerHeightIndex < 0) {
+			warning("Invalid player height index %d in savegame, clamping to 0", playerHeightIndex);
+			playerHeightIndex = 0;
+		}
+
+		_playerHeight = 32 * (playerHeightIndex + 1) - 16 / float(_currentArea->_scale);
+	}
+	assert(_playerHeight > 0);
 	_gameStateControl = kFreescapeGameStatePlaying;
 	return loadGameStreamExtended(stream);
 }
@@ -1215,7 +1251,7 @@ Common::Error FreescapeEngine::saveGameStream(Common::WriteStream *stream, bool 
 	}
 
 	stream->writeByte(_flyMode);
-	stream->writeUint32LE(_playerHeightNumber);
+	stream->writeSint32LE(_playerHeightNumber);
 	stream->writeUint32LE(_playerStepIndex);
 	stream->writeUint32LE(_countdown);
 	return saveGameStreamExtended(stream, isAutosave);
@@ -1248,6 +1284,32 @@ void FreescapeEngine::getLatestMessages(Common::String &message, int &deadline) 
 void FreescapeEngine::clearTemporalMessages() {
 	_temporaryMessages.clear();
 	_temporaryMessageDeadlines.clear();
+}
+
+void FreescapeEngine::decodeAmigaSprite(Common::SeekableReadStream *file, Graphics::ManagedSurface *surf,
+		int dataOffset, int widthWords, int height, byte *palette) {
+	for (int y = 0; y < height; y++) {
+		for (int col = 0; col < widthWords; col++) {
+			int off = dataOffset + (y * widthWords + col) * 8;
+			file->seek(off);
+			uint16 p0 = file->readUint16BE();
+			uint16 p1 = file->readUint16BE();
+			uint16 p2 = file->readUint16BE();
+			uint16 p3 = file->readUint16BE();
+			for (int bit = 0; bit < 16; bit++) {
+				byte colorIdx = 0;
+				if (p0 & (0x8000 >> bit)) colorIdx |= 1;
+				if (p1 & (0x8000 >> bit)) colorIdx |= 2;
+				if (p2 & (0x8000 >> bit)) colorIdx |= 4;
+				if (p3 & (0x8000 >> bit)) colorIdx |= 8;
+				if (colorIdx == 0)
+					continue;
+				uint32 color = _gfx->_texturePixelFormat.ARGBToColor(0xFF,
+					palette[colorIdx * 3], palette[colorIdx * 3 + 1], palette[colorIdx * 3 + 2]);
+				surf->setPixel(col * 16 + bit, y, color);
+			}
+		}
+	}
 }
 
 byte *FreescapeEngine::getPaletteFromNeoImage(Common::SeekableReadStream *stream, int offset) {
@@ -1286,6 +1348,29 @@ Graphics::ManagedSurface *FreescapeEngine::loadAndConvertScrImage(Common::Seekab
 	const Graphics::Surface *decoded = decoder.getSurface();
 	surface->create(320, 200, _gfx->_texturePixelFormat);
 	surface->simpleBlitFrom(*decoded, Common::Point((320 - decoded->w) / 2, (200 - decoded->h) / 2), Graphics::FLIP_NONE, false, 255, &decoder.getPalette());
+	return surface;
+}
+
+Graphics::ManagedSurface *FreescapeEngine::loadFrame(Common::SeekableReadStream *file, Graphics::ManagedSurface *surface, int width, int height, uint32 front) {
+	for (int i = 0; i < width * height; i++) {
+		byte color = file->readByte();
+		for (int n = 0; n < 8; n++) {
+			int y = i / width;
+			int x = (i % width) * 8 + (7 - n);
+			if ((color & (1 << n)))
+				surface->setPixel(x, y, front);
+		}
+	}
+	return surface;
+}
+
+Graphics::ManagedSurface *FreescapeEngine::loadFrameCPCIndexed(Common::SeekableReadStream *file, Graphics::ManagedSurface *surface, int widthBytes, int height) {
+	for (int y = 0; y < height; y++)
+		for (int col = 0; col < widthBytes; col++) {
+			byte cpc_byte = file->readByte();
+			for (int i = 0; i < 4; i++)
+				surface->setPixel(col * 4 + i, y, getCPCPixel(cpc_byte, i, true));
+		}
 	return surface;
 }
 

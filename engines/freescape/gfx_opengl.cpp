@@ -276,7 +276,7 @@ void OpenGLRenderer::positionCamera(const Math::Vector3d &pos, const Math::Vecto
 	GLfloat projMatrix[16];
 	glGetFloatv(GL_PROJECTION_MATRIX, projMatrix);
 	glLoadIdentity();
-	glTranslatef(_shakeOffset.x * 0.05f, _shakeOffset.y * 0.05f, 0.0f);
+	glTranslatef(_shakeOffset.x * 0.025f, _shakeOffset.y * 0.025f, 0.0f);
 	glMultMatrixf(projMatrix);
 	glMatrixMode(GL_MODELVIEW);
 }
@@ -490,18 +490,23 @@ void OpenGLRenderer::renderPlayerShootBall(byte color, const Common::Point &posi
 	glColor4ub(r, g, b, 255);
 	int triangleAmount = 20;
 	float twicePi = (float)(2.0 * M_PI);
-	float coef = (9 - frame) / 9.0;
-	float radius = (1 - coef) * 4.0;
 
-	Common::Point initial_position(viewArea.left + viewArea.width() / 2 + 2, viewArea.height() + viewArea.top);
-	Common::Point ball_position = coef * position + (1 - coef) * initial_position;
+	// Exponential ease-out trajectory inspired by the original ZX animation.
+	// The stone shrinks as it flies into the screen (perspective).
+	float coef = 1.0f - powf(0.5f, (8 - frame + 1) / 2.0f);
+	float radius = 1.0f + frame * 0.5f;
+
+	float startX = viewArea.left + viewArea.width() / 2.0f + 2;
+	float startY = viewArea.height() + viewArea.top;
+	float ballX = coef * position.x + (1.0f - coef) * startX;
+	float ballY = coef * position.y + (1.0f - coef) * startY;
 
 	glEnableClientState(GL_VERTEX_ARRAY);
-	copyToVertexArray(0, Math::Vector3d(ball_position.x, ball_position.y, 0));
+	copyToVertexArray(0, Math::Vector3d(ballX, ballY, 0));
 
 	for (int i = 0; i <= triangleAmount; i++) {
-		float x = ball_position.x + (radius * cos(i *  twicePi / triangleAmount));
-		float y = ball_position.y + (radius * sin(i * twicePi / triangleAmount));
+		float x = ballX + (radius * cos(i * twicePi / triangleAmount));
+		float y = ballY + (radius * sin(i * twicePi / triangleAmount));
 		copyToVertexArray(i + 1, Math::Vector3d(x, y, 0));
 	}
 

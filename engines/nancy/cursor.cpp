@@ -74,11 +74,19 @@ void CursorManager::init(Common::SeekableReadStream *chunkStream) {
 	// cursor code in later games.
 
 	uint numCursors = _numCursorTypes * (g_nancy->getGameType() == kGameTypeVampire ? 2 : 3) + g_nancy->getStaticData().numItems * _numCursorTypes;
+	if (g_nancy->getGameType() >= kGameTypeNancy10) {
+		_numCursorTypes = 37;
+		numCursors = _numCursorTypes * 2 + g_nancy->getStaticData().numItems * 2;
+	}
+
 	_cursors.resize(numCursors);
 
 	for (uint i = 0; i < numCursors; ++i) {
 		readRect(*chunkStream, _cursors[i].bounds);
 	}
+
+	if (g_nancy->getGameType() >= kGameTypeNancy10)
+		chunkStream->skip(numCursors * 4 * 4);	// TODO
 
 	for (uint i = 0; i < numCursors; ++i) {
 		_cursors[i].hotspot.x = chunkStream->readUint32LE();
@@ -127,10 +135,16 @@ void CursorManager::setCursor(CursorType type, int16 itemID) {
 	// value of the CursorType enum.
 	switch (type) {
 	case kNormalArrow:
-		_curCursorID = _numCursorTypes;
+		if (gameType >= kGameTypeNancy10)
+			_curCursorID = 8;
+		else
+			_curCursorID = _numCursorTypes;
 		return;
 	case kHotspotArrow:
-		_curCursorID = _numCursorTypes + 1;
+		if (gameType >= kGameTypeNancy10)
+			_curCursorID = 9;
+		else
+			_curCursorID = _numCursorTypes + 1;
 		return;
 	case kInvertedRotateLeft:
 		// Only valid for nancy6 and up

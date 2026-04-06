@@ -2387,6 +2387,8 @@ have_icc=no
 cc_check_define __INTEL_COMPILER && have_icc=yes
 have_clang=no
 cc_check_define __clang__ && have_clang=yes
+have_apple_clang=no
+test "$have_clang" = yes && cc_check_define __apple_build_version__ && have_apple_clang=yes
 
 if test "$have_icc" = yes; then
 	add_line_to_config_mk 'HAVE_ICC = 1'
@@ -2411,7 +2413,7 @@ if test "$have_gcc" = yes; then
 	add_line_to_config_mk 'HAVE_GCC = 1'
 	_cxx_major=`gcc_get_define __GNUC__`
 	_cxx_minor=`gcc_get_define __GNUC_MINOR__`
-	cxx_version="`( $CXX -dumpversion ) 2>&1`"
+	cxx_version="`$CXX -dumpversion 2>&1`"
 
 	if test "$have_clang" = yes; then
 		# Clang sets a gcc version number for compatibility.
@@ -2419,10 +2421,15 @@ if test "$have_gcc" = yes; then
 		# compiler version checks.
 
 		# For the version reported in the configure log (cxx_version),
-		# we get the actual clang version.
+		# we get the actual Clang version. Apple Clang also has its
+		# own version numbers, so differentiate it.
 		cxx_version=`gcc_get_define __clang_version__`
 		cxx_version="`echo "${cxx_version}" | sed -e 's/"\([^ ]*\) .*/\1/'`"
-		cxx_version="clang $cxx_version, ok"
+		if test "$have_apple_clang" = yes; then
+			cxx_version="Apple Clang $cxx_version, ok"
+		else
+			cxx_version="Clang $cxx_version, ok"
+		fi
 
 		_clang_major=`gcc_get_define __clang_major__`
 		_clang_minor=`gcc_get_define __clang_minor__`
@@ -2459,13 +2466,13 @@ if test "$have_gcc" = yes; then
 		fi
 	fi
 elif test "$have_icc" = yes; then
-	cxx_version="`( $CXX -dumpversion ) 2>/dev/null`"
+	cxx_version="`$CXX -dumpversion 2>/dev/null`"
 	_cxx_major="`echo "${cxx_version}" | sed -ne 's/\([0-9][0-9]*\)\..*/\1/gp'`"
 	_cxx_minor="`echo "${cxx_version}" | sed -ne 's/[0-9][0-9]*\.\([0-9][0-9]*\)/\1/gp'`"
 	cxx_version="ICC $cxx_version, ok"
 else
 	# TODO: Big scary warning about unsupported compilers
-	cxx_version=`( $CXX -version ) 2>&1`
+	cxx_version=`$CXX -version 2>&1`
 	if test "$?" -eq 0; then
 		cxx_version="`echo "${cxx_version}" | sed -ne 's/^.*[^0-9]\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*$/\1/gp'`"
 		if test -z "${cxx_version}"; then
@@ -2887,9 +2894,6 @@ case $_host_cpu in
 				define_in_config_if_yes yes 'USE_ARM_SCALER_ASM'
 				define_in_config_if_yes yes 'USE_ARM_SMUSH_ASM'
 				define_in_config_if_yes yes 'USE_ARM_GFX_ASM'
-				# FIXME: The following feature exhibits a bug during the intro scene of Indy 4
-				# (on Pandora and iPhone at least)
-				#define_in_config_if_yes yes 'USE_ARM_COSTUME_ASM'
 				;;
 		esac
 
@@ -4132,6 +4136,7 @@ if test -n "$_host"; then
 			#the -gcc- variants allow link time optimization
 			_ar="$_host_alias-gcc-ar cr"
 			_ranlib=$_host_alias-gcc-ranlib
+			_pkgconfig="${VITASDK}/bin/arm-vita-eabi-pkg-config"
 			;;
 		psp)
 			_backend="psp"

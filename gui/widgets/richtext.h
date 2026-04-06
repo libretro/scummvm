@@ -37,6 +37,7 @@ class ScrollBarWidget;
 /* RichTextWidget */
 class RichTextWidget : public Widget, public CommandSender {
 protected:
+	Graphics::ManagedSurface *_cachedTextSurface = nullptr;
 	Graphics::MacText *_txtWnd = nullptr;
 	Graphics::ManagedSurface *_surface = nullptr;
 	Common::U32String _text;
@@ -81,6 +82,7 @@ protected:
 	void recalc();
 	void drawWidget() override;
 	void createWidget();
+	void ensureWidget();
 	Widget *findWidget(int x, int y) override;
 };
 

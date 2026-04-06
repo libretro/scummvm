@@ -81,9 +81,19 @@ namespace Action {
 ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableReadStream *recordStream) {
 	switch (type) {
 	case 10:
-		return new Hot1FrSceneChange(CursorManager::kHotspot);
+		if (g_nancy->getGameType() <= kGameTypeNancy9) {
+			return new Hot1FrSceneChange(CursorManager::kHotspot);
+		} else {
+			return new SceneChange();
+		}
 	case 11:
-		return new HotMultiframeSceneChange(CursorManager::kHotspot);
+		if (g_nancy->getGameType() <= kGameTypeNancy9) {
+			return new HotMultiframeSceneChange(CursorManager::kHotspot);
+		} else {
+			// TODO: Handle this correctly, as it messes up scene hotspots
+			return nullptr;
+			//return new HotSingleFrameSceneChange(true);
+		}
 	case 12:
 		return new SceneChange();
 	case 13:
@@ -109,13 +119,23 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 	case 21:
 		if (g_nancy->getGameType() == kGameTypeVampire) {
 			return new PaletteNextScene();
-		} else {
+		} else if (g_nancy->getGameType() <= kGameTypeNancy9) {
 			return new HotMultiframeSceneChange(CursorManager::kMoveDown);
+		} else {
+			return new HotSingleFrameSceneChange();
 		}
 	case 22:
-		return new Hot1FrSceneChange(CursorManager::kMoveLeft);
+		if (g_nancy->getGameType() <= kGameTypeNancy9) {
+			return new Hot1FrSceneChange(CursorManager::kMoveLeft);
+		} else {
+			return new HotMultiframeSceneChange(CursorManager::kMoveLeft);
+		}
 	case 23:
-		return new Hot1FrSceneChange(CursorManager::kMoveRight);
+		if (g_nancy->getGameType() <= kGameTypeNancy9) {
+			return new Hot1FrSceneChange(CursorManager::kMoveRight);
+		} else {
+			return new HotMultiframeSceneChange(CursorManager::kMoveRight);
+		}
 	case 24:
 		return new HotMultiframeMultisceneCursorTypeSceneChange();
 	case 25: {
@@ -132,6 +152,10 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 	}
 	case 26:
 		return new InteractiveVideo();
+	case 29:
+		// Nancy 10+
+		warning("ControlUIItems - not implemented yet");
+		return nullptr;
 	case 40:
 		if (g_nancy->getGameType() < kGameTypeNancy2) {
 			// Only used in TVD
@@ -210,6 +234,10 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new ModifyListEntry(ModifyListEntry::kDelete);
 	case 73:
 		return new ModifyListEntry(ModifyListEntry::kMark);
+	case 74:	// Nancy 10
+	case 81:	// Nancy 11+
+		warning("FrameTextBox - not implemented yet");
+		return nullptr;
 	case 75:
 		return new TextBoxWrite();
 	case 76:
@@ -288,6 +316,14 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new PopInvViewPriorScene();
 	case 126:
 		return new GoInvViewScene();
+	case 130:
+		// Nancy 10+
+		warning("ChangeCellPhoneInfo - not implemented yet");
+		return nullptr;
+	case 131:
+		// Nancy 10+
+		warning("AddSearchLink - not implemented yet");
+		return nullptr;
 	case 140:
 		return new SetVolume();
 	case 148:

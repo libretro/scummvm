@@ -33,6 +33,7 @@
 #ifdef USE_OSD
 #include "common/translation.h"
 #endif
+#include "engines/engine.h"
 
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 static void sdlGLDestroyContext(SDL_GLContext context) {
@@ -354,7 +355,7 @@ void OpenGLSdlGraphicsManager::initSize(uint w, uint h, const Graphics::PixelFor
 		_graphicsScale = 2;
 	}
 
-	if (ConfMan.getBool("force_resize", Common::ConfigManager::kApplicationDomain)) {
+	if (ConfMan.getBool("dumper_force_resize", Common::ConfigManager::kApplicationDomain)) {
 		notifyResize(w, h);
 	}
 
@@ -413,14 +414,19 @@ void OpenGLSdlGraphicsManager::notifyResize(const int width, const int height) {
 	getWindowSizeFromSdl(&currentWidth, &currentHeight);
 	float dpiScale = _window->getSdlDpiScalingFactor();
 
-	if (ConfMan.getBool("force_resize", Common::ConfigManager::kApplicationDomain)) {
+	if (ConfMan.getBool("dumper_force_resize", Common::ConfigManager::kApplicationDomain)) {
 		currentWidth = width;
 		currentHeight = height;
 	}
 
+	if (dpiScale < 0.01f || dpiScale > 100.0f) {
+		warning("OpenGLSdlGraphicsManager::notifyResize: Unreasonable DPI scale factor %f, ignoring it", dpiScale);
+		dpiScale = 2.0f;
+	}
+
 	debug(3, "req: %d x %d  cur: %d x %d, scale: %f", width, height, currentWidth, currentHeight, dpiScale);
 
-	if (ConfMan.getBool("force_resize", Common::ConfigManager::kApplicationDomain)) {
+	if (ConfMan.getBool("dumper_force_resize", Common::ConfigManager::kApplicationDomain)) {
 		createOrUpdateWindow(currentWidth, currentHeight, 0);
 	}
 
@@ -511,9 +517,13 @@ bool OpenGLSdlGraphicsManager::loadVideoMode(uint requestedWidth, uint requested
 	// In order to prevent any unnecessary downscaling (e.g. when launching
 	// a game in 800x600 while having a smaller screen size stored in the configuration file),
 	// we override the window dimensions with the "real" resolution request made by the engine.
-	if ((requestedWidth < _lastRequestedWidth  * _graphicsScale || requestedHeight < _lastRequestedHeight * _graphicsScale) && ConfMan.getActiveDomain()) {
-		requestedWidth  = _lastRequestedWidth  * _graphicsScale;
-		requestedHeight = _lastRequestedHeight * _graphicsScale;
+	// If it's the launcher or a 3D game supporting arbitrary resolutions, leave it as is
+	// as there is no downscale
+	const bool engineSupportsArbitraryResolutions = !g_engine ||
+		(_renderer3d && g_engine->hasFeature(Engine::kSupportsArbitraryResolutions));
+	if (!engineSupportsArbitraryResolutions) {
+		requestedWidth  = MAX<uint>(requestedWidth, _lastRequestedWidth  * _graphicsScale);
+		requestedHeight = MAX<uint>(requestedHeight, _lastRequestedHeight * _graphicsScale);
 	}
 
 	// Set allowed dimensions

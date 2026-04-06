@@ -588,7 +588,10 @@ void Scene::registerGraphics() {
 	_frame.registerGraphics();
 	_viewport.registerGraphics();
 	_textbox.registerGraphics();
-	_inventoryBox.registerGraphics();
+
+	if (g_nancy->getGameType() <= kGameTypeNancy9)
+		_inventoryBox.registerGraphics();
+
 	_hotspotDebug.registerGraphics();
 
 	if (_menuButton) {
@@ -682,7 +685,7 @@ void Scene::synchronize(Common::Serializer &ser) {
 		order.pop_back();
 	}
 
-	if (ser.isLoading()) {
+	if (ser.isLoading() && g_nancy->getGameType() <= kGameTypeNancy9) {
 		// Make sure the shades are open if we have items
 		getInventoryBox().onReorder();
 	}
@@ -1192,15 +1195,22 @@ void Scene::initStaticData() {
 	auto *bootSummary = GetEngineData(BSUM);
 	assert(bootSummary);
 
-	const ImageChunk *fr0 = (const ImageChunk *)g_nancy->getEngineData("FR0");
-	assert(fr0);
+	Common::Path imageName = "FRAME";
+
+	if (g_nancy->getGameType() <= kGameTypeNancy9) {
+		const ImageChunk *fr0 = (const ImageChunk *)g_nancy->getEngineData("FR0");
+		assert(fr0);
+		imageName = fr0->imageName;
+	}
 
 	auto *mapData = GetEngineData(MAP);
 
-	_frame.init(fr0->imageName);
+	_frame.init(imageName);
 	_viewport.init();
 	_textbox.init();
-	_inventoryBox.init();
+
+	if (g_nancy->getGameType() <= kGameTypeNancy9)
+		_inventoryBox.init();
 
 	// Init buttons
 	if (g_nancy->getGameType() == kGameTypeVampire) {

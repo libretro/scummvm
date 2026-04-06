@@ -578,6 +578,8 @@ void SdlGraphicsManager::setImGuiCallbacks(const ImGuiCallbacks &callbacks) {
 		_imGuiCallbacks.init();
 	}
 	_imGuiInited = true;
+
+	updateScreen();
 }
 
 void SdlGraphicsManager::initImGui(SDL_Renderer *renderer, void *glContext) {

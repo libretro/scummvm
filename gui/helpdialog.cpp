@@ -125,7 +125,7 @@ _s(
 
 	_tab->setActiveTab(0);
 
-	new ButtonWidget(this, "HelpDialog.Close", Common::U32String("Close"), Common::U32String(), kCloseCmd);
+	new ButtonWidget(this, "HelpDialog.Close", Common::U32String(_("Close")), Common::U32String(), kCloseCmd);
 }
 
 void HelpDialog::addTabs(const char * const *tabData) {

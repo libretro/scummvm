@@ -35,6 +35,7 @@ static const PlainGameDescriptor freescapeGames[] = {
 	{"totaleclipse", "Total Eclipse"},
 	{"totaleclipse2", "Total Eclipse 2"},
 	{"castlemaster", "Castle Master"},
+	{"castlemaster2", "Castle Master 2: The Crypt"},
 	{0, 0}
 };
 
@@ -570,7 +571,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformAmstradCPC,
 		ADGF_DEMO,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDERCPC, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_AY_MUSIC)
 	},
 	{
 		"totaleclipse",
@@ -584,7 +585,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformZX,
 		ADGF_DEMO | GF_ZX_DEMO_MICROHOBBY,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERZX)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDERZX, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_AY_MUSIC)
 	},
 	{
 		"totaleclipse",
@@ -598,7 +599,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformZX,
 		ADGF_DEMO | GF_ZX_DEMO_CRASH,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERZX)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDERZX, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_AY_MUSIC)
 	},
 	{
 		"totaleclipse",
@@ -607,7 +608,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformZX,
 		ADGF_NO_FLAGS,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERZX)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDERZX, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_AY_MUSIC)
 	},
 	{
 		"totaleclipse2",
@@ -616,7 +617,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformZX,
 		ADGF_NO_FLAGS,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERZX)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDERZX, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_AY_MUSIC)
 	},
 	{
 		"totaleclipse",
@@ -630,7 +631,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformAmstradCPC,
 		ADGF_NO_FLAGS,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDERCPC, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_AY_MUSIC)
 	},
 	{
 		"totaleclipse2",
@@ -644,7 +645,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformAmstradCPC,
 		ADGF_NO_FLAGS,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDERCPC, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_AY_MUSIC)
 	},
 	{
 		"totaleclipse2",
@@ -658,7 +659,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformAmstradCPC,
 		ADGF_NO_FLAGS,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDERCPC, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_AY_MUSIC)
 	},
 	{
 		"totaleclipse2", // Tape release
@@ -667,7 +668,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformC64,
 		ADGF_UNSTABLE | GF_C64_TAPE,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERC64)
+		GUIO4(GUIO_NOMIDI, GUIO_RENDERC64, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"totaleclipse2", // Disk release
@@ -676,7 +677,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformC64,
 		ADGF_UNSTABLE | GF_C64_DISC,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERC64)
+		GUIO4(GUIO_NOMIDI, GUIO_RENDERC64, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"totaleclipse2", // Commodore Format #18
@@ -685,7 +686,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformC64,
 		ADGF_UNSUPPORTED | GF_C64_DISC,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERC64)
+		GUIO4(GUIO_NOMIDI, GUIO_RENDERC64, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"totaleclipse",
@@ -701,7 +702,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformDOS,
 		ADGF_NO_FLAGS,
-		GUIO4(GUIO_NOMIDI, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_MODERN_MOVEMENT)
+		GUIO6(GUIO_NOMIDI, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_OPL_MUSIC)
 	},
 	{
 		// Erbe Software release
@@ -718,7 +719,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformDOS,
 		ADGF_NO_FLAGS,
-		GUIO4(GUIO_NOMIDI, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_MODERN_MOVEMENT)
+		GUIO6(GUIO_NOMIDI, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_MODERN_MOVEMENT, GAMEOPTION_WASD_CONTROLS, GAMEOPTION_OPL_MUSIC)
 	},
 	{
 		"totaleclipse", // Tape relese
@@ -726,7 +727,7 @@ static const ADGameDescription gameDescriptions[] = {
 		AD_ENTRY1s("TOTALECLIPSE.C64.DATA", "968fd46b941a00f887741dfc348ac149", 47105),
 		Common::EN_ANY,
 		Common::kPlatformC64,
-		ADGF_UNSTABLE | GF_C64_TAPE,
+		ADGF_TESTING | GF_C64_TAPE,
 		GUIO2(GUIO_NOMIDI, GUIO_RENDERC64)
 	},
 	{
@@ -735,7 +736,7 @@ static const ADGameDescription gameDescriptions[] = {
 		AD_ENTRY1s("TOTALECLIPSE.C64.DATA", "b9d3aa682777ee50840cabfc036693b0", 50356),
 		Common::EN_ANY,
 		Common::kPlatformC64,
-		ADGF_UNSTABLE | GF_C64_DISC,
+		ADGF_TESTING | GF_C64_DISC,
 		GUIO2(GUIO_NOMIDI, GUIO_RENDERC64)
 	},
 	{
@@ -802,7 +803,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformZX,
 		GF_ZX_RETAIL,
-		GUIO3(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERZX)
+		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERZX, GAMEOPTION_WASD_CONTROLS)
 	},
 	// Disc release
 	{
@@ -812,7 +813,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformZX,
 		GF_ZX_DISC,
-		GUIO3(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERZX)
+		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERZX, GAMEOPTION_WASD_CONTROLS)
 	},
 	// Spanish release was disc-only?
 	{
@@ -822,7 +823,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::ES_ESP,
 		Common::kPlatformZX,
 		GF_ZX_DISC,
-		GUIO3(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERZX)
+		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERZX, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -836,7 +837,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformDOS,
 		ADGF_DEMO,
-		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+		GUIO5(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -848,8 +849,8 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformAmiga,
-		ADGF_UNSTABLE | ADGF_DEMO,
-		GUIO3(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERAMIGA)
+		ADGF_DEMO,
+		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERAMIGA, GAMEOPTION_WASD_CONTROLS)
 	},
 	// Stampede Amiga, Issue 1, July 1990
 	{
@@ -862,8 +863,8 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformAmiga,
-		ADGF_UNSTABLE | ADGF_DEMO,
-		GUIO3(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERAMIGA)
+		ADGF_DEMO,
+		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDERAMIGA, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -874,10 +875,20 @@ static const ADGameDescription gameDescriptions[] = {
 			{"CMSCR.BIN", 0, "75fe4a8af0ca797c51922f0ceeb8d383", 16512},
 			AD_LISTEND
 		},
-		Common::EN_ANY,
+		Common::UNK_LANG, // Multi-language
 		Common::kPlatformAmstradCPC,
-		ADGF_UNSTABLE,
-		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
+		ADGF_NO_FLAGS,
+		GUIO4(GUIO_NOMIDI, GUIO_RENDERCPC, GAMEOPTION_TRAVEL_ROCK, GAMEOPTION_WASD_CONTROLS)
+	},
+	// C64 tape release
+	{
+		"castlemaster",
+		"",
+		AD_ENTRY1s("CASTLEMASTER.C64.DATA", "d433af0fc854d91fb22f986e274d809b", 51198),
+		Common::EN_ANY,
+		Common::kPlatformC64,
+		ADGF_UNSTABLE | GF_C64_TAPE,
+		GUIO4(GUIO_NOMIDI, GUIO_RENDERC64, GAMEOPTION_TRAVEL_ROCK, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -893,7 +904,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::UNK_LANG,
 		Common::kPlatformDOS,
 		ADGF_PIRATED,
-		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+		GUIO5(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -909,7 +920,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::UNK_LANG, // Multi-language
 		Common::kPlatformDOS,
 		ADGF_NO_FLAGS,
-		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+		GUIO5(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -925,7 +936,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::UNK_LANG, // Multi-language
 		Common::kPlatformDOS,
 		ADGF_NO_FLAGS,
-		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+		GUIO5(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -941,7 +952,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::UNK_LANG, // Multi-language
 		Common::kPlatformDOS,
 		ADGF_UNSUPPORTED, // Compressed with lzexe
-		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+		GUIO5(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -957,7 +968,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::UNK_LANG, // Multi-language
 		Common::kPlatformDOS,
 		ADGF_UNSUPPORTED, // Game data offset are different
-		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+		GUIO5(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_WASD_CONTROLS)
 	},
 	{
 		"castlemaster",
@@ -972,8 +983,18 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::ES_ESP,
 		Common::kPlatformDOS,
-		ADGF_UNSTABLE,
-		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+		ADGF_NO_FLAGS,
+		GUIO5(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_WASD_CONTROLS)
+	},
+	// Castle Master 2: The Crypt
+	{
+		"castlemaster2",
+		"",
+		AD_ENTRY1s("castlemaster2.zx.data", "a470acb51c7925e921b0de056cdb880f", 35328),
+		Common::EN_ANY,
+		Common::kPlatformZX,
+		ADGF_NO_FLAGS,
+		GUIO3(GUIO_NOMIDI, GUIO_RENDERZX, GAMEOPTION_WASD_CONTROLS)
 	},
 	// 3D Construction Kit games
 	{

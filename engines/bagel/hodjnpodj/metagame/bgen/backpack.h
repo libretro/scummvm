@@ -30,7 +30,7 @@ namespace HodjNPodj {
 namespace Metagame {
 namespace Gtl {
 
-#define BACKPACK_SPEC   ".\\art\\mlscroll.bmp"      // path for backpack's DIB on disk
+#define BACKPACK_SPEC   "art\\mlscroll.bmp"      // path for backpack's DIB on disk
 #define BACKPACK_DX             502
 #define BACKPACK_DY             395
 #define BACKPACK_CURL_DX        500

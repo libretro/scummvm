@@ -594,7 +594,7 @@ void MidiDriver_MT32GM::controlChange(byte outputChannel, byte controllerNumber,
 				controllerValue = 0;
 			} else {
 				// Scale to user volume
-				uint16 userVolume = _sources[source].type == SOURCE_TYPE_SFX ? _userSfxVolume : _userMusicVolume; // Treat SOURCE_TYPE_UNDEFINED as music
+				uint16 userVolume = (source >= 0 && _sources[source].type == SOURCE_TYPE_SFX) ? _userSfxVolume : _userMusicVolume; // Treat SOURCE_TYPE_UNDEFINED as music
 				controllerValue = (controllerValue * userVolume) >> 8;
 			}
 		}

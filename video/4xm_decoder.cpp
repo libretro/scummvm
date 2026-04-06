@@ -34,6 +34,10 @@
 
 namespace Video {
 
+FourXMDecoder::~FourXMDecoder() {
+	close();
+}
+
 Common::Rational floatToRational(float value) {
 	int num = static_cast<int>(1000 * value);
 	int denom = 1000;
@@ -54,11 +58,10 @@ static const int8_t mv[256][2] = {
 class FourXMDecoder::FourXMAudioTrack : public AudioTrack {
 	uint _audioType;
 	uint _audioChannels;
-	//uint _sampleRate;
 	Common::ScopedPtr<Audio::PacketizedAudioStream> _output;
 
 public:
-	FourXMAudioTrack(FourXMDecoder *dec, uint trackIdx, uint audioType, uint audioChannels, uint sampleRate) : AudioTrack(Audio::Mixer::SoundType::kPlainSoundType), _audioType(audioType), _audioChannels(audioChannels)/*, _sampleRate(sampleRate)*/ {
+	FourXMAudioTrack(FourXMDecoder *dec, uint trackIdx, uint audioType, uint audioChannels, uint sampleRate) : AudioTrack(Audio::Mixer::SoundType::kPlainSoundType), _audioType(audioType), _audioChannels(audioChannels) {
 		switch (_audioType) {
 		case 0: {
 			// Raw PCM data
@@ -345,18 +348,16 @@ void mcdc(uint16_t *dst, const uint16_t *src, int log2w,
 	int h = 1 << log2h;
 	if (Scale) {
 		for (int i = 0; i < h; ++i) {
-			auto *dst32 = reinterpret_cast<uint32_t *>(dst);
-			auto *src32 = reinterpret_cast<const uint32_t *>(src);
 			switch (log2w) {
 			case 3:
-				dst32[2] = src32[2] + dc;
-				dst32[3] = src32[3] + dc;
+				WRITE_UINT32(dst + 4, READ_UINT32(src + 4) + dc);
+				WRITE_UINT32(dst + 6, READ_UINT32(src + 6) + dc);
 				// fall through
 			case 2:
-				dst32[1] = src32[1] + dc;
+				WRITE_UINT32(dst + 2, READ_UINT32(src + 2) + dc);
 				// fall through
 			case 1:
-				dst32[0] = src32[0] + dc;
+				WRITE_UINT32(dst, READ_UINT32(src) + dc);
 				break;
 			case 0:
 				*dst = *src + dc;
@@ -366,17 +367,16 @@ void mcdc(uint16_t *dst, const uint16_t *src, int log2w,
 		}
 	} else {
 		for (int i = 0; i < h; ++i) {
-			auto *dst32 = reinterpret_cast<uint32_t *>(dst);
 			switch (log2w) {
 			case 3:
-				dst32[2] = dc;
-				dst32[3] = dc;
+				WRITE_UINT32(dst + 4, dc);
+				WRITE_UINT32(dst + 6, dc);
 				// fall through
 			case 2:
-				dst32[1] = dc;
+				WRITE_UINT32(dst + 2, dc);
 				// fall through
 			case 1:
-				dst32[0] = dc;
+				WRITE_UINT32(dst, dc);
 				break;
 			case 0:
 				*dst = dc;
@@ -642,6 +642,7 @@ void FourXMDecoder::readList(uint32 listEnd) {
 }
 
 bool FourXMDecoder::loadStream(Common::SeekableReadStream *stream) {
+	_stream.reset(stream);
 	if (!stream->size()) {
 		return false;
 	}
@@ -659,8 +660,6 @@ bool FourXMDecoder::loadStream(Common::SeekableReadStream *stream) {
 		warning("RIFF not an 4XM file, got: %08x", riffType);
 		return false;
 	}
-
-	_stream = stream;
 
 	while (stream->pos() < fileSize) {
 		uint32 tag = stream->readUint32BE();

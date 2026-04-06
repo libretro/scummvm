@@ -71,6 +71,34 @@ void HotMultiframeSceneChange::execute() {
 	}
 }
 
+void HotSingleFrameSceneChange::readData(Common::SeekableReadStream &stream) {
+	_hoverCursor = (CursorManager::CursorType)stream.readUint16LE();
+	_sceneChange.sceneID = stream.readUint16LE();
+	_sceneChange.continueSceneSound = kContinueSceneSound;
+	_sceneChange.listenerFrontVector.set(0, 0, 1);
+	readRect(stream, _sceneHotspot.coords);
+	if (_readExtra) {
+		uint16 unk1 = stream.readUint16LE();
+		uint16 unk2 = stream.readUint16LE();
+		debug("Read extra data for HotSingleFrameSceneChange: %u, %u", unk1, unk2);
+	}
+}
+
+void HotSingleFrameSceneChange::execute() {
+	switch (_state) {
+	case kBegin:
+		_hotspot = _sceneHotspot.coords;
+		_state = kRun;
+		// fall through
+	case kRun:
+		_hasHotspot = true;
+		break;
+	case kActionTrigger:
+		SceneChange::execute();
+		break;
+	}
+}
+
 void Hot1FrSceneChange::readData(Common::SeekableReadStream &stream) {
 	if (!_isTerse) {
 		SceneChange::readData(stream);

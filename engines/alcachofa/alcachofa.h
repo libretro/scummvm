@@ -61,7 +61,7 @@ constexpr int16 kSmallThumbnailHeight = 120;
 namespace SaveVersion {
 	static constexpr const Common::Serializer::Version kInitial = 0;
 	static constexpr const Common::Serializer::Version kWithEngineV10 = 1;
-};
+}
 static constexpr const Common::Serializer::Version kCurrentSaveVersion = SaveVersion::kWithEngineV10;
 
 class MySerializer : public Common::Serializer {

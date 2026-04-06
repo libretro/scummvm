@@ -164,6 +164,8 @@ void DrillerEngine::drawCPCUI(Graphics::Surface *surface) {
 	uint32 color = _currentArea->_underFireBackgroundColor;
 	uint8 r, g, b;
 
+	if (isEncodedCPCDirectColor(color))
+		color = decodeCPCDirectColor(color);
 	_gfx->readFromPalette(color, r, g, b);
 	uint32 front = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 
@@ -172,6 +174,8 @@ void DrillerEngine::drawCPCUI(Graphics::Surface *surface) {
 		color = (*_gfx->_colorRemaps)[color];
 	}
 
+	if (isEncodedCPCDirectColor(color))
+		color = decodeCPCDirectColor(color);
 	_gfx->readFromPalette(color, r, g, b);
 	uint32 back = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 

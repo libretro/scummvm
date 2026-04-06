@@ -29,7 +29,7 @@ namespace HodjNPodj {
 namespace Metagame {
 namespace Gtl {
 
-#define NOTEBOOK_SPEC   ".\\art\\mlscroll.bmp"      // path for notebook's DIB on disk
+#define NOTEBOOK_SPEC   "art\\mlscroll.bmp"      // path for notebook's DIB on disk
 #define NOTEBOOK_DX             502
 #define NOTEBOOK_DY             395
 #define NOTEBOOK_CURL_DX        500

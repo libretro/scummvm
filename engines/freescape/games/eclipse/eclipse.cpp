@@ -30,6 +30,10 @@
 #include "common/translation.h"
 
 #include "freescape/freescape.h"
+#include "freescape/games/eclipse/c64.music.h"
+#include "freescape/games/eclipse/c64.sfx.h"
+#include "freescape/games/eclipse/ay.music.h"
+#include "freescape/games/eclipse/opl.music.h"
 #include "freescape/games/eclipse/eclipse.h"
 #include "freescape/language/8bitDetokeniser.h"
 
@@ -40,6 +44,12 @@ Audio::AudioStream *makeEclipseAtariMusicStream(const byte *data, uint32 dataSiz
                                                   int songNum = 1, int rate = 44100);
 
 EclipseEngine::EclipseEngine(OSystem *syst, const ADGameDescription *gd) : FreescapeEngine(syst, gd) {
+	_playerC64Music = nullptr;
+	_playerC64Sfx = nullptr;
+	_playerAYMusic = nullptr;
+	_playerOPLMusic = nullptr;
+	_c64UseSFX = false;
+
 	// These sounds can be overriden by the class of each platform
 	_soundIndexStartFalling = -1;
 	_soundIndexEndFalling = -1;
@@ -92,9 +102,51 @@ EclipseEngine::EclipseEngine(OSystem *syst, const ADGameDescription *gd) : Frees
 
 	_lastThirtySeconds = 0;
 	_lastFiveSeconds = 0;
+	_lastHeartbeatSoundTick = -1;
+	_lastHeartIndicatorFrame = 1;
 	_lastSecond = -1;
 	_resting = false;
 	_flashlightOn = false;
+}
+
+void EclipseEngine::stopBackgroundMusic() {
+	if (_playerOPLMusic)
+		_playerOPLMusic->stopMusic();
+	if (_playerAYMusic)
+		_playerAYMusic->stopMusic();
+	if (_playerC64Music)
+		_playerC64Music->stopMusic();
+	if (_mixer)
+		_mixer->stopHandle(_musicHandle);
+}
+
+void EclipseEngine::restartBackgroundMusic() {
+	if (isC64() && _playerC64Music) {
+		_playerC64Music->startMusic();
+	} else if ((isCPC() || isSpectrum()) && _playerAYMusic) {
+		_playerAYMusic->startMusic();
+	} else if (isDOS() && _playerOPLMusic) {
+		_playerOPLMusic->startMusic();
+	} else if (isAtariST() && !_musicData.empty()) {
+		if (_mixer)
+			_mixer->stopHandle(_musicHandle);
+		Audio::AudioStream *musicStream = makeEclipseAtariMusicStream(
+			_musicData.data(), _musicData.size(), 1);
+		if (musicStream) {
+			_mixer->playStream(Audio::Mixer::kMusicSoundType,
+				&_musicHandle, musicStream);
+		}
+	} else {
+		playMusic("Total Eclipse Theme");
+	}
+}
+
+EclipseEngine::~EclipseEngine() {
+	stopBackgroundMusic();
+	delete _playerOPLMusic;
+	delete _playerAYMusic;
+	delete _playerC64Music;
+	delete _playerC64Sfx;
 }
 
 void EclipseEngine::initGameState() {
@@ -109,11 +161,11 @@ void EclipseEngine::initGameState() {
 	getTimeFromCountdown(seconds, minutes, hours);
 	_lastThirtySeconds = seconds / 30;
 	_lastFiveSeconds = seconds / 5;
+	_lastHeartbeatSoundTick = -1;
+	_lastHeartIndicatorFrame = 1;
 	_resting = false;
 	_flashlightOn = false;
-
-	// Start playing music, if any, in any supported format
-	playMusic("Total Eclipse Theme");
+	restartBackgroundMusic();
 }
 
 void EclipseEngine::loadAssets() {
@@ -200,7 +252,20 @@ bool EclipseEngine::checkIfGameEnded() {
 	return false;
 }
 
+bool EclipseEngine::triggerWinCondition() {
+	setGameBit(16);
+	_endGameDelayTicks = 0;
+	_endGameKeyPressed = false;
+	_endGamePlayerEndArea = false;
+	_gameStateControl = kFreescapeGameStateEnd;
+	return true;
+}
+
 void EclipseEngine::endGame() {
+	bool enteringEndArea = (_gameStateControl == kFreescapeGameStateEnd && !_endGamePlayerEndArea);
+	if (enteringEndArea)
+		restartBackgroundMusic();
+
 	FreescapeEngine::endGame();
 
 	if (!_endGamePlayerEndArea)
@@ -263,20 +328,29 @@ void EclipseEngine::initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *in
 
 	act = new Common::Action("ROTR", _("Rotate right"));
 	act->setCustomEngineActionEvent(kActionRotateRight);
-	act->addDefaultInputMapping("w");
+	act->addDefaultInputMapping(_useWASDControls ? "e" : "w");
 	engineKeyMap->addAction(act);
 
 	// I18N: Illustrates the angle at which you turn left or right.
 	act = new Common::Action("CHNGANGLE", _("Change angle"));
 	act->setCustomEngineActionEvent(kActionIncreaseAngle);
-	act->addDefaultInputMapping("a");
+	act->addDefaultInputMapping(_useWASDControls ? "v" : "a");
 	engineKeyMap->addAction(act);
 
 	// I18N: STEP SIZE: Measures the size of one movement in the direction you are facing (1-250 standard distance units (SDUs))
 	act = new Common::Action("CHNGSTEPSIZE", _("Change step size"));
 	act->setCustomEngineActionEvent(kActionChangeStepSize);
-	act->addDefaultInputMapping("s");
+	act->addDefaultInputMapping(_useWASDControls ? "x" : "s");
 	engineKeyMap->addAction(act);
+
+	if (_useWASDControls) {
+		act = new Common::Action("RUNMOD", _("Sprint (hold)"));
+		act->setCustomEngineActionEvent(kActionRunModifier);
+		act->addDefaultInputMapping("LSHIFT");
+		act->addDefaultInputMapping("RSHIFT");
+		act->addDefaultInputMapping("JOY_LEFT_TRIGGER");
+		engineKeyMap->addAction(act);
+	}
 
 	act = new Common::Action("TGGLHEIGHT", _("Toggle height"));
 	act->setCustomEngineActionEvent(kActionToggleRiseLower);
@@ -341,7 +415,8 @@ void EclipseEngine::gotoArea(uint16 areaID, int entranceID) {
 
 	_gfx->_keyColor = 0;
 	swapPalette(areaID);
-	_currentArea->_usualBackgroundColor = isCPC() ? 1 : 0;
+	if (isCPC())
+		updateHeartFramesCPC();
 	if (isAmiga() || isAtariST())
 		_currentArea->_skyColor = 15;
 
@@ -476,8 +551,13 @@ void EclipseEngine::drawInfoMenu() {
 					_eventManager->purgeKeyboardEvents();
 					saveGameDialog();
 					_gfx->setViewport(_viewArea);
-				} else if (isDOS() && event.customType == kActionToggleSound) {
-					playSound(_soundIndexMenu, false, _soundFxHandle);
+				} else if (event.customType == kActionToggleSound) {
+					if (isC64() && _playerC64Sfx) {
+						toggleC64Sound();
+						_eventManager->purgeKeyboardEvents();
+					} else {
+						playSound(_soundIndexMenu, false, _soundFxHandle);
+					}
 				} else if ((isDOS() || isCPC() || isSpectrum()) && event.customType == kActionEscape) {
 					_forceEndGame = true;
 					cont = false;
@@ -525,14 +605,12 @@ void EclipseEngine::pressedKey(const int keycode) {
 		else
 			error("Invalid player height index: %d", _playerHeightNumber);
 	} else if (keycode == kActionRest) {
-		if (_currentArea->getAreaID() == 1) {
+		if (_currentArea->getAreaID() == 1 || _currentArea->getAreaID() == 51) {
 			playSoundFx(3, false);
-			if (_temporaryMessages.empty())
-				insertTemporaryMessage(_messagesList[6], _countdown - 2);
+			insertTemporaryMessage(_messagesList[6], _countdown - 2);
 		} else {
 			_resting = true;
-			if (_temporaryMessages.empty())
-				insertTemporaryMessage(_messagesList[7], _countdown - 2);
+			insertTemporaryMessage(_messagesList[7], _countdown - 2);
 			_countdown = _countdown - 5;
 		}
 	} else if (keycode == kActionFaceForward) {
@@ -540,6 +618,12 @@ void EclipseEngine::pressedKey(const int keycode) {
 		updateCamera();
 	} else if (keycode == kActionToggleFlashlight) {
 		_flashlightOn = !_flashlightOn;
+	} else if (keycode == kActionRunModifier) {
+		// Shift-to-sprint: save current step, switch to max while held
+		if (_savedPlayerStepIndex < 0) {
+			_savedPlayerStepIndex = _playerStepIndex;
+			_playerStepIndex = (int)_playerSteps.size() - 1;
+		}
 	}
 }
 
@@ -619,6 +703,13 @@ bool EclipseEngine::onScreenControls(Common::Point mouse) {
 void EclipseEngine::releasedKey(const int keycode) {
 	if (keycode == kActionRiseOrFlyUp)
 		_resting = false;
+	else if (keycode == kActionRunModifier) {
+		// Shift released: restore previous step size
+		if (_savedPlayerStepIndex >= 0) {
+			_playerStepIndex = _savedPlayerStepIndex;
+			_savedPlayerStepIndex = -1;
+		}
+	}
 }
 
 void EclipseEngine::drawAnalogClock(Graphics::Surface *surface, int x, int y, uint32 colorHand1, uint32 colorHand2, uint32 colorBack) {
@@ -775,6 +866,37 @@ void EclipseEngine::drawIndicator(Graphics::Surface *surface, int xPosition, int
 	}
 }
 
+void EclipseEngine::drawHeartIndicator(Graphics::Surface *surface, int x, int y) {
+	// Heartbeat animation shared across platforms.
+	// Timer counts down from shield at 50Hz (_ticks rate).
+	// Beat frame shown for last 5 ticks of each cycle, rest frame for the remainder.
+	// Lower shield = faster heartbeat. At shield <= 5, heart beats constantly.
+	if (_eclipseSprites.size() < 2)
+		return;
+
+	int shield = _gameStateVars[k8bitVariableShield];
+	int beatCycle = MAX(shield, 1);
+	int phase = _ticks % beatCycle;
+	int beatStart = MAX(beatCycle - 5, 0);
+	int frame = _lastHeartIndicatorFrame;
+
+	if (shield <= 5 || _avoidRenderingFrames > 0 || _hasFallen) {
+		frame = 1;
+		_lastHeartIndicatorFrame = frame;
+	} else if (!_inWaitLoop) {
+		frame = (phase >= beatStart) ? 0 : 1;
+		_lastHeartIndicatorFrame = frame;
+
+		if (!isPaused() && phase == beatStart && _lastHeartbeatSoundTick != _ticks) {
+			playSound(1, false, _soundFxHandle);
+			_lastHeartbeatSoundTick = _ticks;
+		}
+	}
+
+	surface->copyRectToSurface(*_eclipseSprites[frame], x, y,
+		Common::Rect(_eclipseSprites[frame]->w, _eclipseSprites[frame]->h));
+}
+
 void EclipseEngine::drawSensorShoot(Sensor *sensor) {
 	Math::Vector3d target;
 	float distance = 5;
@@ -886,7 +1008,8 @@ void EclipseEngine::drawScoreString(int score, int x, int y, uint32 front, uint3
 
 	for (int i = 0; i < int(scoreStr.size()); i++) {
 		Common::String digit(scoreStr[i]);
-		digit.toUppercase();
+		if (!isCPC())
+			digit.toUppercase();
 		scoreFont->drawString(surface, digit, x, y, _screenW, front);
 		x += charStep;
 		if ((i - scoreStr.size() + 1) % 3 == 1)
@@ -943,7 +1066,22 @@ void EclipseEngine::executePrint(FCLInstruction &instruction) {
 		drawFullscreenMessageAndWait(_messagesList[index]);
 		return;
 	}
-	insertTemporaryMessage(_messagesList[index], _countdown - 2);
+	Common::String message = _messagesList[index];
+	if (isEclipse2()) {
+		// Message 16 (1-based, index 15) contains the "NO. OF PARTS XX" placeholder.
+		// The original routine patches those two bytes immediately before drawing the string.
+		Common::String::size_type pos = message.find("XX");
+		if (pos != Common::String::npos) {
+			int parts = _gameStateVars[kVariableEclipse2SphinxParts];
+			Common::String replacement;
+			if (parts < 10)
+				replacement = Common::String::format("%d ", parts);
+			else
+				replacement = Common::String::format("%d", parts);
+			message.replace(pos, 2, replacement);
+		}
+	}
+	insertTemporaryMessage(message, _countdown - 2);
 }
 
 Common::Error EclipseEngine::saveGameStreamExtended(Common::WriteStream *stream, bool isAutosave) {
@@ -951,6 +1089,8 @@ Common::Error EclipseEngine::saveGameStreamExtended(Common::WriteStream *stream,
 }
 
 Common::Error EclipseEngine::loadGameStreamExtended(Common::SeekableReadStream *stream) {
+	_lastHeartbeatSoundTick = -1;
+	_lastHeartIndicatorFrame = 1;
 	return Common::kNoError;
 }
 

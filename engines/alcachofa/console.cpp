@@ -56,6 +56,8 @@ Console::Console() : GUI::Debugger() {
 	registerCmd("playVoice", WRAP_METHOD(Console, cmdPlaySound));
 	registerCmd("playSFX", WRAP_METHOD(Console, cmdPlaySound));
 	registerCmd("dumpFile", WRAP_METHOD(Console, cmdDumpFile));
+	registerCmd("procedureAt", WRAP_METHOD(Console, cmdProcedureAt));
+	registerCmd("pa", WRAP_METHOD(Console, cmdProcedureAt));
 }
 
 Console::~Console() {}
@@ -375,6 +377,24 @@ bool Console::cmdDumpFile(int argc, const char **args) {
 		read = input.read(buffer, kBufferSize);
 		output.write(buffer, read);
 	} while (read == kBufferSize);
+	return true;
+}
+
+bool Console::cmdProcedureAt(int argc, const char **args) {
+	if (argc != 2) {
+		debugPrintf("usage: %s pc\n", args[0]);
+		return true;
+	}
+
+	char *end = nullptr;
+	uint32 pc = (uint32)strtoul(args[1], &end, 10);
+	if (end == nullptr || *end != '\0') {
+		debugPrintf("pc has to be an unsigned integer\n");
+		return true;
+	}
+
+	auto procedure = g_engine->script().procedureAt(pc);
+	debugPrintf("%u is part of %s\n", pc, procedure.c_str());
 	return true;
 }
 

@@ -52,12 +52,12 @@ static const KeybindingRecord MENU_KEYS[] = {
 	{ KEYBIND_RAPIER, "RAPIER", _s("Rapier"), "r", nullptr },
 	{ KEYBIND_AXE, "AXE", _s("Axe"), "a", nullptr },
 	{ KEYBIND_SHIELD, "SHIELD", _s("Shield"), "s", nullptr },
-	{ KEYBIND_BOW, "BOW", _s("Bow & Arrow"), "b", nullptr },
-	{ KEYBIND_AMULET, "AMULET", _s("Magic Amulet"), "m", nullptr },
-	{ KEYBIND_AMULET1, "AMULET1", _s("Amulet Option 1"), "1", nullptr },
-	{ KEYBIND_AMULET2, "AMULET2", _s("Amulet Option 2"), "2", nullptr },
-	{ KEYBIND_AMULET3, "AMULET3", _s("Amulet Option 3"), "3", nullptr },
-	{ KEYBIND_AMULET4, "AMULET4", _s("Amulet Option 4"), "4", nullptr },
+	{ KEYBIND_BOW, "BOW", _s("Bow & arrow"), "b", nullptr },
+	{ KEYBIND_AMULET, "AMULET", _s("Magic amulet"), "m", nullptr },
+	{ KEYBIND_AMULET1, "AMULET1", _s("Amulet option 1"), "1", nullptr },
+	{ KEYBIND_AMULET2, "AMULET2", _s("Amulet option 2"), "2", nullptr },
+	{ KEYBIND_AMULET3, "AMULET3", _s("Amulet option 3"), "3", nullptr },
+	{ KEYBIND_AMULET4, "AMULET4", _s("Amulet option 4"), "4", nullptr },
 	{ KEYBIND_NONE, nullptr, nullptr, nullptr, nullptr }
 };
 
@@ -66,24 +66,24 @@ static const KeybindingRecord OVERWORLD_KEYS[] = {
 	{ KEYBIND_DOWN, "DOWN", _s("South"), "DOWN", "JOY_DOWN" },
 	{ KEYBIND_LEFT, "LEFT", _s("West"), "LEFT", "JOY_LEFT" },
 	{ KEYBIND_RIGHT, "RIGHT", _s("East"), "RIGHT", "JOY_RIGHT" },
-	{ KEYBIND_ENTER, "ENTER", _s("Enter/Exit"), "e", "JOY_B" },
+	{ KEYBIND_ENTER, "ENTER", _s("Enter / Exit"), "e", "JOY_B" },
 	{ KEYBIND_INFO, "INFO", _s("Info"), "z", "JOY_X" },
 	{ KEYBIND_QUIT, "QUIT", _s("Quit"), "q", nullptr },
-	{ KEYBIND_PASS, "PASS", _s("Pass/Wait"), "SPACE", nullptr },
+	{ KEYBIND_PASS, "PASS", _s("Pass / Wait"), "SPACE", nullptr },
 	{ KEYBIND_MINIMAP, "MINIMAP", _s("Minimap"), "m", nullptr },
 	{ KEYBIND_NONE, nullptr, nullptr, nullptr, nullptr }
 };
 
 static const KeybindingRecord DUNGEON_KEYS[] = {
-	{ KEYBIND_UP, "UP", _s("Move Forward"), "UP", "JOY_UP" },
-	{ KEYBIND_DOWN, "DOWN", _s("Turn Around"), "DOWN", "JOY_DOWN" },
-	{ KEYBIND_LEFT, "LEFT", _s("Turn Left"), "LEFT", "JOY_LEFT" },
-	{ KEYBIND_RIGHT, "RIGHT", _s("Turn Right"), "RIGHT", "JOY_RIGHT" },
+	{ KEYBIND_UP, "UP", _s("Move forward"), "UP", "JOY_UP" },
+	{ KEYBIND_DOWN, "DOWN", _s("Turn around"), "DOWN", "JOY_DOWN" },
+	{ KEYBIND_LEFT, "LEFT", _s("Turn left"), "LEFT", "JOY_LEFT" },
+	{ KEYBIND_RIGHT, "RIGHT", _s("Turn right"), "RIGHT", "JOY_RIGHT" },
 	{ KEYBIND_ATTACK, "ATTACK", _s("Attack"), "a", "JOY_A" },
-	{ KEYBIND_ENTER, "ENTER", _s("Enter/Exit"), "e", "JOY_B" },
+	{ KEYBIND_ENTER, "ENTER", _s("Enter / Exit"), "e", "JOY_B" },
 	{ KEYBIND_INFO, "INFO", _s("Info"), "z", "JOY_X" },
 	{ KEYBIND_QUIT, "QUIT", _s("Quit"), "q", nullptr },
-	{ KEYBIND_PASS, "PASS", _s("Pass/Wait"), "SPACE", nullptr },
+	{ KEYBIND_PASS, "PASS", _s("Pass / Wait"), "SPACE", nullptr },
 	{ KEYBIND_MINIMAP, "MINIMAP", _s("Minimap"), "m", nullptr },
 	{ KEYBIND_NONE, nullptr, nullptr, nullptr, nullptr }
 };
@@ -95,33 +95,33 @@ struct KeysRecord {
 };
 
 static const KeysRecord ALL_RECORDS[] = {
-	{ "ultima0", _s("Basic Keys"), MINIMAL_KEYS },
-	{ "menu", _s("Menu Keys"), MENU_KEYS },
-	{ "overworld", _s("Overworld Keys"), OVERWORLD_KEYS },
-	{ "dungeon", _s("Dungeon Keys"), DUNGEON_KEYS },
+	{ "ultima0", _s("Basic keys"), MINIMAL_KEYS },
+	{ "menu", _s("Menu keys"), MENU_KEYS },
+	{ "overworld", _s("Overworld keys"), OVERWORLD_KEYS },
+	{ "dungeon", _s("Dungeon keys"), DUNGEON_KEYS },
 	{ nullptr, nullptr, nullptr }
 };
 
 static const KeysRecord MINIMAL_RECORDS[] = {
-	{ "ultima0", _s("Basic Keys"), MINIMAL_KEYS },
+	{ "ultima0", _s("Basic keys"), MINIMAL_KEYS },
 	{ nullptr, nullptr, nullptr }
 };
 
 static const KeysRecord MENU_RECORDS[] = {
-	{ "ultima0", _s("Basic Keys"), MINIMAL_KEYS },
-	{ "menu", _s("Menu Keys"), MENU_KEYS },
+	{ "ultima0", _s("Basic keys"), MINIMAL_KEYS },
+	{ "menu", _s("Menu keys"), MENU_KEYS },
 	{ nullptr, nullptr, nullptr }
 };
 
 static const KeysRecord OVERWORLD_RECORDS[] = {
-	{ "ultima0", _s("Basic Keys"), MINIMAL_KEYS },
-	{ "overworld", _s("Overworld Keys"), OVERWORLD_KEYS },
+	{ "ultima0", _s("Basic keys"), MINIMAL_KEYS },
+	{ "overworld", _s("Overworld keys"), OVERWORLD_KEYS },
 	{ nullptr, nullptr, nullptr }
 };
 
 static const KeysRecord DUNGEON_RECORDS[] = {
-	{ "ultima0", _s("Basic Keys"), MINIMAL_KEYS },
-	{ "dungeon", _s("Dungeon Keys"), DUNGEON_KEYS },
+	{ "ultima0", _s("Basic keys"), MINIMAL_KEYS },
+	{ "dungeon", _s("Dungeon keys"), DUNGEON_KEYS },
 	{ nullptr, nullptr, nullptr }
 };
 

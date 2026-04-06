@@ -105,10 +105,12 @@ extern const char *getLanguageLocale(Language id);
 extern const char *getLanguageDescription(Language id);
 
 // TODO: Document this GUIO related function
-const String getGameGUIOptionsDescriptionLanguage(Common::Language lang);
+const String getGameGUIOptionsDescriptionLanguage(Language lang);
+const String getGameGUIOptionsDescriptionLanguages(const List<Language> &languages);
+List<Language> parseLanguagesFromGameGUIOptionsString(const String &optionsString);
 
 // TODO: Document this GUIO related function
-bool checkGameGUIOptionLanguage(Common::Language lang, const String &str);
+bool checkGameGUIOptionLanguage(Language lang, const String &str);
 
 List<String> getLanguageList();
 

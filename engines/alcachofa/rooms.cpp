@@ -42,8 +42,7 @@ Room::Room(World *world, SeekableReadStream &stream)
 	if (g_engine->isV1()) {
 		readRoomV1(stream);
 		readObjects(stream);
-	}
-	else
+	} else
 		readRoomV2and3(stream, false);
 	initBackground();
 }
@@ -72,8 +71,7 @@ static ObjectBase *readRoomObject(Room *room, const String &type, SeekableReadSt
 			return new EditBoxV2(room, stream);
 		else
 			return new EditBoxV3(room, stream);
-	}
-	else if (type == PushButton::kClassName)
+	} else if (type == PushButton::kClassName)
 		return new PushButton(room, stream);
 	else if (type == CheckBox::kClassName)
 		return new CheckBox(room, stream);
@@ -84,8 +82,7 @@ static ObjectBase *readRoomObject(Room *room, const String &type, SeekableReadSt
 			return new SlideButtonV2(room, stream);
 		else
 			return new SlideButtonV3(room, stream);
-	}
-	else if (type == IRCWindow::kClassName)
+	} else if (type == IRCWindow::kClassName)
 		return new IRCWindow(room, stream);
 	else if (type == MessageBox::kClassName)
 		return new MessageBox(room, stream);
@@ -640,7 +637,9 @@ ObjectBase *World::getObjectByName(MainCharacterKind character, const char *name
 		return getObjectByName(name);
 	const auto &player = g_engine->player();
 	ObjectBase *result = nullptr;
-	if (player.activeCharacterKind() == character && player.currentRoom() != player.activeCharacter()->room())
+	if (player.activeCharacterKind() == character &&
+		player.currentRoom() != nullptr &&
+		player.currentRoom() != player.activeCharacter()->room())
 		result = player.currentRoom()->getObjectByName(name);
 	if (result == nullptr)
 		result = player.activeCharacter()->room()->getObjectByName(name);
@@ -780,8 +779,8 @@ bool World::loadWorldFileV2(const char *path) {
 	};
 	readGlobalAnim(GlobalAnimationKind::GeneralFont, GlobalAnimationKind::DialogFont);
 	readGlobalAnim(GlobalAnimationKind::Cursor, GlobalAnimationKind::Count);
-	readGlobalAnim(GlobalAnimationKind::MortadeloIcon, GlobalAnimationKind::MortadeloDisabledIcon);
 	readGlobalAnim(GlobalAnimationKind::FilemonIcon, GlobalAnimationKind::FilemonDisabledIcon);
+	readGlobalAnim(GlobalAnimationKind::MortadeloIcon, GlobalAnimationKind::MortadeloDisabledIcon);
 	readGlobalAnim(GlobalAnimationKind::InventoryIcon, GlobalAnimationKind::InventoryDisabledIcon);
 
 	readRooms(file);
@@ -1018,7 +1017,7 @@ GameFileReference World::readFileRef(SeekableReadStream &stream) const {
 		stream.skip(size);
 		return { name, (uint32)_files.size(), offset, size };
 	} else
-		return GameFileReference(reencode(name));
+		return GameFileReference(g_engine->game().reencodePath(name));
 }
 
 ScopedPtr<SeekableReadStream> World::openFileRef(const GameFileReference &ref) const {
@@ -1056,7 +1055,7 @@ public:
 		// e.g. c:\myf2000\textos\dialogos.txt
 		// but the filenames alone do not clash so we flatten everything
 
-		skipVarString(*file);
+		skipVarString(*_file);
 		uint32 totalSize = _file->readUint32LE();
 		int64 endPosition = _file->pos() + totalSize;
 		_file->skip(2);

@@ -25,12 +25,22 @@
 #include "backends/text-to-speech/macosx/macosx-text-to-speech.h"
 
 #if defined(USE_TTS) && defined(MACOSX)
+
 #include "common/translation.h"
+#include "backends/platform/sdl/macosx/macosx-compat.h"
+
 #include <AppKit/NSSpeechSynthesizer.h>
+#include <Foundation/NSArray.h>
+#include <Foundation/NSDictionary.h>
+#include <Foundation/NSEnumerator.h>
 #include <Foundation/NSString.h>
 #include <CoreFoundation/CFString.h>
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6
+@interface MacOSXTextToSpeechManagerDelegate : NSObject {
+#else
 @interface MacOSXTextToSpeechManagerDelegate : NSObject<NSSpeechSynthesizerDelegate> {
+#endif
 	MacOSXTextToSpeechManager *_ttsManager;
 	BOOL _ignoreNextFinishedSpeaking;
 }
@@ -266,8 +276,11 @@ void MacOSXTextToSpeechManager::updateVoices() {
 	Common::String lang = getLanguage();
 	NSArray *voices = [NSSpeechSynthesizer availableVoices];
 	NSString *defaultVoice = [NSSpeechSynthesizer defaultVoice];
+	NSEnumerator *voiceEnum = [voices objectEnumerator];
+	NSString *voiceId;
 	int voiceIndex = 0;
-	for (NSString *voiceId in voices) {
+
+	while ((voiceId = [voiceEnum nextObject])) {
 		NSDictionary *voiceAttr = [NSSpeechSynthesizer attributesForVoice:voiceId];
 		Common::String voiceLocale([[voiceAttr objectForKey:NSVoiceLocaleIdentifier] UTF8String]);
 		if (voiceLocale.hasPrefix(lang)) {

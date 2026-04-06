@@ -697,10 +697,31 @@ void Util::keyDown(const Common::Event &event) {
 		_keyState |= 0x0004;
 	else if (event.kbd.keycode == Common::KEYCODE_LEFT)
 		_keyState |= 0x0008;
+	else if (event.kbd.keycode == Common::KEYCODE_RETURN ||
+	         event.kbd.keycode == Common::KEYCODE_KP_ENTER)
+		_keyState |= 0x0010;
 	else if (event.kbd.keycode == Common::KEYCODE_SPACE)
 		_keyState |= 0x0020;
 	else if (event.kbd.keycode == Common::KEYCODE_ESCAPE)
 		_keyState |= 0x0040;
+	else if (event.kbd.keycode == Common::KEYCODE_LCTRL ||
+	         event.kbd.keycode == Common::KEYCODE_RCTRL)
+		_keyState |= 0x0080;
+	else if (event.kbd.keycode == Common::KEYCODE_LSHIFT)
+		_keyState |= 0x0100;
+	else if (event.kbd.keycode == Common::KEYCODE_RSHIFT)
+		_keyState |= 0x0200;
+	else if (event.kbd.keycode == Common::KEYCODE_LALT ||
+	         event.kbd.keycode == Common::KEYCODE_RALT)
+		_keyState |= 0x0400;
+	else if (event.kbd.keycode == Common::KEYCODE_F1)
+		_keyState |= 0x0800;
+	else if (event.kbd.keycode == Common::KEYCODE_F2)
+		_keyState |= 0x1000;
+	else if (event.kbd.keycode == Common::KEYCODE_F3)
+		_keyState |= 0x2000;
+	else if (event.kbd.keycode == Common::KEYCODE_F4)
+		_keyState |= 0x4000;
 }
 
 void Util::keyUp(const Common::Event &event) {
@@ -712,10 +733,31 @@ void Util::keyUp(const Common::Event &event) {
 		_keyState &= ~0x0004;
 	else if (event.kbd.keycode == Common::KEYCODE_LEFT)
 		_keyState &= ~0x0008;
+	else if (event.kbd.keycode == Common::KEYCODE_RETURN ||
+	         event.kbd.keycode == Common::KEYCODE_KP_ENTER)
+		_keyState &= ~0x0010;
 	else if (event.kbd.keycode == Common::KEYCODE_SPACE)
 		_keyState &= ~0x0020;
 	else if (event.kbd.keycode == Common::KEYCODE_ESCAPE)
 		_keyState &= ~0x0040;
+	else if (event.kbd.keycode == Common::KEYCODE_LCTRL ||
+	         event.kbd.keycode == Common::KEYCODE_RCTRL)
+		_keyState &= ~0x0080;
+	else if (event.kbd.keycode == Common::KEYCODE_LSHIFT)
+		_keyState &= ~0x0100;
+	else if (event.kbd.keycode == Common::KEYCODE_RSHIFT)
+		_keyState &= ~0x0200;
+	else if (event.kbd.keycode == Common::KEYCODE_LALT ||
+	         event.kbd.keycode == Common::KEYCODE_RALT)
+		_keyState &= ~0x0400;
+	else if (event.kbd.keycode == Common::KEYCODE_F1)
+		_keyState &= ~0x0800;
+	else if (event.kbd.keycode == Common::KEYCODE_F2)
+		_keyState &= ~0x1000;
+	else if (event.kbd.keycode == Common::KEYCODE_F3)
+		_keyState &= ~0x2000;
+	else if (event.kbd.keycode == Common::KEYCODE_F4)
+		_keyState &= ~0x4000;
 }
 
 } // End of namespace Gob

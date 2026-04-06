@@ -225,9 +225,9 @@ private:
 	GameFileReference _globalAnimations[(int)GlobalAnimationKind::Count];
 	Common::String _initScriptName;
 	GameFileReference _scriptFileRef;
-	Room *_globalRoom;
-	Inventory *_inventory;
-	MainCharacter *_filemon, *_mortadelo;
+	Room *_globalRoom = nullptr;
+	Inventory *_inventory = nullptr;
+	MainCharacter *_filemon = nullptr, *_mortadelo = nullptr;
 	uint8 _loadedMapCount = 0;
 	Common::HashMap<const char *, const char *,
 		Common::Hash<const char *>,

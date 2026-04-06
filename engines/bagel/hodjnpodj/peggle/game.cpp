@@ -107,10 +107,10 @@ int8 BoardSelected = CROSS;
 //} ;
 char fState [GRID_SIZE][GRID_SIZE];
 const char *BoardSpec[BOARD_COUNT] = {
-	".\\ART\\CROSS.BMP",
-	".\\ART\\CROSSX.BMP",
-	".\\ART\\TRIANGLE.BMP",
-	".\\ART\\TRIANGLX.BMP"
+	"art\\CROSS.BMP",
+	"art\\CROSSX.BMP",
+	"art\\TRIANGLE.BMP",
+	"art\\TRIANGLX.BMP"
 };
 
 // Move co-ordinates. 1 peg can be removed per move.
@@ -650,7 +650,7 @@ void CMainWindow::OnLButtonDown(unsigned int nFlags, CPoint myPoint) {
 		pDC = GetDC();
 		pSprite = new CSprite;
 		(*pSprite).SharePalette(pGamePalette);
-		bSuccess = (*pSprite).LoadCels(pDC, ".\\art\\dart.bmp", NUM_DART_CELS);
+		bSuccess = (*pSprite).LoadCels(pDC, "art\\dart.bmp", NUM_DART_CELS);
 		if (!bSuccess) {
 			delete pSprite;
 			ReleaseDC(pDC);
@@ -660,7 +660,7 @@ void CMainWindow::OnLButtonDown(unsigned int nFlags, CPoint myPoint) {
 		(*pSprite).SetMobile(false);
 
 		if ((*pGameInfo).bSoundEffectsEnabled) {
-			pEffect = new CSound((CWnd *)this, ".\\sound\\darts.wav",                // Load up the sound file as a
+			pEffect = new CSound((CWnd *)this, "sound\\darts.wav",                // Load up the sound file as a
 			                     SOUND_WAVE | SOUND_QUEUE | SOUND_ASYNCH | SOUND_AUTODELETE);    //...Wave file, to delete itself
 		}
 		for (i = 0; i < NUM_DART_CELS; i++) {
@@ -682,7 +682,7 @@ void CMainWindow::OnLButtonDown(unsigned int nFlags, CPoint myPoint) {
 		pDC = GetDC();
 		pSprite = new CSprite;
 		(*pSprite).SharePalette(pGamePalette);
-		bSuccess = (*pSprite).LoadCels(pDC, ".\\art\\keg.bmp", NUM_KEG_CELS);
+		bSuccess = (*pSprite).LoadCels(pDC, "art\\keg.bmp", NUM_KEG_CELS);
 		if (!bSuccess) {
 			delete pSprite;
 			ReleaseDC(pDC);
@@ -692,7 +692,7 @@ void CMainWindow::OnLButtonDown(unsigned int nFlags, CPoint myPoint) {
 		(*pSprite).SetMobile(false);
 
 		if ((*pGameInfo).bSoundEffectsEnabled) {
-			pEffect = new CSound((CWnd *)this, ".\\sound\\barglass.wav",             // Load up the sound file as a
+			pEffect = new CSound((CWnd *)this, "sound\\barglass.wav",             // Load up the sound file as a
 			                     SOUND_WAVE | SOUND_QUEUE | SOUND_ASYNCH | SOUND_AUTODELETE);                //...Wave file, to delete itself
 		}
 		if (pEffect != nullptr) {
@@ -715,7 +715,7 @@ void CMainWindow::OnLButtonDown(unsigned int nFlags, CPoint myPoint) {
 		pDC = GetDC();
 		pSprite = new CSprite;
 		(*pSprite).SharePalette(pGamePalette);
-		bSuccess = (*pSprite).LoadCels(pDC, ".\\art\\stool.bmp", NUM_STOOL_CELS);
+		bSuccess = (*pSprite).LoadCels(pDC, "art\\stool.bmp", NUM_STOOL_CELS);
 		if (!bSuccess) {
 			delete pSprite;
 			ReleaseDC(pDC);
@@ -725,7 +725,7 @@ void CMainWindow::OnLButtonDown(unsigned int nFlags, CPoint myPoint) {
 		(*pSprite).SetMobile(false);
 
 		if ((*pGameInfo).bSoundEffectsEnabled) {
-			pEffect = new CSound((CWnd *)this, ".\\sound\\chrdance.wav",             // Load up the sound file as a
+			pEffect = new CSound((CWnd *)this, "sound\\chrdance.wav",             // Load up the sound file as a
 			                     SOUND_WAVE | SOUND_QUEUE |  SOUND_ASYNCH | SOUND_AUTODELETE);               //...Wave file, to delete itself
 		}
 		if (pEffect != nullptr) {

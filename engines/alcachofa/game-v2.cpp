@@ -19,6 +19,8 @@
  *
  */
 
+#include "gui/message.h"
+
 #include "alcachofa/alcachofa.h"
 #include "alcachofa/game.h"
 #include "alcachofa/script.h"
@@ -91,8 +93,8 @@ static constexpr const ScriptKernelTask kScriptKernelTaskMap[] = {
 	ScriptKernelTask::LerpOrSetCam,
 	ScriptKernelTask::Drop,
 	ScriptKernelTask::CharacterDrop,
-	ScriptKernelTask::ChangeDoor,
-	ScriptKernelTask::CamShake,
+	ScriptKernelTask::Nop,
+	ScriptKernelTask::Disguise,
 	ScriptKernelTask::ToggleRoomFloor,
 	ScriptKernelTask::SetDialogLineReturn,
 	ScriptKernelTask::DialogMenu,
@@ -126,7 +128,7 @@ public:
 	}
 	
 	Point getSubtitlePos() override {
-		return Point(g_system->getWidth() / 2, 150); // TODO: Check subtitle position
+		return Point(g_system->getWidth() / 2, g_system->getHeight() - 200);
 	}
 
 	const char *getMenuRoom() override {
@@ -159,17 +161,18 @@ public:
 		return String("Sonidos/") + filename;
 	}
 
-	String getMusicPath(int32 trackId) override {
-		return String::format("Music/Track%02d", trackId);
-	}
-
 	int32 getCharacterJingle(MainCharacterKind kind) override {
 		return g_engine->script().variable(
 			kind == MainCharacterKind::Mortadelo ? "PistaMorta" : "PistaFile");
 	}
 
+	bool hasMortadeloVoice(const Character *character) override {
+		return Game::hasMortadeloVoice(character) ||
+			character->name().equalsIgnoreCase("MORTA_ATADO");
+	}
+
 	bool shouldFilterTexturesByDefault() override {
-		return true; // TODO: Check this!
+		return false;
 	}
 
 	bool shouldClipCamera() override {
@@ -181,7 +184,7 @@ public:
 	}
 
 	bool isAllowedToInteract() override {
-		return true; // original would be checking an unused script variable "Ocupados"
+		return g_engine->player().semaphore().isReleased();
 	}
 
 	bool shouldScriptLockInteraction() override {
@@ -205,6 +208,28 @@ public:
 	}
 };
 
+class GameWithVersion2_0 : public GameWithVersion2 {
+public:
+	void onLoadedGameFiles() override {
+		GameWithVersion2::onLoadedGameFiles();
+
+		auto &script = g_engine->script();
+		script.fixNestedMenuPop(5921); // Mortadelo talking to ARQUEOLOGOS in CARRETERA
+		script.fixNestedMenuPop(20898); // Filemon talking to MANOLO in FILE_PIRAMIDE
+	}
+
+	char getTextFileKey() override {
+		return static_cast<char>(0xA3);
+	}
+
+	PointObject *unknownCamLerpTarget(const char *action, const char *name) override {
+		// Original bug: a main character being reinterpret_cast to a PointObject, undefined behavior ensues
+		if (scumm_stricmp(name, "FILEMON"))
+			return Game::unknownCamLerpTarget(action, name);
+		return nullptr;
+	}
+};
+
 static constexpr const char *kMapFilesSecta[] = {
 	"Mapas/mapa1.emc",
 	"Mapas/mapa2.emc",
@@ -212,19 +237,125 @@ static constexpr const char *kMapFilesSecta[] = {
 	nullptr
 };
 
-class GameSecta : public GameWithVersion2 {
+static constexpr const char *kMapFilesMoscu[] = {
+	"Mapas/mapa1.emc",
+	"Mapas/global.emc",
+	nullptr
+};
+
+static constexpr const char *kMapFilesEscarabajo[] = {
+	"Mapas/mapa2.emc",
+	"Mapas/global.emc",
+	nullptr
+};
+
+class GameSecta : public GameWithVersion2_0 {
 public:
+	GameSecta() {
+		// only the Steam Release has only the Videos in an ISO...
+		if (!SearchMan.hasFile(getVideoPath(0)) && SearchMan.hasFile("VIDS.iso")) {
+			_videosAreExtracted = false;
+			GUI::MessageDialog dialog("Please extract VIDS.iso in order to play videos.");
+			dialog.runModal();
+		}
+	}
+
+	bool isKnownBadVideo(int32 videoId) override {
+		// all videos are known bad if they are not extracted
+		return !_videosAreExtracted;
+	}
+
+	void onLoadedGameFiles() override {
+		g_engine->script().variable("EsJuegoCompleto") = 0;
+	}
+
 	const char *const *getMapFiles() override {
 		return kMapFilesSecta;
 	}
 
-	char getTextFileKey() override {
-		return static_cast<char>(0xA3);
+	String getMusicPath(int32 trackId) override {
+		const Room *room = g_engine->player().currentRoom();
+		const char *dirName = room != nullptr && room->mapIndex() == 1 ? "Music_Cleopatra" : "Music";
+		return String::format("%s/Track%02d", dirName, trackId);
 	}
+
+private:
+	bool _videosAreExtracted = true;
+};
+
+class GameMoscu : public GameWithVersion2_0 {
+public:
+	void onLoadedGameFiles() override {
+		g_engine->script().variable("EsJuegoCompleto") = 1;
+	}
+
+	const char *const *getMapFiles() override {
+		return kMapFilesMoscu;
+	}
+
+	String getMusicPath(int32 trackId) override {
+		return String::format("track%d", trackId);
+	}
+
+	bool isKnownBadVideo(int32 videoId) override {
+		return videoId == 0; // MPEG-4 codec is unsupported
+	}
+};
+
+class GameEscarabajo : public GameWithVersion2_0 {
+public:
+	GameEscarabajo() {
+		_hasMessedUpEncoding = !SearchMan.hasFile(Path(reencode("Animaciones/M\xC1SCARA MUSEO_RECEPCI\xD3N.ANI")));
+	}
+
+	void onLoadedGameFiles() override {
+		g_engine->script().variable("EsJuegoCompleto") = 2;
+	}
+
+	const char *const *getMapFiles() override {
+		return kMapFilesEscarabajo;
+	}
+
+	String getMusicPath(int32 trackId) override {
+		return String::format("track%d", trackId);
+	}
+
+	bool isKnownBadVideo(int32 videoId) override {
+		return videoId == 0; // MPEG-4 codec is unsupported
+	}
+
+	String reencodePath(const String &path) override {
+		if (!_hasMessedUpEncoding)
+			return Game::reencodePath(path);
+
+		// The Steam release has wrong characters due to some messed up UTF8 conversion
+		U32String u32String = path.decode(Common::CodePage::kISO8859_1);
+		for (uint i = 0; i < u32String.size(); i++) {
+			const auto ch = u32String[i];
+			if (ch == 0xC1) // Á -> ╡
+				u32String[i] = 0x2561;
+			else if (ch == 0xD3) // Ó -> α
+				u32String[i] = 0x03B1;
+			else if (ch == 0xCD) // Í -> ╓
+				u32String[i] = 0x2553;
+		}
+		return u32String.encode();
+	}
+
+private:
+	bool _hasMessedUpEncoding = false;
 };
 
 Game *Game::createForSecta() {
 	return new GameSecta();
+}
+
+Game *Game::createForMoscu() {
+	return new GameMoscu();
+}
+
+Game *Game::createForEscarabajo() {
+	return new GameEscarabajo();
 }
 
 }

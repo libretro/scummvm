@@ -51,14 +51,14 @@ void PlaySecondaryMovie::readData(Common::SeekableReadStream &stream) {
 
 	readFilename(ser, _videoName);
 	readFilename(ser, _paletteName, kGameTypeVampire, kGameTypeVampire);
-	readFilename(ser, _bitmapOverlayName);
+	readFilename(ser, _bitmapOverlayName, kGameTypeVampire, kGameTypeNancy9);
 
 	ser.syncAsUint16LE(_videoType, kGameTypeNancy7);
-	ser.skip(2); // videoPlaySource
+	ser.skip(2, kGameTypeVampire, kGameTypeNancy9); // videoPlaySource
 	ser.syncAsUint16LE(_videoFormat);
 	ser.skip(4, kGameTypeVampire, kGameTypeVampire); // paletteStart, paletteSize
-	ser.skip(2); // hasBitmapOverlaySurface
-	ser.skip(2); // VIDEO_STOP_RENDERING, VIDEO_CONTINUE_RENDERING
+	ser.skip(2, kGameTypeVampire, kGameTypeNancy9);  // hasBitmapOverlaySurface
+	ser.skip(2, kGameTypeVampire, kGameTypeNancy9);  // VIDEO_STOP_RENDERING, VIDEO_CONTINUE_RENDERING
 
 	ser.syncAsUint16LE(_videoSceneChange);
 	ser.syncAsUint16LE(_playerCursorAllowed);
@@ -66,18 +66,28 @@ void PlaySecondaryMovie::readData(Common::SeekableReadStream &stream) {
 	ser.syncAsUint16LE(_firstFrame);
 	ser.syncAsUint16LE(_lastFrame);
 
+	ser.syncAsSint16LE(_sceneChange.sceneID, kGameTypeNancy10);
+	ser.skip(5 * 2, kGameTypeNancy10);	// TODO
+
 	if (ser.getVersion() >= kGameTypeNancy1) {
-		_frameFlags.resize(15);
-		for (uint i = 0; i < 15; ++i) {
+		uint size = 15;
+		
+		if (ser.getVersion() >= kGameTypeNancy10)
+			ser.syncAsUint16LE(size);
+
+		_frameFlags.resize(size);
+		for (uint i = 0; i < size; ++i) {
 			ser.syncAsSint16LE(_frameFlags[i].frameID);
 			ser.syncAsSint16LE(_frameFlags[i].flagDesc.label);
 			ser.syncAsUint16LE(_frameFlags[i].flagDesc.flag);
 		}
 	}
 
-	_triggerFlags.readData(stream);
-	_sound.readNormal(stream);
-	_sceneChange.readData(stream, ser.getVersion() == kGameTypeVampire);
+	if (ser.getVersion() <= kGameTypeNancy9) {
+		_triggerFlags.readData(stream);
+		_sound.readNormal(stream);
+		_sceneChange.readData(stream, ser.getVersion() == kGameTypeVampire);
+	}
 
 	uint16 numVideoDescs = 0;
 	ser.syncAsUint16LE(numVideoDescs);

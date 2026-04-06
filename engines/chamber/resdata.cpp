@@ -20,6 +20,7 @@
  */
 
 #include "common/file.h"
+#include "graphics/surface.h"
 
 #include "chamber/chamber.h"
 #include "chamber/common.h"
@@ -29,7 +30,7 @@
 namespace Chamber {
 
 extern void askDisk2(void);
-extern int16 loadSplash(const char *filename);
+extern Graphics::Surface *loadSplash(const char *filename);
 
 /*
 Get bank entry
@@ -244,7 +245,7 @@ int16 loadVepciData() {
 	return loadFilesList(res_texts);
 }
 
-int16 loadFond(void) {
+Graphics::Surface *loadFond(void) {
 	return loadSplash("FOND.BIN");
 }
 

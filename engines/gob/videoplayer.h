@@ -50,12 +50,13 @@ class DataStream;
 class VideoPlayer {
 public:
 	enum Flags {
-		kFlagNone                  = 0x000000,
-		kFlagUseBackSurfaceContent = 0x000040, ///< Use the back surface as a video "base".
-		kFlagFrontSurface          = 0x000080, ///< Draw directly into the front surface.
-		kFlagNoVideo               = 0x000100, ///< Only sound.
-		kFlagOtherSurface          = 0x000800, ///< Draw into a specific sprite.
-		kFlagScreenSurface         = 0x400000  ///< Draw into a newly created sprite of screen dimensions.
+		kFlagNone                               = 0x000000,
+		kFlagUseBackSurfaceContentOrDoubleVideo = 0x000040, ///< Use the back surface as a video "base".
+		// In later version of the engine, this 0x40 flag indicates instead that the video should be doubled.
+		kFlagFrontSurface                       = 0x000080, ///< Draw directly into the front surface.
+		kFlagNoVideo                            = 0x000100, ///< Only sound.
+		kFlagOtherSurface                       = 0x000800, ///< Draw into a specific sprite.
+		kFlagScreenSurface                      = 0x400000  ///< Draw into a newly created sprite of screen dimensions.
 	};
 
 	/** Video format. */
@@ -178,12 +179,17 @@ private:
 		Common::String fileName;
 
 		SurfacePtr surface;
+		SurfacePtr tmpSurfDouble; ///< Intermediate 1x surface for video doubling
+		int16 doubleVideoDestX;   ///< Saved destination X on target surface for the doubled video
+		int16 doubleVideoDestY;   ///< Saved destination Y on target surface for the doubled video
 		Common::SharedPtr<Graphics::Surface> tmpSurfBppConversion;
 		uint32 *highColorMap;
 
 		Properties properties;
 
+		bool doubleVideo; ///< Should the video be doubled (each pixel drawn as a 2x2 block)
 		bool live;
+		bool autoUpdate; ///< Should the video be automatically advanced by updateVideos()
 
 		Video();
 

@@ -211,10 +211,9 @@ void Player::triggerObject(ObjectBase *object, const char *action) {
 	_activeCharacter->currentlyUsing() = nullptr;
 	if (scumm_stricmp(action, "MIRAR") == 0)
 		script.createProcess(activeCharacterKind(), "DefectoMirar");
-	//else if (action[0] == 'i' && object->name()[0] == 'i')
-	// This case can happen if you combine two objects without procedure, the original engine
-	// would attempt to start the procedure "DefectoObjeto" which does not exist
-	// (this should be revised when working on further games)
+	else if (action[0] == 'i' && object->name()[0] == 'i' && script.hasProcedure("DefectoObjeto"))
+		// This case can happen if you combine two objects without procedure. This does not happen in all games
+		script.createProcess(activeCharacterKind(), "DefectoObjeto");
 	else
 		script.createProcess(activeCharacterKind(), "DefectoUsar");
 }
@@ -378,9 +377,10 @@ void Player::syncGame(Serializer &s) {
 
 	String roomName;
 	if (s.isSaving()) {
+		bool isInInventory = currentRoom() == &g_engine->world().inventory();
 		roomName =
 			g_engine->menu().isOpen() ? g_engine->menu().previousRoom()->name() // save from in-game menu
-			: _roomBeforeInventory != nullptr ? _roomBeforeInventory->name() // save from ScummVM while in inventory
+			: isInInventory && _roomBeforeInventory != nullptr ? _roomBeforeInventory->name() // save from ScummVM while in inventory
 			: currentRoom()->name(); // save from ScumnmVM global menu or autosave in normal gameplay
 	}
 	s.syncString(roomName);

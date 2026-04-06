@@ -39,6 +39,11 @@ void Game::onLoadedGameFiles() {}
 
 void Game::drawScreenStates() {}
 
+String Game::reencodePath(const String &path) {
+	// Except for the messed up Stream release of escarabajo, this suffices
+	return reencode(path);
+}
+
 int32 Game::getKernelTaskArgCount(int32 kernelTaskI) {
 	(void)kernelTaskI;
 	return 0;
@@ -227,6 +232,10 @@ Game *Game::create() {
 		switch (*desc.desc.gameId) {
 		case 's':
 			return createForSecta();
+		case 'm':
+			return createForMoscu();
+		case 'e':
+			return createForEscarabajo();
 		}
 		break;
 	case EngineVersion::V3_0:

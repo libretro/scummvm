@@ -1008,7 +1008,7 @@ bool Sound::prepareMusicStreaming(const Common::Path &filename, int newHandleId,
 			return false;
 		}
 
-		sampleRate = wavHead.dwSamplesPerSec;
+		sampleRate = FROM_LE_32(wavHead.dwSamplesPerSec);
 	}
 #ifdef USE_FLAC
 	else if (assignedMode == MusFLAC) {

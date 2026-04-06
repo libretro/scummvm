@@ -51,7 +51,9 @@ static inline uint16 t3getColor(uint8 r, uint8 g, uint8 b) {
 /**
  * PSX/Saturn Block list unwinder.
  * Chunk type 0x0003 (CHUNK_CHARPTR) in PSX version of DW 1 & 2 is compressed (original code
- * calls the compression PJCRLE), thus we need to decompress it before passing data to drawing functions
+ * calls the compression PJCRLE), thus we need to decompress it before passing data to drawing functions.
+ * Note that while the compression format itself is always little endian, even on Saturn, the endianness
+ * of the output indexes is platform specific.
  */
 uint8* psxSaturnPJCRLEUnwinder(uint16 imageWidth, uint16 imageHeight, uint8 *srcIdx) {
 	uint32 remainingBlocks = 0;
@@ -118,7 +120,7 @@ uint8* psxSaturnPJCRLEUnwinder(uint16 imageWidth, uint16 imageHeight, uint8 *src
 		switch (compressionType) {
 			case 0: // No compression, plain copy of indexes
 				while (decremTiles) {
-					WRITE_LE_UINT16(dstIdx, READ_LE_UINT16(srcIdx));
+					WRITE_16(dstIdx, READ_LE_UINT16(srcIdx));
 					srcIdx += 2;
 					dstIdx += 2;
 					decremTiles--;
@@ -126,14 +128,14 @@ uint8* psxSaturnPJCRLEUnwinder(uint16 imageWidth, uint16 imageHeight, uint8 *src
 				break;
 			case 1: // Compression type 1, repeat a base index
 				while (decremTiles) {
-					WRITE_LE_UINT16(dstIdx, baseIndex);
+					WRITE_16(dstIdx, baseIndex);
 					dstIdx += 2;
 					decremTiles--;
 				}
 				break;
 			case 2: // Compression type 2, increment a base index
 				while (decremTiles) {
-					WRITE_LE_UINT16(dstIdx, baseIndex);
+					WRITE_16(dstIdx, baseIndex);
 					baseIndex++;
 					dstIdx += 2;
 					decremTiles--;
@@ -323,7 +325,7 @@ static void psxSaturnDrawTiles(DRAWOBJECT *pObj, uint8 *srcP, uint8 *destP, bool
 		if (!applyClipping) {
 			// No clipping, so so set box bounding area for drawing full 4x4 pixel blocks
 			boxBounds.top = 0;
-			boxBounds.bottom = 3;
+			boxBounds.bottom = MIN(pObj->height - 1, 3);
 			boxBounds.left = 0;
 		} else {
 			// Handle any possible clipping at the top of the char block.
@@ -354,7 +356,7 @@ static void psxSaturnDrawTiles(DRAWOBJECT *pObj, uint8 *srcP, uint8 *destP, bool
 			assert(boxBounds.bottom >= boxBounds.top);
 			assert(boxBounds.right >= boxBounds.left);
 
-			int16 indexVal = READ_LE_UINT16(srcP);
+			int16 indexVal = READ_16(srcP);
 			srcP += sizeof(uint16);
 
 			// Draw a 4x4 block based on the opcode as in index into the block list
@@ -378,9 +380,10 @@ static void psxSaturnDrawTiles(DRAWOBJECT *pObj, uint8 *srcP, uint8 *destP, bool
 				} else {
 					for (int xp = boxBounds.left; xp <= boxBounds.right; ++xp) {
 						// Extract pixel value from byte
-						byte pixValue =  (*(p + (xp / 2)) & ((xp % 2) ? 0xf0 : 0x0f)) >> ((xp % 2) ? 4 : 0);
-						if (pixValue || !transparency)
-							*(tempDest + SCREEN_WIDTH * (yp - boxBounds.top) + (xp - boxBounds.left)) = psxMapperTable[pixValue];
+						byte psxIndexValue =  (*(p + (xp / 2)) & ((xp % 2) ? 0xf0 : 0x0f)) >> ((xp % 2) ? 4 : 0);
+						byte pixelValue = psxMapperTable[psxIndexValue];
+						if (pixelValue || !transparency)
+							*(tempDest + SCREEN_WIDTH * (yp - boxBounds.top) + (xp - boxBounds.left)) = pixelValue;
 					}
 				}
 			}

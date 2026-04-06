@@ -65,6 +65,7 @@ private:
 	bool cmdToggleObject(int argc, const char **args);
 	bool cmdPlaySound(int argc, const char **args);
 	bool cmdDumpFile(int argc, const char **args);
+	bool cmdProcedureAt(int argc, const char **args);
 
 	bool _showGraphics = false;
 	bool _showInteractables = false;

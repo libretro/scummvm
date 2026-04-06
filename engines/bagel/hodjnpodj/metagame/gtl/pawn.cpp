@@ -778,7 +778,7 @@ void CPawnShop::OnLButtonDown(unsigned int nFlags, CPoint point) {
 				pItem = (*pInventory).FetchItem(i + nFirstSlot);
 				if ((pItem != nullptr) &&
 				        ((*pItem).GetValue() > 0)) {
-					pSound = new CSound(this, (bPlayingHodj ? ".\\sound\\gsps7.wav" : ".\\sound\\gsps8.wav"), SOUND_WAVE | SOUND_QUEUE | SOUND_AUTODELETE);
+					pSound = new CSound(this, (bPlayingHodj ? "sound\\gsps7.wav" : "sound\\gsps8.wav"), SOUND_WAVE | SOUND_QUEUE | SOUND_AUTODELETE);
 					(*pSound).setDrivePath(lpMetaGameStruct->m_chCDPath);
 					(*pSound).play();
 					pDC = GetDC();

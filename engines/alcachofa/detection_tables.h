@@ -23,6 +23,11 @@ namespace Alcachofa {
 
 const PlainGameDescriptor alcachofaGames[] = {
 	{ "aventuradecine", "Mort & Phil: A Movie Adventure" },
+	{ "balones", "Mortadelo y Filemón: Balones y Patadones" },
+	{ "corvino", "Mortadelo y Filemón: La Banda de Corvino" },
+	{ "escarabajo", "Mortadelo y Filemón: El escarabajo de Cleopatra" },
+	{ "mamelucos", "Mortadelo y Filemón: Mamelucos a la Romana" },
+	{ "moscu", "Mortadelo y Filemón: Operación Moscú" },
 	{ "secta", "Mortadelo y Filemón: La Sexta Secta" },
 	{ "terror", "Mortadelo y Filemón: Terror, Espanto y Pavor" },
 	{ "vaqueros", "Mortadelo y Filemón: Dos vaqueros chapuceros" },
@@ -131,13 +136,122 @@ const AlcachofaGameDescription gameDescriptions[] = {
 	},
 
 	//
+	// La Banda de Corvino
+	//
+	{
+		{
+			"corvino",
+			"Mortadelo y Filemón: La Banda de Corvino",
+			AD_ENTRY3s(
+				"Fondos/MUSEO_O.ANI", "830443af2290a96a95703a17c1915c21", 9732, // this file contains object names, thus detects the language
+				"Mapas/mapa1.emc", "d0a8eb184e813cf337840bb0e5270ee8", 33515,
+				"Mapas/mapa2.emc", "d0a8eb184e813cf337840bb0e5270ee8", 40452),
+			Common::ES_ESP,
+			Common::kPlatformWindows,
+			ADGF_UNSTABLE | ADGF_USEEXTRAASTITLE,
+			GUIO0()
+		},
+		EngineVersion::V2_1
+	},
+
+	//
+	// Balones y Patadones
+	//
+	{
+		{
+			"balones",
+			"Mortadelo y Filemón: Balones y Patadones",
+			AD_ENTRY2s(
+				"Fondos/MUSEO_O.ANI", "830443af2290a96a95703a17c1915c21", 9732,
+				"Mapas/mapa1.emc", "d0a8eb184e813cf337840bb0e5270ee8", 33515),
+			Common::ES_ESP,
+			Common::kPlatformWindows,
+			ADGF_UNSTABLE | ADGF_USEEXTRAASTITLE,
+			GUIO0()
+		},
+		EngineVersion::V2_1
+	},
+
+	//
+	// Mamelucos a la Romana
+	//
+	{
+		{
+			"corvino",
+			"Mortadelo y Filemón: Mamelucos a la Romana",
+			AD_ENTRY2s(
+				"Fondos/MUSEO_O.ANI", "830443af2290a96a95703a17c1915c21", 9732,
+				"Mapas/mapa2.emc", "d0a8eb184e813cf337840bb0e5270ee8", 40452),
+			Common::ES_ESP,
+			Common::kPlatformWindows,
+			ADGF_UNSTABLE | ADGF_USEEXTRAASTITLE,
+			GUIO0()
+		},
+		EngineVersion::V2_1
+	},
+
+	//
 	// La Sexta Secta
 	//
 	{
 		{
 			"secta",
 			"Mortadelo y Filemón: La Sexta Secta",
-			AD_ENTRY1s("Fondos/MUSEO_O.ANI", "40a880c866aabbb5c09899d9b7ca66b6", 10630),
+			AD_ENTRY3s(
+				"Fondos/MUSEO_O.ANI", "40a880c866aabbb5c09899d9b7ca66b6", 10630,
+				"Mapas/mapa1.emc", "c04b7b6424c02d5da0719bdf648003a1", 36530,
+				"Mapas/mapa2.emc", "c04b7b6424c02d5da0719bdf648003a1", 67129),
+			Common::ES_ESP,
+			Common::kPlatformWindows,
+			ADGF_UNSTABLE | ADGF_USEEXTRAASTITLE,
+			GUIO0()
+		},
+		EngineVersion::V2_0
+	},
+
+	//
+	// Operación Moscú
+	//
+	{
+		{
+			"moscu",
+			"Mortadelo y Filemón: Operación Moscú",
+			AD_ENTRY2s(
+				"Fondos/MUSEO_O.ANI", "40a880c866aabbb5c09899d9b7ca66b6", 10630,
+				"Mapas/mapa1.emc", "c04b7b6424c02d5da0719bdf648003a1", 36530),
+			Common::ES_ESP,
+			Common::kPlatformWindows,
+			ADGF_UNSTABLE | ADGF_USEEXTRAASTITLE,
+			GUIO0()
+		},
+		EngineVersion::V2_0
+	},
+	// moscu had a variant with translated texts published on Steam
+	{
+		{
+			"moscu",
+			"Mortadelo y Filemón: Operación Moscú",
+			AD_ENTRY2s(
+				"Fondos/MUSEO_O.ANI", "479ae9100e1730ac03e6f3f84da91f32", 11265,
+				"Mapas/mapa1.emc", "c04b7b6424c02d5da0719bdf648003a1", 36530),
+			Common::EN_ANY,
+			Common::kPlatformWindows,
+			ADGF_UNSTABLE | ADGF_USEEXTRAASTITLE,
+			GUIO0()
+		},
+		EngineVersion::V2_0
+	},
+
+	//
+	// El escarabajo de Cleopatra
+	//
+	{
+		{
+			"escarabajo",
+			"Mortadelo y Filemón: El escarabajo de Cleopatra",
+			AD_ENTRY2s(
+				"Fondos/MUSEO_O.ANI", "40a880c866aabbb5c09899d9b7ca66b6", 10630,
+				"Mapas/mapa2.emc", "c04b7b6424c02d5da0719bdf648003a1", 67129),
 			Common::ES_ESP,
 			Common::kPlatformWindows,
 			ADGF_UNSTABLE | ADGF_USEEXTRAASTITLE,

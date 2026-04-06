@@ -124,7 +124,6 @@ public:
 	void menuRestoreScreen();
 	void menuLoadPictures();
 	void menuDrawBigText(FontType font, uint16 x, uint16 y, Common::String text, Color color);
-	void menuDrawIndicator(int x);
 
 	void clearAlso();
 	void clearTextBar();
@@ -159,6 +158,8 @@ public:
 	void saveScreen();
 	void restoreScreen();
 	void removeBackup();
+
+	Graphics::Surface &getSurface() { return _surface; }
 
 private:
 	static const int16 kMouseSize = 134;

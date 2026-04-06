@@ -392,6 +392,12 @@ public:
 		return { kScriptKernelTaskMapV30, ARRAYSIZE(kScriptKernelTaskMapV30) };
 	}
 
+	void onLoadedGameFiles() override {
+		GameWithVersion3::onLoadedGameFiles();
+		g_engine->script().fixNestedMenuPop(39038); // Mortadelo talking to MERACDER in BAZAAR
+		g_engine->script().fixNestedMenuPop(39130); // also ^
+	}
+
 	void updateScriptVariables() override {
 		GameWithVersion3::updateScriptVariables();
 

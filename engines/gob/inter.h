@@ -780,6 +780,7 @@ protected:
 	void o7_vmdGetSoundBuffer();
 	void o7_vmdReleaseSoundBuffer();
 
+	void o7_keyFunc(OpFuncParams &params);
 	void o7_loadCursor(OpFuncParams &params);
 	void o7_printText(OpFuncParams &params);
 	void o7_fillRect(OpFuncParams &params);

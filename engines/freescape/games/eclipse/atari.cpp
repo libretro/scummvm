@@ -318,10 +318,17 @@ void EclipseEngine::drawAmigaAtariSTUI(Graphics::Surface *surface) {
 		_font.drawChar(surface, chr, 233, 119, pal[1]);
 	}
 
-	// Heart indicator: sprite blit at x=$A0(160), y=$86(134) — from $1E9E/$1EA6
-	// 2 frames: 0 = heart visible, 1 = heart hidden/dimmed. Blink cycle.
+	// Heart indicator: sprite blit at x=$A0(160), y=$86(134)
+	// Original heartbeat at $1E28-$1EAC: "lub-dub-pause" pattern.
+	// Counter $125A loaded from shield ($7F68). Two quick beats (3 VBLs each)
+	// then a long pause of shield-value VBLs. Lower shield = faster heartbeat.
+	// Phase counter $126C tracks beat position (0->1->2->0): beats at 0,1 show
+	// frame 0 (heart visible), phase 2 shows frame 1 (dimmed) during the pause.
 	if (_eclipseSprites.size() >= 2) {
-		int frame = (_ticks / 30) % 2;
+		int shield = _gameStateVars[k8bitVariableShield];
+		int beatCycle = MAX(shield, 1) + 6;
+		int phase = _ticks % beatCycle;
+		int frame = (phase < 6) ? 0 : 1;
 		surface->copyRectToSurface(*_eclipseSprites[frame], 160, 134,
 			Common::Rect(_eclipseSprites[frame]->w, _eclipseSprites[frame]->h));
 	}

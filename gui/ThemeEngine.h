@@ -535,6 +535,12 @@ public:
 	TextColorData *getTextColorData(TextColor color) const;
 
 	/**
+	 * Returns the background color of the first draw step for a given DrawData item.
+	 * Useful for widgets that need a flat fill matching the theme background.
+	 */
+	bool getDrawDataColor(DrawData ddId, uint8 &r, uint8 &g, uint8 &b) const;
+
+	/**
 	 * Interface for ThemeParser class: Parsed DrawSteps are added via this function.
 	 * There is no return type because DrawSteps can always be added, unless something
 	 * goes horribly wrong.
@@ -612,6 +618,15 @@ public:
 	 */
 	bool addTextData(const Common::String &drawDataId, TextData textId, TextColor id, Graphics::TextAlign alignH, TextAlignVertical alignV);
 
+public:
+	enum CursorType {
+		kCursorNormal = 0,
+		kCursorIndex = 1,
+		kCursorMax
+	};
+
+	void setActiveCursor(CursorType type);
+
 protected:
 	/**
 	 * Returns if the Theme is ready to draw stuff on screen.
@@ -632,6 +647,22 @@ protected:
 	 */
 	void setGraphicsMode(GraphicsMode mode);
 
+	struct CursorData {
+		byte *data = nullptr;
+		uint width = 0;
+		uint height = 0;
+		int hotspotX = 0;
+		int hotspotY = 0;
+		uint32 transparent = 255;
+		Graphics::PixelFormat format;
+		byte palSize = 0;
+		byte pal[3 * 256];
+	};
+
+	CursorData _cursors[kCursorMax];
+	CursorType _activeCursorType = kCursorNormal;
+	bool _useCursor = false;
+
 public:
 	inline ThemeEval *getEvaluator() { return _themeEval; }
 	inline Graphics::VectorRenderer *renderer() { return _vectorRenderer; }
@@ -650,8 +681,9 @@ public:
 	 * @param filename File name of the bitmap to load.
 	 * @param hotspotX X Coordinate of the bitmap which does the cursor click.
 	 * @param hotspotY Y Coordinate of the bitmap which does the cursor click.
+	 * @param type Cursor type (normal or index)
 	 */
-	bool createCursor(const Common::String &filename, int hotspotX, int hotspotY);
+	bool createCursor(const Common::String &filename, int hotspotX, int hotspotY, CursorType type = kCursorNormal);
 
 	/**
 	 * Wrapper for restoring data from the Back Buffer to the screen.
@@ -744,6 +776,8 @@ private:
 	static void listUsableThemes(const Common::FSNode &node, Common::List<ThemeDescriptor> &list, int depth = -1);
 	static void listUsableThemes(Common::Archive &archive, Common::List<ThemeDescriptor> &list);
 
+	Common::Archive *createUnpackedThemeArchive(const Common::FSNode &themeDir);
+
 protected:
 	OSystem *_system; /** Global system object. */
 
@@ -802,7 +836,6 @@ protected:
 
 	ImagesMap _bitmaps;
 	Graphics::PixelFormat _overlayFormat;
-	Graphics::PixelFormat _cursorFormat;
 
 	/** List of all the dirty screens that must be blitted to the overlay. */
 	Common::List<Common::Rect> _dirtyScreen;
@@ -817,7 +850,6 @@ protected:
 	Common::Archive *_themeArchive;
 	Common::SearchSet _themeFiles;
 
-	bool _useCursor;
 	int _cursorHotspotX, _cursorHotspotY;
 	uint32 _cursorTransparent;
 	byte *_cursor;
@@ -826,8 +858,6 @@ protected:
 	enum {
 		MAX_CURS_COLORS = 255
 	};
-	byte _cursorPal[3 * MAX_CURS_COLORS];
-	byte _cursorPalSize;
 
 	Common::Rect _clip;
 };

@@ -308,7 +308,9 @@ Object *FreescapeEngine::load8bitObject(Common::SeekableReadStream *file) {
 
 	byte rawFlagsAndType = readField(file, 8);
 	debugC(1, kFreescapeDebugParser, "Raw object data flags and type: %d", rawFlagsAndType);
-	ObjectType objectType = (ObjectType)(rawFlagsAndType & 0x1F);
+	// Castle Master uses a 4-bit type field (0x0F mask); other Freescape games use 5 bits (0x1F).
+	byte typeMask = isCastle() ? 0x0F : 0x1F;
+	ObjectType objectType = (ObjectType)(rawFlagsAndType & typeMask);
 
 	if (objectType == ObjectType::kGroupType)
 		return load8bitGroup(file, rawFlagsAndType);
@@ -621,7 +623,17 @@ Area *FreescapeEngine::load8bitArea(Common::SeekableReadStream *file, uint16 nco
 	Common::String name;
 	uint32 base = file->pos();
 	debugC(1, kFreescapeDebugParser, "Area base: %x", base);
-	uint8 areaFlags = readField(file, 8);
+	// On Amiga/Atari, the first field is 16-bit. Bit 14 (0x4000) enables COLOR15 cycling.
+	// From assembly at $10076: move.w (a1),d0; bclr #$e,d0 → extracts bit 14.
+	bool areaColorCycling = false;
+	uint8 areaFlags;
+	if (isAmiga() || isAtariST()) {
+		uint16 fullWord = file->readUint16BE();
+		areaColorCycling = (fullWord & 0x4000) != 0;
+		areaFlags = fullWord & 0xFF;
+	} else {
+		areaFlags = readField(file, 8);
+	}
 	uint8 numberOfObjects = readField(file, 8);
 	uint8 areaNumber = readField(file, 8);
 
@@ -633,7 +645,9 @@ Area *FreescapeEngine::load8bitArea(Common::SeekableReadStream *file, uint16 nco
 	uint8 skyColor = areaFlags & 15;
 	uint8 groundColor = areaFlags >> 4;
 
-	if (groundColor == 0)
+	// In Castle Master, areaFlags holds sky/floor texture IDs, not colors.
+	// A value of 0 means no sky/floor (indoor area), not "missing color".
+	if (groundColor == 0 && !isCastle())
 		groundColor = 255;
 
 	uint8 usualBackgroundColor = 0;
@@ -642,6 +656,9 @@ Area *FreescapeEngine::load8bitArea(Common::SeekableReadStream *file, uint16 nco
 	uint8 inkColor = 0;
 
 	if (!(isCastle() && (isSpectrum() || isCPC() || isC64()))) {
+		// On Driller/Dark/Eclipse 8-bit targets these are four consecutive
+		// per-area color bytes. CPC stores raw 0..31 ink values here, matching
+		// the original area descriptor layout at offsets +6..+9.
 		usualBackgroundColor = readField(file, 8);
 		underFireBackgroundColor = readField(file, 8);
 		paperColor = readField(file, 8);
@@ -657,6 +674,17 @@ Area *FreescapeEngine::load8bitArea(Common::SeekableReadStream *file, uint16 nco
 			inkColor = 0xb;
 		}
 		skyColor = 0;
+	}
+
+	if (isCPC() && isDriller()) {
+		// Driller CPC stores the four area colors at bytes +6..+9 as raw 0..31
+		// CPC ink values. The original code copies them straight into the live
+		// pens before programming the hardware, so encode them in the Area and
+		// let the generic renderer treat them as direct CPC inks.
+		usualBackgroundColor = encodeCPCDirectColor(usualBackgroundColor);
+		underFireBackgroundColor = encodeCPCDirectColor(underFireBackgroundColor);
+		paperColor = encodeCPCDirectColor(paperColor);
+		inkColor = encodeCPCDirectColor(inkColor);
 	}
 
 	debugC(1, kFreescapeDebugParser, "Colors usual background: %d", usualBackgroundColor);
@@ -719,8 +747,8 @@ Area *FreescapeEngine::load8bitArea(Common::SeekableReadStream *file, uint16 nco
 		byte idx = readField(file, 8);
 		if (isAmiga())
 			name = _messagesList[idx + 51];
-		else if (isSpectrum() || isCPC())
-			name = areaNumber == 255 ? "GLOBAL" : _messagesList[idx + 16];
+		else if (isSpectrum() || isCPC() || isC64())
+			name = areaNumber == 255 ? "GLOBAL" : _messagesList[idx + (isCastleMaster2() ? 41 : 16)];
 		else
 			name = _messagesList[idx + 41];
 
@@ -800,6 +828,7 @@ Area *FreescapeEngine::load8bitArea(Common::SeekableReadStream *file, uint16 nco
 	area->_usualBackgroundColor = usualBackgroundColor;
 	area->_underFireBackgroundColor = underFireBackgroundColor;
 
+	area->_colorCycling = areaColorCycling;
 	area->_extraColor[0] = extraColor[0];
 	area->_extraColor[1] = extraColor[1];
 	area->_extraColor[2] = extraColor[2];
@@ -850,7 +879,7 @@ void FreescapeEngine::load8bitBinary(Common::SeekableReadStream *file, int offse
 	uint8 initialEnergy2 = 0;
 	uint8 initialShield2 = 0;
 
-	if (isCastle() && (isSpectrum() || isCPC())) {
+	if (isCastle() && (isSpectrum() || isCPC() || isC64())) {
 		initialShield1 = readField(file, 8);
 	} else {
 		readField(file, 8); // Unknown
@@ -864,7 +893,7 @@ void FreescapeEngine::load8bitBinary(Common::SeekableReadStream *file, int offse
 	debugC(1, kFreescapeDebugParser, "Initial levels of energy: %d and shield: %d", initialEnergy1, initialShield1);
 	debugC(1, kFreescapeDebugParser, "Initial levels of energy: %d and shield: %d", initialEnergy2, initialShield2);
 
-	if (isCastle() && (isSpectrum() || isCPC()))
+	if (isCastle() && (isSpectrum() || isCPC() || isC64()))
 		file->seek(offset + 0x6);
 	else if (isAmiga() || isAtariST())
 		file->seek(offset + 0x14);
@@ -898,6 +927,8 @@ void FreescapeEngine::load8bitBinary(Common::SeekableReadStream *file, int offse
 
 	if (isCastle() && (isSpectrum() || isCPC()))
 		file->seek(offset + 0x42);
+	else if (isCastle() && isC64())
+		file->seek(offset + 0x3e);
 	else if (isAmiga() || isAtariST())
 		file->seek(offset + 0x8c);
 	else
@@ -973,6 +1004,8 @@ void FreescapeEngine::load8bitBinary(Common::SeekableReadStream *file, int offse
 
 	if (isCastle() && (isSpectrum() || isCPC()))
 		file->seek(offset + 0x4f);
+	else if (isCastle() && isC64())
+		file->seek(offset + 0x4b);
 	else if (isAmiga() || isAtariST())
 		file->seek(offset + 0x190);
 	else
@@ -990,7 +1023,10 @@ void FreescapeEngine::load8bitBinary(Common::SeekableReadStream *file, int offse
 	for (uint16 area = 0; area < numberOfAreas; area++) {
 		debugC(1, kFreescapeDebugParser, "Starting to parse area index %d at offset %x", area, fileOffsetForArea[area]);
 
-		file->seek(offset + fileOffsetForArea[area]);
+		if (isCastle() && isC64())
+			file->seek(offset + fileOffsetForArea[area] - 4);
+		else
+			file->seek(offset + fileOffsetForArea[area]);
 		newArea = load8bitArea(file, ncolors);
 
 		if (newArea) {

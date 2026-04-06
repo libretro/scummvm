@@ -49,6 +49,7 @@
 #include "director/castmember/castmember.h"
 #include "director/castmember/filmloop.h"
 #include "director/castmember/transition.h"
+#include "director/debugger/debugtools.h"
 
 namespace Director {
 
@@ -328,9 +329,6 @@ void Score::startPlay() {
 		return;
 	}
 
-	if (_version >= kFileVer300)
-		_movie->processEvent(kEventStartMovie);
-
 	// load first frame (either 1 or _nextFrame)
 	updateCurrentFrame();
 
@@ -340,6 +338,10 @@ void Score::startPlay() {
 			_channels.push_back(new Channel(this, _currentFrame->_sprites[i], i));
 
 	updateSprites(kRenderForceUpdate, true);
+
+	// Stage has been set up, run the StartMovie script
+	if (_version >= kFileVer300)
+		_movie->processEvent(kEventStartMovie);
 }
 
 void Score::step() {
@@ -363,7 +365,8 @@ void Score::step() {
 			_soundManager->processCuePoints();
 		} else 	if (_version >= kFileVer500) {
 			// In D5, these events are only generated if a mouse button is pressed
-			if (_movie->_currentHoveredSpriteId && g_system->getEventManager()->getButtonState() != 0) {
+			bool isButtonDown = !Director::DT::isMouseInputIgnored() && (g_system->getEventManager()->getButtonState() != 0);
+			if (_movie->_currentHoveredSpriteId && isButtonDown) {
 				_movie->processEvent(kEventMouseWithin, _movie->_currentHoveredSpriteId);
 			}
 		}
@@ -989,6 +992,12 @@ void Score::updateSprites(RenderMode mode, bool withClean) {
 	}
 
 	createScriptInstances(_curFrameNumber);
+
+	// We've updated the channels from the frame, reset the copyback mask so that e.g.
+	// disabling the puppet flag copies all the data as expected.
+	for (auto &it : _currentFrame->_sprites) {
+		it->_copyBackMask = static_cast<uint32>(kSCBNoMask);
+	}
 }
 
 bool Score::renderPrePaletteCycle(RenderMode mode) {
@@ -1398,6 +1407,10 @@ void Score::renderPaletteCycle(RenderMode mode) {
 }
 
 void Score::renderCursor(Common::Point pos, bool forceUpdate) {
+	if (Director::DT::isMouseInputIgnored()) {
+		pos = _movie->_lastMousePos;
+	}
+
 	if (_window != _vm->getCursorWindow()) {
 		// The cursor is outside of this window.
 		return;
@@ -2124,6 +2137,17 @@ bool Score::loadFrame(int frameNum, bool loadCast) {
 		// Reset sprite contents
 		for (auto &it : _currentFrame->_sprites)
 			it->reset();
+	}
+
+	// Reset the copyback mask on all sprites, so we know what changed
+	for (auto &it : _currentFrame->_sprites) {
+		if (frameNum <= (int)_curFrameNumber) {
+			// starting from rewind, copy back everything
+			it->_copyBackMask = static_cast<uint32>(-1);
+		} else {
+			// starting at delta, only copy back changes
+			it->_copyBackMask = 0;
+		}
 	}
 
 	debugC(7, kDebugLoading, "****** Source frame %d to Destination frame %d, current offset 0x%x", sourceFrame, targetFrame, (uint32)_framesStream->pos());

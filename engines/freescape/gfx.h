@@ -290,6 +290,16 @@ public:
 	Common::Point _shakeOffset;
 	byte _stipples[16][128];
 
+	// Amiga/Atari hardware palette cycling for pulsating surfaces.
+	// Castle Master: COLOR15, every 4 frames, per-area gated.
+	// Dark Side: COLOR5, every 2 frames, always active.
+	Common::Array<uint16> _colorCyclingTable;
+	int _colorCyclingIndex;
+	int _colorCyclingTimer;     // -1 = disabled, >=0 = active
+	int _colorCyclingPaletteIndex; // which palette entry to cycle (5 or 15)
+	int _colorCyclingSpeed;     // frames between changes (2 or 4)
+	void updateColorCycling();
+
 	int _scale;
 
 	// debug flags

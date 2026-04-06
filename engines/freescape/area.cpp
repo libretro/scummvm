@@ -74,6 +74,7 @@ Area::Area(uint16 areaID_, uint16 areaFlags_, ObjectMap *objectsByID_, ObjectMap
 	_underFireBackgroundColor = 255;
 	_inkColor = 255;
 	_paperColor = 255;
+	_colorCycling = false;
 
 	_gasPocketRadius = 0;
 
@@ -326,6 +327,17 @@ void Area::draw(Freescape::Renderer *gfx, uint32 animationTicks, Math::Vector3d 
 	// It is only applied to the vertices during the projection phase (L850f/L9177).
 	int n = _sortedObjects.size();
 	if (n > 1 && sort) {
+		// Pre-sort by distance from camera (furthest first) to provide a stable initial
+		// ordering for the non-transitive bubble sort below. The original game achieves
+		// this by culling off-screen objects via a rendering volume check (L8bb7/L845b)
+		// before sorting, which prevents distant off-screen objects from interfering with
+		// the depth ordering of visible objects through non-transitive comparisons.
+		Common::sort(_sortedObjects.begin(), _sortedObjects.end(),
+			[&camera](Object *a, Object *b) {
+				Math::Vector3d centerA = (a->_occlusionBox.getMin() + a->_occlusionBox.getMax()) * 0.5f;
+				Math::Vector3d centerB = (b->_occlusionBox.getMin() + b->_occlusionBox.getMax()) * 0.5f;
+				return (centerA - camera).getSquareMagnitude() > (centerB - camera).getSquareMagnitude();
+			});
 		for (int i = 0; i < n; i++) { // L9c31_whole_object_pass_loop
 			bool changed = false;
 			for (int j = 0; j < n - 1; j++) { // L9c45_objects_loop

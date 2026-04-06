@@ -39,6 +39,29 @@ protected:
 	Common::String getRecordTypeName() const override { return "SceneChange"; }
 };
 
+// Changes the scene when clicked
+class HotSingleFrameSceneChange : public SceneChange {
+public:
+	HotSingleFrameSceneChange(bool readExtra = false) : _readExtra(readExtra) {
+		_hasHotspot = false;
+	}
+	virtual ~HotSingleFrameSceneChange() {}
+
+	void readData(Common::SeekableReadStream &stream) override;
+	void execute() override;
+
+	CursorManager::CursorType getHoverCursor() const override { return _hoverCursor; }
+
+	HotspotDescription _sceneHotspot;
+
+protected:
+	CursorManager::CursorType _hoverCursor;
+	bool _readExtra;
+
+	bool canHaveHotspot() const override { return true; }
+	Common::String getRecordTypeName() const override { return "HotSingleFrameSceneChange"; }
+};
+
 // Changes the scene when clicked. Hotspot can move along with scene background frame.
 // Nancy4 introduced several sub-types with a specific mouse cursor to show when
 // hovering; all of them are handled in this class as well.

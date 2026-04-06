@@ -57,7 +57,7 @@ namespace Frame {
 #define MOVIE_ID_INTRO  3
 #define MOVIE_ID_ENDING 4
 
-#define LOGO_MIDI       ".\\SOUND\\MAINTITL.MID"
+#define LOGO_MIDI       "sound\\MAINTITL.MID"
 
 #define MOVIE_PATH      "..\\VIDEO"
 #define LOGO_MOVIE      "..\\VIDEO\\LOGO.AVI"
@@ -66,7 +66,7 @@ namespace Frame {
 #define HODJ_WIN_MOVIE  "..\\VIDEO\\HODJ.AVI"
 #define PODJ_WIN_MOVIE  "..\\VIDEO\\PODJ.AVI"
 
-#define CREDITSFILE     ".\\CREDITS.TXT"
+#define CREDITSFILE     "CREDITS.TXT"
 
 #define PATHSPECSIZE    256
 #define CDROMHOME       ":\\HODJPODJ\\META"
@@ -171,18 +171,18 @@ struct CREDITS {
 };
 
 static const CREDITS stCredits[MAX_CREDITS] = {
-	{ ".\\ART\\CREDIT1.BMP", 7000},
-	{ ".\\ART\\CREDIT2.BMP", 15000},
-	{ ".\\ART\\CREDIT3.BMP", 12000},
-	{ ".\\ART\\CREDIT4.BMP", 5000},
-	{ ".\\ART\\CREDIT5.BMP", 15000},
-	{ ".\\ART\\CREDIT6.BMP", 13000},
-	{ ".\\ART\\CREDIT7.BMP", 14000},
-	{ ".\\ART\\CREDIT8.BMP", 15000},
-	{ ".\\ART\\CREDIT9.BMP", 5000},
-	{ ".\\ART\\CREDIT10.BMP", 7000},
-	{ ".\\ART\\CREDIT11.BMP", 7000},
-	{ ".\\ART\\CREDIT12.BMP", 8000}
+	{ "art\\CREDIT1.BMP", 7000},
+	{ "art\\CREDIT2.BMP", 15000},
+	{ "art\\CREDIT3.BMP", 12000},
+	{ "art\\CREDIT4.BMP", 5000},
+	{ "art\\CREDIT5.BMP", 15000},
+	{ "art\\CREDIT6.BMP", 13000},
+	{ "art\\CREDIT7.BMP", 14000},
+	{ "art\\CREDIT8.BMP", 15000},
+	{ "art\\CREDIT9.BMP", 5000},
+	{ "art\\CREDIT10.BMP", 7000},
+	{ "art\\CREDIT11.BMP", 7000},
+	{ "art\\CREDIT12.BMP", 8000}
 };
 
 // local prototypes

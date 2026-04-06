@@ -11,12 +11,15 @@ MODULE_OBJS := \
 	freescape.o \
 	games/castle/castle.o \
 	games/castle/amiga.o \
+	games/castle/c64.o \
 	games/castle/cpc.o \
 	games/castle/dos.o \
 	games/castle/zx.o \
 	games/dark/amiga.o \
 	games/dark/atari.o \
 	games/dark/c64.o \
+	games/dark/c64.music.o \
+	games/dark/c64.sfx.o \
 	games/dark/cpc.o \
 	games/dark/dark.o \
 	games/dark/dos.o \
@@ -25,6 +28,7 @@ MODULE_OBJS := \
 	games/driller/atari.o \
 	games/driller/c64.o \
 	games/driller/c64.music.o \
+	games/driller/c64.sfx.o \
 	games/driller/cpc.o \
 	games/driller/dos.o \
 	games/driller/driller.o \
@@ -33,8 +37,12 @@ MODULE_OBJS := \
 	games/eclipse/atari.o \
 	games/eclipse/atari.music.o \
 	games/eclipse/c64.o \
+	games/eclipse/c64.music.o \
+	games/eclipse/ay.music.o \
+	games/eclipse/c64.sfx.o \
 	games/eclipse/dos.o \
 	games/eclipse/eclipse.o \
+	games/eclipse/opl.music.o \
 	games/eclipse/cpc.o \
 	games/eclipse/zx.o \
 	games/palettes.o \

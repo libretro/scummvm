@@ -85,6 +85,7 @@ MODULE_OBJS = \
 	lingo/xlibs/d/dpwavi.o \
 	lingo/xlibs/d/dpwqtw.o \
 	lingo/xlibs/d/draw.o \
+	lingo/xlibs/e/ecdctrl.o \
 	lingo/xlibs/e/ednox.o \
 	lingo/xlibs/e/eventq.o \
 	lingo/xlibs/f/fadegammadownxcmd.o \
@@ -151,6 +152,7 @@ MODULE_OBJS = \
 	lingo/xlibs/p/putcurs.o \
 	lingo/xlibs/q/qtcatmovieplayerxobj.o \
 	lingo/xlibs/q/qtmovie.o \
+	lingo/xlibs/q/qtsupport.o \
 	lingo/xlibs/q/qtvr.o \
 	lingo/xlibs/q/quicktime.o \
 	lingo/xlibs/r/registercomponent.o \
@@ -210,13 +212,15 @@ ifdef USE_IMGUI
 MODULE_OBJS += \
 	debugger/debugtools.o \
 	debugger/dt-cast.o \
+	debugger/dt-castdetails.o \
 	debugger/dt-controlpanel.o \
 	debugger/dt-lists.o \
 	debugger/dt-save-state.o \
 	debugger/dt-score.o \
 	debugger/dt-script-d2.o \
 	debugger/dt-script-d4.o \
-	debugger/dt-scripts.o
+	debugger/dt-scripts.o \
+	debugger/dt-search.o
 
 endif
 

@@ -715,8 +715,10 @@ void WalkingCharacter::walkTo(
 
 	_pathPoints.clear();
 	auto floor = room()->activeFloor();
-	if (floor != nullptr)
-		floor->findPath(_sourcePos, target, _pathPoints);
+	if (floor != nullptr && !floor->findPath(_sourcePos, target, _pathPoints)) {
+		// just walk directly, ignoring the floor shape altogether
+		_pathPoints.push(target);
+	}
 	if (_pathPoints.empty()) {
 		_isWalking = false;
 		onArrived();
@@ -930,7 +932,7 @@ void MainCharacter::walkTo(
 
 void MainCharacter::draw() {
 	if (this == &g_engine->world().mortadelo()) {
-		if (_currentPos.y <= g_engine->world().filemon()._currentPos.y) {
+		if (_currentPos.y > g_engine->world().filemon()._currentPos.y) {
 			g_engine->world().mortadelo().drawInner();
 			g_engine->world().filemon().drawInner();
 		} else {
@@ -996,7 +998,7 @@ void MainCharacter::clearInventory() {
 
 Item *MainCharacter::getItemByName(const String &name) const {
 	for (auto *item : _items) {
-		if (item->name() == name)
+		if (item->name().equalsIgnoreCase(name))
 			return item;
 	}
 	return nullptr;

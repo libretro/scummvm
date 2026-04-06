@@ -34,6 +34,7 @@
 #include "backends/imgui/components/imgui_memory_editor.h"
 
 #include "director/types.h"
+#include "director/window.h"
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingodec/ast.h"
 #include "director/lingo/lingodec/handler.h"
@@ -87,6 +88,7 @@ typedef struct ImGuiWindows {
 	bool vars = false;
 	bool channels = false;
 	bool cast = false;
+	bool castDetails = false;
 	bool funcList = false;
 	bool score = false;
 	bool bpList = false;
@@ -95,7 +97,15 @@ typedef struct ImGuiWindows {
 	bool archive = false;
 	bool watchedVars = false;
 	bool executionContext = false;
+	bool search = false;
 } ImGuiWindows;
+
+
+enum SearchMode {
+	kSearchAll = 0,
+	kSearchHandlerNames,
+	kSearchScriptBody,
+};
 
 typedef struct ScriptData {
 	Common::Array<ImGuiScript> _scripts;
@@ -109,7 +119,75 @@ typedef struct WindowFlag {
 	bool *flag;
 } WindowFlag;
 
+enum ThemeID {
+	kThemeDark = 0,
+	kThemeLight,
+	kThemeCount
+};
+
+struct DebuggerTheme {
+	ImU32 tableLightColor;
+	ImU32 tableDarkColor;
+	ImU32 borderColor;
+	ImU32 sidebarTextColor;
+	ImU32 gridTextColor;
+	ImU32 playhead_color;
+	ImU32 current_statement_bg;
+	ImU32 channel_toggle;
+	ImU32 channel_hide_bg;
+	ImU32 channelSelectedCol;
+	ImU32 channelHoveredCol;
+	ImU32 contColors[6];
+
+	// Breakpoints
+	ImVec4 bp_color_disabled;
+	ImVec4 bp_color_enabled;
+	ImVec4 bp_color_hover;
+
+	// Syntax Highlighting
+	ImVec4 current_statement;
+	ImVec4 line_color;
+	ImVec4 call_color;
+	ImVec4 builtin_color;
+	ImVec4 var_color;
+	ImVec4 literal_color;
+	ImVec4 comment_color;
+	ImVec4 type_color;
+	ImVec4 keyword_color;
+	ImVec4 the_color;
+
+	// Variable / Script References
+	ImVec4 script_ref;
+	ImVec4 var_ref;
+	ImVec4 var_ref_changed;
+	ImVec4 var_ref_out_of_scope;
+
+	// Control Panel
+	ImVec4 cp_color;
+	ImVec4 cp_color_red;
+	ImVec4 cp_active_color;
+	ImVec4 cp_bgcolor;
+	ImVec4 cp_playing_color;
+	ImVec4 cp_path_color;
+
+	// Logger
+	ImVec4 logger_error_b;
+	ImVec4 logger_warning_b;
+	ImVec4 logger_info_b;
+	ImVec4 logger_debug_b;
+	ImVec4 logger_error;
+	ImVec4 logger_warning;
+	ImVec4 logger_info;
+	ImVec4 logger_debug;
+};
+
 typedef struct ImGuiState {
+
+	struct WatchLogEntry {
+		Common::String varName;
+		Common::String value;
+		Common::String scriptRef;
+	};
 
 	struct ScoreConfig {
 		float _sidebarWidth = 60.0f;
@@ -124,9 +202,6 @@ typedef struct ImGuiState {
 		float _sidebar1Height = _cellHeight * 6;
 		float _labelBarHeight = _cellHeight;
 		float _cellHeightExtended = 5 * _cellHeight;
-		ImU32 _tableLightColor = IM_COL32(51,  51,  51,  255);
-		ImU32 _tableDarkColor = IM_COL32(38, 38, 38, 255);
-		ImU32 _borderColor = IM_COL32(102, 102, 102, 100);
 	} _scoreCfg;
 
 	struct ScoreState {
@@ -147,6 +222,9 @@ typedef struct ImGuiState {
 		bool _showScriptContexts = true;
 		Common::HashMap<Window *, ScriptData> _windowScriptData;
 	} _functions;
+	struct {
+		CastMember *_castMember;
+	} _castDetails;
 
 	struct {
 		bool _isScriptDirty = false; // indicates whether or not we have to display the script corresponding to the current stackframe
@@ -154,49 +232,16 @@ typedef struct ImGuiState {
 		bool _scrollToPC = false;
 		uint _lastLinePC = 0;
 		uint _callstackSize = 0;
+		Common::String _highlightQuery; // lowercased, empty disables highlight
+		bool _suppressHighlight = false; // used to disable highlighting in Execution Context
 	} _dbg;
 
 	struct {
-		ImVec4 _bp_color_disabled = ImVec4(0.9f, 0.08f, 0.0f, 0.0f);
-		ImVec4 _bp_color_enabled = ImVec4(0.9f, 0.08f, 0.0f, 1.0f);
-		ImVec4 _bp_color_hover = ImVec4(0.42f, 0.17f, 0.13f, 1.0f);
-
-		ImVec4 _channel_toggle = ImColor(IM_COL32(0x30, 0x30, 0xFF, 0xFF));
-
-		ImVec4 _current_statement = ImColor(IM_COL32(0xFF, 0xFF, 0x00, 0xFF));
-		//ImVec4 _line_color = ImVec4(0.44f, 0.44f, 0.44f, 1.0f);
-		ImVec4 _line_color = ImColor(IM_COL32(0x2F, 0x2F, 0x2F, 0xFF)); // added for better contrast
-		ImVec4 _call_color = ImColor(IM_COL32(0xFF, 0xC5, 0x5C, 0xFF));
-		ImVec4 _builtin_color = ImColor(IM_COL32(0x60, 0x7C, 0xFF, 0xFF));
-		ImVec4 _var_color = ImColor(IM_COL32(0x4B, 0xCD, 0x5E, 0xFF));
-		ImVec4 _literal_color = ImColor(IM_COL32(0xFF, 0x9F, 0xDA, 0x9E));
-		ImVec4 _comment_color = ImColor(IM_COL32(0xFF, 0xA5, 0x9D, 0x95));
-		//ImVec4 _type_color = ImColor(IM_COL32(0x13, 0xC5, 0xF9, 0xFF));
-		ImVec4 _type_color = ImColor(IM_COL32(0xB8, 0xB8, 0xB8, 0xC0)); // added this instead because better contrast
-		ImVec4 _keyword_color = ImColor(IM_COL32(0xC1, 0xC1, 0xC1, 0xFF));
-		ImVec4 _the_color = ImColor(IM_COL32(0xFF, 0x49, 0xEF, 0xFF));
-
-		ImVec4 _script_ref = ImColor(IM_COL32(0x7f, 0x7f, 0xff, 0xfff));
-		ImVec4 _var_ref = ImColor(IM_COL32(0xe6, 0xe6, 0x00, 0xff));
-		ImVec4 _var_ref_changed = ImColor(IM_COL32(0xFF, 0x00, 0x00, 0xFF));
-		ImVec4 _var_ref_out_of_scope = ImColor(IM_COL32(0xFF, 0x00, 0xFF, 0xFF));
-
-		// Colors to show continuation data
-		// They come from the Authoring tool
-		ImColor _contColors[6] = {
-			ImColor(IM_COL32(0xce, 0xce, 0xff, 0x80)), // 0xceceff,
-			ImColor(IM_COL32(0xff, 0xff, 0xce, 0x80)), // 0xffffce,
-			ImColor(IM_COL32(0xce, 0xff, 0xce, 0x80)), // 0xceffce,
-			ImColor(IM_COL32(0xce, 0xff, 0xff, 0x80)), // 0xceffff,
-			ImColor(IM_COL32(0xff, 0xce, 0xff, 0x80)), // 0xffceff,
-			ImColor(IM_COL32(0xff, 0xce, 0x9c, 0x80)), // 0xffce9c,
-		};
-
-		ImColor _channelSelectedCol = ImColor(IM_COL32(0x94, 0x00, 0xD3, 0xFF));
-		ImColor _channelHoveredCol = ImColor(IM_COL32(0xFF, 0xFF, 0, 0x3C));
-		int _contColorIndex = 0;
-	} _colors;
-
+		char input[256] = {};
+		bool dirty = false;
+		int mode = kSearchAll;
+		Common::Array<ImGuiScript> results;
+	} _search;
 
 	struct {
 		DatumHash _locals;
@@ -232,16 +277,21 @@ typedef struct ImGuiState {
 	Common::Array<Common::Array<Common::Pair<uint, uint>>> _continuationData;
 	Common::String _loadedContinuationData;
 
+	Common::Array<WatchLogEntry> _watchLog;
+
 	Common::String _scoreWindow;
 	Common::String _channelsWindow;
 	Common::String _castWindow;
 	int _scoreMode = 0;
 	int _scoreFrameOffset = 1;
 	int _scorePageSlider = 0;
-
 	int _selectedChannel = -1;
+	bool _scrollToChannel = false;
 
 	ImFont *_tinyFont = nullptr;
+
+	int _activeThemeID = kThemeLight;
+	const DebuggerTheme *theme = nullptr;
 
 	struct {
 		Common::Path path;
@@ -255,12 +305,20 @@ typedef struct ImGuiState {
 	} _archive;
 
 	ImGuiEx::ImGuiLogger *_logger = nullptr;
+	bool _ignoreMouse = false;
+	bool _enableMultiViewport = true;
+
+	Window *_windowToRedraw = nullptr;
 } ImGuiState;
 
 // debugtools.cpp
 ImGuiScript toImGuiScript(ScriptType scriptType, CastMemberID id, const Common::String &handlerId);
 ScriptContext *getScriptContext(CastMemberID id);
 ScriptContext *getScriptContext(uint32 nameIndex, CastMemberID castId, Common::String handler);
+ScriptContext *resolveHandlerContext(int32 nameIndex, const CastMemberID &refId, const Common::String &handlerName);
+ImGuiScript buildImGuiHandlerScript(ScriptContext *ctx, int castLibID, const Common::String &handlerName, const Common::String &moviePath);
+void maybeHighlightLastItem(const Common::String &text);
+void addToOpenHandlers(ImGuiScript handler);
 void setScriptToDisplay(const ImGuiScript &script);
 Director::Breakpoint *getBreakpoint(const Common::String &handlerName, uint16 scriptId, uint pc);
 void displayScriptRef(CastMemberID &scriptId);
@@ -269,14 +327,17 @@ ImGuiImage getShapeID(CastMember *castMember);
 ImGuiImage getTextID(CastMember *castMember);
 Common::String getDisplayName(CastMember *castMember);
 void showImage(const ImGuiImage &image, const char *name, float thumbnailSize);
+void showImageWrappedBorder(const ImGuiImage &image, const char *name, float size);
 ImVec4 convertColor(uint32 color);
 void displayVariable(const Common::String &name, bool changed, bool outOfScope = false);
 ImColor brightenColor(const ImColor &color, float factor);
 Window *windowListCombo(Common::String *target);
 Common::String formatHandlerName(int scriptId, int castId, Common::String handlerName, ScriptType scriptType, bool childScript);
+void setTheme(int themeIndex);
 
 void showCast();		// dt-cast.cpp
-void showControlPanel(); // dt-controlpanel.cpp
+void showCastDetails();	// dt-castdetails.cpp
+void showControlPanel();// dt-controlpanel.cpp
 
 // dt-lists.cpp
 void showVars();
@@ -301,6 +362,9 @@ void showHandlers();
 void saveCurrentState();
 void loadSavedState();
 Common::Array<WindowFlag> getWindowFlags();
+
+// dt-search.cpp
+void showSearchBar();
 
 extern ImGuiState *_state;
 

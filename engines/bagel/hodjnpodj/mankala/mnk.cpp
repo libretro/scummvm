@@ -156,7 +156,7 @@ CMnkWindow::CMnkWindow() {
 		return;
 	}      // ... and verify we got it
 
-	if (!(*xpDibDoc).OpenDocument(".\\ART\\MANKALA.BMP")) {
+	if (!(*xpDibDoc).OpenDocument("art\\MANKALA.BMP")) {
 		MFC::SetCursor(hOldCursor);
 		MFC::MessageBox(nullptr, "Cannot Open Background Bitmap. Please Check for file path and/or system resources. Terminating Game", "Open Error", MB_ICONEXCLAMATION | MB_OK) ;
 		delete xpDibDoc;

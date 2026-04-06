@@ -227,12 +227,6 @@ ThemeEngine::ThemeEngine(Common::String id, GraphicsMode mode) :
 	_themeArchive = nullptr;
 	_initOk = false;
 
-	_cursorHotspotX = _cursorHotspotY = 0;
-	_cursorWidth = _cursorHeight = 0;
-	_cursorTransparent = 255;
-	_cursorFormat = Graphics::PixelFormat::createFormatCLUT8();
-	_cursorPalSize = 0;
-
 	// We prefer files in archive bundles over the common search paths.
 	_themeFiles.add("default", &SearchMan, 0, false);
 }
@@ -258,7 +252,9 @@ ThemeEngine::~ThemeEngine() {
 
 	delete _parser;
 	delete _themeEval;
-	delete[] _cursor;
+	for (int i = 0; i < kCursorMax; i++) {
+        delete[] _cursors[i].data;
+    }
 }
 
 
@@ -340,7 +336,8 @@ bool ThemeEngine::init() {
 	if (!_themeArchive && !_themeFile.empty()) {
 		Common::FSNode node(_themeFile);
 		if (node.isDirectory()) {
-			_themeArchive = new Common::FSDirectory(node);
+			debug("Loading unpacked theme from %s", node.getPath().toString().c_str());
+			_themeArchive = createUnpackedThemeArchive(node);
 		} else if (_themeFile.baseName().matchString("*.zip", true)) {
 			// TODO: Also use "node" directly?
 			// Look for the zip file via SearchMan
@@ -400,9 +397,10 @@ void ThemeEngine::refresh() {
 		_system->showOverlay();
 
 		if (_useCursor) {
-			if (_cursorPalSize)
-				CursorMan.replaceCursorPalette(_cursorPal, 0, _cursorPalSize);
-			CursorMan.replaceCursor(_cursor, _cursorWidth, _cursorHeight, _cursorHotspotX, _cursorHotspotY, _cursorTransparent, true, &_cursorFormat);
+			CursorData &cur = _cursors[_activeCursorType];
+			if (cur.palSize)
+				CursorMan.replaceCursorPalette(cur.pal, 0, cur.palSize);
+			CursorMan.replaceCursor(cur.data, cur.width, cur.height, cur.hotspotX, cur.hotspotY, cur.transparent, true, &cur.format);
 		}
 	}
 }
@@ -879,6 +877,9 @@ bool ThemeEngine::loadThemeXML(const Common::String &themeId) {
 		warning("Corrupted 'THEMERC' file in theme '%s'", themeId.c_str());
 		return false;
 	}
+
+	if (!themeId.contains(".zip") && !themeId.contains(".ZIP"))
+		_themeName += " (unpacked)";
 
 	Common::ArchiveMemberList members;
 	if (0 == _themeArchive->listMatchingMembers(members, "*.stx")) {
@@ -1579,34 +1580,37 @@ void ThemeEngine::applyScreenShading(ShadingStyle style) {
 	}
 }
 
-bool ThemeEngine::createCursor(const Common::String &filename, int hotspotX, int hotspotY) {
+bool ThemeEngine::createCursor(const Common::String &filename, int hotspotX, int hotspotY, CursorType type) {
 	// Try to locate the specified file among all loaded bitmaps
 	const Graphics::ManagedSurface *cursor = _bitmaps[filename];
 	if (!cursor)
+	    //warning("createCursor: Bitmap '%s' not found in _bitmaps! (type=%d)", filename.c_str(), type);
 		return false;
 
+	CursorData &cur = _cursors[type];
+
 	// Set up the cursor parameters
-	_cursorHotspotX = hotspotX;
-	_cursorHotspotY = hotspotY;
+	cur.hotspotX = hotspotX;
+	cur.hotspotY = hotspotY;
 
-	_cursorWidth = cursor->w;
-	_cursorHeight = cursor->h;
+	cur.width = cursor->w;
+	cur.height = cursor->h;
 
-	_cursorTransparent = 255;
-	_cursorFormat = Graphics::PixelFormat::createFormatCLUT8();
-	_cursorPalSize = 0;
+	cur.transparent = 255;
+	cur.format = Graphics::PixelFormat::createFormatCLUT8();
+	cur.palSize = 0;
 
 	if (_system->hasFeature(OSystem::kFeatureCursorAlpha)) {
-		_cursorFormat = cursor->format;
-		_cursorTransparent = _cursorFormat.RGBToColor(0xFF, 0, 0xFF);
+		cur.format = cursor->format;
+		cur.transparent = cur.format.RGBToColor(0xFF, 0, 0xFF);
 
 		// Allocate a new buffer for the cursor
-		delete[] _cursor;
-		_cursor = new byte[_cursorWidth * _cursorHeight * _cursorFormat.bytesPerPixel];
-		assert(_cursor);
-		Graphics::copyBlit(_cursor, (const byte *)cursor->getPixels(),
-		                   _cursorWidth * _cursorFormat.bytesPerPixel, cursor->pitch,
-		                   _cursorWidth, _cursorHeight, _cursorFormat.bytesPerPixel);
+		delete[] cur.data;
+		cur.data = new byte[cur.width * cur.height * cur.format.bytesPerPixel];
+		assert(cur.data);
+		Graphics::copyBlit(cur.data, (const byte *)cursor->getPixels(),
+		                   cur.width * cur.format.bytesPerPixel, cursor->pitch,
+		                   cur.width, cur.height, cur.format.bytesPerPixel);
 
 		_useCursor = true;
 		return true;
@@ -1616,10 +1620,10 @@ bool ThemeEngine::createCursor(const Common::String &filename, int hotspotX, int
 		return true;
 
 	// Allocate a new buffer for the cursor
-	delete[] _cursor;
-	_cursor = new byte[_cursorWidth * _cursorHeight];
-	assert(_cursor);
-	memset(_cursor, 0xFF, sizeof(byte) * _cursorWidth * _cursorHeight);
+	delete[] cur.data;
+	cur.data = new byte[cur.width * cur.height];
+	assert(cur.data);
+	memset(cur.data, 0xFF, sizeof(byte) * cur.width * cur.height);
 
 	// the transparent color is 0xFF00FF
 	const uint32 colTransparent = cursor->format.RGBToColor(0xFF, 0, 0xFF);
@@ -1630,8 +1634,8 @@ bool ThemeEngine::createCursor(const Common::String &filename, int hotspotX, int
 	uint colorsFound = 0;
 	Common::HashMap<int, int> colorToIndex;
 	const byte *src = (const byte *)cursor->getPixels();
-	for (uint y = 0; y < _cursorHeight; ++y) {
-		for (uint x = 0; x < _cursorWidth; ++x) {
+	for (uint y = 0; y < cur.height; ++y) {
+		for (uint x = 0; x < cur.width; ++x) {
 			uint32 color = colTransparent;
 			byte r, g, b;
 
@@ -1662,25 +1666,47 @@ bool ThemeEngine::createCursor(const Common::String &filename, int hotspotX, int
 				const int index = colorsFound++;
 				colorToIndex[col] = index;
 
-				_cursorPal[index * 3 + 0] = r;
-				_cursorPal[index * 3 + 1] = g;
-				_cursorPal[index * 3 + 2] = b;
+				cur.pal[index * 3 + 0] = r;
+				cur.pal[index * 3 + 1] = g;
+				cur.pal[index * 3 + 2] = b;
 			}
 
 			// Copy pixel from the 16 bit source surface to the 8bit target surface
 			const int index = colorToIndex[col];
-			_cursor[y * _cursorWidth + x] = index;
+			cur.data[y * cur.width + x] = index;
 		}
 
 		src += cursor->pitch - cursor->w * cursor->format.bytesPerPixel;
 	}
 
 	_useCursor = true;
-	_cursorPalSize = colorsFound;
+	cur.palSize = colorsFound;
 
 	return true;
 }
 
+void ThemeEngine::setActiveCursor(CursorType type) {
+    if (type < 0 || type >= kCursorMax || !_cursors[type].data) {
+        if (type == kCursorIndex && _cursors[kCursorNormal].data) {
+        	type = kCursorNormal;  // Fallback to normal cursor
+        } else {
+            return;
+        }
+    }
+
+    _activeCursorType = type;
+    
+    if (_useCursor) {
+        CursorData &cur = _cursors[_activeCursorType];
+		if (cur.palSize) {
+			CursorMan.replaceCursorPalette(cur.pal, 0, cur.palSize);
+		}
+
+        CursorMan.replaceCursor(cur.data, cur.width, cur.height, 
+                                cur.hotspotX, cur.hotspotY, 
+                                cur.transparent, true, &cur.format);
+    }
+}
 
 /**********************************************************
  * Legacy GUI::Theme support functions
@@ -1719,6 +1745,26 @@ TextColorData *ThemeEngine::getTextColorData(TextColor color) const {
 		color = kTextColorNormal;
 
 	return _textColors[color];
+}
+
+bool ThemeEngine::getDrawDataColor(DrawData ddId, uint8 &r, uint8 &g, uint8 &b) const {
+	if (ddId < 0 || ddId >= kDrawDataMAX || !_widgets[ddId])
+		return false;
+
+	const Common::List<Graphics::DrawStep> &steps = _widgets[ddId]->_steps;
+	if (steps.empty())
+		return false;
+
+	const Graphics::DrawStep &step = steps.front();
+
+	if (step.bgColor.set) {
+		r = step.bgColor.r;
+		g = step.bgColor.g;
+		b = step.bgColor.b;
+	} else
+		return false;
+
+	return true;
 }
 
 DrawData ThemeEngine::parseDrawDataId(const Common::String &name) const {
@@ -1904,6 +1950,14 @@ bool ThemeEngine::themeConfigUsable(const Common::ArchiveMember &member, Common:
 		}
 
 		delete zipArchive;
+	} else {
+		Common::FSNode dirNode(Common::Path(member.getName()));
+		if (dirNode.isDirectory()) {
+			Common::FSNode themeRcNode = dirNode.getChild("THEMERC");
+			if (themeRcNode.exists() && !themeRcNode.isDirectory()) {
+				stream.open(themeRcNode);
+			}
+		}
 	}
 
 	if (stream.isOpen()) {
@@ -1972,6 +2026,8 @@ void ThemeEngine::listUsableThemes(Common::List<ThemeDescriptor> &list) {
 
 	if (ConfMan.hasKey("themepath"))
 		listUsableThemes(Common::FSNode(ConfMan.getPath("themepath")), list);
+	else
+		listUsableThemes(Common::FSNode(Common::Path("gui/themes")), list);
 
 	listUsableThemes(SearchMan, list);
 
@@ -2018,6 +2074,51 @@ void ThemeEngine::listUsableThemes(Common::Archive &archive, Common::List<ThemeD
 	fileList.clear();
 }
 
+Common::Archive *ThemeEngine::createUnpackedThemeArchive(const Common::FSNode &themeDir) {
+	// Check if the directory has the THEMERC file
+	Common::FSNode themercNode = themeDir.getChild("THEMERC");
+	if (!themercNode.exists() || themercNode.isDirectory())
+		return 0;
+
+	Common::File themercFile;
+	if (!themercFile.open(themercNode))
+		return 0;
+
+	Common::SearchSet *archive = new Common::SearchSet();
+	archive->addDirectory(themeDir.getName(), themeDir, 0);
+
+	Common::String line;
+	int prio = 1;
+
+	// Parse the THEMERC file and extract the other directories
+	while (!themercFile.eos() && !themercFile.err()) {
+		line = themercFile.readLine();
+		line.trim();
+
+		if (line.hasPrefix("%using ")) {
+			Common::Path themePath = themeDir.getPath();
+			Common::String rawThemePath = line.substr(7);
+			rawThemePath.trim();
+			rawThemePath.insertChar('/', 0);
+
+			themePath += rawThemePath;
+
+			Common::Path normalizedThemePath = themePath.normalize();
+
+			Common::FSNode dir(normalizedThemePath);
+
+			if (dir.exists() && dir.isDirectory()) {
+				archive->addDirectory(dir.getName(), dir, prio++);
+			} else {
+				debug("ThemeEngine: Parsed path: %s from THEMERC doesn't exist", dir.getPath().toString().c_str());
+			}
+
+		}
+	}
+
+	return archive;
+}
+
 void ThemeEngine::listUsableThemes(const Common::FSNode &node, Common::List<ThemeDescriptor> &list, int depth) {
 	if (!node.exists() || !node.isReadable() || !node.isDirectory())
 		return;
@@ -2038,22 +2139,37 @@ void ThemeEngine::listUsableThemes(const Common::FSNode &node, Common::List<Them
 
 	Common::FSList fileList;
 	// Check all files. We need this to find all themes inside ZIP archives.
-	if (!node.getChildren(fileList, Common::FSNode::kListFilesOnly))
+	if (!node.getChildren(fileList, Common::FSNode::kListAll))
 		return;
 
 	for (auto &file : fileList) {
-		// We will only process zip files for now
-		if (!file.getPath().baseName().matchString("*.zip", true))
-			continue;
-
 		td.name.clear();
+		bool isUnpackedTheme = false;
+		if (!file.getPath().baseName().matchString("*.zip", true)) {
+
+			// 2. If it's NOT a zip, check if it's a directory with a THEMERC file
+			if (file.isDirectory()) {
+				Common::FSNode themercNode = file.getChild("THEMERC");
+				if (themercNode.exists() && !themercNode.isDirectory()) {
+					isUnpackedTheme = true;
+				} else {
+					continue; // Not a zip, and no THEMERC found. Skip.
+				}
+			} else {
+				continue; // Not a zip, and not a directory. Skip.
+			}
+		}
+
 		if (themeConfigUsable(file, td.name)) {
 			td.filename = file.getPath();
 			td.id = file.getName();
 
 			// If the name of the node object also contains
 			// the ".zip" suffix, we will strip it.
-			if (td.id.matchString("*.zip", true)) {
+			if (isUnpackedTheme) {
+				td.id += "-unpacked";
+				td.name += " (unpacked)";
+			} else if (td.id.matchString("*.zip", true)) {
 				for (int j = 0; j < 4; ++j)
 					td.id.deleteLastChar();
 			}
@@ -2128,7 +2244,11 @@ Common::String ThemeEngine::getThemeId(const Common::Path &filename) {
 
 			return id;
 		} else {
-			return node.getName();
+			// unpacked theme we need to update the name with -unpacked
+			Common::String id = node.getName();
+			id.chop(1);
+			id += "-unpacked";
+			return id;
 		}
 	}
 
@@ -2148,17 +2268,24 @@ Common::String ThemeEngine::getThemeId(const Common::Path &filename) {
 }
 
 void ThemeEngine::showCursor() {
-	if (_useCursor) {
-		if (_cursorPalSize)
-			CursorMan.pushCursorPalette(_cursorPal, 0, _cursorPalSize);
-		CursorMan.pushCursor(_cursor, _cursorWidth, _cursorHeight, _cursorHotspotX, _cursorHotspotY, _cursorTransparent, true, &_cursorFormat);
-		CursorMan.showMouse(true);
-	}
+    if (!_useCursor)
+        return;
+
+    CursorData &cur = _cursors[_activeCursorType];
+
+	if (cur.palSize)
+        CursorMan.pushCursorPalette(cur.pal, 0, cur.palSize);
+
+    CursorMan.pushCursor(cur.data, cur.width, cur.height, 
+                         cur.hotspotX, cur.hotspotY, 
+                         cur.transparent, true, &cur.format);
+    CursorMan.showMouse(true);
 }
 
 void ThemeEngine::hideCursor() {
 	if (_useCursor) {
-		if (_cursorPalSize)
+		CursorData &cur = _cursors[_activeCursorType];
+		if (cur.palSize)
 			CursorMan.popCursorPalette();
 		CursorMan.popCursor();
 	}

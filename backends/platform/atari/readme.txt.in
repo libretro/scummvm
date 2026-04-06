@@ -1,5 +1,5 @@
 ScummVM @VERSION@
-=============
+================
 
 This is a port of ScummVM (https://www.scummvm.org), a program which allows you
 to run certain classic graphical adventure and role-playing games, provided you
@@ -97,8 +97,10 @@ features but also improves performance and reduces executable size.
 
 - Overlay doesn't support alternative themes => faster loading time.
 
-- "STMIDI" driver is automatically enabled (i.e. MIDI emulation is never used
-  but still allows playing speech/sfx samples and/or CD audio).
+- "null" music driver is automatically enabled (i.e. MIDI/OPL emulation is never
+  used but still allows playing speech/sfx samples and/or CD audio).
+
+- DOSBox OPL emulator is disabled => smaller executable size.
 
 FireBee package
 ~~~~~~~~~~~~~~~
@@ -140,6 +142,7 @@ toggle.
 
 "output_rate" in scummvm.ini: sample rate for mixing. Allowed values depend on
 the hardware connected:
+
   - TT030: 50066, 25033, 12517, 6258 Hz
   - Falcon030: as TT030 (except 6258) plus 49170, 32780, 24585, 19668, 16390,
     12292, 9834, 8195 Hz
@@ -147,9 +150,13 @@ the hardware connected:
     17640, 14700, 11025, 8820, 7350 Hz
   - External 24.576 MHz DSP clock: as Falcon030 plus 48000, 32000, 24000,
     19200, 16000, 12000, 9600, 8000 Hz
-The lower the value, the faster the mixing but also worse quality. Default is
-24585/25033 Hz (16-bit, stereo). Please note you don't have to enter the value
-exactly, it will be rounded to the nearest sane value.
+
+The lower the value, the faster the mixing but the worse the quality. The
+default is 22050 Hz in Full and 11025 Hz in Lite (16-bit, stereo), to natively
+support most (DOS/Windows) games that use these frequencies. On TT and Falcon
+systems without an external DSP clock, these frequencies are converted to
+19668 Hz and 9834 Hz, respectively. Note that you do not need to enter the exact
+value; it will be rounded automatically to the nearest suitable value.
 
 "output_channels" in scummvm.ini: mono (1) or stereo (2) mixing. Please note
 that Falcon doesn't allow mixing in 16-bit mono, so this will have no effect on
@@ -367,6 +374,9 @@ good chunk of CPU time which could be utilised elsewhere. However, there are
 games which are fine with sampled music/speech even on a plain TT (e.g. Lands
 of Lore).
 
+Unfortunately, it is not possible to disable OPL emulation and still use native
+ST MIDI. You have to tweak the setting for each game.
+
 CD music slows everything down
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -392,7 +402,10 @@ music (and therefore avoiding the expensive synthesis emulation) but beware, it
 doesn't affect CD (*.wav) playback at all! Same applies for speech and sfx.
 
 The least amount of cycles is spent when:
-- "No music" as "Preferred device": This prevents MIDI synthesis of any kind.
+- "No music" as "Preferred device": This prevents MIDI/OPL synthesis of any kind.
+- "output_rate" set to a DOS/Windows compatible value (default). Even if game
+  uses 22050 Hz and your Falcon supports 22050 Hz, it is always faster to use
+  11025 Hz!
 - "Subtitles" as "Text and speech": This prevents any sampled speech to be
   mixed.
 - All external audio files are deleted (typically *.wav); that way the mixer
@@ -450,11 +463,14 @@ Changes to upstream
 There are a few features that have been disabled or changed and are not possible
 / plausible to merge into upstream:
 
-- the aforementioned "print_rate" feature, too invasive for other platforms
+- The aforementioned "print_rate" feature, too invasive for other platforms
 
 - This port contains an implementation of much faster tooltips in the overlay.
   However, there is a minor rendering bug which sometimes corrupts the
   background. But since its impact is huge, I left it in.
+
+- This port contains an experimental / pending optimisations to the SCUMM
+  engine and audio mixing. I'll try to get them merged in the next release.
 
 
 Known issues

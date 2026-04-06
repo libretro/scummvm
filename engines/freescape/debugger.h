@@ -46,6 +46,10 @@ private:
 	bool cmdSetObjPos(int argc, const char **argv);
 	bool cmdSortOrder(int argc, const char **argv);
 	bool cmdShowOcclusion(int argc, const char **argv);
+	bool cmdArea(int argc, const char **argv);
+	bool cmdPos(int argc, const char **argv);
+	bool cmdWin(int argc, const char **argv);
+	bool cmdAnkh(int argc, const char **argv);
 };
 
 }

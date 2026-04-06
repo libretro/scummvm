@@ -59,6 +59,7 @@ public:
 	virtual Common::Span<const ScriptKernelTask> getScriptKernelTaskMap() = 0;
 	virtual void updateScriptVariables() = 0;
 	virtual void drawScreenStates();
+	virtual Common::String reencodePath(const Common::String &path);
 	virtual const char *getDialogFileName() = 0;
 	virtual const char *getObjectFileName() = 0;
 	virtual char getTextFileKey() = 0;
@@ -128,6 +129,8 @@ public:
 	static Game *createForTerror(); // V1
 	static Game *createForVaqueros(); // V1
 	static Game *createForSecta(); // V2
+	static Game *createForMoscu(); // V2
+	static Game *createForEscarabajo(); // V2
 
 	const Message _message;
 };

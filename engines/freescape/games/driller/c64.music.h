@@ -203,6 +203,11 @@ class DrillerSIDPlayer {
 	enum PlayState { STOPPED,
 					 PLAYING,
 					 CHANGING_TUNE };
+	enum ContinuousEffectEntry {
+		kVoiceDone,
+		kFullEffectPath,
+		kPortamentoOnlyPath
+	};
 	PlayState _playState;
 	uint8_t _targetTuneIndex; // Tune index requested via startMusic
 
@@ -220,18 +225,19 @@ public:
 	~DrillerSIDPlayer();
 	void startMusic(int tuneIndex = 1);
 	void stopMusic();
-
-private:
-	void SID_Write(int reg, uint8_t data);
 	void initSID();
+	void destroySID();
+
+	private:
+	void SID_Write(int reg, uint8_t data);
 	void onTimer();
 	void handleChangeTune(int tuneIndex);
 	void handleResetVoices();
 	void playVoice(int voiceIndex);
-	void applyNote(VoiceState &v, int sidOffset, const uint8_t *instA0, const uint8_t *instA1, int voiceIndex);
-	void postNoteEffectSetup(VoiceState &v, int sidOffset, const uint8_t *instA0, const uint8_t *instA1);
-	void applyContinuousEffects(VoiceState &v, int sidOffset, const uint8_t *instA0, const uint8_t *instA1);
-	void applyHardRestart(VoiceState &v, int sidOffset, const uint8_t *instA0, const uint8_t *instA1);
-};
+	void applyNote(VoiceState &v, int sidOffset, const uint8_t *instA0);
+	ContinuousEffectEntry postNoteEffectSetup(VoiceState &v, const uint8_t *instA0, const uint8_t *instA1);
+	void applyContinuousEffects(VoiceState &v, int sidOffset, const uint8_t *instA0, const uint8_t *instA1, bool startAtPortamento);
+	void applyHardRestart(VoiceState &v, int sidOffset, const uint8_t *instA1);
+	};
 
 } // namespace Freescape

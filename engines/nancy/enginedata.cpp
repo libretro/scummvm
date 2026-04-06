@@ -42,7 +42,8 @@ BSUM::BSUM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 
 	s.skip(0x17, kGameTypeVampire, kGameTypeVampire);
 	s.skip(0x49, kGameTypeNancy1, kGameTypeNancy1);
-	s.skip(0x43, kGameTypeNancy2);
+	s.skip(0x43, kGameTypeNancy2, kGameTypeNancy9);
+	s.skip(0x41, kGameTypeNancy10);
 
 	readFilename(s, conversationTextsFilename, kGameTypeNancy6);
 	readFilename(s, autotextFilename, kGameTypeNancy6);
@@ -68,6 +69,8 @@ BSUM::BSUM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 		s.skip(1);
 	}
 
+	s.skip(4, kGameTypeNancy11);	// Unknown
+
 	s.skip(8, kGameTypeVampire, kGameTypeVampire);
 	readRect(s, extraButtonHotspot, kGameTypeVampire, kGameTypeVampire);
 	readRect(s, extraButtonHotspot, kGameTypeNancy2);
@@ -75,12 +78,14 @@ BSUM::BSUM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	s.skip(0x10, kGameTypeVampire, kGameTypeVampire);
 	readRect(s, textboxScreenPosition);
 	readRect(s, inventoryBoxScreenPosition);
-	readRect(s, menuButtonSrc);
-	readRect(s, helpButtonSrc);
-	readRect(s, menuButtonDest);
-	readRect(s, helpButtonDest);
-	readRect(s, menuButtonHighlightSrc, kGameTypeNancy2);
-	readRect(s, helpButtonHighlightSrc, kGameTypeNancy2);
+	
+	readRect(s, menuButtonSrc, kGameTypeVampire, kGameTypeNancy9);
+	readRect(s, helpButtonSrc, kGameTypeVampire, kGameTypeNancy9);
+	readRect(s, menuButtonDest, kGameTypeVampire, kGameTypeNancy9);
+	readRect(s, helpButtonDest, kGameTypeVampire, kGameTypeNancy9);
+	readRect(s, menuButtonHighlightSrc, kGameTypeNancy2, kGameTypeNancy9);
+	readRect(s, helpButtonHighlightSrc, kGameTypeNancy2, kGameTypeNancy9);
+
 	readRect(s, clockHighlightSrc, kGameTypeNancy2);
 
 	s.skip(0x2, kGameTypeVampire, kGameTypeVampire);
@@ -107,6 +112,16 @@ BSUM::BSUM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	s.syncAsByte(overrideMovementTimeDeltas);
 	s.syncAsSint16LE(slowMovementTimeDelta);
 	s.syncAsSint16LE(fastMovementTimeDelta);
+
+	// FIXME: Data fixup/HACK for Nancy12. The BSUM data format changed
+	// significantly, but we want to be able to start the game without
+	// crashing, even if the data is wrong.
+	if (g_nancy->getGameType() >= kGameTypeNancy12) {
+		numFonts = 18;
+		rTrans = 0;
+		gTrans = 31;
+		bTrans = 0;
+	}
 }
 
 VIEW::VIEW(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
@@ -123,20 +138,22 @@ INV::INV(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	Common::Serializer s(chunkStream, nullptr);
 	s.setVersion(g_nancy->getGameType());
 
-	readRect(*chunkStream, scrollbarSrcBounds);
-	s.syncAsUint16LE(scrollbarDefaultPos.x);
-	s.syncAsUint16LE(scrollbarDefaultPos.y);
-	s.syncAsUint16LE(scrollbarMaxScroll);
+	if (g_nancy->getGameType() <= kGameTypeNancy9) {
+		readRect(*chunkStream, scrollbarSrcBounds);
+		s.syncAsUint16LE(scrollbarDefaultPos.x);
+		s.syncAsUint16LE(scrollbarDefaultPos.y);
+		s.syncAsUint16LE(scrollbarMaxScroll);
 
-	readRectArray(s, ornamentSrcs, 6, 6, kGameTypeVampire, kGameTypeNancy1);
-	readRectArray(s, ornamentDests, 6, 6, kGameTypeVampire, kGameTypeNancy1);
+		readRectArray(s, ornamentSrcs, 6, 6, kGameTypeVampire, kGameTypeNancy1);
+		readRectArray(s, ornamentDests, 6, 6, kGameTypeVampire, kGameTypeNancy1);
 
-	uint numFrames = g_nancy->getGameType() == kGameTypeVampire ? 10 : 7;
+		uint numFrames = g_nancy->getGameType() == kGameTypeVampire ? 10 : 7;
 
-	readRectArray(s, curtainAnimationSrcs, numFrames * 2);
+		readRectArray(s, curtainAnimationSrcs, numFrames * 2);
 
-	readRect(s, curtainsScreenPosition);
-	s.syncAsUint16LE(curtainsFrameTime);
+		readRect(s, curtainsScreenPosition);
+		s.syncAsUint16LE(curtainsFrameTime);
+	}
 
 	s.syncAsUint16LE(captionAutoClearTime, kGameTypeNancy3);
 
@@ -146,7 +163,7 @@ INV::INV(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	s.skip(0x4, kGameTypeVampire, kGameTypeNancy1); // inventory box icons surface w/h
 	s.skip(0x4, kGameTypeVampire, kGameTypeNancy1); // inventory cursors surface w/h
 
-	s.skip(0x10); // unknown rect, same size as a hotspot
+	s.skip(0x10, kGameTypeVampire, kGameTypeNancy9); // unknown rect, same size as a hotspot
 
 	byte textBuf[60];
 
@@ -223,7 +240,9 @@ TBOX::TBOX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 
 	readRect(*chunkStream, scrollbarSrcBounds);
 
-	chunkStream->seek(0x20);
+	if (g_nancy->getGameType() <= kGameTypeNancy9)
+		chunkStream->seek(0x20);
+
 	readRect(*chunkStream, innerBoundingBox);
 
 	scrollbarDefaultPos.x = chunkStream->readUint16LE() - (isVampire ? 1 : 0);
@@ -235,8 +254,10 @@ TBOX::TBOX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	leftOffset = chunkStream->readUint16LE() - 1;
 	rightOffset = chunkStream->readUint16LE();
 
-	readRectArray(*chunkStream, ornamentSrcs, 14);
-	readRectArray(*chunkStream, ornamentDests, 14);
+	if (g_nancy->getGameType() <= kGameTypeNancy9) {
+		readRectArray(*chunkStream, ornamentSrcs, 14);
+		readRectArray(*chunkStream, ornamentDests, 14);
+	}
 
 	defaultFontID = chunkStream->readUint16LE();
 	defaultTextColor = chunkStream->readUint16LE();
@@ -272,6 +293,13 @@ TBOX::TBOX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 									(b << format.bShift);
 	} else {
 		textBackground = highlightTextBackground = 0;
+	}
+
+	// FIXME: Data fixup/HACK for Nancy10 and later
+	if (g_nancy->getGameType() >= kGameTypeNancy10) {
+		highlightConversationFontID = conversationFontID;
+		tabWidth = 4;
+		leftOffset = rightOffset = 0;
 	}
 }
 
@@ -826,6 +854,47 @@ TABL::TABL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 
 MARK::MARK(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	readRectArray(*chunkStream, _markSrcs, 5);
+}
+
+SCTB::SCTB(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, imageName);
+	// TODO
+}
+
+SHUI::SHUI(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readRectArray(*chunkStream, _closeRects, 4);
+	readRectArray(*chunkStream, _sliderRects, 4);
+}
+
+TASK::TASK(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	chunkStream->skip(97);
+	readFilename(*chunkStream, imageName);
+	// TODO
+}
+
+UIBW::UIBW(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, imageName);
+	// TODO
+}
+
+UICL::UICL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, imageName);
+	// TODO
+}
+
+UICO::UICO(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, imageName);
+	// TODO
+}
+
+UIIV::UIIV(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, imageName);
+	// TODO
+}
+
+UINB::UINB(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, imageName);
+	// TODO
 }
 
 } // End of namespace Nancy
