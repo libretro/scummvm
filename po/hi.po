@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ScummVM 2.3.0git\n"
 "Report-Msgid-Bugs-To: scummvm-devel@lists.scummvm.org\n"
-"POT-Creation-Date: 2026-04-05 23:32+0000\n"
+"POT-Creation-Date: 2026-04-08 20:02+0000\n"
 "PO-Revision-Date: 2024-07-11 17:47+0000\n"
 "Last-Translator: Krish <ganatrakrish2882005@gmail.com>\n"
 "Language-Team: Hindi <https://translations.scummvm.org/projects/scummvm/"
@@ -25,38 +25,38 @@ msgid "Apple Macintosh Audio"
 msgstr ""
 
 #. I18N: built on <build date> with <compiler>
-#: gui/about.cpp:103
+#: gui/about.cpp:112
 #, c-format
 msgid "(built on %s with %s)"
 msgstr "(%s को बनाया गया %s )"
 
-#: gui/about.cpp:110
+#: gui/about.cpp:119
 msgid "Features compiled in:"
 msgstr "सुविधा बनाए गए:"
 
-#: gui/about.cpp:118
+#: gui/about.cpp:127
 msgid "not supported"
 msgstr "समर्थित नहीं"
 
-#: gui/about.cpp:118
+#: gui/about.cpp:127
 msgid "disabled"
 msgstr "अक्रिय"
 
-#: gui/about.cpp:118
+#: gui/about.cpp:127
 msgid "enabled"
 msgstr "सक्रिय"
 
 #. I18N: CPU extensions are sets of extra processor instructions used to speed up operations. See Intel AVX2, ARM NEON, etc.
-#: gui/about.cpp:142
+#: gui/about.cpp:151
 msgid "CPU extensions support:"
 msgstr "सीपीयू एक्सटेंशन समर्थन:"
 
-#: gui/about.cpp:155
+#: gui/about.cpp:164
 msgid "Available engines:"
 msgstr "उपलब्ध इंजन :"
 
 #. I18N: Close dialog button
-#: gui/about.cpp:527 gui/downloadpacksdialog.cpp:298
+#: gui/about.cpp:506 gui/about.cpp:635 gui/downloadpacksdialog.cpp:298
 #: gui/downloadpacksdialog.cpp:389 gui/integrity-dialog.cpp:354
 #: gui/gui-manager.cpp:168 gui/helpdialog.cpp:128 gui/imagealbum-dialog.cpp:133
 #: gui/textviewer.cpp:56 gui/unknown-game-dialog.cpp:53
@@ -273,13 +273,8 @@ msgstr "पेस्ट"
 msgid "Paste code from clipboard"
 msgstr "क्लिपबोर्ड से कोड पेस्ट करें"
 
-#: gui/cloudconnectionwizard.cpp:387 gui/launcher.cpp:324
-#: engines/dialogs.cpp:97 engines/engine.cpp:1011 engines/mm/xeen/saves.cpp:259
-#: engines/nancy/state/loadsave.cpp:108 engines/nancy/state/loadsave.cpp:153
-#: engines/parallaction/metaengine.cpp:151
-#: engines/parallaction/saveload.cpp:193 engines/pegasus/pegasus.cpp:388
-#: engines/tinsel/metaengine.cpp:329 engines/trecision/saveload.cpp:253
-#: engines/tsage/scenes.cpp:642 engines/wage/saveload.cpp:753
+#: gui/cloudconnectionwizard.cpp:387 engines/nancy/state/loadsave.cpp:108
+#: engines/parallaction/metaengine.cpp:151 engines/tinsel/metaengine.cpp:329
 msgid "Load"
 msgstr "लोड"
 
@@ -328,7 +323,7 @@ msgstr "एक अन्य स्टोरेज अभी काम कर र
 #: gui/cloudconnectionwizard.cpp:530 gui/downloaddialog.cpp:118
 #: gui/downloaddialog.cpp:152 gui/filebrowser-dialog.cpp:135
 #: gui/fluidsynth-dialog.cpp:210 gui/launcher.cpp:428 gui/launcher.cpp:457
-#: gui/launcher.cpp:534 gui/launcher.cpp:1926 gui/options.cpp:3485
+#: gui/launcher.cpp:534 gui/launcher.cpp:1938 gui/options.cpp:3485
 #: gui/options.cpp:3859 base/main.cpp:604
 #: backends/events/default/default-events.cpp:193 engines/buried/buried.cpp:598
 #: engines/chamber/metaengine.cpp:91 engines/director/events.cpp:122
@@ -347,7 +342,7 @@ msgstr "हाँ"
 #: gui/cloudconnectionwizard.cpp:530 gui/downloaddialog.cpp:118
 #: gui/downloaddialog.cpp:153 gui/filebrowser-dialog.cpp:135
 #: gui/fluidsynth-dialog.cpp:210 gui/launcher.cpp:428 gui/launcher.cpp:457
-#: gui/launcher.cpp:534 gui/launcher.cpp:1927 gui/options.cpp:3485
+#: gui/launcher.cpp:534 gui/launcher.cpp:1939 gui/options.cpp:3485
 #: gui/options.cpp:3859 engines/buried/buried.cpp:598
 #: engines/chamber/metaengine.cpp:97 engines/director/events.cpp:122
 #: engines/director/lingo/xlibs/j/jitdraw3.cpp:139
@@ -798,7 +793,9 @@ msgstr "गेम की भाषा। यह आपके स्पैनि�
 #: backends/platform/ios7/ios7_options.mm:132
 #: backends/platform/ios7/ios7_options.mm:133
 #: backends/platform/ios7/ios7_options.mm:158 engines/ags/dialogs.cpp:65
-#: engines/sword1/metaengine.cpp:98
+#: engines/glk/dialogs.cpp:233 engines/glk/dialogs.cpp:239
+#: engines/glk/dialogs.cpp:251 engines/glk/dialogs.cpp:257
+#: engines/glk/dialogs.cpp:266 engines/sword1/metaengine.cpp:98
 msgid "<default>"
 msgstr "<default>"
 
@@ -1075,12 +1072,12 @@ msgstr "नीचे"
 #: gui/gui-manager.cpp:186 engines/metaengine.cpp:149
 #: engines/awe/metaengine.cpp:59 engines/bagel/metaengine.cpp:68
 #: engines/crab/input/input.cpp:107 engines/crab/input/input.cpp:157
-#: engines/dragons/metaengine.cpp:170 engines/got/metaengine.cpp:72
-#: engines/griffon/metaengine.cpp:133 engines/grim/grim.cpp:491
-#: engines/grim/grim.cpp:573 engines/icb/icb.cpp:78 engines/icb/icb.cpp:162
-#: engines/scumm/metaengine.cpp:1020 engines/twine/metaengine.cpp:452
-#: engines/twine/metaengine.cpp:520 engines/twp/metaengine.cpp:152
-#: engines/ultima/ultima4/metaengine.cpp:46
+#: engines/dragons/metaengine.cpp:170 engines/glk/dialogs.cpp:371
+#: engines/got/metaengine.cpp:72 engines/griffon/metaengine.cpp:133
+#: engines/grim/grim.cpp:491 engines/grim/grim.cpp:573 engines/icb/icb.cpp:78
+#: engines/icb/icb.cpp:162 engines/scumm/metaengine.cpp:1020
+#: engines/twine/metaengine.cpp:452 engines/twine/metaengine.cpp:520
+#: engines/twp/metaengine.cpp:152 engines/ultima/ultima4/metaengine.cpp:46
 #: engines/ultima/ultima4/metaengine.cpp:141
 #: engines/ultima/ultima4/metaengine.cpp:151
 #: engines/wintermute/keymapper_tables.h:320
@@ -1095,12 +1092,12 @@ msgstr "बाएँ"
 #: gui/gui-manager.cpp:192 engines/metaengine.cpp:155
 #: engines/awe/metaengine.cpp:60 engines/bagel/metaengine.cpp:69
 #: engines/crab/input/input.cpp:113 engines/crab/input/input.cpp:163
-#: engines/dragons/metaengine.cpp:176 engines/got/metaengine.cpp:73
-#: engines/griffon/metaengine.cpp:139 engines/grim/grim.cpp:496
-#: engines/grim/grim.cpp:578 engines/icb/icb.cpp:83 engines/icb/icb.cpp:167
-#: engines/scumm/metaengine.cpp:1027 engines/twine/metaengine.cpp:444
-#: engines/twine/metaengine.cpp:513 engines/twp/metaengine.cpp:153
-#: engines/ultima/ultima4/metaengine.cpp:47
+#: engines/dragons/metaengine.cpp:176 engines/glk/dialogs.cpp:373
+#: engines/got/metaengine.cpp:73 engines/griffon/metaengine.cpp:139
+#: engines/grim/grim.cpp:496 engines/grim/grim.cpp:578 engines/icb/icb.cpp:83
+#: engines/icb/icb.cpp:167 engines/scumm/metaengine.cpp:1027
+#: engines/twine/metaengine.cpp:444 engines/twine/metaengine.cpp:513
+#: engines/twp/metaengine.cpp:153 engines/ultima/ultima4/metaengine.cpp:47
 #: engines/ultima/ultima4/metaengine.cpp:142
 #: engines/ultima/ultima4/metaengine.cpp:152
 #: engines/wintermute/keymapper_tables.h:326
@@ -1503,13 +1500,6 @@ msgstr "गेम सूची में खोजें"
 msgid "Search:"
 msgstr "तलाशें:"
 
-#: gui/launcher.cpp:324 engines/dialogs.cpp:97 engines/engine.cpp:1011
-#: engines/mm/xeen/saves.cpp:259 engines/nancy/state/loadsave.cpp:153
-#: engines/pegasus/pegasus.cpp:388 engines/trecision/saveload.cpp:253
-#: engines/tsage/scenes.cpp:642 engines/wage/saveload.cpp:753
-msgid "Load game:"
-msgstr "गेम लोड करें:"
-
 #: gui/launcher.cpp:416
 msgid "This directory cannot be used yet, it is being downloaded into!"
 msgstr "यह डायरेक्टरी अभी तक उपयोग नहीं की जा सकती, इसे डाउनलोड किया जा रहा है!"
@@ -1566,85 +1556,85 @@ msgstr "सूची दृश्य"
 msgid "Grid view"
 msgstr "जालक दृश्य"
 
-#: gui/launcher.cpp:1143
+#: gui/launcher.cpp:1145
 msgid "~S~tart"
 msgstr "शुरू करें (S)"
 
-#: gui/launcher.cpp:1143
+#: gui/launcher.cpp:1145
 msgid "Start selected game"
 msgstr "चयनित गेम को शुरू करें"
 
-#: gui/launcher.cpp:1146
+#: gui/launcher.cpp:1148
 msgid "~L~oad..."
 msgstr ""
 
-#: gui/launcher.cpp:1146
+#: gui/launcher.cpp:1148
 msgid "Load saved game for selected game"
 msgstr "चयनित खेल के लिए गेम लोड करे"
 
-#: gui/launcher.cpp:1148
+#: gui/launcher.cpp:1150
 msgid "Record..."
 msgstr ""
 
-#: gui/launcher.cpp:1154
+#: gui/launcher.cpp:1156
 msgid "~G~ame Options..."
 msgstr "गेम विकल्प(O)..."
 
-#: gui/launcher.cpp:1154
+#: gui/launcher.cpp:1156
 msgid "Change game options"
 msgstr "गेम के विकल्प चुनें"
 
-#: gui/launcher.cpp:1154
+#: gui/launcher.cpp:1156
 msgctxt "lowres"
 msgid "~G~ame Opts..."
 msgstr "गेम विकल्प(O)..."
 
-#: gui/launcher.cpp:1240
+#: gui/launcher.cpp:1242
 msgid "Add-on"
 msgstr ""
 
 #. I18N: List grouping when no engine is specified
-#: gui/launcher.cpp:1297 gui/launcher.cpp:1542
+#: gui/launcher.cpp:1309 gui/launcher.cpp:1554
 msgid "Unknown Engine"
 msgstr "अनजान इंजन"
 
 #. I18N: List grouping when no publisher is specified
 #. I18N: List group when no publisher is specified
-#: gui/launcher.cpp:1314 gui/launcher.cpp:1559
+#: gui/launcher.cpp:1326 gui/launcher.cpp:1571
 msgid "Unknown Publisher"
 msgstr "अज्ञात प्रकाशक"
 
 #. I18N: List group when no game series is specified
 #. I18N: List grouping when no game series is specified
-#: gui/launcher.cpp:1331 gui/launcher.cpp:1576
+#: gui/launcher.cpp:1343 gui/launcher.cpp:1588
 msgid "No Series"
 msgstr "श्रृंखला नहीं"
 
 #. I18N: List group when no language is specified
-#: gui/launcher.cpp:1345 gui/launcher.cpp:1590
+#: gui/launcher.cpp:1357 gui/launcher.cpp:1602
 msgid "Language not detected"
 msgstr "भाषा का पता नहीं चला"
 
 #. I18N: List group when no platform is specified
-#: gui/launcher.cpp:1359 gui/launcher.cpp:1604
+#: gui/launcher.cpp:1371 gui/launcher.cpp:1616
 msgid "Platform not detected"
 msgstr "प्लेटफ़ॉर्म का पता नहीं चला"
 
 #. I18N: List group when no year is specified
-#: gui/launcher.cpp:1376 gui/launcher.cpp:1621
+#: gui/launcher.cpp:1388 gui/launcher.cpp:1633
 msgid "Unknown Year"
 msgstr "अज्ञात वर्ष"
 
 #. I18N: Group for All items
-#: gui/launcher.cpp:1628 gui/widgets/groupedlist.cpp:81
+#: gui/launcher.cpp:1640 gui/widgets/groupedlist.cpp:81
 msgid "All"
 msgstr "सभी"
 
-#: gui/launcher.cpp:1800
+#: gui/launcher.cpp:1812
 msgid "Icons per row:"
 msgstr "प्रति पंक्ति आइकन:"
 
-#: gui/launcher.cpp:1857
+#: gui/launcher.cpp:1869
 #, fuzzy, c-format
 #| msgid "Do you really want to remove this game configuration?"
 msgid ""
@@ -2732,7 +2722,7 @@ msgstr "गेम पर स्विच करे"
 
 #: gui/printing-dialog.cpp:60 backends/graphics/opengl/opengl-graphics.cpp:315
 #: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:127
-#: engines/twine/metaengine.cpp:312
+#: engines/glk/dialogs.cpp:372 engines/twine/metaengine.cpp:312
 msgid "Center"
 msgstr ""
 
@@ -2791,6 +2781,26 @@ msgstr ""
 #: gui/remotebrowser.cpp:128
 msgid "ScummVM could not access the directory!"
 msgstr "ScummVM ये directory खोल नहीं पाया!"
+
+#: gui/saveload.cpp:36
+msgid "Save game:"
+msgstr ""
+
+#: gui/saveload.cpp:36
+msgid "Restore game:"
+msgstr ""
+
+#: gui/saveload.cpp:37 engines/groovie/script.cpp:853
+#: engines/lab/savegame.cpp:237 engines/nancy/state/loadsave.cpp:108
+#: engines/parallaction/metaengine.cpp:157 engines/saga/metaengine.cpp:469
+#: engines/tinsel/metaengine.cpp:323 engines/zvision/metaengine.cpp:282
+msgid "Save"
+msgstr ""
+
+#: gui/saveload.cpp:37 engines/groovie/script.cpp:853
+#: engines/lab/savegame.cpp:237 engines/zvision/metaengine.cpp:287
+msgid "Restore"
+msgstr ""
 
 #: gui/saveload-dialog.cpp:56
 msgid "Downloading saves..."
@@ -3473,53 +3483,6 @@ msgctxt "lowres"
 msgid "~R~eturn to Launcher"
 msgstr ""
 
-#: engines/dialogs.cpp:98 engines/engine.cpp:1040 engines/agi/saveload.cpp:766
-#: engines/avalanche/parser.cpp:1918 engines/cine/various.cpp:349
-#: engines/dm/loadsave.cpp:199 engines/drascula/saveload.cpp:390
-#: engines/dreamweb/saveload.cpp:261 engines/glk/streams.cpp:1432
-#: engines/gnap/menu.cpp:465 engines/groovie/script.cpp:858
-#: engines/groovie/script.cpp:2256 engines/groovie/script.cpp:2283
-#: engines/groovie/script.cpp:2324 engines/hugo/file.cpp:297
-#: engines/illusions/menusystem.cpp:702 engines/kingdom/kingdom.cpp:731
-#: engines/lab/savegame.cpp:242 engines/mads/nebular/dialogs_nebular.cpp:358
-#: engines/mads/phantom/dialogs_phantom.cpp:354 engines/mm/xeen/saves.cpp:280
-#: engines/mtropolis/saveload.cpp:76 engines/nancy/state/loadsave.cpp:136
-#: engines/neverhood/menumodule.cpp:925 engines/pegasus/pegasus.cpp:407
-#: engines/prince/saveload.cpp:54 engines/sci/engine/guest_additions.cpp:746
-#: engines/sci/engine/kfile.cpp:1104 engines/sherlock/scalpel/scalpel.cpp:1250
-#: engines/sherlock/tattoo/widget_files.cpp:81 engines/startrek/saveload.cpp:42
-#: engines/toltecs/menu.cpp:308 engines/toon/toon.cpp:3820
-#: engines/trecision/saveload.cpp:67 engines/tsage/scenes.cpp:640
-#: engines/wage/saveload.cpp:763 engines/zvision/file/save_manager.cpp:47
-msgid "Save game:"
-msgstr ""
-
-#: engines/dialogs.cpp:98 engines/engine.cpp:1040 engines/agi/saveload.cpp:766
-#: engines/avalanche/parser.cpp:1918 engines/cine/various.cpp:349
-#: engines/dm/loadsave.cpp:199 engines/drascula/saveload.cpp:390
-#: engines/dreamweb/saveload.cpp:261 engines/glk/streams.cpp:1432
-#: engines/gnap/menu.cpp:465 engines/groovie/script.cpp:853
-#: engines/groovie/script.cpp:858 engines/groovie/script.cpp:2256
-#: engines/groovie/script.cpp:2283 engines/groovie/script.cpp:2324
-#: engines/hugo/file.cpp:297 engines/illusions/menusystem.cpp:702
-#: engines/kingdom/kingdom.cpp:731 engines/lab/savegame.cpp:237
-#: engines/lab/savegame.cpp:242 engines/mads/nebular/dialogs_nebular.cpp:358
-#: engines/mads/phantom/dialogs_phantom.cpp:354 engines/mm/xeen/saves.cpp:280
-#: engines/mtropolis/saveload.cpp:76 engines/nancy/state/loadsave.cpp:108
-#: engines/nancy/state/loadsave.cpp:136 engines/neverhood/menumodule.cpp:925
-#: engines/parallaction/metaengine.cpp:157
-#: engines/parallaction/saveload.cpp:208 engines/pegasus/pegasus.cpp:407
-#: engines/prince/saveload.cpp:54 engines/saga/metaengine.cpp:469
-#: engines/sci/engine/guest_additions.cpp:747 engines/sci/engine/kfile.cpp:1104
-#: engines/sherlock/scalpel/scalpel.cpp:1250
-#: engines/sherlock/tattoo/widget_files.cpp:81 engines/startrek/saveload.cpp:42
-#: engines/tinsel/metaengine.cpp:323 engines/toltecs/menu.cpp:308
-#: engines/toon/toon.cpp:3820 engines/trecision/saveload.cpp:67
-#: engines/tsage/scenes.cpp:640 engines/wage/saveload.cpp:763
-#: engines/zvision/file/save_manager.cpp:47 engines/zvision/metaengine.cpp:282
-msgid "Save"
-msgstr ""
-
 #: engines/dialogs.cpp:128
 msgid ""
 "Sorry, this engine does not currently provide in-game help. Please consult "
@@ -3628,9 +3591,15 @@ msgid "Skip autosave"
 msgstr "ऑटोसेव स्किप करें"
 
 #: engines/engine.cpp:644
-#, c-format
+#, fuzzy, c-format
+#| msgid ""
+#| "WARNING: The autosave slot contains a saved game named %S, and an "
+#| "autosave is pending.\n"
+#| "Please move this saved game to a new slot, or delete it if it's no longer "
+#| "needed.\n"
+#| "Alternatively, you can skip the autosave (will prompt again in 5 minutes)."
 msgid ""
-"WARNING: The autosave slot contains a saved game named %S, and an autosave "
+"WARNING: The autosave slot contains a saved game named %s, and an autosave "
 "is pending.\n"
 "Please move this saved game to a new slot, or delete it if it's no longer "
 "needed.\n"
@@ -3645,7 +3614,7 @@ msgstr ""
 msgid "ERROR: Could not copy the savegame to a new slot"
 msgstr ""
 
-#: engines/engine.cpp:681 engines/savestate.cpp:98
+#: engines/engine.cpp:681 engines/savestate.cpp:103
 #: backends/platform/ios7/ios7_osys_main.cpp:266 engines/mm/xeen/saves.cpp:293
 #: engines/sky/metaengine.cpp:218
 msgid "Autosave"
@@ -3762,14 +3731,15 @@ msgstr "गेम विकल्प(O)..."
 #: engines/hugo/metaengine.cpp:134 engines/illusions/metaengine.cpp:94
 #: engines/kyra/engine/eobcommon.cpp:369 engines/kyra/engine/lol.cpp:505
 #: engines/lure/metaengine.cpp:177 engines/made/metaengine.cpp:137
-#: engines/mads/metaengine.cpp:280 engines/mtropolis/metaengine.cpp:161
-#: engines/nancy/input.cpp:181 engines/parallaction/metaengine.cpp:138
-#: engines/saga/metaengine.cpp:278 engines/sludge/keymapper_tables.h:561
-#: engines/sludge/keymapper_tables.h:580 engines/stark/metaengine.cpp:189
-#: engines/sword1/metaengine.cpp:271 engines/tinsel/metaengine.cpp:246
-#: engines/toon/metaengine.cpp:86 engines/touche/metaengine.cpp:122
-#: engines/trecision/metaengine.cpp:125 engines/tsage/metaengine.cpp:178
-#: engines/tucker/metaengine.cpp:172 engines/ultima/ultima0/metaengine.cpp:180
+#: engines/mads/metaengine.cpp:280 engines/mm/metaengine.cpp:186
+#: engines/mtropolis/metaengine.cpp:161 engines/nancy/input.cpp:181
+#: engines/parallaction/metaengine.cpp:138 engines/saga/metaengine.cpp:278
+#: engines/sludge/keymapper_tables.h:561 engines/sludge/keymapper_tables.h:580
+#: engines/stark/metaengine.cpp:189 engines/sword1/metaengine.cpp:271
+#: engines/tinsel/metaengine.cpp:246 engines/toon/metaengine.cpp:86
+#: engines/touche/metaengine.cpp:122 engines/trecision/metaengine.cpp:125
+#: engines/tsage/metaengine.cpp:178 engines/tucker/metaengine.cpp:172
+#: engines/ultima/ultima0/metaengine.cpp:180
 #: engines/ultima/ultima4/metaengine.cpp:227
 #: engines/ultima/nuvie/metaengine.cpp:238
 #: engines/ultima/ultima8/metaengine.cpp:138 engines/vcruise/metaengine.cpp:158
@@ -3799,14 +3769,14 @@ msgstr "दाहिना क्लिक"
 #: engines/illusions/metaengine.cpp:101 engines/kyra/engine/eobcommon.cpp:370
 #: engines/kyra/engine/lol.cpp:506 engines/lure/metaengine.cpp:183
 #: engines/made/metaengine.cpp:144 engines/mads/metaengine.cpp:286
-#: engines/mtropolis/metaengine.cpp:167 engines/nancy/input.cpp:188
-#: engines/parallaction/metaengine.cpp:144 engines/saga/metaengine.cpp:289
-#: engines/sludge/keymapper_tables.h:567 engines/sludge/keymapper_tables.h:586
-#: engines/stark/metaengine.cpp:195 engines/sword1/metaengine.cpp:277
-#: engines/tinsel/metaengine.cpp:252 engines/toon/metaengine.cpp:92
-#: engines/touche/metaengine.cpp:128 engines/trecision/metaengine.cpp:131
-#: engines/tsage/metaengine.cpp:184 engines/tucker/metaengine.cpp:178
-#: engines/ultima/ultima0/metaengine.cpp:186
+#: engines/mm/metaengine.cpp:192 engines/mtropolis/metaengine.cpp:167
+#: engines/nancy/input.cpp:188 engines/parallaction/metaengine.cpp:144
+#: engines/saga/metaengine.cpp:289 engines/sludge/keymapper_tables.h:567
+#: engines/sludge/keymapper_tables.h:586 engines/stark/metaengine.cpp:195
+#: engines/sword1/metaengine.cpp:277 engines/tinsel/metaengine.cpp:252
+#: engines/toon/metaengine.cpp:92 engines/touche/metaengine.cpp:128
+#: engines/trecision/metaengine.cpp:131 engines/tsage/metaengine.cpp:184
+#: engines/tucker/metaengine.cpp:178 engines/ultima/ultima0/metaengine.cpp:186
 #: engines/ultima/ultima4/metaengine.cpp:233
 #: engines/ultima/nuvie/metaengine.cpp:244
 #: engines/ultima/ultima8/metaengine.cpp:144
@@ -4152,37 +4122,37 @@ msgstr ""
 msgid "Fit to window (4:3)"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:971
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:975
 #, c-format
 msgid "Resolution: %dx%d"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1015
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1019
 #: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2869
 msgid "Active graphics filter:"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1036
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1040
 #: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2903
 msgid "Enabled aspect ratio correction"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1038
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1042
 #: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2909
 msgid "Disabled aspect ratio correction"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1051
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1055
 #: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2925
 msgid "Filtering enabled"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1053
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1057
 #: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2927
 msgid "Filtering disabled"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1079
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1083
 #: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2954
 msgid "Stretch mode"
 msgstr ""
@@ -4727,7 +4697,7 @@ msgstr ""
 #: backends/platform/sdl/ps3/ps3.cpp:49 backends/platform/sdl/psp2/psp2.cpp:51
 #: engines/bagel/metaengine.cpp:64 engines/efh/metaengine.cpp:397
 #: engines/got/metaengine.cpp:76 engines/hypno/metaengine.cpp:363
-#: engines/mm/mm1/metaengine.cpp:49 engines/mm/mm1/metaengine.cpp:92
+#: engines/mm/mm1/metaengine.cpp:50 engines/mm/mm1/metaengine.cpp:93
 #: engines/sherlock/metaengine.cpp:660 engines/sherlock/metaengine.cpp:672
 #: engines/sherlock/metaengine.cpp:1014 engines/supernova/metaengine.cpp:303
 #: engines/titanic/metaengine.cpp:233 engines/ultima/ultima0/metaengine.cpp:47
@@ -5986,7 +5956,7 @@ msgstr ""
 #: engines/access/metaengine.cpp:291 engines/access/metaengine.cpp:312
 #: engines/bbvs/metaengine.cpp:136 engines/cine/metaengine.cpp:342
 #: engines/efh/metaengine.cpp:462 engines/hdb/metaengine.cpp:237
-#: engines/lab/metaengine.cpp:323 engines/mm/mm1/metaengine.cpp:81
+#: engines/lab/metaengine.cpp:323 engines/mm/mm1/metaengine.cpp:82
 #: engines/petka/metaengine.cpp:151 engines/queen/metaengine.cpp:294
 #: engines/saga/metaengine.cpp:379 engines/scumm/help.cpp:129
 #: engines/scumm/help.cpp:153 engines/scumm/help.cpp:171
@@ -6138,7 +6108,7 @@ msgstr ""
 #: engines/adl/metaengine.cpp:117 engines/agi/metaengine.cpp:220
 #: engines/cge/metaengine.cpp:56 engines/cine/metaengine.cpp:69
 #: engines/cruise/metaengine.cpp:45 engines/drascula/metaengine.cpp:55
-#: engines/efh/metaengine.cpp:44 engines/glk/metaengine.cpp:193
+#: engines/efh/metaengine.cpp:44 engines/glk/metaengine.cpp:205
 #: engines/gob/metaengine.cpp:57 engines/got/metaengine.cpp:48
 #: engines/griffon/metaengine.cpp:40 engines/hugo/metaengine.cpp:56
 #: engines/made/metaengine.cpp:51 engines/mm/metaengine.cpp:91
@@ -6301,48 +6271,6 @@ msgstr "यह गेम लॉन्चर से गेम लोड करन
 msgid "This game does not support saving"
 msgstr "यह गेम लॉन्चर से गेम लोड करने का समर्थन नहीं करता है|"
 
-#: engines/agi/saveload.cpp:779 engines/avalanche/parser.cpp:1906
-#: engines/cine/various.cpp:360 engines/dm/dm.cpp:271
-#: engines/dm/loadsave.cpp:187 engines/drascula/saveload.cpp:403
-#: engines/dreamweb/saveload.cpp:169 engines/glk/streams.cpp:1441
-#: engines/gnap/menu.cpp:474 engines/groovie/script.cpp:835
-#: engines/groovie/script.cpp:870 engines/groovie/script.cpp:2243
-#: engines/groovie/script.cpp:2270 engines/groovie/script.cpp:2340
-#: engines/hugo/file.cpp:399 engines/illusions/menusystem.cpp:679
-#: engines/kingdom/kingdom.cpp:741 engines/lab/savegame.cpp:257
-#: engines/mads/nebular/dialogs_nebular.cpp:385
-#: engines/mads/phantom/dialogs_phantom.cpp:381
-#: engines/mtropolis/saveload.cpp:120 engines/neverhood/menumodule.cpp:938
-#: engines/prince/saveload.cpp:63 engines/sci/engine/guest_additions.cpp:749
-#: engines/sci/engine/kfile.cpp:1246 engines/sherlock/scalpel/scalpel.cpp:1263
-#: engines/sherlock/tattoo/widget_files.cpp:100
-#: engines/startrek/saveload.cpp:67 engines/toltecs/menu.cpp:278
-#: engines/toon/toon.cpp:3914 engines/zvision/file/save_manager.cpp:60
-msgid "Restore game:"
-msgstr ""
-
-#: engines/agi/saveload.cpp:779 engines/avalanche/parser.cpp:1906
-#: engines/cine/various.cpp:360 engines/dm/dm.cpp:271
-#: engines/dm/loadsave.cpp:187 engines/drascula/saveload.cpp:403
-#: engines/dreamweb/saveload.cpp:169 engines/glk/streams.cpp:1441
-#: engines/gnap/menu.cpp:474 engines/groovie/script.cpp:835
-#: engines/groovie/script.cpp:853 engines/groovie/script.cpp:870
-#: engines/groovie/script.cpp:2243 engines/groovie/script.cpp:2270
-#: engines/groovie/script.cpp:2340 engines/hugo/file.cpp:399
-#: engines/illusions/menusystem.cpp:679 engines/kingdom/kingdom.cpp:741
-#: engines/lab/savegame.cpp:237 engines/lab/savegame.cpp:257
-#: engines/mads/nebular/dialogs_nebular.cpp:385
-#: engines/mads/phantom/dialogs_phantom.cpp:381
-#: engines/mtropolis/saveload.cpp:120 engines/neverhood/menumodule.cpp:938
-#: engines/prince/saveload.cpp:63 engines/sci/engine/guest_additions.cpp:750
-#: engines/sci/engine/kfile.cpp:1246 engines/sherlock/scalpel/scalpel.cpp:1263
-#: engines/sherlock/tattoo/widget_files.cpp:100
-#: engines/startrek/saveload.cpp:67 engines/toltecs/menu.cpp:278
-#: engines/toon/toon.cpp:3914 engines/zvision/file/save_manager.cpp:60
-#: engines/zvision/metaengine.cpp:287
-msgid "Restore"
-msgstr ""
-
 #: engines/agos/animation.cpp:576
 #, c-format
 msgid "Cutscene file '%s' not found!"
@@ -6499,7 +6427,7 @@ msgstr ""
 
 #: engines/agos/metaengine.cpp:228 engines/dm/metaengine.cpp:186
 #: engines/kyra/engine/eobcommon.cpp:375 engines/kyra/engine/lol.cpp:517
-#: engines/lab/metaengine.cpp:257 engines/mm/mm1/metaengine.cpp:97
+#: engines/lab/metaengine.cpp:257 engines/mm/mm1/metaengine.cpp:98
 #: engines/mohawk/riven.cpp:901 engines/pegasus/pegasus.cpp:2740
 #: engines/twine/metaengine.cpp:353 engines/ultima/ultima0/metaengine.cpp:80
 #: engines/ultima/ultima8/metaengine.cpp:48
@@ -6513,7 +6441,7 @@ msgstr "बांए मुड़िए"
 
 #: engines/agos/metaengine.cpp:234 engines/dm/metaengine.cpp:206
 #: engines/kyra/engine/eobcommon.cpp:376 engines/kyra/engine/lol.cpp:518
-#: engines/lab/metaengine.cpp:271 engines/mm/mm1/metaengine.cpp:98
+#: engines/lab/metaengine.cpp:271 engines/mm/mm1/metaengine.cpp:99
 #: engines/mohawk/riven.cpp:907 engines/pegasus/pegasus.cpp:2747
 #: engines/twine/metaengine.cpp:346 engines/ultima/ultima0/metaengine.cpp:81
 #: engines/ultima/ultima8/metaengine.cpp:49
@@ -6916,8 +6844,8 @@ msgstr ""
 #: engines/bbvs/metaengine.cpp:111 engines/cruise/metaengine.cpp:223
 #: engines/freescape/movement.cpp:107 engines/got/metaengine.cpp:78
 #: engines/hugo/metaengine.cpp:197 engines/lure/metaengine.cpp:209
-#: engines/mads/metaengine.cpp:292 engines/mm/mm1/metaengine.cpp:41
-#: engines/mm/mm1/metaengine.cpp:47 engines/saga/metaengine.cpp:328
+#: engines/mads/metaengine.cpp:292 engines/mm/mm1/metaengine.cpp:42
+#: engines/mm/mm1/metaengine.cpp:48 engines/saga/metaengine.cpp:328
 #: engines/tinsel/metaengine.cpp:258 engines/tsage/metaengine.cpp:190
 #: engines/tucker/metaengine.cpp:221 engines/twine/metaengine.cpp:388
 #: engines/ultima/ultima0/metaengine.cpp:40 engines/vcruise/metaengine.cpp:164
@@ -7306,6 +7234,18 @@ msgstr ""
 #| msgid "Quit Game"
 msgid "Quit game"
 msgstr "गेम quit करें"
+
+#: engines/bolt/metaengine.cpp:34
+#, fuzzy
+#| msgid "Change game options"
+msgid "Extended game resolution"
+msgstr "गेम के विकल्प चुनें"
+
+#: engines/bolt/metaengine.cpp:35
+msgid ""
+"This option allows the game to play at a slightly extended resolution. This "
+"is what the Mac and CDi versions are supposed to play like."
+msgstr ""
 
 #: engines/buried/buried.cpp:598
 msgid "Are you sure you want to quit?"
@@ -7728,7 +7668,7 @@ msgstr "आगे बढ़ो"
 
 #: engines/colony/metaengine.cpp:114 engines/dm/metaengine.cpp:216
 #: engines/freescape/movement.cpp:53 engines/hpl1/metaengine.cpp:78
-#: engines/mm/mm1/metaengine.cpp:99
+#: engines/mm/mm1/metaengine.cpp:100
 #, fuzzy
 #| msgid "Strafe Left"
 msgid "Strafe left"
@@ -7736,7 +7676,7 @@ msgstr "बाएं Strafe करें"
 
 #: engines/colony/metaengine.cpp:121 engines/dm/metaengine.cpp:236
 #: engines/freescape/movement.cpp:61 engines/hpl1/metaengine.cpp:79
-#: engines/mm/mm1/metaengine.cpp:100
+#: engines/mm/mm1/metaengine.cpp:101
 #, fuzzy
 #| msgid "Strafe Right"
 msgid "Strafe right"
@@ -7814,7 +7754,7 @@ msgstr "राइट क्लिक इंटरैक्ट"
 #. I18N: Combat command in Might & Magic 1
 #: engines/crab/input/input.cpp:125 engines/efh/metaengine.cpp:487
 #: engines/efh/metaengine.cpp:512 engines/griffon/metaengine.cpp:145
-#: engines/mm/mm1/metaengine.cpp:65 engines/scumm/metaengine.cpp:1053
+#: engines/mm/mm1/metaengine.cpp:66 engines/scumm/metaengine.cpp:1053
 #: engines/ultima/ultima0/metaengine.cpp:82
 #: engines/ultima/ultima4/metaengine.cpp:48
 #: engines/ultima/nuvie/metaengine.cpp:74
@@ -7822,7 +7762,7 @@ msgid "Attack"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/crab/input/input.cpp:130 engines/mm/mm1/metaengine.cpp:67
+#: engines/crab/input/input.cpp:130 engines/mm/mm1/metaengine.cpp:68
 msgid "Block"
 msgstr ""
 
@@ -8040,11 +7980,13 @@ msgid "Brighten the graphics to simulate a Macintosh monitor"
 msgstr ""
 
 #: engines/director/metaengine.cpp:81
-msgid "Force true color"
+msgid "Force true color (32bpp) mode"
 msgstr ""
 
 #: engines/director/metaengine.cpp:82
-msgid "Use true color graphics mode, even if the game is not designed for it"
+msgid ""
+"Use true color graphics mode (32 bits per pixel), even if the game is not "
+"designed for it"
 msgstr ""
 
 #: engines/dm/metaengine.cpp:125
@@ -8735,7 +8677,7 @@ msgid "Enable background music ported from the C64 version"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/freescape/movement.cpp:69 engines/mm/mm1/metaengine.cpp:79
+#: engines/freescape/movement.cpp:69 engines/mm/mm1/metaengine.cpp:80
 msgid "Shoot"
 msgstr ""
 
@@ -8902,7 +8844,7 @@ msgstr "दायें मुड़िए"
 
 #. I18N: Action of hero party in Might & Magic 1
 #: engines/freescape/games/eclipse/eclipse.cpp:361
-#: engines/kyra/engine/lol.cpp:519 engines/mm/mm1/metaengine.cpp:109
+#: engines/kyra/engine/lol.cpp:519 engines/mm/mm1/metaengine.cpp:110
 #: engines/ultima/nuvie/metaengine.cpp:195
 #: engines/ultima/nuvie/metaengine.cpp:200
 msgid "Rest"
@@ -8921,15 +8863,15 @@ msgstr ""
 msgid "Untitled Savegame"
 msgstr ""
 
-#: engines/glk/metaengine.cpp:194
+#: engines/glk/metaengine.cpp:206
 msgid "Use TTS to read the text"
 msgstr ""
 
-#: engines/glk/metaengine.cpp:201
+#: engines/glk/metaengine.cpp:213
 msgid "Also read input text"
 msgstr ""
 
-#: engines/glk/metaengine.cpp:202
+#: engines/glk/metaengine.cpp:214
 msgid "Use TTS to read the input text"
 msgstr ""
 
@@ -8976,6 +8918,458 @@ msgstr ""
 
 #: engines/glk/comprehend/game.cpp:860
 msgid "Picture window toggled\n"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:141
+msgid "white"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:142
+msgid "green"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:143
+#, fuzzy
+#| msgid "Proceed"
+msgid "red"
+msgstr "आगे बढ़ें"
+
+#: engines/glk/dialogs.cpp:144
+msgid "blue"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:145
+msgid "black"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:146
+msgid "grey"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:195
+msgid "Monospace Regular"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:196
+msgid "Monospace Bold"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:197
+msgid "Monospace Italic"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:198
+msgid "Monospace Bold Italic"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:199
+msgid "Proportional Regular"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:200
+msgid "Proportional Bold"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:201
+msgid "Proportional Italic"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:202
+msgid "Proportional Bold Italic"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:210
+msgid "Font"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:212 engines/glk/dialogs.cpp:222
+msgid "Text:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:212
+msgid "Font for the text"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:216 engines/glk/dialogs.cpp:227
+msgid "Grid:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:216
+msgid "Font for drawn graphics like maps, diagrams, puzzles, etc"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:220
+msgid "Color"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:222
+#, fuzzy
+#| msgid "Move Left"
+msgid "Color of the interactive text"
+msgstr "बाएं चलें"
+
+#: engines/glk/dialogs.cpp:225 engines/glk/dialogs.cpp:230
+#: engines/glk/dialogs.cpp:236 engines/glk/dialogs.cpp:242
+#: engines/glk/dialogs.cpp:254 engines/glk/dialogs.cpp:260
+#: engines/glk/dialogs.cpp:269
+msgid "<custom>"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:227
+msgid "Color for drawn graphics such as maps, diagrams, puzzles, etc"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:232
+msgid "Window:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:232
+#, fuzzy
+msgid "Color of the window (background)"
+msgstr "दायें मुड़िए"
+
+#: engines/glk/dialogs.cpp:238
+msgid "Border:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:238
+#, fuzzy
+msgid "Color of the window border"
+msgstr "दायें मुड़िए"
+
+#. I18N: This is a section for text windows border settings
+#: engines/glk/dialogs.cpp:245
+msgid "Border"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:247 engines/glk/dialogs.cpp:341
+#: engines/glk/dialogs.cpp:345 engines/glk/dialogs.cpp:349
+msgid "Horizontal:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:247
+msgid "Horizontal border size"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:248 engines/glk/dialogs.cpp:342
+#: engines/glk/dialogs.cpp:346 engines/glk/dialogs.cpp:350
+msgid "Vertical:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:248
+msgid "Vertical border size"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:250
+msgid "Caret:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:250
+#, fuzzy
+#| msgid "Manual mode"
+msgid "Color of the cursor"
+msgstr "मैन्युअल मोड"
+
+#: engines/glk/dialogs.cpp:256
+msgid "Link:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:256
+msgid "Color for URLs if they appear in-game"
+msgstr ""
+
+#. I18N: "More..." is a prompt in text windows, which appears when the text exceeds the window size
+#: engines/glk/dialogs.cpp:264
+msgid "More:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:265
+msgid "Color for the \"More...\" markers in the text"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:272
+#, fuzzy
+#| msgid "Graphics mode:"
+msgid "Typography"
+msgstr "ग्राफ़िक्स मोड:"
+
+#: engines/glk/dialogs.cpp:274
+msgid "Link style:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:274
+msgid "Style for URLs if they appear in-game"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:279
+msgid "Caret shape:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:279
+msgid "Shape of the cursor"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:286
+#, fuzzy
+#| msgid "Quit Game"
+msgid "More prompt:"
+msgstr "गेम quit करें"
+
+#: engines/glk/dialogs.cpp:286
+msgid ""
+"Custom marker in place of the \"More...\" marker for eg. \"continue\". Leave "
+"it blank to use the game's default"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:288
+#, fuzzy
+msgid "Style hints:"
+msgstr "छिपी हुई files दिखाये"
+
+#: engines/glk/dialogs.cpp:288
+msgid "Let the game suggest text styling options"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:289
+#, fuzzy
+#| msgid "Right Click"
+msgid "Safe clicks:"
+msgstr "दाहिना क्लिक"
+
+#: engines/glk/dialogs.cpp:289
+msgid "Safely apply clicks while input is pending"
+msgstr ""
+
+#. I18N: This is setting for number of text columns
+#: engines/glk/dialogs.cpp:292
+#, fuzzy
+#| msgid "Main game controls:"
+msgid "Column count:"
+msgstr "मुख्य खेल के कंट्रोल:"
+
+#: engines/glk/dialogs.cpp:292
+msgid "Number of columns"
+msgstr ""
+
+#. I18N: This is setting for number of text rows
+#: engines/glk/dialogs.cpp:294
+msgid "Rows count:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:294
+msgid "Number of rows"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:296
+msgid "Lock columns:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:296
+msgid "Check it to manually change the column count"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:297
+msgid "Lock rows:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:297
+msgid "Check it to manually change the row count"
+msgstr ""
+
+#. I18N: This is a setting for enabling text justification
+#: engines/glk/dialogs.cpp:301
+msgid "Justify:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:302
+msgid "Enable text justification"
+msgstr ""
+
+#. I18N: These is setting for type of text quote symbols
+#: engines/glk/dialogs.cpp:305
+#, fuzzy
+#| msgid "Graphics mode:"
+msgid "Typographic quotes:"
+msgstr "ग्राफ़िक्स मोड:"
+
+#: engines/glk/dialogs.cpp:306
+#, fuzzy
+#| msgid "Color graphics"
+msgid "Choose typographic quotes"
+msgstr "कलर ग्राफिक्स"
+
+#: engines/glk/dialogs.cpp:307 engines/glk/dialogs.cpp:320
+#: engines/glk/dialogs.cpp:332
+msgid "Off"
+msgstr ""
+
+#. I18N: This is a setting for using normal typographic quotes, which are like in most books, with the opening quote higher than the closing one
+#: engines/glk/dialogs.cpp:309 engines/mohawk/dialogs.cpp:366
+msgid "Normal"
+msgstr ""
+
+#. I18N: This is a setting for using "rabid" quotes, which are like normal typographic quotes but with the opening quote lower than the closing one, like in some comic books
+#: engines/glk/dialogs.cpp:311
+msgid "Rabid"
+msgstr ""
+
+#. I18N: This is a setting for forcing all input to be in uppercase
+#: engines/glk/dialogs.cpp:314
+msgid "Caps:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:314
+msgid "Force uppercase input"
+msgstr ""
+
+#. I18N: This is a setting for type of text dash symbols
+#: engines/glk/dialogs.cpp:317
+msgid "Dashes:"
+msgstr ""
+
+#. I18N: This is a setting for type of text dash symbols
+#: engines/glk/dialogs.cpp:319
+msgid "Types of dashes"
+msgstr ""
+
+#. I18N: This is a setting for using normal typographic dashes, which are like in most books, with the em dash being the longest and the en dash being half of it
+#: engines/glk/dialogs.cpp:322
+msgid "Em dashes"
+msgstr ""
+
+#. I18N: This is a setting for using "en+em" dashes, which are like normal typographic dashes but with the en dash being the same length as the em dash, like in some comic books
+#: engines/glk/dialogs.cpp:324
+msgid "En+Em dashes"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:326
+msgid "User experience"
+msgstr ""
+
+#. I18N: This is a setting for type of spaces in the text
+#: engines/glk/dialogs.cpp:329
+msgid "Spaces:"
+msgstr ""
+
+#. I18N: This is a setting for type of spaces in the text
+#: engines/glk/dialogs.cpp:331
+msgid "Types of spaces"
+msgstr ""
+
+#. I18N: This is a setting for compressing double spaces into single ones in text
+#: engines/glk/dialogs.cpp:334
+msgid "Compress double spaces"
+msgstr ""
+
+#. I18N: This is a setting for expanding single spaces into double ones in text
+#: engines/glk/dialogs.cpp:336
+msgid "Expand single spaces"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:338
+#, fuzzy
+#| msgid "Graphics"
+msgid "Graphics:"
+msgstr "ग्राफ़िक्स"
+
+#: engines/glk/dialogs.cpp:338
+msgid "Turn graphics on/off"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:340
+msgid "Window margin"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:341
+msgid "Horizontal margin for window"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:342
+msgid "Vertical margin for window"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:344
+msgid "Window padding"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:345
+msgid "Horizontal padding for window"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:346
+msgid "Vertical padding for window"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:348
+msgid "Text margin"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:349
+msgid "Horizontal margin for text"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:350
+msgid "Vertical margin for text"
+msgstr ""
+
+#. I18N: This is a setting for leading, which is the vertical distance between text rows
+#: engines/glk/dialogs.cpp:353
+msgid "Leading:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:354
+msgid "Vertical distance between text rows. Valid inputs - 12, 16, 22 etc."
+msgstr ""
+
+#. I18N: This is a setting for baseline, which is the invisible horizontal line on which text sits
+#: engines/glk/dialogs.cpp:356
+msgid "Baseline:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:357
+msgid ""
+"Invisible horizontal line on which text sits. Valid inputs - 8, 16 etc. as "
+"per your font size"
+msgstr ""
+
+#. I18N: Font size scaling for the monospace text font
+#: engines/glk/dialogs.cpp:360
+msgid "Monosize:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:361
+msgid "Font size scaling for the monospace text font"
+msgstr ""
+
+#. I18N: Font size scaling for the proportional text font
+#: engines/glk/dialogs.cpp:363
+msgid "Propsize:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:364
+msgid "Font size scaling for the proportional text font"
+msgstr ""
+
+#. I18N: This is a section for settings related to the "More..." prompt in text windows
+#: engines/glk/dialogs.cpp:367
+msgid "More"
+msgstr ""
+
+#. I18N: This is a setting for alignment of the "More..." prompt in text windows
+#: engines/glk/dialogs.cpp:369
+msgid "Align:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:370
+msgid "Alignment of the \"More...\" marker on the window"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:375
+msgid "Font:"
+msgstr ""
+
+#: engines/glk/dialogs.cpp:375
+msgid "Font for the \"More...\" marker"
 msgstr ""
 
 #: engines/glk/glulx/glulx.cpp:81
@@ -9794,7 +10188,7 @@ msgstr "सारा पे स्विच करें"
 msgid "Camp"
 msgstr ""
 
-#: engines/kyra/engine/eobcommon.cpp:380 engines/mm/mm1/metaengine.cpp:102
+#: engines/kyra/engine/eobcommon.cpp:380 engines/mm/mm1/metaengine.cpp:103
 #, fuzzy
 #| msgid "Fast replay"
 msgid "Cast spell"
@@ -9837,7 +10231,7 @@ msgid "Attack 3"
 msgstr ""
 
 #: engines/kyra/engine/lol.cpp:512 engines/lab/metaengine.cpp:278
-#: engines/mm/mm1/metaengine.cpp:103 engines/mohawk/myst.cpp:606
+#: engines/mm/mm1/metaengine.cpp:104 engines/mohawk/myst.cpp:606
 #: engines/wintermute/keymapper_tables.h:1526
 #: engines/wintermute/keymapper_tables.h:1673
 #: engines/wintermute/keymapper_tables.h:1722
@@ -10324,130 +10718,129 @@ msgstr ""
 msgid "Replace a colored gem with bars for hit points and spell points."
 msgstr ""
 
-#: engines/mm/mm1/metaengine.cpp:54
-msgid "View party member 1"
+#: engines/mm/metaengine.cpp:183
+msgid "Might and Magic"
 msgstr ""
 
 #: engines/mm/mm1/metaengine.cpp:55
-msgid "View party member 2"
+msgid "View party member 1"
 msgstr ""
 
 #: engines/mm/mm1/metaengine.cpp:56
-msgid "View party member 3"
+msgid "View party member 2"
 msgstr ""
 
 #: engines/mm/mm1/metaengine.cpp:57
-msgid "View party member 4"
+msgid "View party member 3"
 msgstr ""
 
 #: engines/mm/mm1/metaengine.cpp:58
-msgid "View party member 5"
+msgid "View party member 4"
 msgstr ""
 
 #: engines/mm/mm1/metaengine.cpp:59
+msgid "View party member 5"
+msgstr ""
+
+#: engines/mm/mm1/metaengine.cpp:60
 msgid "View party member 6"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:69 engines/ultima/ultima4/metaengine.cpp:50
+#: engines/mm/mm1/metaengine.cpp:70 engines/ultima/ultima4/metaengine.cpp:50
 #: engines/ultima/nuvie/metaengine.cpp:194
 msgid "Cast"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:71
+#: engines/mm/mm1/metaengine.cpp:72
 msgid "Exchange"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:73
+#: engines/mm/mm1/metaengine.cpp:74
 msgid "Fight"
 msgstr "फाइट"
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:75 engines/mm/mm1/metaengine.cpp:116
+#: engines/mm/mm1/metaengine.cpp:76 engines/mm/mm1/metaengine.cpp:117
 msgid "Quick reference"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:77
+#: engines/mm/mm1/metaengine.cpp:78
 msgid "Retreat"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:84
+#: engines/mm/mm1/metaengine.cpp:85
 msgid "Delay"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
 #. I18N: Action of hero party in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:86 engines/mm/mm1/metaengine.cpp:107
+#: engines/mm/mm1/metaengine.cpp:87 engines/mm/mm1/metaengine.cpp:108
 msgid "Protect"
 msgstr ""
 
 #. I18N: Party arrangement command in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:94
+#: engines/mm/mm1/metaengine.cpp:95
 msgid "Forwards"
 msgstr "आगे"
 
 #. I18N: Party arrangement command in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:96
+#: engines/mm/mm1/metaengine.cpp:97
 msgid "Backwards"
 msgstr ""
 
-#: engines/mm/mm1/metaengine.cpp:104
+#: engines/mm/mm1/metaengine.cpp:105
 #, fuzzy
 msgid "Toggle minimap"
 msgstr "दायें मुड़िए"
 
-#: engines/mm/mm1/metaengine.cpp:105
+#: engines/mm/mm1/metaengine.cpp:106
 msgid "Reorder party"
 msgstr ""
 
 #. I18N: Action of hero party in Might & Magic 1
 #. I18N: (Game: The Lost Files of Sherlock Holmes: The Case of the Serrated Scalpel) The game has a journal, this action is used to search the journal
-#: engines/mm/mm1/metaengine.cpp:111 engines/sherlock/metaengine.cpp:514
+#: engines/mm/mm1/metaengine.cpp:112 engines/sherlock/metaengine.cpp:514
 #: engines/sherlock/metaengine.cpp:961 engines/ultima/ultima4/metaengine.cpp:71
 msgid "Search"
 msgstr "खोजें"
 
 #. I18N: Action of hero party in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:113
+#: engines/mm/mm1/metaengine.cpp:114
 msgid "Bash"
 msgstr ""
 
 #. I18N: Action of hero party in Might & Magic 1
-#: engines/mm/mm1/metaengine.cpp:115 engines/scumm/help.cpp:147
+#: engines/mm/mm1/metaengine.cpp:116 engines/scumm/help.cpp:147
 msgid "Unlock"
 msgstr ""
 
-#: engines/mm/mm1/metaengine.cpp:122 engines/ultima/ultima4/metaengine.cpp:112
+#: engines/mm/mm1/metaengine.cpp:123 engines/ultima/ultima4/metaengine.cpp:112
 msgid "Goto location"
 msgstr "लोकेशन पर जाएँ"
 
-#: engines/mm/mm1/metaengine.cpp:133 engines/mm/mm1/metaengine.cpp:143
+#: engines/mm/mm1/metaengine.cpp:148
 msgid "Might and Magic 1 - Menus"
 msgstr ""
 
-#: engines/mm/mm1/metaengine.cpp:138
+#: engines/mm/mm1/metaengine.cpp:149
 msgid "Might and Magic 1 - Minimal Keys"
 msgstr ""
 
-#: engines/mm/mm1/metaengine.cpp:144 engines/mm/mm1/metaengine.cpp:150
-#: engines/mm/mm1/metaengine.cpp:156
+#: engines/mm/mm1/metaengine.cpp:150
+msgid "Might and Magic 1 - Main"
+msgstr ""
+
+#: engines/mm/mm1/metaengine.cpp:151
 msgid "Might and Magic 1 - Party"
 msgstr ""
 
-#: engines/mm/mm1/metaengine.cpp:149
+#: engines/mm/mm1/metaengine.cpp:152
 msgid "Might and Magic 1 - Combat"
-msgstr ""
-
-#: engines/mm/mm1/metaengine.cpp:155
-msgid "Might and Magic 1"
-msgstr ""
-
-#: engines/mm/mm1/metaengine.cpp:157
-msgid "Might and Magic 1 - Cheats"
 msgstr ""
 
 #: engines/mm/mm1/mm1.cpp:57
@@ -10562,10 +10955,6 @@ msgstr ""
 
 #: engines/mohawk/dialogs.cpp:365
 msgid "Fastest"
-msgstr ""
-
-#: engines/mohawk/dialogs.cpp:366
-msgid "Normal"
 msgstr ""
 
 #: engines/mohawk/dialogs.cpp:367 engines/scumm/dialogs.cpp:1582
@@ -11033,16 +11422,8 @@ msgid ""
 "\n"
 msgstr ""
 
-#: engines/parallaction/saveload.cpp:193
-msgid "Load file"
-msgstr ""
-
 #: engines/parallaction/saveload.cpp:200
 msgid "Loading game..."
-msgstr ""
-
-#: engines/parallaction/saveload.cpp:208
-msgid "Save file"
 msgstr ""
 
 #: engines/parallaction/saveload.cpp:215
@@ -11227,11 +11608,6 @@ msgstr "ऑटोसेव स्किप करें"
 #| msgid "Saved games"
 msgid "Restart sequence"
 msgstr "सेव गेम्स"
-
-#. I18N: Plumbers is the title of the game. 3DO is the name of platform
-#: engines/plumbers/metaengine.cpp:51
-msgid "3DO Plumbers requires RGB support."
-msgstr ""
 
 #: engines/prince/metaengine.cpp:237
 #, fuzzy
@@ -13416,7 +13792,7 @@ msgstr ""
 msgid "Use the floppy version's intro (CD version only)"
 msgstr ""
 
-#: engines/sky/metaengine.cpp:235
+#: engines/sky/metaengine.cpp:237
 msgid "WARNING: Deleting the autosave slot is not supported by this engine"
 msgstr ""
 
@@ -16601,6 +16977,9 @@ msgid ""
 "solved.  These puzzles may alternatively be solved using subtitles, if "
 "supported. Continue launching game?"
 msgstr ""
+
+#~ msgid "Load game:"
+#~ msgstr "गेम लोड करें:"
 
 #~ msgid "Move Forward"
 #~ msgstr "आगे बढ़ो"

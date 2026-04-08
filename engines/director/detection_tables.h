@@ -2051,9 +2051,9 @@ static const DirectorGameDescription gameDescriptions[] = {
 	},
 
 	// Original filename is "•Main Menu" for all
-	MACGAME1("theapartment", "D2", "xn--Main Menu-zd0e", "fc56c179cb8c6d4938e61ee61fd0032c", 48069, 200),
-	MACGAME1("theapartment", "D3", "xn--Main Menu-zd0e", "9e838fe1a6af7992d656ca325e38dee5", 47655, 300),
-	MACGAME1("theapartment", "D4", "xn--Main Menu-zd0e", "ff86181f03fe6eb060f65a985ca0580d", 160612, 400),
+	MACGAME1("theapartment", "D2", "xn--Main Menu-zd0e", "d:fc56c179cb8c6d4938e61ee61fd0032c", 48069, 200),
+	MACGAME1("theapartment", "D3", "xn--Main Menu-zd0e", "d:9e838fe1a6af7992d656ca325e38dee5", 47655, 300),
+	MACGAME1("theapartment", "D4", "xn--Main Menu-zd0e", "d:ff86181f03fe6eb060f65a985ca0580d", 160612, 400),
 
 //////////////////////////////////////////////////
 //
@@ -9864,6 +9864,11 @@ static const DirectorGameDescription gameDescriptions[] = {
 	// developed by IJsfontein, published by Tivola, disc pressing timestamp "01/01"
 	WINGAME2_l("webmaster", "", "Webmaster.exe",  "t:b757ff13f0f10c94b1b9fc5f2ceac6ec", 1820594,
 								"Data/chaos.dxr", "d:a974288bad555038af8a0791b1ae0292", 556715, Common::EN_ANY, 702),
+
+	// French: "Webmaster: le maître d'internet"
+	// developed by IJsfontein, published by Multimédia Gallimard
+	WINGAME2_l("webmaster", "", "Webmaster.exe",  "t:e1e8d498214e8ffc50f65973c510962b", 178102,
+								"Data/chaos.dxr", "d:a8857ee87e3435190a880e3f45085212", 436488, Common::FR_FRA, 702),
 
 	// Published by The Wine CD Corp (1999)
 	// Windows version needs installation

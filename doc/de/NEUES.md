@@ -5,11 +5,17 @@ Umfangreichere Informationen über die Änderungen des aktuellen Codes findest D
  Allgemein:
    - Klickbare Links in der Benutzeroberfläche werden jetzt durch einen veränderten Cursor hervorgehoben.
    - Die Fenstergröße wird jetzt korrekt wiederhergestellt, wenn in 3D-Engines von Vollbild zurück zum Fenster-Modus gewechselt wird.
-   - "Leerer" NULL OPL-Treiber für schwächere Systeme implementiert.
+   - NULL OPL-Treiber für schwächere Systeme implementiert.
 
  AGOS:
    - Unterstützung für die von der Amiga- und Macintosh-Versionen von Simon2 verwendeten
      Sprachdateien hinzugefügt.
+
+ GLK:
+   - Text- und Engine-Optionen können jetzt über die Benutzeroberfläche gesetzt werden.
+
+ MM:
+   - Verbesserte Unterstützung für Tastenkürzel in MM1.
 
 
 #### 2026.2.0 "Railmonicon" (28.03.2026)

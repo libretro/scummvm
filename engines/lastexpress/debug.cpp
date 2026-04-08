@@ -519,7 +519,6 @@ void LogicManager::renderCurrentSceneDebugger() {
 
 			// Draw collision lines...
 			Line7 *currentLine = currentLink->lineList;
-			int lineIndex = 0;
 			while (currentLine) {
 				ImU32 lineColor = IM_COL32(0, 255, 255, 255);
 
@@ -580,7 +579,6 @@ void LogicManager::renderCurrentSceneDebugger() {
 				}
 
 				currentLine = currentLine->next;
-				lineIndex++;
 			}
 
 			currentLink = currentLink->next;

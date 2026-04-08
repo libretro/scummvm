@@ -398,7 +398,8 @@ void ManagedSurface::simpleBlitFromInner(const Surface &src, const Common::Rect 
 	Common::Rect dstRectC = srcRect;
 
 	dstRectC.moveTo(destPos.x, destPos.y);
-	clip(srcRectC, dstRectC, src.w, src.h, flip);
+	if (!clip(srcRectC, dstRectC, src.w, src.h, flip))
+		return;
 
 	const byte *srcPtr = (const byte *)src.getBasePtr(srcRectC.left, srcRectC.top);
 	byte *dstPtr = (byte *)getBasePtr(dstRectC.left, dstRectC.top);
@@ -498,7 +499,8 @@ void ManagedSurface::maskBlitFromInner(const Surface &src, const Surface &mask,
 	Common::Rect dstRectC = srcRect;
 
 	dstRectC.moveTo(destPos.x, destPos.y);
-	clip(srcRectC, dstRectC, src.w, src.h, flip);
+	if (!clip(srcRectC, dstRectC, src.w, src.h, flip))
+		return;
 
 	const byte *srcPtr = (const byte *)src.getBasePtr(srcRectC.left, srcRectC.top);
 	const byte *maskPtr = (const byte *)mask.getBasePtr(srcRectC.left, srcRectC.top);

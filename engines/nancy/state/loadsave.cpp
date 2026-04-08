@@ -133,7 +133,7 @@ bool LoadSaveMenu::onStateExit(const NancyState::NancyState nextState) {
 }
 
 void LoadSaveMenu::scummVMSave() {
-	GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(_("Save game:"), _("Save"), true);
+	GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(true);
 	int slot = dialog->runModalWithCurrentTarget();
 	Common::String saveName = dialog->getResultString();
 	delete dialog;
@@ -150,7 +150,7 @@ void LoadSaveMenu::scummVMSave() {
 }
 
 void LoadSaveMenu::scummVMLoad() {
-	GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(_("Load game:"), _("Load"), false);
+	GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(false);
 	int slot = dialog->runModalWithCurrentTarget();
 	delete dialog;
 
@@ -688,7 +688,7 @@ bool LoadSaveMenu_V1::save() {
 					}
 
 					SaveStateDescriptor desc = g_nancy->getMetaEngine()->querySaveMetaInfos(ConfMan.getActiveDomainName().c_str(), i);
-					if (desc.getDescription().substr(0, _loadSaveData->_defaultSaveNamePrefix.size()).equals(Common::U32String(_loadSaveData->_defaultSaveNamePrefix))) {
+					if (desc.getDescription().substr(0, _loadSaveData->_defaultSaveNamePrefix.size()).equals(_loadSaveData->_defaultSaveNamePrefix)) {
 						if (desc.getDescription().substr(_loadSaveData->_defaultSaveNamePrefix.size(), 1).asUint64() == suffixNum) {
 							++suffixNum;
 						} else {
