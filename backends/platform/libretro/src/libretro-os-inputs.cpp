@@ -218,44 +218,37 @@ void OSystem_libretro::processInputs(void) {
 		int px = (int)((p_x + 0x7fff) * getScreenWidth()  / 0xffff);
 		int py = (int)((p_y + 0x7fff) * getScreenHeight() / 0xffff);
 
-		// Thresholds (frame-based)
 		static const int TAP_MAX_FRAMES    = (20 * retro_setting_get_frame_rate()) / 60;
 		static const int LONG_MIN_FRAMES   = (40 * retro_setting_get_frame_rate()) / 60;
 		static const int MOVE_THRESHOLD_PX = 8;
 
-		// Gesture state
-		static bool wasPressed      = false;
-		static int  holdFrames      = 0;
-		static bool dragging    = false;
-		static bool longClickFired  = false;
-		static int  startX          = 0;
-		static int  startY          = 0;
-		static int  lastX           = 0;
-		static int  lastY           = 0;
-		static int pendingButton = 0;  // 0 none, 1 left, 2 right
-		static int pendingX = 0, pendingY = 0;
-		static int pendingDelay = 0;   // frame countdown until UP
+		static bool wasPressed = false;
+		static int  holdFrames = 0;
+		static bool dragging   = false;
+		static int  startX     = 0;
+		static int  startY     = 0;
+		static int  lastX      = 0;
+		static int  lastY      = 0;
 
-		// check if UP is pending
-		if (pendingButton != 0) {
-			if (pendingDelay > 0) {
-				pendingDelay--;
-			} else {
-				Common::Event ev;
-				ev.type = eventID[pendingButton - 1][1];
-				ev.mouse.x = pendingX;
-				ev.mouse.y = pendingY;
-				_events.push_back(ev);
-				pendingButton = 0;
-			}
-		}
+		static bool leftDown       = false;
+		static bool leftUpPending  = false;
+		static int  leftUpDelay    = 0;
+		static int  leftDownX      = 0;
+		static int  leftDownY      = 0;
+		static bool rightDown      = false;
 
 		// DOWN edge: start tracking
 		if (p_press && !wasPressed) {
-			wasPressed     = true;
-			holdFrames     = 0;
+			// If a fast tap armed a deferred LEFT UP, a new press within TAP_MAX_FRAMES
+			// turns it into a tap-hold (drag). In that case we must NOT emit LEFT UP here.
+			if (leftUpPending) {
+				leftUpPending = false;
+				leftUpDelay   = 0;
+			}
+
+			wasPressed = true;
+			holdFrames = 0;
 			dragging   = false;
-			longClickFired = false;
 
 			startX = lastX = px;
 			startY = lastY = py;
@@ -300,47 +293,81 @@ void OSystem_libretro::processInputs(void) {
 				lastY = py;
 			}
 
-			// Long press triggers RIGHT click automatically BEFORE release
-			if (!longClickFired && !dragging && holdFrames >= LONG_MIN_FRAMES) {
+			// Long press triggers RIGHT DOWN automatically BEFORE release
+			if (!rightDown && !leftDown && !dragging && holdFrames >= LONG_MIN_FRAMES) {
 				Common::Event ev;
 				ev.type = eventID[1][0];
 				ev.mouse.x = startX;
 				ev.mouse.y = startY;
 				_events.push_back(ev);
 
-				pendingButton = 2;
-				pendingX = startX;
-				pendingY = startY;
-				pendingDelay = 1;
-
-				longClickFired = true;
+				rightDown = true;
 
 				// After long click, remain pressed behaves like drag/move (no more clicks)
 				dragging = true;
 			}
 		}
 
-		// UP edge: decide tap click (LEFT) only if long didn't fire and no drag
+		// UP edge:
+		// - If RIGHT is down (long press), emit RIGHT UP on release at final coordinates.
+		// - If LEFT is down from a chained tap->tap-hold, emit LEFT UP on release at final coordinates.
+		// - Otherwise, a fast tap arms a LEFT click by emitting LEFT DOWN now and deferring LEFT UP
 		if (!p_press && wasPressed) {
 			wasPressed = false;
-			if (!longClickFired && !dragging) {
-				if ((abs(px - startX) <= MOVE_THRESHOLD_PX && abs(py - startY) <= MOVE_THRESHOLD_PX) && holdFrames <= TAP_MAX_FRAMES) {
+
+			// Release RIGHT (long press) at final coordinates
+			if (rightDown) {
+				Common::Event ev;
+				ev.type = eventID[1][1];
+				ev.mouse.x = px;
+				ev.mouse.y = py;
+				_events.push_back(ev);
+				rightDown = false;
+			}
+			// Release LEFT (tap-drag) at final coordinates
+			else if (leftDown && !leftUpPending) {
+				Common::Event ev;
+				ev.type = eventID[0][1];
+				ev.mouse.x = px;
+				ev.mouse.y = py;
+				_events.push_back(ev);
+				leftDown = false;
+			}
+			// Normal fast tap: emit LEFT DOWN and defer LEFT UP
+			else if (!dragging) {
+				if ((abs(px - startX) <= MOVE_THRESHOLD_PX && abs(py - startY) <= MOVE_THRESHOLD_PX) &&
+				        holdFrames <= TAP_MAX_FRAMES) {
 					Common::Event ev;
 					ev.type = eventID[0][0];
 					ev.mouse.x = startX;
 					ev.mouse.y = startY;
 					_events.push_back(ev);
 
-					pendingButton = 1;
-					pendingX = startX;
-					pendingY = startY;
-					pendingDelay = 1;
+					leftDown      = true;
+					leftDownX     = startX;
+					leftDownY     = startY;
+					leftUpPending = true;
+					leftUpDelay   = (TAP_MAX_FRAMES > 0) ? TAP_MAX_FRAMES : 1;
 				}
 			}
 
-			holdFrames     = 0;
-			dragging   = false;
-			longClickFired = false;
+			holdFrames = 0;
+			dragging = false;
+		}
+
+		// Handle deferred LEFT UP (tap)
+		if (leftUpPending && !wasPressed) {
+			if (leftUpDelay > 0)
+				leftUpDelay--;
+			if (leftUpDelay <= 0) {
+				Common::Event ev;
+				ev.type = eventID[0][1]; // LEFT UP
+				ev.mouse.x = leftDownX;
+				ev.mouse.y = leftDownY;
+				_events.push_back(ev);
+				leftUpPending = false;
+				leftDown = false;
+			}
 		}
 	} else if (retro_setting_get_pointer_device() == RETRO_DEVICE_MOUSE) {
 		// Process input from physical mouse
