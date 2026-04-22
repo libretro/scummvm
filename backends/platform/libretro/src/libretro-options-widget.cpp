@@ -280,7 +280,7 @@ void LibretroOptionsWidget::handleCommand(GUI::CommandSender *sender, uint32 cmd
 	case kPlaylistGenerateCmd: {
 		save();
 		_playlistStatus->setLabel(Common::String("-"));
-		generatePlaylist(ConfMan.get("libretro_playlist_path"));
+		generatePlaylist(ConfMan.get("libretro_playlist_path", _domain));
 		break;
 	}
 	default:
@@ -290,7 +290,7 @@ void LibretroOptionsWidget::handleCommand(GUI::CommandSender *sender, uint32 cmd
 }
 
 void LibretroOptionsWidget::load() {
-	_playlistPath->setLabel(ConfMan.get("libretro_playlist_path"));
+	_playlistPath->setLabel(ConfMan.get("libretro_playlist_path", _domain));
 
 	if (ConfMan.getInt("libretro_playlist_version", _domain) == kPlaylistFormat6lines)
 		_playlistVersion->setSelected(kPlaylistFormat6lines);
