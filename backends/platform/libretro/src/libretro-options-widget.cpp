@@ -118,13 +118,15 @@ bool LibretroOptionsWidget::cleanFolder(Common::String &path) {
 	Common::FSNode(Common::Path(path)).listChildren(listHooks, "*." CORE_EXTENSIONS);
 	for (Common::ArchiveMemberPtr hook : listHooks) {
 		Common::FSNode *fshook = dynamic_cast<Common::FSNode *>(hook.get());
-		if (fshook->isDirectory())
+		if (!fshook || fshook->isDirectory())
 			continue;
 		if (remove(fshook->getPath().toString().c_str()) == 0)
-			retro_log_cb(RETRO_LOG_INFO, "Hook file deleted in '%s'.\n", fshook->getPath().toString().c_str());
+			if (retro_log_cb)
+				retro_log_cb(RETRO_LOG_INFO, "Hook file deleted in '%s'.\n", fshook->getPath().toString().c_str());
 		else {
 			res = false;
-			retro_log_cb(RETRO_LOG_WARN, "Failed to delete hook file in '%s'.\n", fshook->getPath().toString().c_str());
+			if (retro_log_cb)
+				retro_log_cb(RETRO_LOG_WARN, "Failed to delete hook file in '%s'.\n", fshook->getPath().toString().c_str());
 		}
 	}
 	return res;
@@ -149,10 +151,12 @@ bool LibretroOptionsWidget::generatePlaylist(Common::String playlistPath) {
 	RFILE *playlistFile = filestream_open(Common::String(playlistPath + "/" + CORE_NAME + ".lpl").c_str(), RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE);
 	if (!playlistFile) {
 		_playlistStatus->setLabel(_("Failed, can't access playlist file"));
-		retro_log_cb(RETRO_LOG_ERROR, "Failed to access playlst file at '%s'.\n", Common::String(playlistPath +  "/" + CORE_NAME + ".lpl").c_str());
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_ERROR, "Failed to access playlst file at '%s'.\n", Common::String(playlistPath +  "/" + CORE_NAME + ".lpl").c_str());
 		return false;
 	} else
-		retro_log_cb(RETRO_LOG_INFO, "Playlist file created in '%s'.\n", Common::String(playlistPath + CORE_NAME + ".lpl").c_str());
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO, "Playlist file created in '%s'.\n", Common::String(playlistPath + CORE_NAME + ".lpl").c_str());
 
 	/* Create common hook folder */
 	if (ConfMan.getInt("libretro_hooks_location", _domain) != kHooksLocationGame) {
@@ -222,11 +226,13 @@ bool LibretroOptionsWidget::generatePlaylist(Common::String playlistPath) {
 		/* Create hook file */
 		RFILE *hookFile = filestream_open(hookFilePath.c_str(), RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE);
 		if (!hookFile) {
-			retro_log_cb(RETRO_LOG_ERROR, "Failed to access/create hook file at '%s'.\n", hookFilePath.c_str());
+			if (retro_log_cb)
+				retro_log_cb(RETRO_LOG_ERROR, "Failed to access/create hook file at '%s'.\n", hookFilePath.c_str());
 			success = false;
 			break;
 		} else
-			retro_log_cb(RETRO_LOG_INFO, "Hook file created in '%s'.\n", hookFilePath.c_str());
+			if (retro_log_cb)
+				retro_log_cb(RETRO_LOG_INFO, "Hook file created in '%s'.\n", hookFilePath.c_str());
 
 
 		filestream_printf(hookFile, "%s", iter->_key.c_str());
