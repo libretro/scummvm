@@ -951,6 +951,7 @@ void MacFontManager::generateTTFFont(MacFont &toFont, Common::SeekableReadStream
 
 	if (!font) {
 		warning("Failed to generate font '%s'", toPrintable(getFontName(toFont)).c_str());
+		return;
 	}
 
 	toFont.setGenerated(true);
@@ -980,6 +981,7 @@ void MacFontManager::generateFONTFont(MacFont &toFont, MacFont &fromFont) {
 
 	if (!font) {
 		warning("Failed to generate font '%s'", toPrintable(getFontName(toFont)).c_str());
+		return;
 	}
 
 	toFont.setGenerated(true);
