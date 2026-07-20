@@ -230,9 +230,9 @@ void Menu::plasmaEffectRenderFrame() {
 			c += _plasmaEffectPtr[(i + 0) + (j + 1) * PLASMA_WIDTH]; // bottom
 			c += _plasmaEffectPtr[(i + 1) + (j + 1) * PLASMA_WIDTH]; // bottom-right
 
-			/* And the 2 least significant bits are used as a
+			/* And the 3 least significant bits are used as a
 			 * randomizing parameter for statistically fading the flames */
-			c = (c >> 3) | ((c & 0x0003) << 13);
+			c = (c >> 3) | ((c & 0x0007) << 13);
 
 			if (!(c & 0x6500) &&
 				(j >= (PLASMA_HEIGHT - 4) || c > 0)) {
@@ -251,8 +251,8 @@ void Menu::plasmaEffectRenderFrame() {
 
 void Menu::processPlasmaEffect(const Common::Rect &rect, int32 color) {
 	if (_engine->isLBA2()) {
-		// TODO: effects are handled differently here.
-		return;
+		// LBA2 uses palette bank 12 (192) for selected items
+		color = 192;
 	}
 	const int32 max_value = color + 15;
 
@@ -260,20 +260,19 @@ void Menu::processPlasmaEffect(const Common::Rect &rect, int32 color) {
 
 	const uint8 *in = _plasmaEffectPtr + 5 * PLASMA_WIDTH;
 	uint8 *out = (uint8 *)_engine->_imageBuffer.getBasePtr(0, 0);
+	const int32 bufWidth = _engine->_imageBuffer.w;
 
+	// Write plasma at native 320x25 resolution, each source row doubled vertically
+	// to produce 320x50 output matching the original DoFire rendering
 	for (int32 y = 0; y < PLASMA_HEIGHT / 2; y++) {
-		int32 yOffset = y * _engine->_imageBuffer.w;
 		const uint8 *colPtr = &in[y * PLASMA_WIDTH];
+		uint8 *row0 = out + (y * 2) * bufWidth;
+		uint8 *row1 = row0 + bufWidth;
 		for (int32 x = 0; x < PLASMA_WIDTH; x++) {
 			const uint8 c = MIN(*colPtr / 2 + color, max_value);
-			/* 2x2 squares sharing the same pixel color: */
-			const int32 target = 2 * yOffset;
-			out[target + 0] = c;
-			out[target + 1] = c;
-			out[target + _engine->_imageBuffer.w + 0] = c;
-			out[target + _engine->_imageBuffer.w + 1] = c;
+			row0[x] = c;
+			row1[x] = c;
 			++colPtr;
-			++yOffset;
 		}
 	}
 	const Common::Rect prect(0, 0, PLASMA_WIDTH, PLASMA_HEIGHT);
@@ -453,7 +452,12 @@ int16 Menu::drawButtons(MenuSettings *menuSettings, bool hover) {
 
 void Menu::menuDemo() {
 	// TODO: lba2 only show the credits only in the main menu and you could force it by pressing shift+c
-	// TODO: lba2 has a cd audio track (2) for the credits
+	if (_engine->isLBA2()) {
+		_engine->_music->playCdTrack(2);
+		_engine->_menuOptions->showCredits();
+		_engine->_screens->loadMenuImage(false);
+		return;
+	}
 	_engine->_menuOptions->showCredits();
 	if (_engine->_movie->playMovie(FLA_DRAGON3)) {
 		if (!_engine->_screens->loadImageDelay(TwineImage(Resources::HQR_RESS_FILE, 15, 16), 3)) {

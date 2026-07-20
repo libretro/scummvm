@@ -156,6 +156,60 @@ AnimationBase::~AnimationBase() {
 	freeImages();
 }
 
+static void openAnimationFile(File *file, String name, AnimationFolder folder) {
+	// for real file paths we have to apply the folder and do a couple fallback
+	const char *extension = g_engine->isV3() ? ".AN0" : ".ANI";
+	String fullPath;
+	const auto getFullPath = [&] (AnimationFolder folder) {
+		switch (folder) {
+		case AnimationFolder::Animations:
+			fullPath = "Animaciones/";
+			break;
+		case AnimationFolder::Masks:
+			fullPath = "Mascaras/";
+			break;
+		case AnimationFolder::Backgrounds:
+			fullPath = "Fondos/";
+			break;
+		default:
+			assert(false && "Invalid AnimationFolder");
+			break;
+		}
+		fullPath += name;
+		if (!name.hasSuffixIgnoreCase(extension))
+			fullPath += extension;
+	};
+
+	// the canonical path
+	getFullPath(folder);
+	if (file->open(fullPath.c_str()))
+		return;
+
+	// an original fallback to a different folder
+	getFullPath(AnimationFolder::Masks);
+	if (file->open(fullPath.c_str()))
+		return;
+
+	// some V2 games has many different variants of messed up encodings
+	String originalName = name;
+	int variant = 0;
+	do {
+		name = g_engine->game().alternativeAnimationName(originalName, variant++);
+		if (name.empty())
+			return;
+
+		// with the original folder
+		getFullPath(folder);
+		if (file->open(fullPath.c_str()))
+			return;
+
+		// and the original Masks fallback again
+		getFullPath(AnimationFolder::Masks);
+		if (file->open(fullPath.c_str()))
+			return;
+	} while (true);
+}
+
 void AnimationBase::load() {
 	if (_isLoaded)
 		return;
@@ -170,38 +224,11 @@ void AnimationBase::load() {
 		} else
 			rawStream = g_engine->world().openFileRef(_fileRef);
 	} else {
-		// for real file paths we have to apply the folder and do some fallback
-		const char *extension = g_engine->isV3() ? ".AN0" : ".ANI";
-		String fullPath;
-		const auto getFullPath = [&] (AnimationFolder folder) {
-			switch (folder) {
-			case AnimationFolder::Animations:
-				fullPath = "Animaciones/";
-				break;
-			case AnimationFolder::Masks:
-				fullPath = "Mascaras/";
-				break;
-			case AnimationFolder::Backgrounds:
-				fullPath = "Fondos/";
-				break;
-			default:
-				assert(false && "Invalid AnimationFolder");
-				break;
-			}
-			fullPath += _fileRef._path;
-			if (!_fileRef._path.hasSuffixIgnoreCase(extension))
-				fullPath += extension;
-		};
-		getFullPath(_folder);
-
 		File *file = new File();
-		if (!file->open(fullPath.c_str())) {
-			// original fallback
-			getFullPath(AnimationFolder::Masks);
-			if (!file->open(fullPath.c_str())) {
-				delete file;
-				file = nullptr;
-			}
+		openAnimationFile(file, _fileRef._path, _folder);
+		if (!file->isOpen()) {
+			delete file;
+			file = nullptr;
 		}
 		rawStream.reset(file);
 	}
@@ -616,8 +643,8 @@ void Animation::prerenderFrame(int32 frameI) {
 
 struct TexCoords {
 	TexCoords(const Rect &inner, int16 outerW, int16 outerH) {
-		_min = Vector2d(0.5f / outerW, 0.5f / outerH);
-		_max = Vector2d((inner.width() - 0.5f) / outerW, (inner.height() - 0.5f) / outerH);
+		_min = Vector2d(0.0f, 0.0f);
+		_max = Vector2d((inner.width()) / (float)outerW, (inner.height()) / (float)outerH);
 	}
 
 	Vector2d _min, _max;
@@ -1196,10 +1223,12 @@ Task *fade(Process &process, FadeType fadeType,
 	int32 duration, EasingType easingType,
 	int8 order,
 	PermanentFadeAction permanentFadeAction) {
-	if (duration <= 0)
-		return new DelayTask(process, 0);
 	if (!process.isActiveForPlayer())
 		return new DelayTask(process, (uint32)duration);
+	if (duration <= 0) {
+		g_engine->globalUI().isPermanentFaded() = permanentFadeAction == PermanentFadeAction::SetFaded;
+		return new DelayTask(process, 0);
+	}
 	return new FadeTask(process, fadeType, from, to, duration, easingType, order, permanentFadeAction);
 }
 

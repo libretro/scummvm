@@ -71,7 +71,7 @@ void onImGuiRender() {
 	if (_state->_engine->shouldQuit() || _state->_engine->_exitFromMenuButton)
 		return;
 
-	if (!debugChannelSet(-1, kDebugConsole)) {
+	if (!debugChannelSet(-1, kDebugImGui)) {
 		ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
 		return;
 	}

@@ -30,19 +30,6 @@ static const PlainGameDescriptor lastExpressGames[] = {
 	{nullptr, nullptr}
 };
 
-static const DebugChannelDef debugFlagList[] = {
-	{LastExpress::kLastExpressDebugGraphics, "Graphics", "Debug graphics & animation/sequence playback"},
-	{LastExpress::kLastExpressDebugResource, "Resource", "Debug resource management"},
-	{LastExpress::kLastExpressDebugCursor, "Cursor", "Debug cursor handling"},
-	{LastExpress::kLastExpressDebugSound, "Sound", "Debug sound playback"},
-	{LastExpress::kLastExpressDebugSubtitle, "Subtitle", "Debug subtitles"},
-	{LastExpress::kLastExpressDebugSavegame, "Savegame", "Debug savegames"},
-	{LastExpress::kLastExpressDebugLogic, "Logic", "Debug logic"},
-	{LastExpress::kLastExpressDebugScenes, "Scenes", "Debug scenes & hotspots"},
-	{LastExpress::kLastExpressDebugUnknown, "Unknown", "Debug unknown data"},
-	DEBUG_CHANNEL_END
-};
-
 static const ADGameDescription gameDescriptions[] = {
 
 	// The Last Express (English) - US Broderbund Release
@@ -297,10 +284,6 @@ public:
 
 	const char *getOriginalCopyright() const override {
 		return "The Last Express (C) 1997 Smoking Car Productions";
-	}
-
-	const DebugChannelDef *getDebugChannels() const override {
-		return debugFlagList;
 	}
 };
 

@@ -48,7 +48,7 @@ enum ContextSectionType {
 	kContextActorLoadComplete = 0x13,
 	kContextCreateVariableData = 0x14,
 	kContextFunctionSection = 0x31,
-	kContextNameData = 0xbb8
+	kContextNameData = 0xbb9
 };
 
 class Context {

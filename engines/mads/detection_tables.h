@@ -152,11 +152,11 @@ static const MADSGameDescription gameDescriptions[] = {
 		{
 			"phantom",
 			0,
-			AD_ENTRY1s("section1.hag", "76e2d47a7aebafe48edc9884b3d91782", 1130939),
+			AD_ENTRY1s("global.hag", "bdce9ca93a015f0883d1bc0fabd0cdfa", 812150),
 			Common::EN_ANY,
 			Common::kPlatformDOS,
 			ADGF_UNSTABLE,
-			GUIO1(GAMEOPTION_EASY_MOUSE)
+			GUIO3(GUIO_NOMIDI, GAMEOPTION_EASY_MOUSE, GAMEOPTION_ORIGINAL_SAVELOAD)
 		},
 		GType_Phantom,
 		0
@@ -166,12 +166,27 @@ static const MADSGameDescription gameDescriptions[] = {
 		// Return of the Phantom GOG DOS English
 		{
 			"phantom",
-			0,
-			AD_ENTRY1s("global.idx", "cf17ab33b5ab084763cf83c76a8d9634", 4638),
+			"CD",
+			AD_ENTRY1s("global.hag", "8a51c984eb4c64e8b30a7e6670f6bddb", 101154000),
 			Common::EN_ANY,
 			Common::kPlatformDOS,
-			ADGF_UNSTABLE,
-			GUIO1(GAMEOPTION_EASY_MOUSE)
+			ADGF_UNSTABLE | ADGF_CD,
+			GUIO3(GUIO_NOMIDI, GAMEOPTION_EASY_MOUSE, GAMEOPTION_ORIGINAL_SAVELOAD)
+		},
+		GType_Phantom,
+		0
+	},
+
+	{
+		// Return of the Phantom CD Installer
+		{
+			"phantom",
+			"CD Installer",
+			AD_ENTRY2s("mpslabs.001", "6f891664a0b09a00e45eaa3ee9b24669", 633998, "mpslabs.idx", "156a856072f4eb66b1f9b337358225e9", 4048),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_UNSTABLE | ADGF_CD | GF_INSTALLER,
+			GUIO3(GUIO_NOMIDI, GAMEOPTION_EASY_MOUSE, GAMEOPTION_ORIGINAL_SAVELOAD)
 		},
 		GType_Phantom,
 		0
@@ -186,9 +201,24 @@ static const MADSGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformDOS,
 			ADGF_UNSTABLE | ADGF_DEMO,
-			GUIO1(GAMEOPTION_EASY_MOUSE)
+			GUIO3(GUIO_NOMIDI, GAMEOPTION_EASY_MOUSE, GAMEOPTION_ORIGINAL_SAVELOAD)
 		},
 		GType_Phantom,
+		0
+	},
+
+	{
+		// Dragonsphere DOS English CD
+		{
+			"dragonsphere",
+			"CD",
+			AD_ENTRY2s("section1.hag", "2770e441d296be5e806194693eebd95a", 2061199, "speech.idx", "80d36ba3ca88e9d078cc19a7678aeb87", 1250),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_UNSTABLE | ADGF_CD,
+			GUIO3(GUIO_NOMIDI, GAMEOPTION_EASY_MOUSE, GAMEOPTION_ORIGINAL_SAVELOAD)
+		},
+		GType_Dragonsphere,
 		0
 	},
 
@@ -201,7 +231,23 @@ static const MADSGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformDOS,
 			ADGF_UNSTABLE,
-			GUIO1(GAMEOPTION_EASY_MOUSE)
+			GUIO3(GUIO_NOMIDI, GAMEOPTION_EASY_MOUSE, GAMEOPTION_ORIGINAL_SAVELOAD)
+		},
+		GType_Dragonsphere,
+		0
+	},
+
+	{
+		// Dragonsphere Microprose DOS English
+		{
+			"dragonsphere",
+			"CD Installer",
+			AD_ENTRY2s("mpslabs.001", "0d2143364be8e12b9807e111ffbe4fb5", 771220,
+				"mpslabs.idx", "db604f6e665516c59bebe60b404abe44", 4636),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_UNSTABLE | ADGF_CD | GF_INSTALLER,
+			GUIO3(GUIO_NOMIDI, GAMEOPTION_EASY_MOUSE, GAMEOPTION_ORIGINAL_SAVELOAD)
 		},
 		GType_Dragonsphere,
 		0
@@ -216,7 +262,7 @@ static const MADSGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformDOS,
 			ADGF_UNSTABLE | ADGF_DEMO,
-			GUIO1(GAMEOPTION_EASY_MOUSE)
+			GUIO3(GUIO_NOMIDI, GAMEOPTION_EASY_MOUSE, GAMEOPTION_ORIGINAL_SAVELOAD)
 		},
 		GType_Dragonsphere,
 		0
@@ -231,7 +277,7 @@ static const MADSGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformDOS,
 			ADGF_UNSTABLE,
-			GUIO1(GAMEOPTION_EASY_MOUSE)
+			GUIO2(GUIO_NOSFX, GAMEOPTION_ORIGINAL_SAVELOAD)
 		},
 		GType_Forest,
 		0
@@ -240,4 +286,4 @@ static const MADSGameDescription gameDescriptions[] = {
 	{ AD_TABLE_END_MARKER, 0, 0 }
 };
 
-} // End of namespace MADS
+} // namespace MADS

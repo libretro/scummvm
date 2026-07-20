@@ -59,20 +59,36 @@ byte buildArpeggioTable(const byte intervals[8], byte mask, byte *outTable, byte
 
 } // End of namespace WBCommon
 
+/** Table offsets and sizes for a Wally Beben music module. */
+struct WBTableOffsets {
+	uint32 periodTable;       // 48 x uint16 BE
+	uint32 samplePtrTable;    // numSamples x uint32 BE
+	uint32 instrumentTable;   // numInstruments x 8 bytes
+	uint32 arpeggioIntervals; // 8 bytes
+	uint32 envelopeTable;     // numEnvelopes x 8 bytes
+	uint32 songTable;         // 2 songs x 4 channels x uint32 BE
+	uint32 patternPtrTable;   // up to 128 x uint32 BE
+	int numSamples;
+	int numInstruments;
+	int numEnvelopes;
+};
+
 /**
  * Create a music stream for the Wally Beben custom music engine
- * used in the Amiga version of Dark Side.
+ * used in the Amiga versions of Dark Side and Total Eclipse.
  *
- * @param data     Raw TEXT segment data from HDSMUSIC.AM (after 0x1C GEMDOS header)
- * @param dataSize Size of the TEXT segment (0xF4BC for Dark Side)
+ * @param data     Raw TEXT segment data (after 0x1C GEMDOS header)
+ * @param dataSize Size of the TEXT segment
  * @param songNum  Song number to play (1 or 2)
  * @param rate     Output sample rate
  * @param stereo   Whether to produce stereo output
+ * @param offsets  Table offsets (nullptr = Dark Side defaults)
  * @return A new AudioStream, or nullptr on error
  */
 Audio::AudioStream *makeWallyBebenStream(const byte *data, uint32 dataSize,
                                          int songNum = 1, int rate = 44100,
-                                         bool stereo = true);
+                                         bool stereo = true,
+                                         const WBTableOffsets *offsets = nullptr);
 
 } // End of namespace Freescape
 

@@ -36,7 +36,7 @@
 #include "graphics/pixelformat.h"
 
 
-#define SCUMMVM_THEME_VERSION_STR "SCUMMVM_STX0.9.22"
+#define SCUMMVM_THEME_VERSION_STR "SCUMMVM_STX0.9.24"
 
 class OSystem;
 
@@ -63,8 +63,8 @@ enum DrawData {
 	kDDMainDialogBackground,
 	kDDSpecialColorBackground,
 	kDDPlainColorBackground,
-	kDDTooltipBackground,
 	kDDDefaultBackground,
+	kDDTooltipBackground,
 	kDDTextSelectionBackground,
 	kDDTextSelectionFocusBackground,
 	kDDThumbnailBackground,
@@ -208,7 +208,7 @@ private:
 
 class ThemeEngine {
 protected:
-	typedef Common::HashMap<Common::String, Graphics::ManagedSurface *> ImagesMap;
+	typedef Common::HashMap<Common::String, Common::SharedPtr<Graphics::ManagedSurface> > ImagesMap;
 
 	friend class GUI::Dialog;
 	friend class GUI::GuiObject;
@@ -458,6 +458,16 @@ public:
 	 */
 	void disableClipRect();
 
+	/**
+	 * Get the rectangle that a dialog with provided coordinates would dirty on screen.
+	 *
+	 * @param r The dialog rectangle
+	 * @param bgtype The dialog background
+	 *
+	 * @return The rectangle drawn by the engine including drop shadows
+	 */
+	Common::Rect getDialogDirtyRect(const Common::Rect &r, DialogBackground bgtype);
+
 	/** @name WIDGET DRAWING METHODS */
 	//@{
 
@@ -648,15 +658,9 @@ protected:
 	void setGraphicsMode(GraphicsMode mode);
 
 	struct CursorData {
-		byte *data = nullptr;
-		uint width = 0;
-		uint height = 0;
+		Common::SharedPtr<Graphics::ManagedSurface> surface;
 		int hotspotX = 0;
 		int hotspotY = 0;
-		uint32 transparent = 255;
-		Graphics::PixelFormat format;
-		byte palSize = 0;
-		byte pal[3 * 256];
 	};
 
 	CursorData _cursors[kCursorMax];
@@ -670,7 +674,7 @@ public:
 	inline bool supportsImages() const { return true; }
 	inline bool ownCursor() const { return _useCursor; }
 
-	Graphics::ManagedSurface *getImageSurface(const Common::String &name) const {
+	Common::SharedPtr<Graphics::ManagedSurface> getImageSurface(const Common::String &name) const {
 		return _bitmaps.contains(name) ? _bitmaps[name] : 0;
 	}
 
@@ -749,6 +753,12 @@ protected:
 	                bool elipsis, Graphics::TextAlign alignH = Graphics::kTextAlignLeft,
 	                TextAlignVertical alignV = kTextAlignVTop, int deltax = 0,
 	                const Common::Rect &drawableTextArea = Common::Rect(0, 0, 0, 0));
+
+	/**
+	 * Compute the extended (dirty) rectangle for a given draw data type applied
+	 * to the given base rect. Includes background and shadow offsets.
+	 */
+	Common::Rect getDrawDataExtendedRect(DrawData type, const Common::Rect &r) const;
 
 	/**
 	 * DEBUG: Draws a white square and writes some text next to it.

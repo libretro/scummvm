@@ -287,8 +287,8 @@ private:
 class MemcachingCaseInsensitiveArchive : public Archive {
 public:
 	MemcachingCaseInsensitiveArchive(uint32 maxStronglyCachedSize = 512) : _maxStronglyCachedSize(maxStronglyCachedSize) {}
-	SeekableReadStream *createReadStreamForMember(const Path &path) const;
-	SeekableReadStream *createReadStreamForMemberAltStream(const Path &path, Common::AltStreamType altStreamType) const;
+	SeekableReadStream *createReadStreamForMember(const Path &path) const override;
+	SeekableReadStream *createReadStreamForMemberAltStream(const Path &path, Common::AltStreamType altStreamType) const override;
 
 	virtual Path translatePath(const Path &path) const {
 		return path.normalize();
@@ -410,7 +410,7 @@ public:
 	 *
 	 * In this example, the code first tries to search for all directories matching
 	 * "game" in the path "directory" first and search through all of the matches for
-	 * "itedata". If "ingoreCase" is set to true, the code does a case insensitive
+	 * "itedata". If "ignoreCase" is set to true, the code does a case insensitive
 	 * match, otherwise it is doing a case sensitive match.
 	 *
 	 * This method also works with tokens. For a list of available tokens,
@@ -487,7 +487,7 @@ public:
 	 * Reset the Search Manager to the default list of search paths (system
 	 * specific dirs + current dir).
 	 */
-	virtual void clear();
+	void clear() override;
 
 private:
 	friend class Singleton<SingletonBaseType>;

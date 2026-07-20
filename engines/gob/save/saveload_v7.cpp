@@ -943,6 +943,9 @@ SaveLoad_v7::SaveFile SaveLoad_v7::_saveFiles[] = {
 	{"adi.tmp", kSaveModeSave, nullptr, nullptr},
 	{"adi4.tmp", kSaveModeSave, nullptr, nullptr},
 
+	// Temporary sprites
+	{"ADI.$$$", kSaveModeSave, nullptr, nullptr},
+
 	// Persitent files
 	{"RETURN_FROM_GAMEBOX", kSaveModeSave, nullptr, nullptr}, // Fictive file used to simulate returning from Gamebox in ScummVM
 	{"TEMP/ADI4.PHO", kSaveModeSave, nullptr, nullptr},
@@ -2104,6 +2107,8 @@ SaveLoad_v7::SaveLoad_v7(GobEngine *vm, const char *targetName) :
 		_saveFiles[index++].handler = _adi4TempFileHandler[i] = new FakeFileHandler(_vm);
 	}
 
+	_saveFiles[index++].handler = _adi4TempSpriteHandler = new TempSpriteHandler(_vm);
+
 	int indexAdi4file = 0;
 	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
 																							  targetName,
@@ -2181,6 +2186,8 @@ SaveLoad_v7::~SaveLoad_v7() {
 	for (uint32 i = 0; i < kAdi4NbrOfTempFiles; i++) {
 		delete _adi4TempFileHandler[i];
 	}
+
+	delete _adi4TempSpriteHandler;
 
 	for (uint32 i = 0; i < kAdi4NbrOfGameFiles; i++) {
 		delete _adi4GameFileHandler[i];

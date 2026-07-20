@@ -44,6 +44,11 @@ uint32 DirectorEngine::transformColor(uint32 color) {
 	if (_pixelformat.bytesPerPixel == 1)
 		return color;
 
+	// A palette index can never exceed 0xff (max 256 colors); a larger value
+	// must be a packed RGB int from a Lingo color assignment (e.g. rgb()).
+	if (color > 0xff)
+		return _wm->findBestColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff);
+
 	return _wm->findBestColor(_currentPalette[color * 3], _currentPalette[color * 3 + 1], _currentPalette[color * 3 + 2]);
 }
 
@@ -247,9 +252,10 @@ void DirectorEngine::syncPalette() {
 		memcpy(paletteBuf, _currentPalette, _currentPaletteLength*3);
 	}
 
-	// Pass the palette to OSystem only for 8bpp mode
-	if (_pixelformat.bytesPerPixel == 1)
+	if (_pixelformat.bytesPerPixel == 1) {
+		// Pass the palette to OSystem only for 8bpp mode
 		_system->getPaletteManager()->setPalette(paletteBuf, 0, _currentPaletteLength);
+	}
 
 	_wm->passPalette(paletteBuf, _currentPaletteLength);
 }
@@ -289,6 +295,14 @@ class InkPrimitives final : public Graphics::Primitives {
 public:
 	constexpr InkPrimitives() {}
 	void drawPoint(int x, int y, uint32 src, void *data) override;
+private:
+	inline void decomposeColor(Graphics::MacWindowManager *wm, uint32 color, byte &r, byte &g, byte &b) {
+		if (sizeof(T) == sizeof(byte)) {
+			wm->getPaletteEntry(color, r, g, b);
+		} else {
+			wm->_pixelformat.colorToRGB(color, r, g, b);
+		}
+	}
 };
 
 template <typename T>
@@ -306,14 +320,14 @@ void InkPrimitives<T>::drawPoint(int x, int y, uint32 src, void *data) {
 	dst = (T *)p->dst->getBasePtr(x, y);
 
 	if (p->ms) {
-		if (p->ms->pd->thickness > 1) {
-			int prevThickness = p->ms->pd->thickness;
+		if (p->ms->pd->thickness.x > 1 || p->ms->pd->thickness.y > 1) {
+			Common::Point prevThickness = p->ms->pd->thickness;
 			int x1 = x;
-			int x2 = x1 + prevThickness;
+			int x2 = x1 + prevThickness.x;
 			int y1 = y;
-			int y2 = y1 + prevThickness;
+			int y2 = y1 + prevThickness.y;
 
-			p->ms->pd->thickness = 1;	// We do not want recursive loops
+			p->ms->pd->thickness = Common::Point(1, 1);	// We do not want recursive loops
 
 			for (y = y1; y < y2; y++)
 				for (x = x1; x < x2; x++)
@@ -326,8 +340,12 @@ void InkPrimitives<T>::drawPoint(int x, int y, uint32 src, void *data) {
 		}
 
 		if (p->ms->tile) {
-			int x1 = p->ms->tileRect->left + (p->ms->pd->fillOriginX + x) % p->ms->tileRect->width();
-			int y1 = p->ms->tileRect->top  + (p->ms->pd->fillOriginY + y) % p->ms->tileRect->height();
+			int x1 = (p->ms->tileRect->left + p->ms->pd->fillOriginX + x) % p->ms->tileRect->width();
+			if (x1 < 0)
+				x1 += p->ms->tileRect->width();
+			int y1 = (p->ms->tileRect->top  + p->ms->pd->fillOriginY + y) % p->ms->tileRect->height();
+			if (y1 < 0)
+				y1 += p->ms->tileRect->height();
 
 			src = p->ms->tile->_surface.getPixel(x1, y1);
 		} else {
@@ -344,8 +362,8 @@ void InkPrimitives<T>::drawPoint(int x, int y, uint32 src, void *data) {
 		byte rSrc, gSrc, bSrc;
 		byte rDst, gDst, bDst;
 
-		wm->decomposeColor<T>(src, rSrc, gSrc, bSrc);
-		wm->decomposeColor<T>(*dst, rDst, gDst, bDst);
+		decomposeColor(wm, src, rSrc, gSrc, bSrc);
+		decomposeColor(wm, *dst, rDst, gDst, bDst);
 
 		rDst = lerpByte(rSrc, rDst, p->alpha, 255);
 		gDst = lerpByte(gSrc, gDst, p->alpha, 255);
@@ -396,7 +414,7 @@ void InkPrimitives<T>::drawPoint(int x, int y, uint32 src, void *data) {
 		} else {
 			// Find the inverse of the colour and match it back to the palette if required
 			byte rSrc, gSrc, bSrc;
-			wm->decomposeColor<T>(src, rSrc, gSrc, bSrc);
+			decomposeColor(wm, src, rSrc, gSrc, bSrc);
 
 			*dst = wm->findBestColor(~rSrc, ~gSrc, ~bSrc);
 		}
@@ -435,7 +453,11 @@ void InkPrimitives<T>::drawPoint(int x, int y, uint32 src, void *data) {
 			// Originally designed for 1-bit mode so that
 			// black pixels would appear white on a black
 			// background.
-			*dst ^= src;
+			if (p->oneBitImage || p->ms || p->applyColor) {
+				*dst ^= src;
+			} else {
+				*dst = (src == p->backColor) ? *dst : src;
+			}
 		} else {
 			// In 32-bit mode, this is the opposite??
 			*dst ^= ~(src);
@@ -484,8 +506,8 @@ void InkPrimitives<T>::drawPoint(int x, int y, uint32 src, void *data) {
 		byte rSrc, gSrc, bSrc;
 		byte rDst, gDst, bDst;
 
-		wm->decomposeColor<T>(src, rSrc, gSrc, bSrc);
-		wm->decomposeColor<T>(*dst, rDst, gDst, bDst);
+		decomposeColor(wm, src, rSrc, gSrc, bSrc);
+		decomposeColor(wm, *dst, rDst, gDst, bDst);
 
 		switch (p->ink) {
 		case kInkTypeAddPin:
@@ -523,6 +545,8 @@ Graphics::Primitives *DirectorEngine::getInkPrimitives() {
 	if (!_primitives) {
 		if (_pixelformat.bytesPerPixel == 1)
 			_primitives = new InkPrimitives<byte>();
+		else if (_pixelformat.bytesPerPixel == 2)
+			_primitives = new InkPrimitives<uint16>();
 		else
 			_primitives = new InkPrimitives<uint32>();
 	}
@@ -643,7 +667,7 @@ void DirectorPlotData::inkBlitShape(Common::Rect &srcRect) {
 
 	Common::Rect fillAreaRect((int)srcRect.width(), (int)srcRect.height());
 	fillAreaRect.moveTo(srcRect.left, srcRect.top);
-	Graphics::MacPlotData plotFill(dst, nullptr, &d->getPatterns(), ms->pattern, srcRect.left + wpos.x, srcRect.top + wpos.y, 1, ms->backColor);
+	Graphics::MacPlotData plotFill(dst, nullptr, &d->getPatterns(), ms->pattern, srcRect.left + wpos.x, srcRect.top + wpos.y, {1, 1}, ms->backColor);
 
 	uint strokePattern = 1;
 
@@ -655,7 +679,7 @@ void DirectorPlotData::inkBlitShape(Common::Rect &srcRect) {
 
 	Common::Rect strokeRect(MAX((int)srcRect.width() - ms->lineSize, 0), MAX((int)srcRect.height() - ms->lineSize, 0));
 	strokeRect.moveTo(srcRect.left, srcRect.top);
-	Graphics::MacPlotData plotStroke(dst, nullptr, &d->getPatterns(), strokePattern, strokeRect.left + wpos.x, strokeRect.top + wpos.y, ms->lineSize, ms->backColor);
+	Graphics::MacPlotData plotStroke(dst, nullptr, &d->getPatterns(), strokePattern, strokeRect.left + wpos.x, strokeRect.top + wpos.y, {(int16)ms->lineSize, (int16)ms->lineSize}, ms->backColor);
 
 	Graphics::Primitives *primitives = g_director->getInkPrimitives();
 
@@ -783,6 +807,9 @@ void DirectorPlotData::inkBlitSurface(Common::Rect &srcRect, const Graphics::Sur
 				if (d->_wm->_pixelformat.bytesPerPixel == 1) {
 					primitives->drawPoint(destRect.left + j, destRect.top + i,
 										preprocessColor(*((byte *)srf->getBasePtr(srcPoint.x, srcPoint.y))), this);
+				} else if (d->_wm->_pixelformat.bytesPerPixel == 2) {
+					primitives->drawPoint(destRect.left + j, destRect.top + i,
+										preprocessColor(*((uint16 *)srf->getBasePtr(srcPoint.x, srcPoint.y))), this);
 				} else {
 					primitives->drawPoint(destRect.left + j, destRect.top + i,
 										preprocessColor(*((uint32 *)srf->getBasePtr(srcPoint.x, srcPoint.y))), this);

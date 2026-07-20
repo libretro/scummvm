@@ -116,8 +116,8 @@ void EclipseEngine::loadAssetsC64FullGame() {
 				if (loadAddress == 0x0410) {
 					_c64MusicData.resize(file.size() - 2);
 					file.read(_c64MusicData.data(), _c64MusicData.size());
-					delete _playerC64Music;
-					_playerC64Music = new EclipseC64MusicPlayer(_c64MusicData);
+					delete _playerMusic;
+					_playerMusic = new EclipseC64MusicPlayer(_c64MusicData);
 				}
 			}
 		} else if ((_variant & GF_C64_TAPE) && _extraBuffer) {
@@ -128,8 +128,8 @@ void EclipseEngine::loadAssetsC64FullGame() {
 			static const int kMusicRegionSize = 0x1100; // covers 0x0410..0x14FF
 			_c64MusicData.resize(kMusicRegionSize);
 			memcpy(_c64MusicData.data(), _extraBuffer + kTapeMusicShift, kMusicRegionSize);
-			delete _playerC64Music;
-			_playerC64Music = new EclipseC64MusicPlayer(_c64MusicData);
+			delete _playerMusic;
+			_playerMusic = new EclipseC64MusicPlayer(_c64MusicData);
 		}
 	} else {
 		Common::File musicFile;
@@ -139,8 +139,8 @@ void EclipseEngine::loadAssetsC64FullGame() {
 			if (loadAddress == 0x0410) {
 				_c64MusicData.resize(musicFile.size() - 2);
 				musicFile.read(_c64MusicData.data(), _c64MusicData.size());
-				delete _playerC64Music;
-				_playerC64Music = new EclipseC64MusicPlayer(_c64MusicData);
+				delete _playerMusic;
+				_playerMusic = new EclipseC64MusicPlayer(_c64MusicData);
 			}
 		}
 	}
@@ -152,26 +152,22 @@ void EclipseEngine::loadAssetsC64FullGame() {
 	_playerC64Sfx->destroySID();
 }
 
-void EclipseEngine::playSoundC64(int index) {
-	debugC(1, kFreescapeDebugMedia, "Playing Eclipse C64 SFX %d", index);
-	if (_playerC64Sfx && _c64UseSFX)
-		_playerC64Sfx->playSfx(index);
-}
-
 void EclipseEngine::toggleC64Sound() {
 	if (_c64UseSFX) {
+		if (_sound == _playerC64Sfx)
+			_sound = nullptr;
 		if (_playerC64Sfx)
 			_playerC64Sfx->destroySID();
-		if (_playerC64Music) {
-			_playerC64Music->initSID();
-			_playerC64Music->startMusic();
-		}
+		if (_playerMusic)
+			_playerMusic->startMusic();
 		_c64UseSFX = false;
 	} else {
-		if (_playerC64Music)
-			_playerC64Music->destroySID();
+		if (_playerMusic)
+			_playerMusic->stopMusic();
 		if (_playerC64Sfx)
 			_playerC64Sfx->initSID();
+		if (_sound == nullptr)
+			_sound = _playerC64Sfx;
 		_c64UseSFX = true;
 	}
 }

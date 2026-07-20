@@ -702,7 +702,15 @@ bool ScScript::executeInstruction() {
 
 				if (DID_FAIL(res)) {
 					_stack->correctParams(0);
-					runtimeError("Call to undefined method '%s'. Ignored.", methodName);
+					if (BaseEngine::instance().getGameId() == "barrowhilldp" && strcmp(methodName, "MakeParticle") == 0) {
+						// Silence unknown opcode in 'Barrow Hill - The Dark Path'
+					} else if (BaseEngine::instance().getGameId() == "forgottensound2" && (strcmp(methodName, "SetImage") == 0 || strcmp(methodName, "GetControl") == 0)) {
+						// Silence unknown opcode in 'Forgotten Sound 2 - Destiny'
+					} else if (BaseEngine::instance().getGameId() == "darksummer" && (strcmp(methodName, "SetImage") == 0 || strcmp(methodName, "GetControl") == 0)) {
+						// Silence unknown opcode in 'Twilight: Dark Summer'
+					} else {
+						runtimeError("Call to undefined method '%s'. Ignored.", methodName);
+					}
 					_stack->pushNULL();
 				}
 			}

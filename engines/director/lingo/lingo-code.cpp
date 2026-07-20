@@ -47,6 +47,7 @@
 
 #include "director/director.h"
 #include "director/debugger.h"
+#include "director/cast.h"
 #include "director/movie.h"
 #include "director/score.h"
 #include "director/sprite.h"
@@ -258,6 +259,18 @@ void Lingo::pushContext(const Symbol funcSym, bool allowRetVal, Datum defaultRet
 		_state->context->incRefCount();
 	}
 
+	// Run the handler in the window that owns its script (MIAW scoping); mirrors c_tell()
+	if (funcSym.ctx && funcSym.ctx->getCast() && funcSym.ctx->getCast()->getMovie()) {
+		Window *targetWindow = funcSym.ctx->getCast()->getMovie()->getWindow();
+		Window *currentWindow = _vm->getCurrentWindow();
+		if (targetWindow && targetWindow != currentWindow) {
+			fp->retWindow = currentWindow;
+			currentWindow->incRefCount();
+			currentWindow->moveLingoState(targetWindow);
+			_vm->setCurrentWindow(targetWindow);
+		}
+	}
+
 	DatumHash *localvars = new DatumHash;
 	if (funcSym.anonymous && _state->localVars) {
 		// Execute anonymous functions within the current var frame.
@@ -364,7 +377,19 @@ void Lingo::popContext(bool aborting) {
 		printCallStack(_state->pc);
 	}
 
+	// Undo the pushContext window switch.
+	Window *retWindow = fp->retWindow;
+
 	delete fp;
+
+	if (retWindow) {
+		// If the window was closed while the handler ran, don't switch back.
+		if (_vm->getCurrentWindow() != retWindow && _vm->isWindowRegistered(retWindow)) {
+			_vm->getCurrentWindow()->moveLingoState(retWindow);
+			_vm->setCurrentWindow(retWindow);
+		}
+		retWindow->decRefCount();
+	}
 
 	g_debugger->popContextHook();
 }
@@ -380,6 +405,12 @@ void Lingo::freezePlayState() {
 	window->freezeLingoPlayState();
 	switchStateFromWindow();
 }
+
+void Lingo::requeuePlayState() {
+	Window *window = _vm->getCurrentWindow();
+	window->requeueLingoPlayState();
+}
+
 
 void LC::c_constpush() {
 	Common::String name(g_lingo->readString());
@@ -1001,9 +1032,22 @@ void LC::c_intersects() {
 		return;
 	}
 
+	// tested in D6:
+	// both sprites matte: do a matte-on-matte intersection
+	// just S1 matte: do a box-on-box intersection
+	// just S2 matte: do a box-on-matte intersection
+	// neither sprite matte: do a box-on-box intersection
+	// If the cast member is not a bitmap, always treat it as a bounding box collision,
+	// even if the ink type is matte and there's visibly no overlap (e.g a kCastShape circle).
+
+	bool s1IsBitmap = sprite1->_sprite->_cast && sprite1->_sprite->_cast->_type == kCastBitmap;
+	bool s2IsBitmap = sprite2->_sprite->_cast && sprite2->_sprite->_cast->_type == kCastBitmap;
+
 	// don't regard quick draw shape as matte type
-	if ((!sprite1->_sprite->isQDShape() && sprite1->_sprite->_ink == kInkTypeMatte) && (!sprite2->_sprite->isQDShape() && sprite2->_sprite->_ink == kInkTypeMatte)) {
+	if ((s1IsBitmap && sprite1->_sprite->_ink == kInkTypeMatte) && (s2IsBitmap && sprite2->_sprite->_ink == kInkTypeMatte)) {
 		g_lingo->push(Datum(sprite2->isMatteIntersect(sprite1)));
+	} else if ((s2IsBitmap && sprite2->_sprite->_ink == kInkTypeMatte)) {
+		g_lingo->push(Datum(sprite2->isMatteBoxIntersect(sprite1)));
 	} else {
 		g_lingo->push(Datum(sprite2->getBbox().intersects(sprite1->getBbox())));
 	}
@@ -1324,8 +1368,10 @@ Datum LC::compareArrays(Datum (*compareFunc)(Datum, Datum), Datum d1, Datum d2, 
 	// At least one of d1 and d2 must be an array
 	bool d1isArr = d1.isArray() || d1.type == PARRAY;
 	bool d2isArr = d2.isArray() || d2.type == PARRAY;
-	// As far as I can tell, D6 no longer does partial array or element-to-array comparison
-	if ((g_director->getVersion() >= 600) && (!(d1isArr && d2isArr))) {
+	// In D6 and higher, direct relational comparison no longer does partial array or
+	// element-to-array coercion. However, location mode still needs
+	// scalar-to-element checks while scanning array entries.
+	if ((g_director->getVersion() >= 600) && !location && (!(d1isArr && d2isArr))) {
 		return Datum(0);
 	}
 
@@ -1786,6 +1832,14 @@ void LC::call(const Symbol &funcSym, int nargs, bool allowRetVal) {
 			(*funcSym.u.bltin)(nargs);
 			g_lingo->_state->me = retMe;
 		} else {
+			// sendSprite/sendAllSprites/call/send can be used both as a command and
+			// as a function (returning the handler's result). 
+			if (funcSym.name && (funcSym.name->equalsIgnoreCase("sendSprite") ||
+					funcSym.name->equalsIgnoreCase("sendAllSprites") ||
+					funcSym.name->equalsIgnoreCase("call") ||
+					funcSym.name->equalsIgnoreCase("send")))
+				g_lingo->push(Datum(allowRetVal));
+
 			(*funcSym.u.bltin)(nargs);
 		}
 

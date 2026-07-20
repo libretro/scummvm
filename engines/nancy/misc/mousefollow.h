@@ -51,9 +51,9 @@ public:
 
 	void setZ(uint16 z) { _z = z; _needsRedraw = true; }
 	void handleInput(NancyInput &input);
+	bool isViewportRelative() const override { return true; }
 
 protected:
-	bool isViewportRelative() const override { return true; }
 
 	bool _isPickedUp = false;
 	byte _rotation = 0;

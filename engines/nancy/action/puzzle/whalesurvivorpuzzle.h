@@ -45,9 +45,10 @@ public:
 	void execute() override;
 	void handleInput(NancyInput &input) override;
 
+	bool isViewportRelative() const override { return true; }
+
 protected:
 	Common::String getRecordTypeName() const override { return "WhaleSurvivorPuzzle"; }
-	bool isViewportRelative() const override { return true; }
 
 private:
 	// ---- Constants ----
@@ -226,6 +227,12 @@ private:
 	int    _oxygenStage     = 0;     // 0=full, 8=dead
 	uint32 _oxygenNextTickMs = 0;
 
+	// Underwater scoring multiplier — grows the longer the porpoise stays
+	// submerged. Per fish: score += scoreDivisor * multiplier.
+	float  _underwaterMultiplier = 1.0f; // original +0x200, clamped >= 1.0
+	uint32 _diveStartMs          = 0;    // original +0x204, set when diving
+	float  _deplPerMs            = 0.0f; // oxygenDeplSpeed / (oxygenTickMs * 8)
+
 	// Score and lives
 	int    _score = 0;
 	int    _lives = kMaxLives;
@@ -246,7 +253,7 @@ private:
 	void updateGame(uint32 nowMs);
 	void checkCollisions();
 	void updateOxygen(uint32 nowMs);
-	void loseLife(uint32 nowMs);
+	void loseLife();
 	void redraw();
 	int  findFreeEntity() const;
 };

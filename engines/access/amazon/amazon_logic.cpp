@@ -357,8 +357,13 @@ void Opening::doTitle() {
 			_vm->_events->_vbCount = 70;
 			while (!_vm->shouldQuit() && _vm->_events->_vbCount > 0 && !_skipStart) {
 				_vm->_events->pollEventsAndWait();
-				if (_vm->_events->_rightButton)
-					_skipStart = true;
+				bool skip = _vm->_events->_rightButton;
+				if (_vm->_events->peekAction() == kActionSkip) {
+					Common::CustomEventType event;
+					_vm->_events->getAction(event);
+					skip = true;
+				}
+				_skipStart = skip;
 			}
 		}
 		if (_vm->shouldQuit())
@@ -553,7 +558,7 @@ void Opening::doTent() {
 
 	_vm->_events->showCursor();
 	_vm->_midi->newMusic(11, 1);
-	_vm->_sound->_soundTable.clear();
+	_vm->_sound->freeSounds();
 
 	_vm->establishCenter(0, 4);
 }
@@ -1337,7 +1342,7 @@ void Cast::doCast(int param1) {
 			break;
 
 		if (_yCam < -7550) {
-			while (!_vm->shouldQuit() && !_vm->_midi->checkMidiDone())
+			while (!_vm->shouldQuit() && _vm->_midi->isPlaying())
 				_vm->_events->pollEventsAndWait();
 			break;
 		}
@@ -1742,7 +1747,7 @@ void River::plotRiver() {
 	}
 
 	// Draw the text for skipping the river
-	Font &font2 = *_vm->_fonts._font2;
+	const Font &font2 = *_vm->_fonts._font2;
 	font2.drawString(_vm->_screen, "SKIP", Common::Point(5, 5));
 }
 

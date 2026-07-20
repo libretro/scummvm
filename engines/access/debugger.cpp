@@ -23,6 +23,7 @@
 #include "access/access.h"
 #include "access/debugger.h"
 #include "access/amazon/amazon_game.h"
+#include "access/noctropolis/noctropolis_resources.h"
 
 namespace Access {
 
@@ -75,6 +76,7 @@ Debugger::Debugger(AccessEngine *vm) : GUI::Debugger(), _vm(vm) {
 	registerCmd("ask", WRAP_METHOD(Debugger, Cmd_Ask));
 	registerCmd("inventory", WRAP_METHOD(Debugger, Cmd_Inventory));
 	registerCmd("everything", WRAP_METHOD(Debugger, Cmd_Everything));
+	registerCmd("hotspot", WRAP_METHOD(Debugger, Cmd_Hotspot));
 }
 
 Debugger::~Debugger() {
@@ -93,10 +95,10 @@ bool Debugger::Cmd_LoadScene(int argc, const char **argv) {
 	case 2: {
 		int newRoom = strToInt(argv[1]);
 		if (newRoom < 0 || newRoom >= (int)_vm->_res->ROOMTBL.size()) {
-			debugPrintf("Invalid Room Number\n");
+			debugPrintf("Invalid Room Number (only have %d)\n", (int)_vm->_res->ROOMTBL.size());
 			return true;
 		}
-		if (_vm->_res->ROOMTBL[newRoom]._desc.empty()) {
+		if (_vm->_res->ROOMTBL[newRoom]._data.empty()) {
 			debugPrintf("Unused Room Number\n");
 			return true;
 		}
@@ -240,9 +242,21 @@ bool Debugger::Cmd_Travel(int argc, const char **argv) {
 		debugPrintf("Travel table:\n");
 
 		for (int i = 0; i < ARRAYSIZE(_vm->_travel); ++i) {
-			if (!Martian::TRAVDATA[i])
-				break;
-			debugPrintf("%2d: %d (%s)\n", i, _vm->_travel[i], Martian::TRAVDATA[i]);
+			const char *label = "UNKNOWN";
+
+			if (_vm->getGameID() == kGameMartianMemorandum) {
+				if (!Martian::TRAVDATA[i])
+					break;
+			} else if (_vm->getGameID() == kGameNoctropolis) {
+				int j = 0;
+				while (Noctropolis::TRAV_ROOMS[j]) {
+					if (Noctropolis::TRAV_ROOMS[j] == i)
+						label = ((Noctropolis::NoctropolisResources *)_vm->_res)->getPlaceName(j);
+					j++;
+				}
+			}
+
+			debugPrintf("%2d: %d (%s)\n", i, _vm->_travel[i], label);
 		}
 
 		return true;
@@ -359,13 +373,15 @@ bool Debugger::Cmd_Everything(int argc, const char **argv) {
 	// Turn off known-broken/cut locations that exist in the travel table
 	// but you can't go there or going there directly will cause a crash.
 	//
-	const int INVALID_TRAVEL_LOCATIONS[] = {
+	const int MM_INVALID_TRAVEL_LOCATIONS[] = {
 		10, // RESTAURANT
 		12, // LOVE SCENE
 	};
 
-	for (uint i = 0; i < ARRAYSIZE(INVALID_TRAVEL_LOCATIONS); ++i)
-		_vm->_travel[INVALID_TRAVEL_LOCATIONS[i]] = 0;
+	if (_vm->getGameID() == kGameMartianMemorandum) {
+		for (uint i = 0; i < ARRAYSIZE(MM_INVALID_TRAVEL_LOCATIONS); ++i)
+			_vm->_travel[MM_INVALID_TRAVEL_LOCATIONS[i]] = 0;
+	}
 
 	for (uint i = 0; i < ARRAYSIZE(_vm->_ask); ++i)
 		_vm->_ask[i] = 1;
@@ -375,6 +391,12 @@ bool Debugger::Cmd_Everything(int argc, const char **argv) {
 	return true;
 }
 
+bool Debugger::Cmd_Hotspot(int argc, const char **argv) {
+	_vm->_hotspotFl = !_vm->_hotspotFl;
+
+	debugPrintf("Hotspot highlighting %s\n", _vm->_hotspotFl ? "enabled" : "disabled");
+	return true;
+}
 
 
 /*------------------------------------------------------------------------*/

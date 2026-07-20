@@ -304,11 +304,11 @@ GlkOptionsWidget::GlkOptionsWidget(GuiObject *boss, const Common::String &name, 
 	// I18N: These is setting for type of text quote symbols
 	NEW_LABEL_POPUP("GlkOptionsDialog.quoteslbl", _("Typographic quotes:"),
 		 _quotes, "GlkOptionsDialog.quotes", _("Choose typographic quotes"));
-	_quotes->appendEntry(_("Off"), 0);
+	_quotes->appendEntry(_c("Off", "quotes"), 0);
 	// I18N: This is a setting for using normal typographic quotes, which are like in most books, with the opening quote higher than the closing one
-	_quotes->appendEntry(_("Normal"), 1);
+	_quotes->appendEntry(_c("Normal", "quotes"), 1);
 	// I18N: This is a setting for using "rabid" quotes, which are like normal typographic quotes but with the opening quote lower than the closing one, like in some comic books
-	_quotes->appendEntry(_("Rabid"), 2);
+	_quotes->appendEntry(_c("Rabid", "quotes"), 2);
 
 	// I18N: This is a setting for forcing all input to be in uppercase
 	NEW_LABEL_CHECKBOX("GlkOptionsDialog.capslbl", _("Caps:"), _caps, "GlkOptionsDialog.caps", _("Force uppercase input"));
@@ -572,12 +572,8 @@ void GlkOptionsWidget::load() {
 		{ _gfontPopUps[0], g_conf->_gStyles, "gfont" }
 	};
 
-	for (auto &opt : fontOptions) {
-		if (g_conf)
-			setFontPopUp(opt.popup, true, opt.styles[style_Normal].font, nullptr, _domain);
-		else
-			setFontPopUp(opt.popup, false, (FACES)0, opt.confKeyPrefix, _domain);
-	}
+	for (auto &opt : fontOptions)
+		setFontPopUp(opt.popup, true, opt.styles[style_Normal].font, nullptr, _domain);
 
 	for (auto &opt : colorOptions) {
 		if (g_conf) {
@@ -892,7 +888,7 @@ static void saveFontPopUp(GUI::PopUpWidget *popup, WindowStyle *styles, const ch
 	FACES selectedFont = (FACES)popup->getSelectedTag();
 	for (int i = 0; i < style_NUMSTYLES; ++i) {
 		styles[i].font = selectedFont;
-		Common::String key = Common::String::format("%s%d", confKeyPrefix, i);
+		Common::String key = Common::String::format("%s_%d", confKeyPrefix, i);
 		ConfMan.set(key, Screen::getFontName(selectedFont), domain);
 	}
 }

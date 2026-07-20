@@ -83,8 +83,8 @@ public:
 
 	virtual int16 getHeight() const = 0;
 	virtual int16 getWidth() const = 0;
-	virtual void setPalette(const byte *colors, uint start, uint num) = 0;
-	virtual void grabPalette(byte *colors, uint start, uint num) const = 0;
+	void setPalette(const byte *colors, uint start, uint num) override = 0;
+	void grabPalette(byte *colors, uint start, uint num) const override = 0;
 	virtual void copyRectToScreen(const void *buf, int pitch, int x, int y, int w, int h) = 0;
 	virtual Graphics::Surface *lockScreen() = 0;
 	virtual void unlockScreen() = 0;
@@ -116,7 +116,7 @@ public:
 
 	virtual bool showMouse(bool visible) = 0;
 	virtual void warpMouse(int x, int y) = 0;
-	virtual void setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor, bool dontScale = false, const Graphics::PixelFormat *format = nullptr, const byte *mask = nullptr) = 0;
+	virtual void setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor, const Graphics::PixelFormat *format, const byte *mask, frac_t scaleX, frac_t scaleY) = 0;
 	virtual void setCursorPalette(const byte *colors, uint start, uint num) = 0;
 
 	virtual void displayMessageOnOSD(const Common::U32String &msg) {}

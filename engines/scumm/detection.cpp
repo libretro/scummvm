@@ -65,7 +65,6 @@ static const DebugChannelDef debugFlagList[] = {
 		{Scumm::DEBUG_SMUSH, "SMUSH", "Track SMUSH"},
 		{Scumm::DEBUG_MOONBASE_AI, "MOONBASEAI", "Track Moonbase AI"},
 		{Scumm::DEBUG_NETWORK, "NETWORK", "Track Networking"},
-		{Scumm::DEBUG_IMGUI, "IMGUI", "Show ImGui debug window (if available)"},
 		DEBUG_CHANNEL_END
 };
 
@@ -242,6 +241,8 @@ DetectedGames ScummMetaEngineDetection::detectGames(const Common::FSList &fslist
 		game.appendGUIOptions(getGameGUIOptionsDescriptionLanguage(x->language));
 		game.appendGUIOptions(getGameGUIOptionsDescriptionPlatform(x->game.platform));
 
+		if (x->game.features & GF_TESTING)
+			game.gameSupportLevel = kTestingGame;
 
 		detectedGames.push_back(game);
 	}

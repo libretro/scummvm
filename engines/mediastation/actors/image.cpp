@@ -47,7 +47,7 @@ void ImageActor::readParameter(Chunk &chunk, ActorHeaderSectionType paramType) {
 		break;
 
 	case kActorHeaderLoadType:
-		_decompressImmediately = chunk.readTypedByte();
+		_decompressInPlace = chunk.readTypedByte();
 		break;
 
 	case kActorHeaderX:
@@ -60,7 +60,7 @@ void ImageActor::readParameter(Chunk &chunk, ActorHeaderSectionType paramType) {
 
 	case kActorHeaderActorReference: {
 		_actorReference = chunk.readTypedUint16();
-		ImageActor *referencedImage = static_cast<ImageActor *>(g_engine->getActorByIdAndType(_actorReference, kActorTypeImage));
+		ImageActor *referencedImage = static_cast<ImageActor *>(g_engine->getImtGod()->getActorByIdAndType(_actorReference, kActorTypeImage));
 		_asset = referencedImage->_asset;
 		break;
 	}
@@ -92,7 +92,7 @@ ScriptValue ImageActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptV
 }
 
 void ImageActor::draw(DisplayContext &displayContext) {
-	if (_isVisible) {
+	if (_asset != nullptr && _asset->bitmap != nullptr) {
 		Common::Point origin = getBbox().origin();
 		g_engine->getDisplayManager()->imageBlit(origin, _asset->bitmap, _dissolveFactor, &displayContext);
 	}
@@ -116,7 +116,7 @@ Common::Rect ImageActor::getBbox() const {
 
 void ImageActor::readChunk(Chunk &chunk) {
 	ImageInfo bitmapHeader = ImageInfo(chunk);
-	_asset->bitmap = new PixMapImage(chunk, bitmapHeader);
+	_asset->bitmap = new PixMapImage(chunk, bitmapHeader, _decompressInPlace);
 }
 
 } // End of namespace MediaStation

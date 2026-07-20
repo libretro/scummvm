@@ -71,12 +71,12 @@ ScriptValue PathActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptVa
 		stopPath();
 		break;
 
-	case kPauseMethod:
+	case kTimePauseMethod:
 		ARGCOUNTCHECK(0);
 		pausePath();
 		break;
 
-	case kResumeMethod: {
+	case kTimeResumeMethod: {
 		ARGCOUNTRANGE(0, 1);
 		bool shouldRestart = false;
 		if (args.size() == 1) {
@@ -123,7 +123,8 @@ ScriptValue PathActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptVa
 		ARGCOUNTCHECK(1);
 		// Convert from seconds to milliseconds.
 		const uint MILLISECONDS_IN_ONE_SECOND = 1000;
-		_duration = args[0].asTime() * MILLISECONDS_IN_ONE_SECOND;
+		double durationAsFractionalSeconds = args[0].asFloatOrTime();
+		_duration = durationAsFractionalSeconds * MILLISECONDS_IN_ONE_SECOND;
 		_useTimeForCompletion = true;
 		break;
 	}
@@ -153,26 +154,20 @@ ScriptValue PathActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptVa
 	return returnValue;
 }
 
-void PathActor::process() {
-	if (_playState == kPathPlaying) {
-		uint currentTime = g_system->getMillis();
-		if (currentTime >= _nextPathStepTime) {
-			timerEvent();
-		}
-	}
+void PathActor::onEvent(const ActorEvent &event) {
+	// The original has other logic here, but I like the way I track things better.
+	runScriptResponseIfExists(event.type);
 }
 
 void PathActor::startPath() {
-	_playState = kPathPlaying;
-	_startTime = g_system->getMillis();
-
+	_currentPoint = _startPoint;
 	if (_stepRate <= 0.0) {
 		error("[%s] %s: Got zero or negative step rate", debugName(), __func__);
 	}
-
-	_currentPoint = _startPoint;
 	_stepDurationInMilliseconds = static_cast<uint>((1.0 / _stepRate) * 1000);
-	_nextPathStepTime = _startTime + _stepDurationInMilliseconds;
+	_startTime = g_engine->getTotalPlayTime();
+	_playState = kPathPlaying;
+	scheduleNextTimerEvent();
 	_currentStep = 0;
 
 	// There is no path start script response.
@@ -180,22 +175,24 @@ void PathActor::startPath() {
 
 void PathActor::stopPath() {
 	if (_playState == kPathPlaying || _playState == kPathPaused) {
+		g_engine->getTimerService()->stopTimer(_timer);
 		_playState = kPathStopped;
-		runScriptResponseIfExists(kPathStoppedEvent);
+		ActorEvent actorEvent(_id, kPathStoppedEvent);
+		g_engine->getEventLoop()->queueEvent(actorEvent);
 	}
 }
 
 void PathActor::pausePath() {
 	if (_playState == kPathPlaying) {
 		_playState = kPathPaused;
-		_pauseTime = g_system->getMillis();
+		_pauseTime = g_engine->getTotalPlayTime();
 	}
 }
 
 void PathActor::resumePath(bool shouldRestart) {
 	if (_playState == kPathPaused) {
 		// Calculate how long we were paused, to make sure we resume at the right point.
-		uint currentTime = g_system->getMillis();
+		uint currentTime = g_engine->getTotalPlayTime();
 		uint pauseDuration = currentTime - _pauseTime;
 		_startTime += pauseDuration;
 		_playState = kPathPlaying;
@@ -212,7 +209,7 @@ double PathActor::getPercentComplete() {
 			percentComplete = static_cast<double>(_currentStep) / _totalSteps;
 		}
 	} else {
-		uint currentTime = g_system->getMillis();
+		uint currentTime = g_engine->getTotalPlayTime();
 		if (currentTime > _startTime && _duration > 0) {
 			double timeElapsed = currentTime - _startTime;
 			percentComplete = timeElapsed / _duration;
@@ -236,28 +233,39 @@ bool PathActor::step() {
 			_endPoint.x, _endPoint.y, _startPoint.x, _startPoint.y, _currentPoint.x, _currentPoint.y);
 
 		// We don't run a step event for the last step.
-		runScriptResponseIfExists(kPathStepEvent);
+		ActorEvent actorEvent(_id, kPathStepEvent);
+		g_engine->getEventLoop()->queueEvent(actorEvent);
 		return false;
 	}
 	return true;
 }
 
 void PathActor::scheduleNextTimerEvent() {
+	// Catch up if we are behind.
 	_nextPathStepTime += _stepDurationInMilliseconds;
+	uint32 currentTime = g_engine->getTotalPlayTime();
+	if (_nextPathStepTime < currentTime) {
+		_nextPathStepTime = currentTime;
+	}
+	uint32 delayUntilNextStepInMilliseconds = _nextPathStepTime - currentTime;
+	debugC(5, kDebugEvents, "[%s] %s: next step in %d ms", debugName(), __func__, delayUntilNextStepInMilliseconds);
+	g_engine->getTimerService()->startTimer(_timer, delayUntilNextStepInMilliseconds);
 }
 
-void PathActor::timerEvent() {
+void PathActor::timerEvent(const TimerEvent &event) {
 	_currentStep += 1;
 	bool finishedPlaying = step();
 	if (!finishedPlaying) {
 		scheduleNextTimerEvent();
 	} else {
+		g_engine->getTimerService()->stopTimer(_timer);
 		_playState = kPathStopped;
-		_percentComplete = 0;
 		_nextPathStepTime = 0;
 		_currentStep = 0;
 		_stepDurationInMilliseconds = 0;
-		runScriptResponseIfExists(kPathEndEvent);
+
+		ActorEvent actorEvent(_id, kPathEndEvent);
+		g_engine->getEventLoop()->queueEvent(actorEvent);
 	}
 }
 

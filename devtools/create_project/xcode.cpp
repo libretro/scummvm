@@ -1141,6 +1141,14 @@ XcodeProvider::ValueList& XcodeProvider::getResourceFiles(const BuildSetup &setu
 			files.push_back("engines/freescape/shaders/freescape_cubemap.fragment");
 			files.push_back("engines/freescape/shaders/freescape_cubemap.vertex");
 		}
+		if (CONTAINS_DEFINE(setup.defines, "ENABLE_COLONY")) {
+			files.push_back("engines/colony/shaders/colony_solid.fragment");
+			files.push_back("engines/colony/shaders/colony_solid.vertex");
+			files.push_back("engines/colony/shaders/colony_solid_3d.fragment");
+			files.push_back("engines/colony/shaders/colony_solid_3d.vertex");
+			files.push_back("engines/colony/shaders/colony_bitmap.fragment");
+			files.push_back("engines/colony/shaders/colony_bitmap.vertex");
+		}
 		if (CONTAINS_DEFINE(setup.defines, "USE_FLUIDSYNTH")) {
 			files.push_back("dists/soundfonts/Roland_SC-55.sf2");
 			files.push_back("dists/soundfonts/COPYRIGHT.Roland_SC-55");
@@ -1612,15 +1620,15 @@ void XcodeProvider::setupBuildConfiguration(const BuildSetup &setup) {
 	}
 
 	// Warning: This assumes we have all configurations with a Debug & Release pair
-	for (const auto *config : _buildConfiguration._objects) {
+	for (std::vector<Object *>::iterator config = _buildConfiguration._objects.begin(); config != _buildConfiguration._objects.end(); config++) {
 
-		Object *configList = new Object(this, "XCConfigurationList_" + config->_name, config->_name, "XCConfigurationList", "", "Build configuration list for " + config->_refType + " \"" + config->_name + "\"");
+		Object *configList = new Object(this, "XCConfigurationList_" + (*config)->_name, (*config)->_name, "XCConfigurationList", "", "Build configuration list for " + (*config)->_refType + " \"" + (*config)->_name + "\"");
 
 		Property buildConfigs;
 		buildConfigs._flags = kSettingsAsList;
 
-		buildConfigs._settings[getHash(config->_id)] = Setting("", "Debug", kSettingsNoValue, 0, 0);
-		buildConfigs._settings[getHash((++config)->_id)] = Setting("", "Release", kSettingsNoValue, 0, 1);
+		buildConfigs._settings[getHash((*config)->_id)] = Setting("", "Debug", kSettingsNoValue, 0, 0);
+		buildConfigs._settings[getHash((*(++config))->_id)] = Setting("", "Release", kSettingsNoValue, 0, 1);
 
 		configList->_properties["buildConfigurations"] = buildConfigs;
 

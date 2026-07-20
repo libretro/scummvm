@@ -29,6 +29,7 @@
 #include "graphics/screen.h"
 
 #include "mediastation/clients.h"
+#include "mediastation/events.h"
 #include "mediastation/mediascript/scriptvalue.h"
 
 namespace MediaStation {
@@ -44,8 +45,11 @@ enum BlitMode {
 	kUncompressedTransparentBlit = 0x08,
 	kPartialDissolve = 0x10,
 	kFullDissolve = 0x20,
-	kCccBlit = 0x40,
-	kCccTransparentBlit = 0x80
+	// These are variants of Color Cell Compression to compress low framerate
+	// "videos" as opposed to just animations. They seem only to be used in
+	// the Lamb Chop cutscenes.
+	kColorCellCompressionBlit = 0x40,
+	kColorCellCompressionTransparentBlit = 0x80
 };
 
 enum TransitionType {
@@ -60,8 +64,26 @@ enum TransitionType {
 	kTransitionSetToPaletteObject = 308,
 	kTransitionSetToPercentOfPaletteObject = 309,
 	kTransitionColorShiftCurrentPalette = 310,
+	kTransitionScrollLeft = 311,
+	kTransitionScrollRight = 312,
+	kTransitionScrollUp = 313,
+	kTransitionScrollDown = 314,
+	kTransitionWipeLeft = 315,
+	kTransitionWipeRight = 316,
+	kTransitionWipeUp = 317,
+	kTransitionWipeDown = 318,
+	kTransitionSlideLeft = 319,
+	kTransitionSlideRight = 320,
+	kTransitionSlideUp = 321,
+	kTransitionSlideDown = 322,
+	kTransitionSlitLROpen = 323,
+	kTransitionSlitLRClose = 324,
+	kTransitionSlitUDOpen = 325,
+	kTransitionSlitUDClose = 326,
+	kTransitionCircleIn = 327,
 	kTransitionCircleOut = 328
 };
+const char *transitionTypeToStr(TransitionType type);
 
 enum VideoDisplayManagerSectionType {
 	kVideoDisplayManagerUpdateDirty = 0x578,
@@ -124,6 +146,42 @@ private:
 	Common::Stack<Clip> _clips;
 };
 
+
+class PrintManager : DisplayContext {
+public:
+	bool printerIsReady();
+	void printScreen();
+	void printSpatialObject(SpatialEntity *entity);
+	void setSourceSize(Common::Point size);
+	void flushToPrinter();
+
+	bool _isPortrait = false;
+
+	double _leftMargin = -1;
+	double _rightMargin = -1;
+	double _topMargin = -1;
+	double _bottomMargin = -1;
+};
+
+class DisplayUpdateManager {
+public:
+	virtual ~DisplayUpdateManager() {}
+	virtual void onEvent(const DisplayEvent &event);
+
+	void performAutoUpdateAndFlush();
+	void performUpdateAll();
+	void performUpdateDirty();
+
+	void enableAutoUpdate(uint disabledUpdateDepthCounter);
+	uint disableAutoUpdate();
+	bool needToDisplay();
+
+private:
+	bool _autoUpdateEnabled = true;
+	bool _forceFlush = false;
+	uint _disabledScreenAutoUpdateToken = 0;
+};
+
 class VideoDisplayManager : public ParameterClient {
 public:
 	VideoDisplayManager(MediaStationEngine *vm);
@@ -131,6 +189,7 @@ public:
 
 	virtual bool attemptToReadFromStream(Chunk &chunk, uint sectionType) override;
 
+	void flushToDisplay();
 	void updateScreen() { _screen->update(); }
 	Graphics::Palette *getRegisteredPalette() { return _registeredPalette; }
 	void setRegisteredPalette(Graphics::Palette *palette) { _registeredPalette = palette; }
@@ -151,12 +210,28 @@ public:
 		const double dissolveFactor,
 		DisplayContext *displayContext);
 
+	Graphics::ManagedSurface decompressRle8Bitmap(
+		const PixMapImage *source,
+		const Graphics::ManagedSurface *keyFrame = nullptr,
+		const Common::Point *keyFrameOffset = nullptr);
+
+	const int16 CCC_BLOCK_DIMENSION = 4;
+	Graphics::ManagedSurface decompressCccBitmap(const PixMapImage *source);
+	Graphics::ManagedSurface decompressCccTransparentBitmap(const PixMapImage *source);
+	void decompressCccBlock(
+		Graphics::ManagedSurface &dest,
+		int16_t blockX,
+		int16_t blockY,
+		uint8_t backgroundColor,
+		uint8_t foregroundColor,
+		uint16_t bitMask,
+		int16_t blockWidth,
+		int16_t blockHeight,
+		const uint8_t *transparencyColor = nullptr);
+
 	void effectTransition(Common::Array<ScriptValue> &args);
 	void setTransitionOnSync(Common::Array<ScriptValue> &args) { _scheduledTransitionOnSync = args; }
 	void doTransitionOnSync();
-
-	void performUpdateDirty();
-	void performUpdateAll();
 
 	void setGammaValues(double red, double green, double blue);
 	void getDefaultGammaValues(double &red, double &green, double &blue);
@@ -185,7 +260,7 @@ private:
 	void blitRectsClip(
 		Graphics::ManagedSurface *dest,
 		const Common::Point &destLocation,
-		const Graphics::ManagedSurface &source,
+		const PixMapImage *source,
 		const Common::Array<Common::Rect> &dirtyRegion,
 		bool useTransBlit = false);
 	void rleBlitRectsClip(
@@ -193,10 +268,16 @@ private:
 		const Common::Point &destLocation,
 		const PixMapImage *source,
 		const Common::Array<Common::Rect> &dirtyRegion);
-	Graphics::ManagedSurface decompressRle8Bitmap(
+	void cccBlitRectsClip(
+		Graphics::ManagedSurface *dest,
+		const Common::Point &destLocation,
 		const PixMapImage *source,
-		const Graphics::ManagedSurface *keyFrame = nullptr,
-		const Common::Point *keyFrameOffset = nullptr);
+		const Common::Array<Common::Rect> &dirtyRegion);
+	void cccTransparentBlitRectsClip(
+		Graphics::ManagedSurface *dest,
+		const Common::Point &destLocation,
+		const PixMapImage *source,
+		const Common::Array<Common::Rect> &dirtyRegion);
 	void dissolveBlitRectsClip(
 		Graphics::ManagedSurface *dest,
 		const Common::Point &destPos,

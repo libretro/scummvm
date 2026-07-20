@@ -8,6 +8,7 @@ cd build-firebee
 
 PLATFORM=m68k-atari-mintelf
 FASTCALL=false
+PLUGINS=true
 export CXXFLAGS="-mcpu=5475"
 export LDFLAGS="-mcpu=5475"
 #export CXXFLAGS="-m68020-60"
@@ -23,12 +24,12 @@ then
 	LDFLAGS="$LDFLAGS -mfastcall"
 fi
 
-if [ -f ../backends/platform/atari/.patched ]
+if $PLUGINS
 then
-	echo "FireBee SDL target shouldn't contain any ATARI patches!"
-	exit 1
+	PLUGINS_FLAGS="--enable-plugins --default-dynamic --enable-detection-dynamic"
+else
+	PLUGINS_FLAGS=""
 fi
-
 
 if [ ! -f config.log ]
 then
@@ -39,7 +40,9 @@ then
 	--with-freetype2-prefix="$(${PLATFORM}-gcc -print-sysroot)/usr/bin/${CPU_DIR}" \
 	--with-mikmod-prefix="$(${PLATFORM}-gcc -print-sysroot)/usr/bin/${CPU_DIR}" \
 	--enable-release \
-	--enable-verbose-build
+	--disable-nfm \
+	--enable-verbose-build \
+	${PLUGINS_FLAGS}
 fi
 
 make -j$(getconf _NPROCESSORS_CONF) fbdist

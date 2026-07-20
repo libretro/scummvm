@@ -59,7 +59,7 @@ private:
 	Time _buttonPressActivationTime;
 };
 
-#define NancyHelpState Nancy::State::Help::instance()
+#define NancyHelpState State::Help::instance()
 
 } // End of namespace State
 } // End of namespace Nancy

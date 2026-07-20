@@ -30,6 +30,7 @@
 #include "access/access.h"
 #include "access/amazon/amazon_game.h"
 #include "access/martian/martian_game.h"
+#include "access/noctropolis/noctropolis_game.h"
 
 #include "access/detection.h"
 
@@ -40,11 +41,12 @@
 #include "common/translation.h"
 
 #define MAX_SAVES 99
+#define GAMEOPTION_OGG_MUSIC GUIO_GAMEOPTIONS1
 
 namespace Access {
 
-uint32 AccessEngine::getGameID() const {
-	return _gameDescription->gameID;
+AccessGameType AccessEngine::getGameID() const {
+	return (AccessGameType)(_gameDescription->gameID);
 }
 
 uint32 AccessEngine::getGameFeatures() const {
@@ -64,7 +66,7 @@ bool AccessEngine::isDemo() const {
 }
 
 Common::Language AccessEngine::getLanguage() const {
-	return _gameDescription->desc.language;
+	return _lang;
 }
 
 Common::Platform AccessEngine::getPlatform() const {
@@ -72,6 +74,22 @@ Common::Platform AccessEngine::getPlatform() const {
 }
 
 } // End of namespace Access
+
+static const ADExtraGuiOptionsMap optionsList[] = {
+	{
+		GAMEOPTION_OGG_MUSIC,
+		{
+			_s("Use 'high definition' OGG music"),
+			_s("Use the OGG audio from the re-release instead of original MIDI tracks"),
+			"ogg_music",
+			true,
+			0,
+			0
+		}
+	},
+	AD_EXTRA_GUI_OPTIONS_TERMINATOR
+};
+
 
 class AccessMetaEngine : public AdvancedMetaEngine<Access::AccessGameDescription> {
 public:
@@ -84,20 +102,19 @@ public:
 	Common::Error createInstance(OSystem *syst, Engine **engine, const Access::AccessGameDescription *desc) const override;
 
 	SaveStateList listSaves(const char *target) const override;
-	int getMaximumSaveSlot() const override;
-	bool removeSaveState(const char *target, int slot) const override;
 	SaveStateDescriptor querySaveMetaInfos(const char *target, int slot) const override;
+
 	Common::KeymapArray initKeymaps(const char *target) const override;
+
+	const ADExtraGuiOptionsMap *getAdvancedExtraGuiOptions() const override {
+		return optionsList;
+	}
+
 };
 
 bool AccessMetaEngine::hasFeature(MetaEngineFeature f) const {
-	return
-	    (f == kSupportsListSaves) ||
-		(f == kSupportsLoadingDuringStartup) ||
-		(f == kSupportsDeleteSave) ||
-		(f == kSavesSupportMetaInfo) ||
-		(f == kSavesSupportThumbnail) ||
-		(f == kSimpleSavesNames);
+	return checkExtendedSaves(f) ||
+		   (f == kSupportsLoadingDuringStartup);
 }
 
 bool Access::AccessEngine::hasFeature(EngineFeature f) const {
@@ -114,6 +131,9 @@ Common::Error AccessMetaEngine::createInstance(OSystem *syst, Engine **engine, c
 		break;
 	case Access::kGameMartianMemorandum:
 		*engine = new Access::Martian::MartianEngine(syst, gd);
+		break;
+	case Access::kGameNoctropolis:
+		*engine = new Access::Noctropolis::NoctropolisEngine(syst, gd);
 		break;
 	default:
 		return Common::kUnsupportedGameidError;
@@ -139,7 +159,11 @@ SaveStateList AccessMetaEngine::listSaves(const char *target) const {
 			if (in) {
 				if (Access::AccessEngine::readSavegameHeader(in, header))
 					saveList.push_back(SaveStateDescriptor(this, slot, header._saveName));
-
+				else {
+					ExtendedSavegameHeader eHeader;
+					if (MetaEngine::readSavegameHeader(in, &eHeader))
+						saveList.push_back(SaveStateDescriptor(this, slot, eHeader.description));
+				}
 				delete in;
 			}
 		}
@@ -150,36 +174,50 @@ SaveStateList AccessMetaEngine::listSaves(const char *target) const {
 	return saveList;
 }
 
-int AccessMetaEngine::getMaximumSaveSlot() const {
-	return MAX_SAVES;
-}
-
-bool AccessMetaEngine::removeSaveState(const char *target, int slot) const {
-	Common::String filename = Common::String::format("%s.%03d", target, slot);
-	return g_system->getSavefileManager()->removeSavefile(filename);
-}
-
 SaveStateDescriptor AccessMetaEngine::querySaveMetaInfos(const char *target, int slot) const {
 	Common::String filename = Common::String::format("%s.%03d", target, slot);
 	Common::InSaveFile *f = g_system->getSavefileManager()->openForLoading(filename);
 
 	if (f) {
-		Access::AccessSavegameHeader header;
-		if (!Access::AccessEngine::readSavegameHeader(f, header, false)) {
+
+		ExtendedSavegameHeader eHeader;
+		if (MetaEngine::readSavegameHeader(f, &eHeader, false)) {
 			delete f;
-			return SaveStateDescriptor();
+
+			SaveStateDescriptor desc(this, slot, eHeader.description);
+			desc.setThumbnail(eHeader.thumbnail);
+
+			uint16 year;
+			uint8 month;
+			uint8 day;
+
+			decodeSavegameDate(&eHeader, year, month, day);
+			desc.setSaveDate(year,month,day);
+
+			uint8 hour;
+			uint8 minute;
+
+			decodeSavegameTime(&eHeader, hour, minute);
+			desc.setSaveTime(hour, minute);
+
+			desc.setPlayTime(eHeader.playtime);
+			return desc;
+		}
+
+		Access::AccessSavegameHeader header;
+		if (Access::AccessEngine::readSavegameHeader(f, header, false)) {
+			delete f;
+			SaveStateDescriptor desc(this, slot, header._saveName);
+			desc.setThumbnail(header._thumbnail);
+			desc.setSaveDate(header._year, header._month, header._day);
+			desc.setSaveTime(header._hour, header._minute);
+
+			return desc;
 		}
 
 		delete f;
 
-		// Create the return descriptor
-		SaveStateDescriptor desc(this, slot, header._saveName);
-		desc.setThumbnail(header._thumbnail);
-		desc.setSaveDate(header._year, header._month, header._day);
-		desc.setSaveTime(header._hour, header._minute);
-		desc.setPlayTime(header._totalFrames * GAME_FRAME_TIME);
-
-		return desc;
+		return SaveStateDescriptor();
 	}
 
 	return SaveStateDescriptor();

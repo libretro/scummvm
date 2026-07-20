@@ -62,15 +62,16 @@ const char *const castTypes[] = {
 	"digitalVideo",
 	"script",
 	"richText",
-	"???",
+	"OLE",
 	"transition",
+	"Xtra",
 };
 
 const char *castType2str(CastType type) {
 	if (type == kCastTypeAny)
 		return "any";
 
-	if (type <= kCastTransition)
+	if (type <= kCastXtra && type >= kCastTypeNull)
 		return castTypes[type];
 
 	warning("BUILDBOT: Unknown castType: %d", type);
@@ -157,6 +158,80 @@ const char *symbolType2str(SymbolType type) {
 		return symbolType[type];
 
 	warning("BUILDBOT: Unknown SymbolType: %d", type);
+	return "<unknown>";
+}
+
+const char *const leventType[] = {
+	"prepareMovie",
+	"startMovie",
+	"stepMovie",
+	"stopMovie",
+
+	"new",
+	"beginSprite",
+	"endSprite",
+
+	"none",
+	"generic",
+	"enterFrame",
+	"prepareFrame",
+	"idle",
+	"stepFrame",
+	"exitFrame",
+	"timeout",
+
+	"activateWindow",
+	"deactivateWindow",
+	"moveWindow",
+	"resizeWindow",
+	"openWindow",
+	"closeWindow",
+	"zoomWindow",
+
+	"keyUp",
+	"keyDown",
+	"mouseUp",
+	"mouseDown",
+	"rightMouseUp",
+	"rightMouseDown",
+	"mouseEnter",
+	"mouseLeave",
+	"mouseUpOutSide",
+	"mouseWithin",
+
+	"startUp",
+
+	"menuCallback",
+
+	"getBehaviorDescription",
+	"getPropertyDescriptionList",
+	"runPropertyDialog",
+
+	"cuePassed",
+};
+
+const char *leventType2str(LEvent type) {
+	if (type <= kEventCuePassed)
+		return leventType[type];
+
+	warning("BUILDBOT: Unknown leventType: %d", type);
+	return "<unknown>";
+}
+
+const char *const eventHandlerSourceType[] = {
+	"NoneHandler",
+	"PrimaryHandler",
+	"SpriteHandler",
+	"CastHandler",
+	"FrameHandler",
+	"MovieHandler",
+};
+
+const char *eventHandlerSourceType2str(EventHandlerSourceType type) {
+	if (type <= kMovieHandler)
+		return eventHandlerSourceType[type];
+
+	warning("BUILDBOT: Unknown EventHandlerSourceType: %d", type);
 	return "<unknown>";
 }
 

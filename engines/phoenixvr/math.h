@@ -22,12 +22,29 @@
 #ifndef PHOENIXVR_MATH_H
 #define PHOENIXVR_MATH_H
 
-#include <math.h>
+#include "common/scummsys.h"
 
 namespace PhoenixVR {
 static constexpr auto kTau = static_cast<float>(M_PI * 2);
 static constexpr auto kPi = static_cast<float>(M_PI);
 static constexpr auto kPi2 = static_cast<float>(M_PI_2);
+
+inline float toRadian(float deg) {
+	return kPi * deg / 180;
+}
+
+inline float toAngle(int a) {
+	static const float angleToFloat = kPi / 4096.0f;
+	return angleToFloat * static_cast<float>(a);
+}
+
+inline int fromAngle(float a) {
+	if (a == INFINITY || a == -INFINITY)
+		return -1;
+	static const float floatToAngle = 4096.0f / kPi;
+	return static_cast<int>(floatToAngle * a);
+}
+
 } // namespace PhoenixVR
 
 #endif

@@ -25,6 +25,7 @@
 #include "common/events.h"
 
 #include "mediastation/actor.h"
+#include "mediastation/events.h"
 #include "mediastation/graphics.h"
 #include "mediastation/mediascript/scriptvalue.h"
 #include "mediastation/mediascript/scriptconstants.h"
@@ -34,15 +35,15 @@ namespace MediaStation {
 // Cylindrical wrapping allows content on a stage to wrap around like a cylinder - for example, when you scroll past the
 // right edge, content from the left edge appears, creating the illusion of an infinite looping world.
 enum CylindricalWrapMode : int {
-	kWrapNone = 0,        // No offset (default)
-	kWrapRight = 1,       // Right wrap (X + extent.x)
-	kWrapBottom = 2,      // Bottom wrap (Y + extent.y)
-	kWrapLeftTop = 3,     // Left + Top wrap (X - extent.x, Y - extent.y)
-	kWrapLeft = 4,        // Left wrap (X - extent.x)
-	kWrapRightBottom = 5, // Right + Bottom wrap (X + extent.x, Y + extent.y)
-	kWrapTop = 6,         // Top wrap (Y - extent.y)
-	kWrapLeftBottom = 7,  // Left + Bottom wrap (X - extent.x, Y + extent.y)
-	kWrapRightTop = 8     // Right + Top wrap (X + extent.x, Y - extent.y)
+	kWrapNone = 0,
+	kWrapRight = 1,
+	kWrapDown = 2,
+	kWrapRightDown = 3,
+	kWrapLeft = 4,
+	kWrapUp = 5,
+	kWrapLeftUp = 6,
+	kWrapLeftDown = 7,
+	kWrapRightUp = 8
 };
 
 class CameraActor;
@@ -56,9 +57,10 @@ public:
 
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
 	virtual void readParameter(Chunk &chunk, ActorHeaderSectionType paramType) override;
-	virtual void preload(const Common::Rect &rect) override;
+	virtual void preload(const Common::Rect &rect, bool fireStepEvent = true) override;
 	virtual bool isVisible() const override { return _children.size() > 0; }
 	virtual bool isRectInMemory(const Common::Rect &rect) override;
+	bool inBounds(const Common::Point &point, const Common::Rect &bounds, const Polygon &polygon);
 
 	void addChildSpatialEntity(SpatialEntity *entity);
 	void removeChildSpatialEntity(SpatialEntity *entity);
@@ -71,24 +73,25 @@ public:
 		const Common::Point &point,
 		uint16 eventMask,
 		MouseActorState &state,
+		bool clipMouseEvents,
 		CylindricalWrapMode wrapMode = kWrapNone);
 	uint16 findActorToAcceptMouseEventsObject(
 		const Common::Point &point,
 		uint16 eventMask,
 		MouseActorState &state,
-		bool inBounds);
+		bool clipMouseEvents);
 	uint16 findActorToAcceptMouseEventsCamera(
 		const Common::Point &point,
 		uint16 eventMask,
 		MouseActorState &state,
-		bool inBounds);
+		bool clipMouseEvents);
 	virtual uint16 findActorToAcceptMouseEvents(
 		const Common::Point &point,
 		uint16 eventMask,
 		MouseActorState &state,
-		bool inBounds) override;
+		bool clipMouseEvents) override;
 	virtual uint16 findActorToAcceptKeyboardEvents(
-		uint16 asciiCode,
+		uint16 charCode,
 		uint16 eventMask,
 		MouseActorState &state) override;
 	virtual void currentMousePosition(Common::Point &point) override;
@@ -113,7 +116,10 @@ protected:
 	void addActorToStage(uint actorId);
 	void removeActorFromStage(uint actorId);
 	bool isRectInMemoryTest(const Common::Rect &rect, CylindricalWrapMode wrapMode);
-	void preloadTest(const Common::Rect &rect, CylindricalWrapMode wrapMode);
+	void preloadTest(const Common::Rect &rect, CylindricalWrapMode wrapMode, bool fireStepEvent);
+	bool inBoundsTest(Common::Point point, const Common::Rect &bounds, const Polygon &polygon);
+	bool inBoundsCamera(const Common::Point &point, const Common::Rect &bounds, const Polygon &polygon);
+	bool inBoundsObject(const Common::Point &point, const Common::Rect &bounds, const Polygon &polygon);
 
 	bool assertHasNoParent(const SpatialEntity *entity);
 	bool assertHasParentThatIsNotMe(const SpatialEntity *entity) { return !assertIsMyChild(entity); }
@@ -137,21 +143,21 @@ protected:
 class RootStage : public StageActor {
 public:
 	friend class StageDirector;
-	RootStage() : StageActor() { _id = ROOT_STAGE_ACTOR_ID; };
+	RootStage();
 
 	virtual uint16 findActorToAcceptMouseEvents(
 		const Common::Point &point,
 		uint16 eventMask,
 		MouseActorState &state,
-		bool inBounds) override;
+		bool clipMouseEvents) override;
 	virtual void currentMousePosition(Common::Point &point) override;
 	virtual void setMousePosition(int16 x, int16 y) override;
 	virtual void invalidateRect(const Common::Rect &rect) override;
 	virtual void deleteChildrenFromContextId(uint contextId);
 
-	virtual void mouseEnteredEvent(const Common::Event &event) override;
-	virtual void mouseExitedEvent(const Common::Event &event) override;
-	virtual void mouseOutOfFocusEvent(const Common::Event &event) override;
+	virtual void mouseEnteredEvent(const MouseEvent &event) override;
+	virtual void mouseExitedEvent(const MouseEvent &event) override;
+	virtual void mouseOutOfFocusEvent(const MouseEvent &event) override;
 
 	void drawAll(DisplayContext &displayContext);
 	void drawDirtyRegion(DisplayContext &displayContext);
@@ -174,13 +180,14 @@ public:
 	void drawDirtyRegion();
 	void clearDirtyRegion();
 
-	void handleKeyboardEvent(const Common::Event &event);
-	void handleMouseDownEvent(const Common::Event &event);
-	void handleMouseUpEvent(const Common::Event &event);
-	void handleMouseMovedEvent(const Common::Event &event);
-	void handleMouseEnterExitEvent(const Common::Event &event);
-	void handleMouseOutOfFocusEvent(const Common::Event &event);
-	void sendMouseEnterExitEvent(uint16 flags, MouseActorState &state, const Common::Event &event);
+	void handleMouseEvent(const MouseEvent &event);
+	void handleKeyboardEvent(const KeyboardEvent &event);
+	void handleMouseDownEvent(const MouseEvent &event);
+	void handleMouseUpEvent(const MouseEvent &event);
+	void handleMouseMovedEvent(const MouseEvent &event);
+	void handleMouseEnterExitEvent(const MouseEvent &event);
+	void handleMouseOutOfFocusEvent(const MouseEvent &event);
+	void sendMouseEnterExitEvent(uint16 flags, MouseActorState &state, const MouseEvent &event);
 
 private:
 	RootStage *_rootStage = nullptr;

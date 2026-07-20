@@ -118,6 +118,14 @@ enum EventType {
 	EVENT_FOCUS_LOST = 37,
 
 	/**
+	 * Hotspot display, driven by a hold-to-show key. Bound as a keymapper
+	 * start/end pair (see Keymapper::convertStartToEnd), so SHOW is sent while
+	 * the key is held and HIDE when it is released.
+	 */
+	EVENT_HOTSPOTS_SHOW = 38,
+	EVENT_HOTSPOTS_HIDE = 39,
+
+	/**
 	 * We reserve some event ids for custom events.
 	 * 
 	 * This is used for example by Asylum and Bagel engines.
@@ -305,7 +313,7 @@ public:
 		_artificialEventQueue.push(ev);
 	}
 
-	bool pollEvent(Event &ev) {
+	bool pollEvent(Event &ev) override {
 		if (!_artificialEventQueue.empty()) {
 			ev = _artificialEventQueue.pop();
 			return true;
@@ -318,7 +326,7 @@ public:
 	 * By default, an artificial event source prevents its events
 	 * from being mapped.
 	 */
-	virtual bool allowMapping() const { return false; }
+	bool allowMapping() const override { return false; }
 };
 
 /**

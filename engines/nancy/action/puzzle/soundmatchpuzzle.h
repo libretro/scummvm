@@ -43,9 +43,10 @@ public:
 	void execute() override;
 	void handleInput(NancyInput &input) override;
 
+	bool isViewportRelative() const override { return true; }
+
 protected:
 	Common::String getRecordTypeName() const override { return "SoundMatchPuzzle"; }
-	bool isViewportRelative() const override { return true; }
 
 	// File data
 
@@ -62,6 +63,8 @@ protected:
 	Common::Rect _exitHotspot;
 
 	uint16 _requiredPairs = kNumButtons;   // how many matches needed to win
+
+	bool _resetOnWrong = false;
 
 	struct SoundButtonEntry {
 		SoundDescription sound;   // whale call sound
@@ -89,6 +92,8 @@ protected:
 	int  _selectedSoundButton  = -1;    // currently selected numbered button, -1 = none
 	int  _matchedPairs    = 0;
 	bool _isExiting       = false;
+
+	bool _whaleClickEnabled = false;
 
 	enum SolveSubState {
 		kIdle         = 0,

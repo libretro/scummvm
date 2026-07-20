@@ -114,7 +114,7 @@ void PaletteCastMember::load() {
 	if (paletteId) {
 
 		uint32 tag = MKTAG('C', 'L', 'U', 'T');
-		Archive *arch = _cast->getArchive();
+		Archive *arch = _cast->getArchive().get();
 		if (arch->hasResource(tag, paletteId)) {
 			Common::SeekableReadStreamEndian *pal = arch->getResource(MKTAG('C', 'L', 'U', 'T'), paletteId);
 			debugC(2, kDebugImages, "PaletteCastMember::load(): linking palette id %d to cast index %d", paletteId, _castId);
@@ -138,8 +138,8 @@ void PaletteCastMember::unload() {
 // PaletteCastMember has no data in the 'CASt' resource or is ignored
 // This is the data in 'CASt' resource
 uint32 PaletteCastMember::getCastDataSize() {
-	if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
-		// It has been observed as well that the Data size in PaletteCastMember's CASt resource is 0 for d5
+	if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer1100) {
+		// D5 onward palette lives in the CLUT resources
 		return 0;
 	} else if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
 		// (castType (see Cast::loadCastData() for Director 4 only) 1 byte
@@ -183,7 +183,8 @@ void PaletteCastMember::writePaletteData(Common::SeekableWriteStream *writeStrea
 		writeStream->writeUint16BE(pal[3 * i + 2] << 8);
 	}
 
-	if (debugChannelSet(7, kDebugSaving)) {
+	// FIXME: can't dereference SeekableWriteStream
+	/* if (debugChannelSet(7, kDebugSaving)) {
 		byte *dumpData = nullptr;
 		dumpData = (byte *)calloc(castSize, sizeof(byte));
 		auto dumpStream = new Common::SeekableMemoryWriteStream(dumpData, castSize + 8);
@@ -196,7 +197,7 @@ void PaletteCastMember::writePaletteData(Common::SeekableWriteStream *writeStrea
 		dumpFile("PaletteData", _castId, MKTAG('C', 'L', 'U', 'T'), dumpData, castSize);
 		free(dumpData);
 		delete dumpStream;
-	}
+	}*/
 }
 
 }	// End of namespace Director

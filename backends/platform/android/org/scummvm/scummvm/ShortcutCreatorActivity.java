@@ -1,3 +1,24 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.scummvm.scummvm;
 
 import android.app.Activity;
@@ -194,6 +215,7 @@ public class ShortcutCreatorActivity extends Activity implements CompatHelpers.S
 			FileInputStream[] ret = new FileInputStream[children.length];
 			int i = 0;
 			for (File f: children) {
+				//noinspection resource
 				ret[i] = openFile(f);
 				i += 1;
 			}
@@ -363,7 +385,7 @@ public class ShortcutCreatorActivity extends Activity implements CompatHelpers.S
 		 * This kind of mimics Common::generateZipSet
 		 */
 		private final Context _context;
-		private final Map<String, byte[]> _icons = new LinkedHashMap<String, byte[]>(16,0.75f, true) {
+		private final Map<String, byte[]> _icons = new LinkedHashMap<>(16,0.75f, true) {
 			@Override
 			protected boolean removeEldestEntry(Map.Entry<String, byte[]> eldest) {
 				return size() > 128;

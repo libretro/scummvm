@@ -28,6 +28,9 @@
 #include "chamber/enums.h"
 #include "chamber/resdata.h"
 #include "chamber/cga.h"
+#include "chamber/ega.h"
+#include "chamber/ega_resource.h"
+#include "chamber/amiga.h"
 #include "chamber/cursor.h"
 #include "chamber/portrait.h"
 #include "chamber/input.h"
@@ -38,7 +41,7 @@
 #include "chamber/anim.h"
 #include "chamber/invent.h"
 #include "chamber/sound.h"
-#include "chamber/savegame.h"
+#include "chamber/saveload.h"
 #include "chamber/ifgm.h"
 
 #if 0
@@ -348,29 +351,21 @@ byte wait_delta = 0;
 Wait for a specified number of seconds (real time) or a keypress
 */
 void wait(byte seconds) {
-	warning("STUB: Wait(%d)", seconds);
-
-#if 0
-	struct time t;
-	uint16 endtime;
-
 	seconds += wait_delta;
-	if (seconds > 127)  /*TODO: is this a check for a negative value?*/
+	if (seconds > 127)  /*original: treats as signed; cap to 0*/
 		seconds = 0;
 
-	gettime(&t);
-	endtime = t.ti_sec * 100 + t.ti_hund + seconds * 100;
+	if (seconds == 0)
+		return;
 
-	while (buttons == 0) {
-		uint16 current;
-		gettime(&t);
-		current = t.ti_sec * 100 + t.ti_hund;
-		if (endtime >= 6000 && current < 2048)  /*TODO: some kind of overflow check???*/
-			current += 6000;
-		if (current >= endtime)
+	uint32 end = g_system->getMillis() + (uint32)seconds * 1000;
+	while (!buttons && !g_vm->_shouldQuit) {
+		pollInputButtonsOnly();
+		if (g_system->getMillis() >= end)
 			break;
+		g_system->delayMillis(10);
+		g_system->updateScreen();
 	}
-#endif
 }
 
 /*
@@ -384,14 +379,12 @@ uint16 SCR_2C_Wait4(void) {
 
 /*
 Wait for a specified number of seconds or a keypress
-TODO: Always waits for a 4 seconds due to a bug?
 */
 uint16 SCR_2D_Wait(void) {
 	byte seconds;
 	script_ptr++;
 	seconds = *script_ptr++;
-	(void)seconds;
-	wait(4);    /*TODO: looks like a bug?*/
+	wait(seconds);
 	return 0;
 }
 
@@ -677,7 +670,10 @@ uint16 SCR_5_DrawPortraitLiftRight(void) {
 		return 0;
 
 	/*TODO: use local args instead of globals*/
-	cga_AnimLiftToRight(width, cur_image_pixels + width - 1, width, 1, height, CGA_SCREENBUFFER, CalcXY_p(x, y));
+	if (isEgaLikeRenderer())
+		g_vm->_renderer->animLiftToRight(width, cur_image_pixels + width * 4 - 4, width, 1, height, SCREENBUFFER, g_vm->_renderer->calcXY_p(x, y));
+	else
+		g_vm->_renderer->animLiftToRight(width, cur_image_pixels + width - 1, width, 1, height, SCREENBUFFER, g_vm->_renderer->calcXY_p(x, y));
 	return 0;
 }
 
@@ -693,7 +689,7 @@ uint16 SCR_6_DrawPortraitLiftLeft(void) {
 		return 0;
 
 	/*TODO: use local args instead of globals*/
-	cga_AnimLiftToLeft(width, cur_image_pixels, width, 1, height, CGA_SCREENBUFFER, CalcXY_p(x + width - 1, y));
+	g_vm->_renderer->animLiftToLeft(width, cur_image_pixels, width, 1, height, SCREENBUFFER, g_vm->_renderer->calcXY_p(x + width - 1, y));
 	return 0;
 }
 
@@ -709,7 +705,7 @@ uint16 SCR_7_DrawPortraitLiftDown(void) {
 		return 0;
 
 	/*TODO: use local args instead of globals*/
-	cga_AnimLiftToDown(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, CGA_SCREENBUFFER, cur_image_offs);
+	g_vm->_renderer->animLiftToDown(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, SCREENBUFFER, cur_image_offs);
 	return 0;
 }
 
@@ -725,7 +721,7 @@ uint16 SCR_8_DrawPortraitLiftUp(void) {
 		return 0;
 
 	/*TODO: use local args instead of globals*/
-	cga_AnimLiftToUp(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, CGA_SCREENBUFFER, x, y + height - 1);
+	g_vm->_renderer->animLiftToUp(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, SCREENBUFFER, x, y + height - 1);
 	return 0;
 }
 
@@ -740,7 +736,7 @@ uint16 SCR_9_DrawPortrait(void) {
 	if (!drawPortrait(&script_ptr, &x, &y, &width, &height))
 		return 0;
 
-	cga_BlitAndWait(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, CGA_SCREENBUFFER, cur_image_offs);
+	g_vm->_renderer->blitAndWait(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, SCREENBUFFER, cur_image_offs);
 	return 0;
 }
 
@@ -763,7 +759,7 @@ void twistDraw(byte x, byte y, byte width, byte height, byte *source, byte *targ
 	ey = y + height - 1;
 
 	for (i = 0; i < width * 4; i++) {
-		cga_TraceLine(sx, ex, sy, ey, source, target);
+		g_vm->_renderer->traceLine(sx, ex, sy, ey, source, target);
 		waitVBlank();
 		sx += 1;
 		ex -= 1;
@@ -778,7 +774,7 @@ void twistDraw(byte x, byte y, byte width, byte height, byte *source, byte *targ
 	ey = t;
 
 	for (i = 0; i < height; i++) {
-		cga_TraceLine(sx, ex, sy, ey, source, target);
+		g_vm->_renderer->traceLine(sx, ex, sy, ey, source, target);
 		waitVBlank();
 		sy -= 1;
 		ey += 1;
@@ -797,11 +793,11 @@ uint16 SCR_B_DrawPortraitTwistEffect(void) {
 	if (!drawPortrait(&script_ptr, &x, &y, &width, &height))
 		return 0;
 
-	offs = CalcXY_p(x, y);
+	offs = g_vm->_renderer->calcXY_p(x, y);
 
-	cga_SwapScreenRect(cur_image_pixels, width, height, backbuffer, offs);
+	g_vm->_renderer->swapScreenRect(cur_image_pixels, width, height, backbuffer, offs);
 	twistDraw(x, y, width, height, backbuffer, frontbuffer);
-	cga_BlitAndWait(scratch_mem2, width, width, height, backbuffer, offs);
+	g_vm->_renderer->blitAndWait(scratch_mem2, width, width, height, backbuffer, offs);
 
 	return 0;
 }
@@ -818,19 +814,19 @@ void arcDraw(byte x, byte y, byte width, byte height, byte *source, byte *target
 	ey = y + height - 1;
 
 	for (i = 0; i < height; i++) {
-		cga_TraceLine(sx, ex, sy, ey, source, target);
+		g_vm->_renderer->traceLine(sx, ex, sy, ey, source, target);
 		waitVBlank();
 		sy -= 1;
 	}
 
 	for (i = 0; i < width * 4; i++) {
-		cga_TraceLine(sx, ex, sy, ey, source, target);
+		g_vm->_renderer->traceLine(sx, ex, sy, ey, source, target);
 		waitVBlank();
 		sx += 1;
 	}
 
 	for (i = 0; i < height + 1; i++) {
-		cga_TraceLine(sx, ex, sy, ey, source, target);
+		g_vm->_renderer->traceLine(sx, ex, sy, ey, source, target);
 		waitVBlank();
 		sy += 1;
 	}
@@ -848,11 +844,11 @@ uint16 SCR_C_DrawPortraitArcEffect(void) {
 	if (!drawPortrait(&script_ptr, &x, &y, &width, &height))
 		return 0;
 
-	offs = CalcXY_p(x, y);
+	offs = g_vm->_renderer->calcXY_p(x, y);
 
-	cga_SwapScreenRect(cur_image_pixels, width, height, backbuffer, offs);
+	g_vm->_renderer->swapScreenRect(cur_image_pixels, width, height, backbuffer, offs);
 	arcDraw(x, y, width, height, backbuffer, frontbuffer);
-	cga_BlitAndWait(scratch_mem2, width, width, height, backbuffer, offs);
+	g_vm->_renderer->blitAndWait(scratch_mem2, width, width, height, backbuffer, offs);
 
 	return 0;
 }
@@ -864,12 +860,39 @@ uint16 SCR_D_DrawPortraitDotEffect(void) {
 	//int16 i;
 	byte x, y, width, height;
 	uint16 offs, step = 17;
-	byte *target = CGA_SCREENBUFFER;
+	byte *target = SCREENBUFFER;
 
 	script_ptr++;
 
 	if (!drawPortrait(&script_ptr, &x, &y, &width, &height))
 		return 0;
+
+	if (isEgaLikeRenderer()) {
+		uint16 pw = width * 4;
+		cur_image_end = pw * height;
+		uint16 baseOfs = g_vm->_renderer->calcXY_p(x, y);
+		int16 count = 0;
+		for (offs = 0; offs != cur_image_end;) {
+			uint16 px = offs % pw;
+			uint16 py = offs / pw;
+			target[baseOfs + py * EGA_BYTES_PER_LINE + px] = cur_image_pixels[offs];
+
+			if (count % 20 == 0) {
+				g_vm->_renderer->blitToScreen(x * 4, y, pw, height);
+				pollInput();
+				g_system->updateScreen();
+				if (g_vm->_shouldQuit)
+					return 0;
+			}
+
+			offs += step;
+			if (offs > cur_image_end)
+				offs -= cur_image_end;
+			count++;
+		}
+		g_vm->_renderer->blitToScreen(x * 4, y, pw, height);
+		return 0;
+	}
 
 	cur_image_end = width * height;
 	int16 count = 0;
@@ -882,10 +905,17 @@ uint16 SCR_D_DrawPortraitDotEffect(void) {
 	}
 
 	for (offs = 0; offs != cur_image_end;) {
-		target[CalcXY_p(x + offs % cur_image_size_w, y + offs / cur_image_size_w)] = cur_image_pixels[offs]; // TODO check this
+		target[g_vm->_renderer->calcXY_p(x + offs % cur_image_size_w, y + offs / cur_image_size_w)] = cur_image_pixels[offs]; // TODO check this
 
-		if (count % 5 == 0)
-			cga_blitToScreen(offs, g_vm->_screenPPB, 1);
+		if (count % 5 == 0) {
+			g_vm->_renderer->blitToScreen(offs, g_vm->_screenPPB, 1);
+			if ((count % 100) == 0) {
+				pollInput();
+				g_system->updateScreen();
+				if (g_vm->_shouldQuit)
+					return 0;
+			}
+		}
 
 		offs += step;
 		if (offs > cur_image_end)
@@ -907,7 +937,7 @@ uint16 SCR_E_DrawPortraitZoomIn(void) {
 	if (!drawPortrait(&script_ptr, &x, &y, &width, &height))
 		return 0;
 
-	cga_AnimZoomIn(cur_image_pixels, cur_image_size_w, cur_image_size_h, frontbuffer, cur_image_offs);
+	g_vm->_renderer->animZoomIn(cur_image_pixels, cur_image_size_w, cur_image_size_h, frontbuffer, cur_image_offs);
 	return 0;
 }
 
@@ -923,11 +953,16 @@ uint16 drawPortraitZoomed(byte **params) {
 	zwidth = *((*params)++);
 	zheight = *((*params)++);
 
-	/*adjust the rect for new size*/
-	last_dirty_rect->width = zwidth + 2;
-	last_dirty_rect->height = zheight;
+	if (isEgaLikeRenderer()) {
+		/*EGA can't zoom: draw at original size; dirty rect already has correct dimensions from drawPortrait*/
+		g_vm->_renderer->zoomImage(cur_image_pixels, cur_image_size_w, cur_image_size_h, cur_image_size_w, cur_image_size_h, frontbuffer, cur_image_offs);
+	} else {
+		/*adjust the rect for new size*/
+		last_dirty_rect->width = zwidth + 2;
+		last_dirty_rect->height = zheight;
 
-	cga_ZoomImage(cur_image_pixels, cur_image_size_w, cur_image_size_h, zwidth, zheight, frontbuffer, cur_image_offs);
+		g_vm->_renderer->zoomImage(cur_image_pixels, cur_image_size_w, cur_image_size_h, zwidth, zheight, frontbuffer, cur_image_offs);
+	}
 	return 0;
 }
 
@@ -961,17 +996,32 @@ uint16 SCR_19_HidePortraitLiftLeft(void) {
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
 	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 		return 0;
 	}
 
 	/*TODO: This originally was done by reusing door sliding routine*/
 
-	/*offs = CalcXY_p(x + 1, y);*/
+	if (isEgaLikeRenderer()) {
+		offs += 4;
+		while (--width)
+			g_vm->_renderer->hideScreenBlockLiftToLeft(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
+		offs -= 4;
+		uint16 ooffs = offs;
+		byte oh = height;
+		while (height--) {
+			memcpy(frontbuffer + offs, backbuffer + offs, 4);
+			offs += EGA_BYTES_PER_LINE;
+		}
+		g_vm->_renderer->blitToScreen(ooffs % EGA_BYTES_PER_LINE, ooffs / EGA_BYTES_PER_LINE, 4, oh);
+		return 0;
+	}
+
+	/*offs = g_vm->_renderer->calcXY_p(x + 1, y);*/
 	offs++;
 
 	while (--width) {
-		cga_HideScreenBlockLiftToLeft(1, CGA_SCREENBUFFER, backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->hideScreenBlockLiftToLeft(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
 	}
 
 	offs--;
@@ -987,7 +1037,7 @@ uint16 SCR_19_HidePortraitLiftLeft(void) {
 		if ((offs & g_vm->_line_offset) == 0)
 			offs += g_vm->_screenBPL;
 	}
-	cga_blitToScreen(ooffs, 1, oh);
+	g_vm->_renderer->blitToScreen(ooffs, 1, oh);
 
 	return 0;
 }
@@ -1007,16 +1057,31 @@ uint16 SCR_1A_HidePortraitLiftRight(void) {
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
 	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 		return 0;
 	}
 
 	/*TODO: This originally was done by reusing door sliding routine*/
 
-	offs = CalcXY_p(x + width - 2, y);
+	if (isEgaLikeRenderer()) {
+		offs = g_vm->_renderer->calcXY_p(x + width - 2, y);
+		while (--width)
+			g_vm->_renderer->hideScreenBlockLiftToRight(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
+		offs += 4;
+		uint16 ooffs = offs;
+		byte oh = height;
+		while (height--) {
+			memcpy(frontbuffer + offs, backbuffer + offs, 4);
+			offs += EGA_BYTES_PER_LINE;
+		}
+		g_vm->_renderer->blitToScreen(ooffs % EGA_BYTES_PER_LINE, ooffs / EGA_BYTES_PER_LINE, 4, oh);
+		return 0;
+	}
+
+	offs = g_vm->_renderer->calcXY_p(x + width - 2, y);
 
 	while (--width) {
-		cga_HideScreenBlockLiftToRight(1, CGA_SCREENBUFFER, backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->hideScreenBlockLiftToRight(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
 	}
 
 	offs++;
@@ -1032,7 +1097,7 @@ uint16 SCR_1A_HidePortraitLiftRight(void) {
 		if ((offs & g_vm->_line_offset) == 0)
 			offs += g_vm->_screenBPL;
 	}
-	cga_blitToScreen(ooffs, 1, oh);
+	g_vm->_renderer->blitToScreen(ooffs, 1, oh);
 
 	return 0;
 }
@@ -1052,14 +1117,25 @@ uint16 SCR_1B_HidePortraitLiftUp(void) {
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
 	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 		return 0;
 	}
 
-	offs = CalcXY_p(x, y + 1);
+	if (isEgaLikeRenderer()) {
+		offs = g_vm->_renderer->calcXY_p(x, y + 1);
+		while (--height)
+			g_vm->_renderer->hideScreenBlockLiftToUp(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
+		/*hide topmost line*/
+		offs -= EGA_BYTES_PER_LINE;
+		memcpy(SCREENBUFFER + offs, backbuffer + offs, width * 4);
+		g_vm->_renderer->blitToScreen(offs % EGA_BYTES_PER_LINE, offs / EGA_BYTES_PER_LINE, width * 4, 1);
+		return 0;
+	}
+
+	offs = g_vm->_renderer->calcXY_p(x, y + 1);
 
 	while (--height) {
-		cga_HideScreenBlockLiftToUp(1, CGA_SCREENBUFFER, backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->hideScreenBlockLiftToUp(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
 	}
 
 	/*hide topmost line*/
@@ -1067,8 +1143,8 @@ uint16 SCR_1B_HidePortraitLiftUp(void) {
 	offs ^= g_vm->_line_offset;
 	if ((offs & g_vm->_line_offset) != 0)
 		offs -= g_vm->_screenBPL;
-	memcpy(CGA_SCREENBUFFER + offs, backbuffer + offs, width);
-	cga_blitToScreen(offs, width, 1);
+	memcpy(SCREENBUFFER + offs, backbuffer + offs, width);
+	g_vm->_renderer->blitToScreen(offs, width, 1);
 	return 0;
 }
 
@@ -1088,14 +1164,25 @@ uint16 SCR_1C_HidePortraitLiftDown(void) {
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
 	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 		return 0;
 	}
 
-	offs = CalcXY_p(x, y + height - 2);
+	if (isEgaLikeRenderer()) {
+		offs = g_vm->_renderer->calcXY_p(x, y + height - 2);
+		while (--height)
+			g_vm->_renderer->hideScreenBlockLiftToDown(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
+		/*hide bottommost line*/
+		offs += EGA_BYTES_PER_LINE;
+		memcpy(SCREENBUFFER + offs, backbuffer + offs, width * 4);
+		g_vm->_renderer->blitToScreen(offs % EGA_BYTES_PER_LINE, offs / EGA_BYTES_PER_LINE, width * 4, 1);
+		return 0;
+	}
+
+	offs = g_vm->_renderer->calcXY_p(x, y + height - 2);
 
 	while (--height) {
-		cga_HideScreenBlockLiftToDown(1, CGA_SCREENBUFFER, backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->hideScreenBlockLiftToDown(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
 	}
 
 	/*hide bottommost line*/
@@ -1103,8 +1190,8 @@ uint16 SCR_1C_HidePortraitLiftDown(void) {
 	offs ^= g_vm->_line_offset;
 	if ((offs & g_vm->_line_offset) == 0)
 		offs += g_vm->_screenBPL;
-	memcpy(CGA_SCREENBUFFER + offs, backbuffer + offs, width);
-	cga_blitToScreen(offs, width, 1);
+	memcpy(SCREENBUFFER + offs, backbuffer + offs, width);
+	g_vm->_renderer->blitToScreen(offs, width, 1);
 	return 0;
 }
 
@@ -1124,7 +1211,7 @@ uint16 SCR_1E_HidePortraitTwist(void) {
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
 	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 		return 0;
 	}
 
@@ -1148,7 +1235,7 @@ uint16 SCR_1F_HidePortraitArc(void) {
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
 	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 		return 0;
 	}
 
@@ -1172,7 +1259,7 @@ uint16 SCR_20_HidePortraitDots(void) {
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
 	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 		return 0;
 	}
 
@@ -1298,9 +1385,9 @@ void jaggedZoom(byte *source, byte *target) {
 				ex = points[0].x;
 				ey = points[0].y;
 			}
-			cga_TraceLine(sx / 2, ex / 2, sy / 2, ey / 2, source, target);
-			/*TODO: waitVBlank(); maybe?*/
+			g_vm->_renderer->traceLine(sx / 2, ex / 2, sy / 2, ey / 2, source, target);
 		}
+		waitVBlank();
 	}
 }
 
@@ -1347,7 +1434,10 @@ void drawStars(star_t *stars, int16 iter, byte *target) {
 		short z, x, y;
 		byte pixel, mask;
 
-		target[stars->ofs] &= stars->mask;
+		if (isEgaLikeRenderer())
+			target[stars->ofs] = 0;
+		else
+			target[stars->ofs] &= stars->mask;
 		if (stars->z < 328) {
 			if (iter >= 30) {
 				randomStar(stars);
@@ -1368,17 +1458,23 @@ void drawStars(star_t *stars, int16 iter, byte *target) {
 			continue;
 		}
 
-		stars->ofs = cga_CalcXY(x, y);
-
-		pixel = (stars->z < 0xE00) ? 0xC0 : 0x40;
-		pixel >>= (x % 4) * 2;
-		mask = 0xC0;
-		mask = ~(mask >> (x % 4) * 2);
-		stars->pixel = pixel;
-		stars->mask = mask;
-
-		target[stars->ofs] &= mask;
-		target[stars->ofs] |= pixel;
+		if (isEgaLikeRenderer()) {
+			stars->ofs = g_vm->_renderer->calcXY_p(x, y);
+			pixel = (stars->z < 0xE00) ? 15 : 8;
+			stars->pixel = pixel;
+			stars->mask = 0;
+			target[stars->ofs] = pixel;
+		} else {
+			stars->ofs = g_vm->_renderer->calcXY(x, y);
+			pixel = (stars->z < 0xE00) ? 0xC0 : 0x40;
+			pixel >>= (x % 4) * 2;
+			mask = 0xC0;
+			mask = ~(mask >> (x % 4) * 2);
+			stars->pixel = pixel;
+			stars->mask = mask;
+			target[stars->ofs] &= mask;
+			target[stars->ofs] |= pixel;
+		}
 	}
 }
 
@@ -1387,8 +1483,10 @@ Play starfield animation
 */
 void animStarfield(star_t *stars, byte *target) {
 	int16 i;
-	for (i = 100; i; i--)
+	for (i = 100; i; i--) {
 		drawStars(stars, i, target);
+		waitVBlank();
+	}
 }
 
 /*
@@ -1400,19 +1498,21 @@ uint16 SCR_26_GameOver(void) {
 	script_byte_vars.game_paused = 1;
 	memset(backbuffer, 0, sizeof(backbuffer) - 2);  /*TODO: original bug?*/
 	jaggedZoom(backbuffer, frontbuffer);
-	cga_BackBufferToRealFull();
-	cga_ColorSelect(0x30);
+	g_vm->_renderer->backBufferToRealFull();
+	g_vm->_renderer->colorSelect(0x30);
 	animStarfield(initStarfield(), frontbuffer);
 	playAnim(44, 156 / 4, 95);
 	script_byte_vars.zone_index = 135;
 
 	/*reload background*/
-	while (!loadFond())
+	Graphics::Surface *fond;
+	while (!(fond = loadFond()))
 		askDisk2();
+	delete fond;
 
 	jaggedZoom(backbuffer, frontbuffer);
 
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 	restartGame();
 	return 0;
 }
@@ -1443,6 +1543,14 @@ If go through a door, play door's opening animation
 */
 uint16 SCR_42_LoadZone(void) {
 	byte index;
+	bool door_animated = false;
+	// Freeze the ordeal timer (timer_ticks2) while we load the zone and play the
+	// room transition. These are far slower under ScummVM than on DOS and would
+	// otherwise bleed real seconds into the one-hour ordeal budget. timer_ticks
+	// (animation pacing) keeps running. Save/restore so we don't unpause an
+	// already-paused state (e.g. a zone load during the game-over sequence).
+	byte saved_paused = script_byte_vars.game_paused;
+	script_byte_vars.game_paused = 1;
 
 	script_ptr++;
 	index = *script_ptr++;
@@ -1455,6 +1563,7 @@ uint16 SCR_42_LoadZone(void) {
 			script_byte_vars.last_door = script_byte_vars.cur_spot_flags & 7;
 		else if ((script_byte_vars.cur_spot_flags & ((SPOTFLG_20 | SPOTFLG_10 | SPOTFLG_8))) == SPOTFLG_8) {
 			skip_zone_transition = 1;
+			door_animated = true;
 			animRoomDoorOpen(script_byte_vars.cur_spot_idx);
 			script_byte_vars.last_door = script_byte_vars.cur_spot_flags & 7;
 		} else
@@ -1462,6 +1571,15 @@ uint16 SCR_42_LoadZone(void) {
 	}
 	beforeChangeZone(index);
 	changeZone(index);
+
+	// End any in-flight interaction when going through a door: an Aspirant trade
+	// can still be mid-flight (runCommand ScriptRerun loop, CurrentPers still on
+	// the old room's actor), so abort the chain and drop the stale actor here.
+	// prepareVorts/Turkey/Aspirant below repopulate CurrentPers. Done here, not in
+	// changeZone(), since SCR_25_ChangeZoneOnly's in-place swaps must keep both.
+	the_command = 0;
+	script_vars[kScrPool8_CurrentPers] = pers_list;
+
 	script_byte_vars.zone_area_copy = script_byte_vars.zone_area;
 	script_byte_vars.cur_spot_idx = findInitialSpot();
 	skip_zone_transition |= script_byte_vars.cur_spot_idx;
@@ -1479,6 +1597,11 @@ uint16 SCR_42_LoadZone(void) {
 	prepareAspirant();
 	drawPersons();
 	script_byte_vars.cur_spot_flags = 0;
+
+	if (door_animated)
+		g_vm->_renderer->backBufferToRealFull();
+
+	script_byte_vars.game_paused = saved_paused;
 	return 0;
 }
 
@@ -1516,6 +1639,8 @@ Draw new zone
 */
 uint16 SCR_43_RefreshZone(void) {
 	script_ptr++;
+	// A standalone refresh (not a zone change) should just redraw instantly.
+	skip_zone_transition = 1;
 	refreshZone();
 	return 0;
 }
@@ -1558,7 +1683,7 @@ Display a static sprite in the room (to screen)
 uint16 SCR_11_DrawRoomObject(void) {
 	byte x, y, w, h;
 	SCR_DrawRoomObjectBack(&x, &y, &w, &h);
-	cga_CopyScreenBlock(backbuffer, w, h, frontbuffer, CalcXY_p(x, y));
+	g_vm->_renderer->copyScreenBlock(backbuffer, w, h, frontbuffer, g_vm->_renderer->calcXY_p(x, y));
 	return 0;
 }
 
@@ -1719,7 +1844,7 @@ uint16 SCR_28_MenuLoop(void) {
 	mask = *script_ptr++;
 	value = *script_ptr++;
 
-	selectCursor(cursor);
+	g_vm->_renderer->selectCursor(cursor);
 
 	menuLoop(mask, value);
 
@@ -1741,8 +1866,8 @@ uint16 SCR_2A_PopDialogRect(void) {
 	index = *script_ptr++;
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
-	cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs); /*TODO: implicit target*/
-	cga_CopyScreenBlock(backbuffer, 2, 21, CGA_SCREENBUFFER, offs = (x << 8) | y);  /*TODO: implicit target*/
+	g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs); /*TODO: implicit target*/
+	g_vm->_renderer->copyScreenBlock(backbuffer, 2, 21, SCREENBUFFER, offs = (x << 8) | y);  /*TODO: implicit target*/
 
 	cur_dlg_index = 0;
 
@@ -1773,11 +1898,11 @@ uint16 SCR_22_HidePortraitShatter(void) {
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
 	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 		return 0;
 	}
 
-	cga_HideShatterFall(CGA_SCREENBUFFER, backbuffer, width, height, CGA_SCREENBUFFER, offs);
+	g_vm->_renderer->hideShatterFall(SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
 
 	return 0;
 }
@@ -1796,12 +1921,7 @@ uint16 SCR_23_HidePortrait(void) {
 	index = *script_ptr++;
 
 	getDirtyRectAndFree(index, &kind, &x, &y, &width, &height, &offs);
-	if (right_button) {
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
-		return 0;
-	}
-
-	cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+	g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 
 	return 0;
 }
@@ -1851,7 +1971,7 @@ Draw updated Hands in Who Will Be Saved
 uint16 SCR_41_LiftHand(void) {
 	script_ptr++;
 	redrawRoomStatics(92, script_byte_vars.hands);
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 	playSound(31);
 	return 0;
 }
@@ -1900,13 +2020,13 @@ uint16 SCR_30_Fight(void) {
 	player_image[1] = x;
 	player_image[2] = y;
 	if (drawPortrait(&image, &x, &y, &width, &height))
-		cga_AnimLiftToLeft(width, cur_image_pixels, width, 1, height, CGA_SCREENBUFFER, CalcXY_p(x + width - 1, y));
+		g_vm->_renderer->animLiftToLeft(width, cur_image_pixels, width, 1, height, SCREENBUFFER, g_vm->_renderer->calcXY_p(x + width - 1, y));
 
 	blinkToWhite();
 
 	if (pers->name != 44 && pers->name != 56 && pers->name != 51) {	/*VORT, MONKEY, TURKEY*/
 		getDirtyRectAndFree(1, &kind, &x, &y, &width, &height, &offs);
-		cga_CopyScreenBlock(backbuffer, width, height, CGA_SCREENBUFFER, offs);
+		g_vm->_renderer->copyScreenBlock(backbuffer, width, height, SCREENBUFFER, offs);
 	}
 
 	/*check fight outcome*/
@@ -2154,8 +2274,8 @@ void FightWin(void) {
 	script_byte_vars.bvar_67 = 0;
 
 	if (script_byte_vars.bvar_43 != 18 && *spot_sprite != 0) {
-		cga_RestoreImage(*spot_sprite, frontbuffer);
-		cga_RestoreImage(*spot_sprite, backbuffer);
+		g_vm->_renderer->restoreImage(*spot_sprite, frontbuffer);
+		g_vm->_renderer->restoreImage(*spot_sprite, backbuffer);
 
 		if (script_byte_vars.extreme_violence == 0
 		        && script_byte_vars.bvar_60 == 0
@@ -2186,7 +2306,7 @@ void DrawDeathAnim(void) {
 	/*remove existing cadaver if any*/
 	if (selectPerson(PersonOffset(kPersCadaver))) {
 		found_spot->flags &= ~SPOTFLG_80;
-		cga_RestoreImage(*spot_sprite, backbuffer);
+		g_vm->_renderer->restoreImage(*spot_sprite, backbuffer);
 	}
 
 	for (i = 0; i < 23; i++) {
@@ -2227,7 +2347,7 @@ uint16 SCR_60_ReviveCadaver(void) {
 	pers->area = script_byte_vars.zone_area;
 
 	drawPersons();
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 
 	return 0;
 }
@@ -2288,7 +2408,7 @@ uint16 SCR_15_SelectSpot(void) {
 
 uint16 SCR_44_BackBufferToScreen(void) {
 	script_ptr++;
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 	return 0;
 }
 
@@ -2303,27 +2423,27 @@ uint16 SCR_45_DeProfundisRoomEntry(void) {
 
 	/*draw Platform*/
 	sprofs = getPuzzlSprite(3, 140 / 4, 174, &w, &h, &ofs);
-	cga_BlitScratchBackSprite(sprofs, w, h, CGA_SCREENBUFFER, ofs);
+	g_vm->_renderer->blitScratchBackSprite(sprofs, w, h, SCREENBUFFER, ofs);
 
 	/*draw Granite Monster*/
 	sprofs = getPuzzlSprite(119, 128 / 4, 94, &w, &h, &ofs);
-	cga_BlitScratchBackSprite(sprofs, w, h, CGA_SCREENBUFFER, ofs);
+	g_vm->_renderer->blitScratchBackSprite(sprofs, w, h, SCREENBUFFER, ofs);
 
 	promptWait();
 
 	for (; h; h--) {
 		waitVBlank();
 		waitVBlank();
-		cga_BlitFromBackBuffer(w, 1, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitFromBackBuffer(w, 1, SCREENBUFFER, ofs);
 
 		ofs ^= g_vm->_line_offset;
 		if ((ofs & g_vm->_line_offset) == 0)
 			ofs += g_vm->_screenBPL;
 
-		cga_BlitScratchBackSprite(sprofs, w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitScratchBackSprite(sprofs, w, h, SCREENBUFFER, ofs);
 	}
 
-	cga_BlitFromBackBuffer(w, 1, CGA_SCREENBUFFER, ofs);
+	g_vm->_renderer->blitFromBackBuffer(w, 1, SCREENBUFFER, ofs);
 
 	return 0;
 }
@@ -2339,7 +2459,7 @@ uint16 SCR_46_DeProfundisLowerHook(void) {
 	script_ptr++;
 
 	/*draw Hook*/
-	sprofs = getPuzzlSprite(96, 140 / 4, 18, &w, &h, &ofs);
+	getPuzzlSprite(96, 140 / 4, 18, &w, &h, &ofs);
 
 	h = 1;
 	y = 15;
@@ -2347,12 +2467,12 @@ uint16 SCR_46_DeProfundisLowerHook(void) {
 
 	for (; y; y--) {
 		waitVBlank();
-		cga_BlitFromBackBuffer(w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitFromBackBuffer(w, h, SCREENBUFFER, ofs);
 
 		h++;
 		sprofs -= 20 / 4 * 2;
 
-		cga_BlitScratchBackSprite(sprofs, w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitScratchBackSprite(sprofs, w, h, SCREENBUFFER, ofs);
 	}
 
 	return 0;
@@ -2378,12 +2498,12 @@ uint16 SCR_47_DeProfundisRiseMonster(void) {
 		waitVBlank();
 
 		ofs ^= g_vm->_line_offset;
-		if ((ofs & g_vm->_line_offset) != 0)
+		if ((ofs & g_vm->_line_offset) != 0 || g_vm->_line_offset == 0)
 			ofs -= g_vm->_screenBPL;
 
 		h++;
 
-		cga_BlitScratchBackSprite(sprofs, w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitScratchBackSprite(sprofs, w, h, SCREENBUFFER, ofs);
 	}
 
 	return 0;
@@ -2406,14 +2526,14 @@ uint16 SCR_48_DeProfundisLowerMonster(void) {
 
 	for (; y; y--) {
 		waitVBlank();
-		cga_BlitFromBackBuffer(w, 1, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitFromBackBuffer(w, 1, SCREENBUFFER, ofs);
 
 		ofs ^= g_vm->_line_offset;
 		if ((ofs & g_vm->_line_offset) == 0)
 			ofs += g_vm->_screenBPL;
 
 		h--;
-		cga_BlitScratchBackSprite(sprofs, w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitScratchBackSprite(sprofs, w, h, SCREENBUFFER, ofs);
 	}
 
 	return 0;
@@ -2437,15 +2557,15 @@ uint16 SCR_49_DeProfundisRiseHook(void) {
 
 	for (; y; y--) {
 		waitVBlank();
-		cga_BlitFromBackBuffer(w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitFromBackBuffer(w, h, SCREENBUFFER, ofs);
 
 		h--;
 		sprofs += 20 / 4 * 2;
 
-		cga_BlitScratchBackSprite(sprofs, w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitScratchBackSprite(sprofs, w, h, SCREENBUFFER, ofs);
 	}
 
-	cga_BlitFromBackBuffer(w, 1, CGA_SCREENBUFFER, ofs);
+	g_vm->_renderer->blitFromBackBuffer(w, 1, SCREENBUFFER, ofs);
 
 	return 0;
 }
@@ -2478,7 +2598,7 @@ uint16 SCR_65_DeProfundisMovePlatform(void) {
 
 	for (; y; y--) {
 		waitVBlank();
-		cga_BlitFromBackBuffer(w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitFromBackBuffer(w, h, SCREENBUFFER, ofs);
 
 		ofs ^= g_vm->_line_offset;
 		if ((ofs & g_vm->_line_offset) == 0)
@@ -2486,11 +2606,11 @@ uint16 SCR_65_DeProfundisMovePlatform(void) {
 
 		h--;
 
-		cga_BlitScratchBackSprite(sprofs, w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitScratchBackSprite(sprofs, w, h, SCREENBUFFER, ofs);
 	}
 
 	if (state)
-		cga_BlitFromBackBuffer(w, h, CGA_SCREENBUFFER, ofs);
+		g_vm->_renderer->blitFromBackBuffer(w, h, SCREENBUFFER, ofs);
 
 	return 0;
 }
@@ -2507,7 +2627,7 @@ uint16 SCR_66_DeProfundisRideToExit(void) {
 	/*draw Granite Monster*/
 	sprofs = getPuzzlSprite(119, 128 / 4, 139, &w, &h, &ofs);
 
-	cga_BlitScratchBackSprite(sprofs, w, 20, backbuffer, ofs);
+	g_vm->_renderer->blitScratchBackSprite(sprofs, w, 20, backbuffer, ofs);
 
 	dot_effect_delay = 1;
 	dot_effect_step = 17;
@@ -2704,12 +2824,12 @@ uint16 SCR_56_MorphRoom98(void) {
 
 	redrawRoomStatics(98, 0);
 
-	ofs = cga_CalcXY(0, 136);
+	ofs = g_vm->_renderer->calcXY(0, 136);
 	for (h = 60; h; h--) {
 		memcpy(frontbuffer + ofs, backbuffer + ofs, g_vm->_screenBPL);
 		waitVBlank();
 		ofs ^= g_vm->_line_offset;
-		if ((ofs & g_vm->_line_offset) != 0)
+		if ((ofs & g_vm->_line_offset) != 0 || g_vm->_line_offset == 0)
 			ofs -= g_vm->_screenBPL;
 	}
 
@@ -2728,7 +2848,7 @@ void ShowMirrored(uint16 h, uint16 ofs) {
 
 	/*move 1 line up*/
 	ofs2 ^= g_vm->_line_offset;
-	if ((ofs2 & g_vm->_line_offset) != 0)
+	if ((ofs2 & g_vm->_line_offset) != 0 || g_vm->_line_offset == 0)
 		ofs2 -= g_vm->_screenBPL;
 
 	while (h--) {
@@ -2746,7 +2866,7 @@ void ShowMirrored(uint16 h, uint16 ofs) {
 
 		/*move 1 line up*/
 		ofs2 ^= g_vm->_line_offset;
-		if ((ofs2 & g_vm->_line_offset) != 0)
+		if ((ofs2 & g_vm->_line_offset) != 0 || g_vm->_line_offset == 0)
 			ofs2 -= g_vm->_screenBPL;
 	}
 }
@@ -2779,9 +2899,19 @@ static void AnimSaucer(void) {
 	uint16 delay;
 	byte scroll_done = 0;
 
-	memset(backbuffer, 0, sizeof(backbuffer) - 2);  /*TODO: original bug?*/
-	cga_BackBufferToRealFull();
-	cga_ColorSelect(0x30);
+	/*Clear the whole buffer: the original's "- 2" left the bottom-right two
+	  bytes (row 199, x=318..319) holding stale pixels. In EGA those are visible
+	  and the scroll-reveal lifts them up the screen as a red dot rising with the
+	  saucer, so clear all of it.*/
+	memset(backbuffer, 0, sizeof(backbuffer));
+	/*EGA: also blank the front buffer. The saucer animation only paints the
+	  saucer region, so leftover sprites from the final game frame (player,
+	  HUD pixels) would otherwise survive on the black backdrop right through to
+	  THE END screen.*/
+	if (isEgaLikeRenderer())
+		memset(frontbuffer, 0, sizeof(SCREENBUFFER));
+	g_vm->_renderer->backBufferToRealFull();
+	g_vm->_renderer->colorSelect(0x30);
 
 	right_button = 0;
 	if (!drawPortrait(&pimage1, &x, &y, &width, &height))
@@ -2812,9 +2942,9 @@ static void AnimSaucer(void) {
 		height_prev -= (yy - 1);
 
 		/*scale the saucer*/
-		cga_ZoomInplaceXY(cur_image_pixels, width, height, ww, hh, xx, yy, backbuffer);
+		g_vm->_renderer->zoomInplaceXY(cur_image_pixels, width, height, ww, hh, xx, yy, backbuffer);
 
-		baseofs = cga_CalcXY(0, yy);
+		baseofs = g_vm->_renderer->calcXY(0, yy);
 
 		if (!scroll_done) {
 			/*scroll the saucer*/
@@ -2824,7 +2954,7 @@ static void AnimSaucer(void) {
 
 			/*previous line*/
 			ofs ^= g_vm->_line_offset;
-			if ((ofs & g_vm->_line_offset) != 0)
+			if ((ofs & g_vm->_line_offset) != 0 || g_vm->_line_offset == 0)
 				ofs -= g_vm->_screenBPL;
 
 			for (i = 0; i < 55; i++) {
@@ -2838,17 +2968,17 @@ static void AnimSaucer(void) {
 
 				/*previous line line*/
 				ofs ^= g_vm->_line_offset;
-				if ((ofs & g_vm->_line_offset) != 0)
+				if ((ofs & g_vm->_line_offset) != 0 || g_vm->_line_offset == 0)
 					ofs -= g_vm->_screenBPL;
 			}
 
-			ofs2 = cga_CalcXY(0, 200 - 1);
+			ofs2 = g_vm->_renderer->calcXY(0, 200 - 1);
 
 			for (i = 0; i < 108; i++) {
 				LiftLines(i + 1, backbuffer, ofs, frontbuffer, ofs2);
 
 				ofs2 ^= g_vm->_line_offset;
-				if ((ofs2 & g_vm->_line_offset) != 0)
+				if ((ofs2 & g_vm->_line_offset) != 0 || g_vm->_line_offset == 0)
 					ofs2 -= g_vm->_screenBPL;
 
 				waitVBlank();
@@ -2872,7 +3002,7 @@ static void AnimSaucer(void) {
 		height_prev = height_new;
 
 		waitVBlank();
-		for (i = delay; i--;) ; /*TODO: weak delay*/
+		g_system->delayMillis(delay / 250);
 		delay += 500;
 	}
 }
@@ -2898,14 +3028,26 @@ void theEnd(void) {
 		}
 		while(buttons == 0);
 
-		while (!loadFond())
+		Graphics::Surface *fond;
+		while (!(fond = loadFond()))
 			askDisk2();
+		delete fond;
 		jaggedZoom(backbuffer, frontbuffer);
-		cga_BackBufferToRealFull();
-	} else {
-		while (!loadSplash("PRES.BIN"))
+		g_vm->_renderer->backBufferToRealFull();
+	} else if (g_vm->getPlatform() == Common::kPlatformAmiga) {
+		Graphics::Surface *fond;
+		while (!(fond = ega_loadFond("PRES.BIN")))
 			askDisk2();
-		cga_BackBufferToRealFull();
+		delete fond;
+		g_vm->_renderer->colorSelect(AMIGA_NUM_PALETTES - 1);
+		g_vm->_renderer->backBufferToRealFull();
+	} else {
+		Graphics::Surface *splash;
+		while (!(splash = loadSplash("PRES.BIN")))
+			askDisk2();
+		splash->free();
+		delete splash;
+		g_vm->_renderer->backBufferToRealFull();
 	}
 }
 
@@ -2915,10 +3057,17 @@ uint16 SCR_5B_TheEnd(void) {
 
 	theEnd();
 
-	if (g_vm->getLanguage() == Common::EN_USA)
+	if (g_vm->getLanguage() == Common::EN_USA) {
 		restartGame();
-	else
-		for (;;) ;  /*HANG*/
+	} else {
+		clearButtons();
+		do {
+			pollInputButtonsOnly();
+			g_system->delayMillis(10);
+			g_system->updateScreen();
+		} while (!g_vm->_shouldQuit && buttons == 0);
+		g_vm->_shouldQuit = true;
+	}
 
 	return 0;
 }
@@ -2998,7 +3147,7 @@ uint16 SCR_63_LiftSpot6(void) {
 	zone_spots[6].ey -= 5;
 	backupSpotsImages();
 	drawPersons();
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 
 	return 0;
 }
@@ -3018,7 +3167,7 @@ uint16 SCR_14_DrawDesc(void) {
 	msg = seekToStringScr(desci_data, *script_ptr, &script_ptr);
 	script_ptr++;
 
-	drawMessage(msg, CGA_SCREENBUFFER);
+	drawMessage(msg, SCREENBUFFER);
 
 	return 0;
 }
@@ -3176,12 +3325,15 @@ uint16 SCR_67_Unused(void) {
 /*
 Play Sfx
 NB! Do nothing in EU PC/CGA version
+EGA (kultega.bin) encodes this as a single operand byte (the sfx index) - unlike
+SCR_69 below which has a trailing pad byte. Reading a pad here too would consume
+the following opcode and desync script_ptr (e.g. eats the setVar that unlocks the
+Scorpion ordeal door, leaving its speech bubble stuck on screen).
 */
 uint16 SCR_68_PlaySfx(void) {
 	byte index;
 	script_ptr++;
 	index = *script_ptr++;
-	script_ptr++;
 	IFGM_PlaySfx(index);
 	return 0;
 }
@@ -3208,10 +3360,19 @@ uint16 SCR_6A_Unused(void) {
 }
 
 /*
+EGA-only opcode (kultega.bin): redraw room statics.
+The CGA script (TEMPL.BIN) uses SCR_13 for the same purpose; the EGA build
+re-numbered this command to 0x6B. Behaviour and operand are identical.
+*/
+uint16 SCR_6B_RedrawRoomStatics(void) {
+	return SCR_13_RedrawRoomStatics();
+}
+
+/*
 Open room's items inventory
 */
 uint16 CMD_1_RoomObjects(void) {
-	updateUndrawCursor(CGA_SCREENBUFFER);
+	updateUndrawCursor(SCREENBUFFER);
 	inv_bgcolor = 0xAA;
 	openInventory((0xFF << 8) | ITEMFLG_ROOM, (script_byte_vars.zone_area << 8) | ITEMFLG_ROOM);
 	return ScriptRerun;
@@ -3222,20 +3383,21 @@ Open Psi Powers menu
 */
 uint16 CMD_2_PsiPowers(void) {
 	/*Psi powers bar*/
-	backupAndShowSprite(3, 280 / 4, 40);
+	g_vm->_renderer->backupAndShowSprite(3, 280 / 4, 40);
 	processInput();
+	clearButtons();
 	do {
 		pollInput();
-		selectCursor(CURSOR_FINGER);
+		g_vm->_renderer->selectCursor(CURSOR_FINGER);
 		checkPsiCommandHover();
 		if (command_hint != 100)
 			command_hint += 109;
 		if (command_hint != last_command_hint)
 			drawCommandHint();
-		drawHintsAndCursor(CGA_SCREENBUFFER);
+		drawHintsAndCursor(SCREENBUFFER);
 	} while (buttons == 0);
-	undrawCursor(CGA_SCREENBUFFER);
-	cga_RestoreBackupImage(CGA_SCREENBUFFER);
+	undrawCursor(SCREENBUFFER);
+	g_vm->_renderer->restoreBackupImage(SCREENBUFFER);
 	return ScriptRerun;
 }
 
@@ -3243,7 +3405,7 @@ uint16 CMD_2_PsiPowers(void) {
 Open normal inventory box
 */
 uint16 CMD_3_Possessions(void) {
-	updateUndrawCursor(CGA_SCREENBUFFER);
+	updateUndrawCursor(SCREENBUFFER);
 	inv_bgcolor = 0x55;
 	openInventory(ITEMFLG_OWNED, ITEMFLG_OWNED);
 	return ScriptRerun;
@@ -3268,9 +3430,10 @@ uint16 CMD_4_EnergyLevel(void) {
 		anim = 41 + (script_byte_vars.psy_energy / 16);
 
 	if (drawPortrait(&image, &x, &y, &width, &height)) {
-		cga_BlitAndWait(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, CGA_SCREENBUFFER, cur_image_offs);
+		g_vm->_renderer->blitAndWait(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, SCREENBUFFER, cur_image_offs);
 	}
 
+	clearButtons();
 	do {
 		IFGM_PlaySample(28);
 		animPortrait(1, anim, 10);
@@ -3343,7 +3506,7 @@ uint16 CMD_8_Timer(void) {
 	byte *image = timer_image;
 
 	if (drawPortrait(&image, &x, &y, &width, &height)) {
-		cga_BlitAndWait(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, CGA_SCREENBUFFER, cur_image_offs);
+		g_vm->_renderer->blitAndWait(cur_image_pixels, cur_image_size_w, cur_image_size_w, cur_image_size_h, SCREENBUFFER, cur_image_offs);
 	}
 
 	do {
@@ -3354,10 +3517,10 @@ uint16 CMD_8_Timer(void) {
 		char_draw_coords_y = 120;
 
 		waitVBlank();
-		cga_PrintChar(timer / (60 * 60) + 16, CGA_SCREENBUFFER);
-		cga_PrintChar((minutes & 1) ? 26 : 0, CGA_SCREENBUFFER);    /*colon*/
-		cga_PrintChar(minutes / (60 * 10) + 16, CGA_SCREENBUFFER);
-		cga_PrintChar(minutes / 60 + 16, CGA_SCREENBUFFER);
+		g_vm->_renderer->printChar(timer / (60 * 60) + 16, SCREENBUFFER);
+		g_vm->_renderer->printChar((minutes & 1) ? 26 : 0, SCREENBUFFER);    /*colon*/
+		g_vm->_renderer->printChar(minutes / (60 * 10) + 16, SCREENBUFFER);
+		g_vm->_renderer->printChar(minutes / 60 + 16, SCREENBUFFER);
 		pollInputButtonsOnly();
 	} while (buttons == 0);
 
@@ -3391,7 +3554,7 @@ uint16 CMD_A_PsiSolarEyes(void) {
 	if (zone_palette == 14) {
 		redrawRoomStatics(script_byte_vars.zone_room, zone_palette);
 		zone_palette = 0;
-		cga_BackBufferToRealFull();
+		g_vm->_renderer->backBufferToRealFull();
 	}
 
 	the_command = Swap16(script_word_vars.wvar_AA);
@@ -3411,22 +3574,34 @@ uint16 GetZoneObjCommand(uint16 offs) {
 void DrawStickyNet(void) {
 	byte x, y, w, h;
 
-	uint16 ofs;
-	byte *sprite = loadPuzzlToScratch(80);
-
 	x = room_bounds_rect.sx;
 	y = room_bounds_rect.sy;
 	w = room_bounds_rect.ex - x;
 	h = room_bounds_rect.ey - y;
 
-	ofs = CalcXY_p(x, y);
+	uint16 ofs = g_vm->_renderer->calcXY_p(x, y);
 
 	/*16x30 is the net sprite size*/
 
+	if (isEgaLikeRenderer()) {
+		Graphics::Surface *surf = ega_puzzl_res->getSprite(80);
+		uint16 sprW = surf->w;
+		uint16 sprH = surf->h;
+		byte *pixels = (byte *)surf->getPixels();
+		int16 pitch = surf->pitch;
+		for (; h >= sprH; h -= sprH) {
+			for (int16 i = 0; i < w; i += sprW / 4)
+				g_vm->_renderer->blitSprite(pixels, pitch, sprW, sprH, frontbuffer, ofs + i * 4);
+			ofs += EGA_BYTES_PER_LINE * sprH;
+		}
+		return;
+	}
+
+	byte *sprite = loadPuzzlToScratch(80);
 	for (; h; h -= 30) {
 		int16 i;
 		for (i = 0; i < w; i += 16 / 4)
-			drawSprite(sprite, frontbuffer, ofs + i);
+			g_vm->_renderer->drawSprite(sprite, frontbuffer, ofs + i);
 		ofs += g_vm->_screenBPL * 30 / 2;
 	}
 }
@@ -3442,10 +3617,10 @@ uint16 CMD_B_PsiStickyFingers(void) {
 
 	backupScreenOfSpecialRoom();
 	DrawStickyNet();
-	selectCursor(CURSOR_FLY);
+	g_vm->_renderer->selectCursor(CURSOR_FLY);
 	menuLoop(0, 0);
 	playSound(224);
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 	restoreScreenOfSpecialRoom();
 
 	if (script_byte_vars.cur_spot_idx == 0 || GetZoneObjCommand(0 * 2) == 0)
@@ -3519,7 +3694,8 @@ uint16 CMD_D_PsiBrainwarp(void) {
 
 
 uint16 CMD_E_PsiZoneScan(void) {
-	byte x, y, w, h;
+	byte y, h;
+	uint16 x, w;
 	uint16 offs;
 
 	if (!ConsumePsiEnergy(1))
@@ -3534,17 +3710,27 @@ uint16 CMD_E_PsiZoneScan(void) {
 
 	IFGM_PlaySample(26);
 
-	offs = CalcXY_p(room_bounds_rect.sx, room_bounds_rect.sy);
+	// On Amiga the scan tints the whole room green for its duration: the exe
+	// ships a dedicated green stone-ramp delta (19) that no room ever uses
+	if (g_vm->_videoMode == Common::kRenderAmiga)
+		amigaApplyRoomPalette(19);
+
+	offs = g_vm->_renderer->calcXY_p(room_bounds_rect.sx, room_bounds_rect.sy);
 	w = room_bounds_rect.ex - room_bounds_rect.sx;
 	h = room_bounds_rect.ey - room_bounds_rect.sy;
 
+	if (isEgaLikeRenderer())
+		w *= 4;
+
+	byte inv = isEgaLikeRenderer() ? 0x0F : 0xFF;
+
 	for (y = room_bounds_rect.sy; h; y++, h--) {
 		spot_t *spot;
-		for (x = 0; x < w; x++) frontbuffer[offs + x] = ~frontbuffer[offs + x];
-		cga_blitToScreen(offs, w, 1);
+		for (x = 0; x < w; x++) frontbuffer[offs + x] ^= inv;
+		g_vm->_renderer->blitToScreen(offs, w, 1);
 		waitVBlank();
-		for (x = 0; x < w; x++) frontbuffer[offs + x] = ~frontbuffer[offs + x];
-		cga_blitToScreen(offs, w, 1);
+		for (x = 0; x < w; x++) frontbuffer[offs + x] ^= inv;
+		g_vm->_renderer->blitToScreen(offs, w, 1);
 
 		for (spot = zone_spots; spot != zone_spots_end; spot++) {
 			if ((spot->flags & ~(SPOTFLG_40 | 7)) == (SPOTFLG_20 | SPOTFLG_8) && spot->sy == y) {
@@ -3559,6 +3745,10 @@ uint16 CMD_E_PsiZoneScan(void) {
 		if ((offs & g_vm->_line_offset) == 0)
 			offs += g_vm->_screenBPL;
 	}
+
+	// Bring back the room's own palette once the scan is over
+	if (g_vm->_videoMode == Common::kRenderAmiga)
+		amigaApplyRoomPalette(script_byte_vars.palette_index);
 
 	restoreScreenOfSpecialRoom();
 
@@ -3579,7 +3769,7 @@ uint16 CMD_F_PsiPsiShift(void) {
 		return ScriptRerun;
 	}
 
-	selectCursor(CURSOR_GRAB);
+	g_vm->_renderer->selectCursor(CURSOR_GRAB);
 	menuLoop(0, 0);
 	backupScreenOfSpecialRoom();
 	playSound(25);
@@ -3789,18 +3979,18 @@ uint16 CMD_13_ActivateFountain(void) {
 	for (i = 0; i < 10; i++) {
 		drawRoomStaticObject(water1, &x, &y, &w, &h);
 		waitVBlank();
-		cga_BackBufferToRealFull();
+		g_vm->_renderer->backBufferToRealFull();
 		for (j = 0; j < 0x1FFF; j++) ; /*TODO: weak delay*/
 
 		drawRoomStaticObject(water2, &x, &y, &w, &h);
 		waitVBlank();
-		cga_BackBufferToRealFull();
+		g_vm->_renderer->backBufferToRealFull();
 		for (j = 0; j < 0x1FFF; j++) ; /*TODO: weak delay*/
 	}
 
 	drawRoomStaticObject(headl, &x, &y, &w, &h);
 	drawRoomStaticObject(headr, &x, &y, &w, &h);
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 
 	return 0;
 }
@@ -3817,7 +4007,7 @@ uint16 CMD_14_VortAppear(void) {
 	next_vorts_cmd = 0xA015;
 	blitSpritesToBackBuffer();
 	drawPersons();
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 	next_vorts_ticks = Swap16(script_word_vars.timer_ticks2) + 5;
 	return 0;
 }
@@ -3953,7 +4143,7 @@ uint16 CMD_19_AspirantAppear(void) {
 	animateSpot(&anim23);
 	blitSpritesToBackBuffer();
 	drawPersons();
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 	if (script_byte_vars.aspirant_flags == 5) {
 		the_command = 0xC029;
 		script_byte_vars.aspirant_flags = 0;
@@ -4028,7 +4218,7 @@ uint16 CMD_1E_TurkeyAppear(void) {
 	next_turkey_cmd = 0xA01F;
 	blitSpritesToBackBuffer();
 	drawPersons();
-	cga_BackBufferToRealFull();
+	g_vm->_renderer->backBufferToRealFull();
 	next_turkey_ticks = Swap16(script_word_vars.timer_ticks2) + 5;
 	return 0;
 }
@@ -4080,8 +4270,6 @@ uint16 CMD_21_VortTalk(void) {
 
 	if (script_byte_vars.rand_value >= 85)
 		num = 6;
-	else if (script_byte_vars.rand_value >= 170)
-		num = 7;
 	else
 		num = 35;
 
@@ -4297,6 +4485,7 @@ cmdhandler_t script_handlers[] = {
 	SCR_68_PlaySfx,
 	SCR_69_playSound,
 	SCR_6A_Unused,
+	SCR_6B_RedrawRoomStatics,   /*EGA-only; same as SCR_13*/
 };
 #define MAX_SCR_HANDLERS ARRAYSIZE(script_handlers)
 
@@ -4319,6 +4508,8 @@ uint16 RunScript(byte *code) {
 	while (script_ptr != script_end_ptr) {
 		byte opcode = *script_ptr;
 
+		debug(9, "scr %04X: %02X", (uint16)((script_ptr - templ_data) & 0xFFFF), opcode);
+
 #ifdef DEBUG_SCRIPT
 		{
 			FILE *f = fopen(DEBUG_SCRIPT_LOG, "at");
@@ -4331,14 +4522,25 @@ uint16 RunScript(byte *code) {
 #endif
 
 #ifdef DEBUG_QUEST
-		if (script_ptr - templ_data == 0x4F) {
+		if (script_ptr - templ_data == 0x5B) {
 			/*manipulate rand_value to get a quest item we need*/
+			// 0x5B is the EGA (kultega.bin) offset of the quest-selection branch
+			// 'if rand_value < 0x40'; the old 0x4F was mid-instruction so it never
+			// fired. Forcing rand_value here picks the quest: 0x00=Rope/De Profundis,
+			// 0x40=Knife/The Wall, 0x80=Goblet/Twins, 0xC0=Fly/Scorpion's.
 			script_byte_vars.rand_value = DEBUG_QUEST;
 		}
 #endif
 
 
-		if (opcode == 0 || opcode >= 107)
+		// Amiga pads opcodes to word with 0x00 or 0xAA
+		if (g_vm->getPlatform() == Common::kPlatformAmiga
+		        && (opcode == 0x00 || opcode == 0xAA)) {
+			script_ptr++;
+			continue;
+		}
+
+		if (opcode == 0 || opcode >= MAX_SCR_HANDLERS)
 			break;
 
 		status = script_handlers[opcode]();
@@ -4400,7 +4602,7 @@ again:;
 		res = RunScript(templ_data + the_command);
 		break;
 	case 0x9000:
-		drawMessage(seekToString(desci_data, cmd), CGA_SCREENBUFFER);
+		drawMessage(seekToString(desci_data, cmd), SCREENBUFFER);
 		break;
 	case 0xA000:
 	case 0xB000:
@@ -4409,9 +4611,17 @@ again:;
 		break;
 	case 0xF000:
 		/*restore sp from keep_sp then run script*/
-		/*currently only supposed to work correctly from the SCR_4D_PriorityCommand handler*/
+		// A priority command (SCR_4D_PriorityCommand) discards the current
+		// callchain. The original restored the script stack pointer to the
+		// main-loop baseline (keep_sp); here that baseline is an empty stack.
+		// Without this, a priority command fired from inside a call'd
+		// subroutine breaks out via ScriptRerun before the matching ret runs,
+		// leaking a script_stack frame each time. In the endgame confrontation
+		// repeated PSI POWERS use overflows the 5-frame script_stack array,
+		// corrupting adjacent globals (sprite/rendering glitches) and script
+		// state (looping menu + forced game-over).
 		debug("Restore: $%X 0x%X", the_command, cmd);
-	/*TODO("SCR_RESTORE\n");*/
+		script_stack_ptr = script_stack;
 	/*fall through*/
 	default:
 		res = RunScript(getScriptSubroutine(cmd - 1));
@@ -4433,11 +4643,17 @@ again:;
 	if (g_vm->_shouldRestart)
 		return runCommandKeepSp();
 
-	if (g_vm->_prioritycommand_1 && !(g_vm->_prioritycommand_2))
+	// A priority command (SCR_4D_PriorityCommand) discards the entire current
+	// callchain and re-runs from the main-loop baseline. Propagate the pending
+	// flag straight up to the runCommandKeepSp anchor instead of re-entering
+	// here: re-entering at this (possibly deeply nested) level ran the priority
+	// script but left the outer ActionsMenu frames alive on the C stack. In the
+	// endgame confrontation each PSI POWERS use fired a priority command and
+	// nested one menu level deeper; after the winning flask the stack unwound
+	// only one level into a stale confrontation menu, which re-prompted and (the
+	// win state already consumed) forced a game-over.
+	if (g_vm->_prioritycommand_1)
 		return res;
-
-	if (g_vm->_prioritycommand_1 && g_vm->_prioritycommand_2)
-		return runCommandKeepSp();
 
 	/*TODO: this is pretty hacky, original code manipulates the stack to discard old script invocation*/
 	if (res == ScriptRerun)
@@ -4448,11 +4664,21 @@ again:;
 
 uint16 runCommandKeepSp(void) {
 	/*keep_sp = sp;*/
-	g_vm->_prioritycommand_1 = false;
-	g_vm->_prioritycommand_2 = false;
-	if (g_vm->_shouldRestart)
-		return RUNCOMMAND_RESTART;
-	return runCommand();
+	// Anchor for priority commands. The original engine restored the stack
+	// pointer to this baseline (keep_sp) on every priority command, collapsing
+	// any nested script/menu callchain. Emulate that by draining every pending
+	// priority command here in a loop: nested frames propagate the flag up to
+	// this point (see runCommand) and we re-run from the baseline until none
+	// remain, so menu frames never accumulate on the call stack.
+	uint16 res = 0;
+	do {
+		g_vm->_prioritycommand_1 = false;
+		g_vm->_prioritycommand_2 = false;
+		if (g_vm->_shouldRestart)
+			return RUNCOMMAND_RESTART;
+		res = runCommand();
+	} while (g_vm->_prioritycommand_1);
+	return res;
 }
 
 } // End of namespace Chamber

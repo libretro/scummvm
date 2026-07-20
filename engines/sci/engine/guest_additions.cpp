@@ -911,16 +911,23 @@ void GuestAdditions::syncMessageTypeFromScummVM() const {
 }
 
 void GuestAdditions::syncMessageTypeFromScummVMUsingDefaultStrategy() const {
-	uint8 value = 0;
-	if (ConfMan.getBool("subtitles")) {
-		value |= kMessageTypeSubtitles;
-	}
-	if (!ConfMan.getBool(("speech_mute"))) {
-		value |= kMessageTypeSpeech;
+	uint16 value = _state->variables[VAR_GLOBAL][kGlobalVarMessageType].getOffset();
+
+	// sync subtitle setting if this game supports speech and subtitles.
+	// otherwise, leave the existing value that game scripts have set.
+	if (_features->supportsSpeechWithSubtitles()) {
+		if (ConfMan.getBool("subtitles")) {
+			value |= kMessageTypeSubtitles;
+		} else {
+			value &= ~kMessageTypeSubtitles;
+		}
 	}
 
-	if (value == kMessageTypeSubtitles + kMessageTypeSpeech && !_features->supportsSpeechWithSubtitles()) {
-		value &= ~kMessageTypeSubtitles;
+	// sync speech setting
+	if (!ConfMan.getBool("speech_mute")) {
+		value |= kMessageTypeSpeech;
+	} else {
+		value &= ~kMessageTypeSpeech;
 	}
 
 	if (value) {

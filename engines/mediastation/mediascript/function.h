@@ -43,25 +43,45 @@ public:
 	~ScriptFunction();
 
 	ScriptValue execute(Common::Array<ScriptValue> &args);
+	Common::String decompile() const;
+	uint32 bytecodeSize() const { return _bytecodeSize; }
 
 	uint _contextId = 0;
 	uint _id = 0;
 
 private:
-	CodeChunk *_code = nullptr;
+	byte *_bytecodeBuffer = nullptr;
+	uint32 _bytecodeSize = 0;
 };
 
+namespace MazeMinigame {
+	class Maze;
+} // End of namespace MazeMinigame
+
+namespace CheckersMinigame {
+	class Checkers;
+} // End of namespace CheckersMinigame
+
 class FunctionManager : public ParameterClient {
+friend class Debugger;
+
 public:
 	FunctionManager() {};
 	virtual ~FunctionManager();
 
 	virtual bool attemptToReadFromStream(Chunk &chunk, uint sectionType) override;
 	ScriptValue call(uint functionId, Common::Array<ScriptValue> &args);
+	ScriptFunction *getFunctionById(uint functionId);
 	void deleteFunctionsForContext(uint contextId);
+
+	MazeMinigame::Maze *_maze = nullptr;
+	CheckersMinigame::Checkers *_checkers = nullptr;
+
+	uint _scriptBlockCallDepth = 0;
 
 private:
 	Common::HashMap<uint, ScriptFunction *> _functions;
+	uint32 _timedIntervalStartInMs = 0.0;
 
 	void script_GetPlatform(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
 	void script_Random(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
@@ -79,6 +99,7 @@ private:
 	void script_GetRegistry(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
 	void script_SetProfile(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
 	void script_DebugPrint(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
+	void script_EffectTransition(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
 
 	// 101 Dalmatians.
 	void script_MazeGenerate(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
@@ -87,8 +108,14 @@ private:
 	void script_BeginTimedInterval(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
 	void script_EndTimedInterval(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
 
+	// Hercules.
+	void script_Checkers(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
+
 	// IBM/Crayola.
 	void script_Drawing(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
+
+	// Puzzle Castle.
+	void script_MoveSophie(Common::Array<ScriptValue> &args, ScriptValue &returnValue);
 };
 
 } // End of namespace MediaStation

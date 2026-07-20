@@ -26,7 +26,7 @@
 
 namespace Freescape {
 
-static const int kSIDOffset[] = {0, 7, 14};
+const int kSIDOffset[] = {0, 7, 14};
 
 void EclipseC64MusicPlayer::ChannelState::reset() {
 	orderAddr = 0;
@@ -150,12 +150,14 @@ byte EclipseC64MusicPlayer::clampNote(byte note) const {
 void EclipseC64MusicPlayer::startMusic() {
 	if (_musicData.empty())
 		return;
+	initSID();
 	setupSong();
 }
 
 void EclipseC64MusicPlayer::stopMusic() {
 	_musicActive = false;
 	silenceAll();
+	destroySID();
 }
 
 void EclipseC64MusicPlayer::setupSong() {

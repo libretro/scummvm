@@ -48,7 +48,6 @@ public:
 	void drawRect(const Common::Rect &rect, uint32 color) override;
 	void fillRect(const Common::Rect &rect, uint32 color) override;
 	void drawString(const Graphics::Font *font, const Common::String &str, int x, int y, uint32 color, Graphics::TextAlign align) override;
-	void scroll(int dx, int dy, uint32 background) override;
 	void drawEllipse(int x, int y, int rx, int ry, uint32 color) override;
 	void fillEllipse(int x, int y, int rx, int ry, uint32 color) override;
 	void fillDitherRect(const Common::Rect &rect, uint32 color1, uint32 color2) override;
@@ -97,9 +96,17 @@ public:
 	void computeScreenViewport() override;
 	void drawSurface(const Graphics::Surface *surf, int x, int y) override;
 	Graphics::Surface *getScreenshot() override;
+	Graphics::PixelFormat getPixelFormat() override {
+		return Graphics::PixelFormat::createFormatRGBA32();
+	}
 
 private:
 	void useColor(uint32 color);
+	// Set glLineWidth scaled to window/logical ratio. Mirrors Freescape
+	// (gfx_opengl_shaders.cpp:692). Cached so back-to-back same-width
+	// line draws don't re-issue the GL call.
+	void applyLineWidthForLines();
+	float _lineWidth = 1.0f;
 	GLuint _overlayTexId = 0;
 
 	OSystem *_system = nullptr;
@@ -115,6 +122,7 @@ private:
 };
 
 OpenGLRenderer::OpenGLRenderer(OSystem *system, int width, int height) : _system(system), _width(width), _height(height) {
+	debug(1, "Colony: using OpenGL fixed-function renderer");
 	_wireframe = true;
 	_wireframeFillColor = 0;
 	_stippleData = nullptr;
@@ -166,6 +174,17 @@ void OpenGLRenderer::useColor(uint32 color) {
 	}
 }
 
+void OpenGLRenderer::applyLineWidthForLines() {
+	const int sysW = _system ? _system->getWidth() : 0;
+	float w = 1.0f;
+	if (sysW > _width)
+		w = MAX(1.0f, (float)sysW / (float)_width);
+	if (w != _lineWidth) {
+		glLineWidth(w);
+		_lineWidth = w;
+	}
+}
+
 void OpenGLRenderer::clear(uint32 color) {
 	float r, g, b;
 	if (color & 0xFF000000) {
@@ -184,6 +203,7 @@ void OpenGLRenderer::clear(uint32 color) {
 
 void OpenGLRenderer::drawLine(int x1, int y1, int x2, int y2, uint32 color) {
 	useColor(color);
+	applyLineWidthForLines();
 	glBegin(GL_LINES);
 	glVertex2i(x1, y1);
 	glVertex2i(x2, y2);
@@ -192,6 +212,7 @@ void OpenGLRenderer::drawLine(int x1, int y1, int x2, int y2, uint32 color) {
 
 void OpenGLRenderer::drawRect(const Common::Rect &rect, uint32 color) {
 	useColor(color);
+	applyLineWidthForLines();
 	glBegin(GL_LINE_LOOP);
 	glVertex2i(rect.left, rect.top);
 	glVertex2i(rect.right, rect.top);
@@ -328,6 +349,7 @@ void OpenGLRenderer::draw3DWall(int x1, int y1, int x2, int y2, uint32 color) {
 
 		// Draw colored wireframe edges
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		applyLineWidthForLines();
 		useColor(color);
 		glBegin(GL_QUADS);
 		glVertex3f(fx1, fy1, -160.0f);
@@ -553,9 +575,6 @@ void OpenGLRenderer::computeScreenViewport() {
 	glScissor(_screenViewport.left, screenHeight - _screenViewport.bottom, _screenViewport.width(), _screenViewport.height());
 }
 
-void OpenGLRenderer::scroll(int dx, int dy, uint32 background) {
-}
-
 void OpenGLRenderer::drawEllipse(int x, int y, int rx, int ry, uint32 color) {
 	GLint savedViewport[4];
 	GLint savedScissor[4];
@@ -575,6 +594,7 @@ void OpenGLRenderer::drawEllipse(int x, int y, int rx, int ry, uint32 color) {
 	glDisable(GL_DEPTH_TEST);
 
 	useColor(color);
+	applyLineWidthForLines();
 	glBegin(GL_LINE_LOOP);
 	for (int i = 0; i < 360; i += 10) {
 		float rad = i * M_PI / 180.0f;
@@ -639,9 +659,18 @@ void OpenGLRenderer::fillDitherRect(const Common::Rect &rect, uint32 color1, uin
 }
 
 void OpenGLRenderer::setPixel(int x, int y, uint32 color) {
+	// Draw as a 1×1 GL_QUADS instead of GL_POINTS. With kSupportsArbitrary
+	// Resolutions the viewport stretches logical coords to window pixels:
+	// a single GL_POINT renders as 1 framebuffer pixel (leaving gaps on
+	// HiDPI), while a 1×1 quad in logical coords gets scaled to cover the
+	// full logical-pixel cell — matching what the shader renderer does
+	// (renderer_opengl_shaders.cpp setPixel implementation).
 	useColor(color);
-	glBegin(GL_POINTS);
+	glBegin(GL_QUADS);
 	glVertex2i(x, y);
+	glVertex2i(x + 1, y);
+	glVertex2i(x + 1, y + 1);
+	glVertex2i(x, y + 1);
 	glEnd();
 }
 
@@ -655,6 +684,7 @@ void OpenGLRenderer::drawQuad(int x1, int y1, int x2, int y2, int x3, int y3, in
 	glEnd();
 	
 	glColor3ub(255, 255, 255);
+	applyLineWidthForLines();
 	glBegin(GL_LINE_LOOP);
 	glVertex2i(x1, y1);
 	glVertex2i(x2, y2);
@@ -672,8 +702,9 @@ void OpenGLRenderer::drawPolygon(const int *x, const int *y, int count, uint32 c
 		glVertex2i(x[i], y[i]);
 	}
 	glEnd();
-	
+
 	glColor3ub(255, 255, 255);
+	applyLineWidthForLines();
 	glBegin(GL_LINE_LOOP);
 	for (int i = 0; i < count; i++) {
 		glVertex2i(x[i], y[i]);
@@ -719,11 +750,8 @@ void OpenGLRenderer::drawSurface(const Graphics::Surface *surf, int x, int y) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	// The surface uses PixelFormat(4,8,8,8,8,24,16,8,0) = R at bit 24, A at bit 0.
-	// GL_UNSIGNED_INT_8_8_8_8 reads a uint32 and maps bits 24..31→R, 16..23→G,
-	// 8..15→B, 0..7→A, matching our pixel layout regardless of endianness.
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surf->w, surf->h, 0,
-		GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, surf->getPixels());
+		GL_RGBA, GL_UNSIGNED_BYTE, surf->getPixels());
 
 	// Draw textured quad covering the specified region
 	float dx = x * scaleX;

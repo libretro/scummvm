@@ -34,7 +34,7 @@ static uint32 getLineFromPC() {
 	ScriptData *scriptData = &_state->_functions._windowScriptData.getOrCreateVal(g_director->getCurrentWindow());
 
 	const uint pc = g_lingo->_state->pc;
-	if (scriptData->_scripts.empty())
+	if (scriptData->_scripts.empty() || scriptData->_current >= scriptData->_scripts.size())
 		return 0;
 	const Common::Array<uint> &offsets = scriptData->_scripts[scriptData->_current].startOffsets;
 	for (uint i = 0; i < offsets.size(); i++) {
@@ -128,7 +128,12 @@ void showControlPanel() {
 	ImGui::SetNextWindowSize(ImVec2(200, 103), ImGuiCond_FirstUseEver);
 
 	if (ImGui::Begin("Control Panel", &_state->_w.controlPanel, ImGuiWindowFlags_NoDocking)) {
+		// null guard
 		Movie *movie = g_director->getCurrentMovie();
+		if (!movie) {
+			ImGui::End();
+			return;
+		}
 		Score *score = movie->getScore();
 		ImDrawList *dl = ImGui::GetWindowDrawList();
 
@@ -141,7 +146,8 @@ void showControlPanel() {
 		float bgX1 = -4.0f, bgX2 = 21.0f;
 
 		int frameNum = score->getCurrentFrameNum();
-		int maxFrame = score->getFramesNum() - 1;
+		// frame numbers are 1-based
+		int maxFrame = score->getFramesNum();
 
 		if (_state->_prevFrame != -1 && _state->_prevFrame != frameNum) {
 			score->_playState = kPlayPaused;
@@ -290,8 +296,8 @@ void showControlPanel() {
 
 		{
 			ImGui::Separator();
-			ImGui::TextColored(_state->theme->cp_path_color, movie->getArchive()->getPathName().toString().c_str());
-			ImGui::SetItemTooltip(movie->getArchive()->getPathName().toString().c_str());
+			ImGui::TextColored(_state->theme->cp_path_color, "%s", movie->getArchive()->getPathName().toString().c_str());
+			ImGui::SetItemTooltip("%s", movie->getArchive()->getPathName().toString().c_str());
 		}
 
 		ImGui::Separator();

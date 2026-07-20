@@ -37,6 +37,11 @@ private:
 public:
 	Console();
 	~Console() override;
+
+	void registerVar(const Common::String &name, int *ptr) {
+		GUI::Debugger::registerVar(name, ptr);
+	}
+	using GUI::Debugger::clearVars;
 };
 
 } // End of namespace PhoenixVR

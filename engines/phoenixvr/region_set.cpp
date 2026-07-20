@@ -21,19 +21,45 @@
 
 #include "phoenixvr/region_set.h"
 #include "common/debug.h"
-#include "common/file.h"
 #include "phoenixvr/math.h"
+#include "phoenixvr/phoenixvr.h"
 
 namespace PhoenixVR {
-RegionSet::RegionSet(Common::SeekableReadStream &s) {
-	auto n = s.readUint32LE();
-	while (n--) {
-		auto a = s.readFloatLE();
-		auto b = s.readFloatLE();
-		auto c = s.readFloatLE();
-		auto d = s.readFloatLE();
-		_regions.push_back(Region{MIN(a, b), MAX(a, b), MIN(c, d), MAX(c, d)});
-		debug("region %s", _regions.back().toString().c_str());
+RegionSet::RegionSet(Common::SeekableReadStream &s, bool vr) {
+	auto version = g_engine->version();
+	if (version == 1) {
+		auto n = s.readUint32LE();
+		while (n--) {
+			auto a = s.readFloatLE();
+			auto b = s.readFloatLE();
+			auto c = s.readFloatLE();
+			auto d = s.readFloatLE();
+			_regions.push_back(Region{MIN(a, b), MAX(a, b), MIN(c, d), MAX(c, d)});
+			debug("region %s", _regions.back().toString().c_str());
+		}
+	} else if (version == 2) {
+		while (!s.eos()) {
+			auto a = s.readFloatLE();
+			auto b = s.readFloatLE();
+			auto c = s.readFloatLE();
+			auto d = s.readFloatLE();
+			if (!vr) {
+				auto cx = g_system->getWidth() / 2, cy = g_system->getHeight() / 2;
+				static constexpr float kFocal = 350.0f;
+				auto left = cx + static_cast<int>(tan(a) * kFocal);
+				auto right = cx + static_cast<int>(tan(b) * kFocal);
+				auto top = cy + static_cast<int>(kFocal / tan(c) / cos(a));
+				auto bottom = cy + static_cast<int>(kFocal / tan(d) / cos(b));
+				a = left;
+				b = right;
+				c = top;
+				d = bottom;
+			}
+			_regions.push_back(Region{MIN(a, b), MAX(a, b), MIN(c, d), MAX(c, d)});
+			debug("region %s", _regions.back().toString().c_str());
+		}
+	} else {
+		error("invalid version %d", version);
 	}
 }
 
@@ -64,7 +90,8 @@ bool Region::contains3D(float angleX, float angleY) const {
 		y1 = t;
 	}
 	float ax_pi2 = angleX + kTau;
-	if ((angleX >= x0 && angleX <= x1) || (ax_pi2 >= x0 && ax_pi2 <= x1)) {
+	float ax_mpi2 = angleX - kTau;
+	if ((angleX >= x0 && angleX <= x1) || (ax_pi2 >= x0 && ax_pi2 <= x1) || (ax_mpi2 >= x0 && ax_mpi2 <= x1)) {
 		if (angleY >= y0 && angleY <= y1)
 			return true;
 

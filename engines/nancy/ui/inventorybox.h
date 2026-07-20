@@ -40,8 +40,6 @@ class Scene;
 namespace UI {
 
 class InventoryBox : public RenderObject {
-	friend class Nancy::State::Scene;
-
 public:
 	struct ItemDescription {
 		Common::String name; // 0x00
@@ -58,12 +56,15 @@ public:
 
 	void onScrollbarMove();
 
-private:
-	// These are private since they should only be called from Scene
 	void addItem(const int16 itemID);
 	void removeItem(const int16 itemID);
-
 	void onReorder();
+
+	Common::Array<int16> &getOrder() { return _order; }
+
+private:
+	// These are private since they should only be called from Scene
+
 	void setHotspots(const uint pageNr);
 	void drawItemInSlot(const uint itemID, const uint slotID, const bool highlighted = false);
 

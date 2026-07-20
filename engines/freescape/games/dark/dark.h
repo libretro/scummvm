@@ -21,6 +21,7 @@
 
 #include "audio/mixer.h"
 #include "common/array.h"
+#include "freescape/music.h"
 #include "freescape/games/dark/c64.music.h"
 #include "freescape/games/dark/c64.sfx.h"
 
@@ -143,12 +144,12 @@ public:
 	Audio::SoundHandle _soundFxHandleJetpack;
 
 	DarkSideC64SFXPlayer *_playerC64Sfx;
-	DarkSideC64MusicPlayer *_playerC64Music;
+	MusicPlayer *_playerMusic;
 	bool _c64UseSFX;
 	bool _c64CompassInitialized;
 	int _c64CompassPosition;
 	Common::Array<byte> _c64CompassTable;
-	void playSoundC64(int index) override;
+
 	void toggleC64Sound();
 
 	Common::Array<byte> _musicData; // HDSMUSIC.AM TEXT segment (Amiga)

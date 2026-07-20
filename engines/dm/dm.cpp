@@ -105,8 +105,9 @@ uint16 DMEngine::getMap(int32 mapTime) {
 	return ((uint16)(mapTime >> 24));
 }
 
-int32 DMEngine::setMap(int32 mapTime, uint32 map) {
-	return ((mapTime & 0x00FFFFFF) | (map << 24));
+int32 DMEngine::setMap(int32 &mapTime, uint32 map) {
+	mapTime = ((mapTime & 0x00FFFFFF) | (map << 24));
+	return mapTime;
 }
 
 Thing DMEngine::thingWithNewCell(Thing thing, int16 cell) {
@@ -119,11 +120,12 @@ int16 DMEngine::getDistance(int16 mapx1, int16 mapy1, int16 mapx2, int16 mapy2) 
 
 DMEngine::DMEngine(OSystem *syst, const DMADGameDescription *desc) :
 			Engine(syst), _console(nullptr), _gameVersion(desc),
-			_thingNone(0), _thingEndOfList(0xFFFE), _thingFirstExplosion(0xFF80),
+			_thingNone(0xFFFF), _thingEndOfList(0xFFFE), _thingFirstExplosion(0xFF80),
 			_thingExplFireBall(0xFF80), _thingExplSlime(0xFF81), _thingExplLightningBolt(0xFF82),
 			_thingExplHarmNonMaterial(0xFF83), _thingExplOpenDoor(0xFF84), _thingExplPoisonBolt(0xFF86),
 			_thingExplPoisonCloud(0xFF87), _thingExplSmoke(0xFFA8), _thingExplFluxcage(0xFFB2),
-			_thingExplRebirthStep1(0xFFE4), _thingExplRebirthStep2(0xFFE5), _thingParty(0xFFFF)
+			_thingExplRebirthStep1(0xFFE4), _thingExplRebirthStep2(0xFFE5), _thingParty(0xFFFF),
+			_dirIntoStepCountEast(), _dirIntoStepCountNorth()
 	{
 	// register random source
 	_rnd = new Common::RandomSource("dm");
@@ -205,7 +207,8 @@ DMEngine::~DMEngine() {
 bool DMEngine::hasFeature(EngineFeature f) const {
 	return
 		(f == kSupportsSavingDuringRuntime) ||
-		(f == kSupportsLoadingDuringRuntime);
+		(f == kSupportsLoadingDuringRuntime) ||
+		(f == kSupportsReturnToLauncher);
 }
 
 Common::Error DMEngine::loadGameState(int slot) {
@@ -226,6 +229,14 @@ Common::Error DMEngine::loadGameState(int slot) {
 
 bool DMEngine::canLoadGameStateCurrently(Common::U32String *msg) {
 	return _canLoadFromGMM;
+}
+
+bool DMEngine::canSaveGameStateCurrently(Common::U32String *msg) {
+	return true;
+}
+
+Common::String DMEngine::getSaveStateName(int slot) const {
+	return getMetaEngine()->getSavegameFile(slot, _targetName.c_str());
 }
 
 void DMEngine::delay(uint16 verticalBlank) {
@@ -657,11 +668,11 @@ void DMEngine::endGame(bool doNotDrawCreditsOnly) {
 				championMirrorBox._rect.top += 48;
 				championMirrorBox._rect.bottom += 48;
 				championPortraitBox._rect.top += 48;
-				championPortraitBox._rect.top += 48;
+				championPortraitBox._rect.bottom += 48;
 			}
 			_displayMan->startEndFadeToPalette(_displayMan->_paletteTopAndBottomScreen);
+			_eventMan->waitForMouseOrKeyActivity();
 			_engineShouldQuit = true;
-			return;
 		}
 T0444017:
 		_displayMan->fillScreen(kDMColorBlack);
@@ -710,13 +721,18 @@ T0444017:
 				_displayMan->fillScreen(kDMColorBlack);
 				_displayMan->startEndFadeToPalette(_displayMan->_palDungeonView[0]);
 				_gameMode = kDMModeLoadSavedGame;
-				if (loadgame(1) != kDMLoadgameFailure) {
+				GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(false);
+				int16 saveSlot = dialog->runModalWithCurrentTarget();
+				delete dialog;
+
+				if (saveSlot >= 0 && loadgame(saveSlot) != kDMLoadgameFailure) {
 					startGame();
 					_restartGameRequest = false;
 					_eventMan->hideMouse();
 					_eventMan->discardAllInput();
 					return;
 				}
+				_restartGameRequest = false;
 			}
 		}
 
@@ -757,9 +773,9 @@ void DMEngine::drawEntrance() {
 	_dungeonMan->_currMapHeight = 5;
 	_dungeonMan->_currMapData = microDungeonCurrentMapData;
 
-	Map map; // uninitialized, won't be used
+	static Map map; // uninitialized, won't be used
 	_dungeonMan->_currMap = &map;
-	Square microDungeonSquares[25];
+	static Square microDungeonSquares[25];
 	for (uint16 i = 0; i < 25; ++i)
 		microDungeonSquares[i] = Square(kDMElementTypeWall, 0);
 
@@ -920,7 +936,7 @@ void DMEngine::fuseSequence() {
 	lordChaosMapX += _dirIntoStepCountEast[_dungeonMan->_partyDir];
 	lordChaosMapY += _dirIntoStepCountNorth[_dungeonMan->_partyDir];
 	Thing lordChaosThing = _groupMan->groupGetThing(lordChaosMapX, lordChaosMapY);
-	Group *lordGroup = (Group*)_dungeonMan->getThingData(lordChaosThing);
+	Group *lordGroup = _dungeonMan->getGroup(lordChaosThing);
 	lordGroup->_health[0] = 10000;
 	_dungeonMan->setGroupCells(lordGroup, kDMCreatureTypeSingleCenteredCreature, _dungeonMan->_partyMapIndex);
 	_dungeonMan->setGroupDirections(lordGroup, returnOppositeDir(_dungeonMan->_partyDir), _dungeonMan->_partyMapIndex);
@@ -933,10 +949,11 @@ void DMEngine::fuseSequence() {
 		Thing curThing = _dungeonMan->getSquareFirstObject(fluxCageMapX, fluxcageMapY);
 		while (curThing != _thingEndOfList) {
 			if (curThing.getType() == kDMThingTypeExplosion) {
-				Explosion *curExplosion = (Explosion*)_dungeonMan->getThingData(curThing);
+				Explosion *curExplosion = _dungeonMan->getExplosion(curThing);
 				if (curExplosion->getType() == kDMExplosionTypeFluxcage) {
-					_dungeonMan->unlinkThingFromList(curThing, Thing(0), fluxCageMapX, fluxcageMapY);
+					_dungeonMan->unlinkThingFromList(curThing, Thing(0xFFFF), fluxCageMapX, fluxcageMapY);
 					curExplosion->setNextThing(_thingNone);
+					curThing = _dungeonMan->getSquareFirstObject(fluxCageMapX, fluxcageMapY);
 					continue;
 				}
 			}
@@ -1001,7 +1018,7 @@ void DMEngine::fuseSequence() {
 		for (int16 idx = 0; idx < maxCount; idx++) {
 			char decodedString[200];
 			_dungeonMan->decodeText(decodedString, sizeof(decodedString),
-					textStringThings[idx], (TextType)(kDMTextTypeMessage | kDMMaskDecodeEvenIfInvisible));
+					textStringThings[idx], (int16)(kDMTextTypeMessage | kDMMaskDecodeEvenIfInvisible));
 			if (decodedString[1] == textFirstChar) {
 				_textMan->clearAllRows();
 				decodedString[1] = '\n'; /* New line */
@@ -1016,6 +1033,8 @@ void DMEngine::fuseSequence() {
 
 	for (int16 attackId = 55; attackId <= 255; attackId += 40) {
 		_projexpl->createExplosion(_thingExplHarmNonMaterial, attackId, lordChaosMapX, lordChaosMapY, kDMCreatureTypeSingleCenteredCreature);
+		if (attackId == 255)
+			continue;
 		fuseSequenceUpdate();
 	}
 
@@ -1030,7 +1049,7 @@ void DMEngine::fuseSequenceUpdate() {
 	_sound->playPendingSound();
 	_eventMan->discardAllInput();
 	_displayMan->updateScreen();
-	delay(2);
+	delay(6);
 	_gameTime++; /* BUG0_71 Some timings are too short on fast computers.
 					  The ending animation when Lord Chaos is fused plays too quickly because the execution speed is not limited */
 }

@@ -56,7 +56,7 @@ Animation::Animation(AccessEngine *vm, Common::SeekableReadStream *stream) : Man
 	// WORKAROUND: In Amazon floppy English, there's an animation associated with
 	// the librarian that isn't used, and has junk data. Luckily, it's animation
 	// type is also invalid, so if the _type isn't in range, exit immediately
-	if (_type > 7) {
+	if (_type > 7 && _vm->getGameID() == kGameAmazon) {
 		_scaling = -1;
 		_frameNumber = -1;
 		_initialTicks = _countdownTicks = 0;
@@ -96,9 +96,11 @@ Animation::~Animation() {
 typedef void(Animation::*AnimationMethodPtr)();
 
 void Animation::animate() {
-	static const AnimationMethodPtr METHODS[8] = {
+	static const AnimationMethodPtr METHODS[13] = {
 	   &Animation::anim0, &Animation::anim1, &Animation::anim2, &Animation::anim3,
-	   &Animation::anim4, &Animation::animNone, &Animation::animNone, &Animation::anim7
+	   &Animation::anim4, &Animation::animNone, &Animation::animNone, &Animation::anim7,
+	   &Animation::anim8, &Animation::anim9, &Animation::anim10, &Animation::anim11,
+	   &Animation::anim12,
 	};
 
 	(this->*METHODS[_type])();
@@ -124,6 +126,7 @@ void Animation::anim0() {
 	}
 }
 
+// Loop and then leave the last frame
 void Animation::anim1() {
 	if (_currentLoopCount == -1 || _countdownTicks != 0) {
 		setFrame1(calcFrame());
@@ -142,6 +145,7 @@ void Animation::anim1() {
 	}
 }
 
+// Loop forever
 void Animation::anim2() {
 	if (_countdownTicks != 0) {
 		setFrame1(calcFrame());
@@ -159,28 +163,35 @@ void Animation::anim2() {
 	}
 }
 
+// Loop and stop.
 void Animation::anim3() {
-	if (_currentLoopCount != -1) {
-		if (_countdownTicks != 0) {
-			setFrame1(calcFrame());
-		} else {
-			_countdownTicks = _initialTicks;
-			++_frameNumber;
-			const AnimationFrame *frame = calcFrame();
+	if (_currentLoopCount == -1)
+		return;
 
-			if (frame == nullptr) {
-				--_currentLoopCount;
-				_frameNumber = 0;
-				frame = calcFrame();
-			}
+	if (_countdownTicks != 0) {
+		setFrame1(calcFrame());
+	} else {
+		_countdownTicks = _initialTicks;
+		++_frameNumber;
+		const AnimationFrame *frame = calcFrame();
 
-			setFrame(frame);
+		if (frame == nullptr) {
+			--_currentLoopCount;
+			_frameNumber = 0;
+			frame = calcFrame();
 		}
+
+		setFrame(frame);
 	}
 }
 
+// Loop and stop?? How is this different from 3?
+// It can't leave the last frame there, that breaks
+// Stiletto's door opening in Noctropolis.
 void Animation::anim4() {
-	if (_currentLoopCount == -1 || _countdownTicks != 0) {
+	if (_currentLoopCount == -1)
+		return;
+	if (_countdownTicks != 0) {
 		setFrame1(calcFrame());
 	} else {
 		_countdownTicks = _initialTicks;
@@ -189,7 +200,6 @@ void Animation::anim4() {
 
 		if (frame == nullptr) {
 			if (--_currentLoopCount == -1) {
-				setFrame1(calcFrame());
 				return;
 			} else {
 				_frameNumber = 0;
@@ -205,9 +215,120 @@ void Animation::animNone() {
 	// Empty implementation
 }
 
+// Just a single frame.
 void Animation::anim7() {
 	setFrame(calcFrame1());
 }
+
+void Animation::anim8() {
+	const AnimationFrame *frame = calcFrame();
+	if (!_vm->_curPlayer->_playerOff) {
+		assert(frame->_parts.size() > 0);
+		const AnimationFramePart &part0 = frame->_parts[0];
+		const SpriteFrame *spriteFrame0 = _vm->_objectsTable[part0._spritesIndex]->_frames[part0._frameIndex];
+		_vm->_animation->_base.x = frame->_baseX;
+		_vm->_animation->_base.y = frame->_baseY;
+		int playerX = _vm->_curPlayer->_playerX;
+		int playerY = _vm->_curPlayer->_playerY;
+		int frameX = _vm->_animation->_base.x + part0._position.x;
+		int frameY = _vm->_animation->_base.y + part0._position.y;
+		int playerOffX = _vm->_curPlayer->_playerOffset.x;
+		int playerOffY = _vm->_curPlayer->_playerOffset.y;
+
+		if (playerX <= frameX + spriteFrame0->w &&
+			playerY - playerOffY <= frameY + spriteFrame0->h &&
+			playerY <= part0._offsetY && frameY <= playerY && frameX < playerOffX + playerX) {
+			// Reset frame here?
+			_frameNumber = 0;
+			frame = calcFrame();
+		}
+	}
+	setFrame(frame);
+}
+
+void Animation::anim9() {
+	debug("TODO: Animation::anim9");
+}
+
+void Animation::anim10() {
+	debug("TODO: Animation::anim10");
+}
+
+void Animation::anim11() {
+	// Actor idle
+	const AnimationFrame *frame = calcFrame();
+	_countdownTicks += frame->_frameDelay;
+	_scaling = _vm->_scale;
+	debugC(kDebugGraphics, "anim11: idle %s scale %d (%d, %d) yoffset %d", (_vm->_curPlayer == _vm->_player ? "peter" : "stil"),
+		_vm->_scale, _vm->_curPlayer->_playerX, _vm->_curPlayer->_playerY, _vm->_curPlayer->_playerOffset.y);
+	setFrame1(frame, _vm->_curPlayer->_playerX, _vm->_curPlayer->_playerY - _vm->_curPlayer->_playerOffset.y);
+}
+
+void Animation::anim12() {
+	// Actor walk
+	const AnimationFrame *frame = calcFrame();
+	if (_countdownTicks == 0) {
+		const AnimationFrame *prevAnimationFrame = frame;
+		_countdownTicks = _initialTicks;
+		_frameNumber++;
+		if (_frameNumber >= (int)_frames.size()) {
+			_frameNumber = 1;
+			prevAnimationFrame = calcFrame1();
+		}
+		frame = calcFrame();
+		int16 deltaX = (frame->_baseX + frame->_parts[0]._position.x) -
+			(prevAnimationFrame->_baseX + prevAnimationFrame->_parts[0]._position.x);
+		int16 deltaY = (frame->_baseY + frame->_parts[0]._position.y) -
+			(prevAnimationFrame->_baseY + prevAnimationFrame->_parts[0]._position.y);
+		int16 xadd = ABS(deltaX) * _vm->_scale / 256;
+		int16 xaddLow = (ABS(deltaX) * _vm->_scale) % 256;
+		int16 yadd = ABS(deltaY) * _vm->_scale / 256;
+		int16 yaddLow = (ABS(deltaY) * _vm->_scale) % 256;
+
+		// Original uses "low" parts to do some fixed-point movement
+		// to make scaling slightly smoother.
+		Player *player = _vm->_curPlayer;
+
+		if (deltaX < 0) {
+			player->_playerX -= xadd;
+			player->_playerXLow -= xaddLow;
+			if (player->_playerXLow <= -256) {
+				player->_playerX--;
+				player->_playerXLow += 256;
+			}
+		} else {
+			player->_playerX += xadd;
+			player->_playerXLow += xaddLow;
+			if (player->_playerXLow >= 256) {
+				player->_playerX++;
+				player->_playerXLow -= 256;
+			}
+		}
+
+		if (deltaY < 0) {
+			player->_playerY -= yadd;
+			player->_playerYLow -= yaddLow;
+			if (player->_playerYLow <= -256) {
+				player->_playerY--;
+				player->_playerYLow += 256;
+			}
+		} else {
+			player->_playerY += yadd;
+			player->_playerYLow += yaddLow;
+			if (player->_playerYLow >= 256) {
+				player->_playerY++;
+				player->_playerYLow -= 256;
+			}
+		}
+
+		_countdownTicks += frame->_frameDelay;
+
+		debugC(kDebugGraphics, "anim12: %s pos %d, %d yoff %d (change %d %d -> %d %d) scale %d", (_vm->_curPlayer == _vm->_player ? "peter" : "stil"), _vm->_curPlayer->_playerX, _vm->_curPlayer->_playerY, _vm->_curPlayer->_playerOffset.y, deltaX, deltaY, xadd, yadd, _vm->_scale);
+	}
+	_scaling = _vm->_scale;
+	setFrame1(frame, _vm->_curPlayer->_playerX, _vm->_curPlayer->_playerY - _vm->_curPlayer->_playerOffset.y);
+}
+
 
 const AnimationFrame *Animation::calcFrame() {
 	return (_frameNumber < (int)_frames.size()) ? _frames[_frameNumber] : nullptr;
@@ -223,7 +344,7 @@ void Animation::setFrame(const AnimationFrame *frame) {
 	setFrame1(frame);
 }
 
-void Animation::setFrame1(const AnimationFrame *frame) {
+void Animation::setFrame1(const AnimationFrame *frame, int16 xoff, int16 yoff) {
 	_vm->_animation->_base.x = frame->_baseX;
 	_vm->_animation->_base.y = frame->_baseY;
 
@@ -233,14 +354,33 @@ void Animation::setFrame1(const AnimationFrame *frame) {
 
 		// Set the flags
 		ie._flags = part._flags & ~IMGFLAG_UNSCALED;
-		if (_vm->_animation->_frameScale == -1)
+		if (_scaling == -1)
 			ie._flags |= IMGFLAG_UNSCALED;
 
 		// Set the other fields
 		ie._spritesPtr = _vm->_objectsTable[part._spritesIndex];
 		ie._frameNumber = part._frameIndex;
-		ie._position = part._position + _vm->_animation->_base;
-		ie._offsetY = part._offsetY - ie._position.y;
+		ie._position.x = xoff ? xoff : (part._position.x + _vm->_animation->_base.x);
+		ie._position.y = yoff ? yoff : (part._position.y + _vm->_animation->_base.y);
+		if (xoff && _scaling != -1) {
+			// If xoff is set, the animation is for an actor so we need to apply scale
+			// factor to frame offset for priority.  We also need to determine its size
+			// now so Stiletto and Peter can have different scale factors in Noctropolis
+			ie._offsetY = (part._offsetY - frame->_baseY - part._position.y) * _scaling / 256;
+			ie._scaleOverride = _scaling;
+			const SpriteFrame *spriteFrame = ie._spritesPtr->getFrame(ie._frameNumber);
+			ie._sizeOverride = Common::Point(
+				_vm->_screen->_scaleTable1[spriteFrame->w],
+				_vm->_screen->_scaleTable1[spriteFrame->h]
+			);
+		} else {
+			ie._offsetY = part._offsetY - ie._position.y;
+		}
+
+		/*
+		Common::String dumpfn = Common::String::format("anim_%d_%d_%d_sprite_%d_frame_%d", ie._position.x, ie._position.y, ie._offsetY, part._spritesIndex, part._frameIndex);
+		ie._spritesPtr->getFrame(ie._frameNumber)->dump(dumpfn.c_str());
+		*/
 
 		_vm->_images.addToList(ie);
 	}
@@ -286,7 +426,6 @@ AnimationFramePart::AnimationFramePart(Common::SeekableReadStream *stream) {
 AnimationManager::AnimationManager(AccessEngine *vm) : Manager(vm) {
 	_animation = nullptr;
 	_animStart = nullptr;
-	_frameScale = 0;
 }
 
 AnimationManager::~AnimationManager() {
@@ -334,7 +473,6 @@ Animation *AnimationManager::findAnimation(int animId) {
 
 void AnimationManager::animate(int animId) {
 	Animation *anim = findAnimation(animId);
-	_frameScale = anim->_scaling;
 	anim->animate();
 }
 

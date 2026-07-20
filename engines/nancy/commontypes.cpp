@@ -50,7 +50,7 @@ void SceneChangeDescription::readData(Common::SeekableReadStream &stream, bool l
 	}
 }
 
-void SceneChangeWithFlag::readData(Common::SeekableReadStream &stream, bool reverseFormat) {
+void SceneChangeWithFlag::readData(Common::SeekableReadStream &stream, bool reverseFormat, bool terse) {
 	_sceneChange.sceneID = stream.readUint16LE();
 	_sceneChange.frameID = stream.readUint16LE();
 	_sceneChange.verticalOffset = stream.readUint16LE();
@@ -61,23 +61,29 @@ void SceneChangeWithFlag::readData(Common::SeekableReadStream &stream, bool reve
 		_flag.label = stream.readSint16LE();
 		_flag.flag = stream.readByte();
 
+		if (terse) {
+			stream.skip(1);	// unknown
+			stream.skip(2);	// shouldStopRendering
+		}
+
 		if (g_nancy->getGameType() >= kGameTypeNancy3) {
-			int32 x = stream.readSint32LE();
-			int32 y = stream.readSint32LE();
-			int32 z = stream.readSint32LE();
+			int32 x = terse ? 0 : stream.readSint32LE();
+			int32 y = terse ? 0 : stream.readSint32LE();
+			int32 z = terse ? 1 : stream.readSint32LE();
 			_sceneChange.listenerFrontVector.set(x, y, z);
 			_sceneChange.frontVectorFrameID = _sceneChange.frameID;
 		}
 	} else {
 		if (g_nancy->getGameType() >= kGameTypeNancy3) {
-			int32 x = stream.readSint32LE();
-			int32 y = stream.readSint32LE();
-			int32 z = stream.readSint32LE();
+			int32 x = terse ? 0 : stream.readSint32LE();
+			int32 y = terse ? 0 : stream.readSint32LE();
+			int32 z = terse ? 1 : stream.readSint32LE();
 			_sceneChange.listenerFrontVector.set(x, y, z);
 			_sceneChange.frontVectorFrameID = _sceneChange.frameID;
 		}
 
 		stream.skip(2); // shouldStopRendering
+
 		_flag.label = stream.readSint16LE();
 		_flag.flag = stream.readByte();
 	}
@@ -122,11 +128,16 @@ void MultiEventFlagDescription::execute() {
 	}
 }
 
-void SecondaryVideoDescription::readData(Common::SeekableReadStream &stream) {
+void SecondaryVideoDescription::readData(Common::SeekableReadStream &stream, bool hasTrailingRects) {
 	frameID = stream.readUint16LE();
 	readRect(stream, srcRect);
 	readRect(stream, destRect);
-	stream.skip(0x20);
+	// PlaySecondaryVideo keeps the two trailing rects in every game, while
+	// PlaySecondaryMovie only has them up to Nancy 9 and dropped them afterwards.
+	if (hasTrailingRects || g_nancy->getGameType() <= kGameTypeNancy9) {
+		stream.skip(16);
+		stream.skip(16);
+	}
 }
 
 void SoundEffectDescription::readData(Common::SeekableReadStream &stream) {
@@ -264,6 +275,19 @@ void SoundDescription::readTerse(Common::SeekableReadStream &stream) {
 	numLoops = stream.readUint32LE();
 	volume = stream.readUint16LE();
 	stream.skip(2);
+}
+
+void RandomSoundBlock::readData(Common::SeekableReadStream &stream) {
+	int16 count = stream.readSint16LE();
+	if (count > 0) {
+		names.resize(count);
+		for (int i = 0; i < count; ++i) {
+			readFilename(stream, names[i]);
+		}
+		channel = stream.readSint16LE();
+		numLoops = stream.readSint32LE();
+		volume = stream.readSint16LE();
+	}
 }
 
 void ConditionalDialogue::readData(Common::SeekableReadStream &stream) {

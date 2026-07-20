@@ -301,9 +301,8 @@ void HolomapV1::drawHoloObj(const IVec3 &angle, int32 alpha, int32 beta, int16 s
 	const IVec3 &m = _engine->_renderer->worldRotatePoint(IVec3(0, 0, 1000 + size));
 	_engine->_renderer->setFollowCamera(0, 0, 0, angle.x, angle.y, angle.z, distance(zDistanceTrajectory));
 	_engine->_interface->unsetClip();
-	const IVec3 &m1 = _engine->_renderer->worldRotatePoint(m);
 	Common::Rect dirtyRect;
-	_engine->_renderer->renderIsoModel(m1, alpha, beta, LBAAngles::ANGLE_0, _engine->_resources->_holomapPointModelPtr, dirtyRect);
+	_engine->_renderer->renderIsoModel(m, alpha, beta, LBAAngles::ANGLE_0, _engine->_resources->_holomapPointModelPtr, dirtyRect);
 	_engine->copyBlockPhys(dirtyRect);
 }
 
@@ -383,7 +382,7 @@ void HolomapV1::holoTraj(int32 trajectoryIndex) {
 	bool flagpal = true;
 	_engine->_input->enableKeyMap(holomapKeyMapId);
 	for (;;) {
-		FrameMarker frame(_engine);
+		FrameMarker frame(_engine, 50);
 		_engine->readKeys();
 		if (_engine->shouldQuit() || _engine->_input->toggleAbortAction()) {
 			break;
@@ -587,7 +586,7 @@ void HolomapV1::holoMap() {
 	_engine->_input->enableKeyMap(holomapKeyMapId);
 
 	for (;;) {
-		FrameMarker frame(_engine);
+		FrameMarker frame(_engine, 50);
 		_engine->_input->readKeys();
 		if (_engine->shouldQuit() || _engine->_input->toggleAbortAction()) {
 			break;
@@ -602,8 +601,8 @@ void HolomapV1::holoMap() {
 			_oalpha = _calpha;
 			_obeta = _cbeta;
 			_otimer = _engine->timerRef;
-			_dalpha = _listHoloPos[_current].alpha;
-			_dbeta = _listHoloPos[_current].beta;
+			_dalpha = ClampAngle(_listHoloPos[_current].alpha);
+			_dbeta = ClampAngle(_listHoloPos[_current].beta);
 			_automove = true;
 			_flagredraw = true;
 			debugC(1, TwinE::kDebugHolomap, "Holomap prev: %i (target angles: alpha %d, beta: %d)", _current, _dalpha, _dbeta);
@@ -616,8 +615,8 @@ void HolomapV1::holoMap() {
 			_oalpha = _calpha;
 			_obeta = _cbeta;
 			_otimer = _engine->timerRef;
-			_dalpha = _listHoloPos[_current].alpha;
-			_dbeta = _listHoloPos[_current].beta;
+			_dalpha = ClampAngle(_listHoloPos[_current].alpha);
+			_dbeta = ClampAngle(_listHoloPos[_current].beta);
 			_automove = true;
 			_flagredraw = true;
 			debugC(1, TwinE::kDebugHolomap, "Holomap next: %i (target angles: alpha %d, beta: %d)", _current, _dalpha, _dbeta);

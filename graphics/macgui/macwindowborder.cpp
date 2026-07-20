@@ -190,7 +190,7 @@ void MacWindowBorder::drawScrollBar(ManagedSurface *g) {
 	int ry2 = ry1 + _scrollSize ;
 	Common::Rect rr(rx1, ry1, rx2, ry2);
 
-	MacPlotData pd(g, nullptr,  &_wm->getPatterns(), 1, 0, 0, 1, _wm->_colorWhite, true);
+	MacPlotData pd(g, nullptr,  &_wm->getPatterns(), 1, 0, 0, {1, 1}, _wm->_colorWhite, true);
 	Primitives &primitives = _wm->getDrawInvertPrimitives();
 	primitives.drawFilledRect1(rr, _wm->_colorWhite, &pd);
 
@@ -258,8 +258,10 @@ void MacWindowBorder::loadBorder(Common::SeekableReadStream &file, uint32 flags,
 		if (i < palette.size())
 			surface->setTransparentColor(i);
 	} else {
-		const Graphics::PixelFormat requiredFormat_4byte(4, 8, 8, 8, 8, 24, 16, 8, 0);
-		surface->convertToInPlace(requiredFormat_4byte);
+		if (!_window || _window->_wm->_pixelformat.isCLUT8())
+			surface->convertToInPlace(Graphics::PixelFormat::createFormatRGBA32());
+		else
+			surface->convertToInPlace(_window->_wm->_pixelformat);
 		surface->setTransparentColor(surface->format.RGBToColor(255, 0, 255));
 	}
 
@@ -314,7 +316,7 @@ void MacWindowBorder::loadInternalBorder(uint32 flags) {
 	}
 }
 
-void MacWindowBorder::blitBorderInto(ManagedSurface &destination, uint32 flags) {
+void MacWindowBorder::blitBorderInto(ManagedSurface &destination, uint32 flags, bool maskOnly, uint32 maskColor) {
 	if (flags >= kWindowBorderMaxFlag) {
 		warning("Accessing non-existed border type");
 		return;
@@ -337,12 +339,12 @@ void MacWindowBorder::blitBorderInto(ManagedSurface &destination, uint32 flags) 
 		setTitle(_title, destination.w);
 	}
 
-	src->blit(destination, 0, 0, destination.w, destination.h, _wm);
+	src->blit(destination, 0, 0, destination.w, destination.h, _wm, maskOnly, maskColor);
 
-	if (flags & kWindowBorderTitle)
+	if (flags & kWindowBorderTitle && !maskOnly)
 		drawTitle(&destination, src->getTitleOffset(), _border[flags]->getMinWidth());
 
-	if (flags & kWindowBorderScrollbar)
+	if (flags & kWindowBorderScrollbar && !maskOnly)
 		drawScrollBar(&destination);
 }
 

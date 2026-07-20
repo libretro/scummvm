@@ -27,6 +27,7 @@
 static const PlainGameDescriptor AccessGames[] = {
 	{"amazon", "Amazon: Guardians of Eden"},
 	{"martian", "Martian Memorandum"},
+	{"noctropolis", "Noctropolis"},
 	{nullptr, nullptr}
 };
 
@@ -43,6 +44,9 @@ static const DebugChannelDef debugFlagList[] = {
 class AccessMetaEngineDetection : public AdvancedMetaEngineDetection<Access::AccessGameDescription> {
 public:
 	AccessMetaEngineDetection() : AdvancedMetaEngineDetection(Access::gameDescriptions, AccessGames) {
+		static const char *const DIRECTORY_GLOBS[3] = { "dark", "demo", 0 };
+		_directoryGlobs = DIRECTORY_GLOBS;
+		_flags = kADFlagMatchFullPaths;
 		_maxScanDepth = 3;
 	}
 
@@ -61,6 +65,30 @@ public:
 	const DebugChannelDef *getDebugChannels() const override {
 		return debugFlagList;
 	}
+
+	DetectedGame toDetectedGame(const ADDetectedGame &adGame, ADDetectedGameExtraInfo *extraInfo) const override {
+		static const Common::Language NOCTROPOLIS_RERELEASE_LANGS[] = {
+			Common::EN_ANY,
+			Common::FR_FRA,
+			Common::DE_DEU,
+			Common::ES_ESP,
+		};
+		DetectedGame game = AdvancedMetaEngineDetection::toDetectedGame(adGame);
+
+		const Access::AccessGameDescription *desc = reinterpret_cast<const Access::AccessGameDescription *>(adGame.desc);
+		assert(desc);
+
+		if (desc && (desc->features & Access::FEATURE_NOCT_MULTI_LANG)) {
+			// The AdvancedDetector model only allows specifying a single supported
+			// game language. The Noctropolis re-release supports multiple languages.
+			for (const auto lang: NOCTROPOLIS_RERELEASE_LANGS) {
+				game.appendGUIOptions(Common::getGameGUIOptionsDescriptionLanguage(lang));
+			}
+		}
+
+		return game;
+	}
+
 };
 
 

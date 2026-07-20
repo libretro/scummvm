@@ -24,12 +24,21 @@
 
 namespace Director {
 
-class HitMapObject : public Object<HitMapObject> {
+class HitMapXObject : public Object<HitMapXObject> {
 public:
-    HitMapObject(ObjectType objType);
+	HitMapXObject(ObjectType objType);
+	~HitMapXObject() override;
+
+	// Hitmap data storage
+	Common::Array<byte> _bitmapData;
+	uint32 _width;
+	uint32 _height;
+	int32 _xOffset;
+	int32 _yOffset;
+	uint32 _scale;
 };
 
-namespace HitMap {
+namespace HitMapXObj {
 
 extern const char *const xlibName;
 extern const XlibFileDesc fileNames[];
@@ -39,8 +48,11 @@ void close(ObjectType type);
 
 void m_new(int nargs);
 void m_where(int nargs);
+void m_name(int nargs);
+void m_getSys(int nargs);
+void m_dispose(int nargs);
 
-} // End of namespace HitMap
+} // End of namespace HitMapXObj
 
 } // End of namespace Director
 

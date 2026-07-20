@@ -62,7 +62,6 @@ public:
 		_tempSurface->copyRectToSurface(_screen->getBasePtr(_bbox.left, _bbox.top), _screen->pitch,
 			0, 0, _bbox.width() + 1, _bbox.height() + 1);
 		_wm->pushCursor(Graphics::kMacCursorArrow, nullptr);
-		g_system->showMouse(true);
 		CursorMan.showMouse(true);
 
 		while (!shouldQuit) {
@@ -72,20 +71,40 @@ public:
 				if (processEvent(event))
 					continue;
 
+				// MacDialog button rects are in _screen coordinates (engine
+				// logical, e.g. 853×480). With kSupportsArbitraryResolutions
+				// the framework rewrites g_system->getWidth/Height to window
+				// pixel size, so event.mouse arrives in window pixels —
+				// convert back to _screen coords before hit-testing.
+				auto toLocal = [this](const Common::Point &p) -> Common::Point {
+					const int sysW = g_system->getWidth();
+					const int sysH = g_system->getHeight();
+					if (sysW <= 0 || sysH <= 0 || (sysW == _screen->w && sysH == _screen->h))
+						return p;
+					return Common::Point((int)((int64)p.x * _screen->w / sysW),
+						(int)((int64)p.y * _screen->h / sysH));
+				};
+
 				switch (event.type) {
 				case Common::EVENT_QUIT:
 					shouldQuitEngine = true;
 					shouldQuit = true;
 					break;
-				case Common::EVENT_MOUSEMOVE:
-					mouseMove(event.mouse.x, event.mouse.y);
+				case Common::EVENT_MOUSEMOVE: {
+					const Common::Point p = toLocal(event.mouse);
+					mouseMove(p.x, p.y);
 					break;
-				case Common::EVENT_LBUTTONDOWN:
-					mouseClick(event.mouse.x, event.mouse.y);
+				}
+				case Common::EVENT_LBUTTONDOWN: {
+					const Common::Point p = toLocal(event.mouse);
+					mouseClick(p.x, p.y);
 					break;
-				case Common::EVENT_LBUTTONUP:
-					shouldQuit = mouseRaise(event.mouse.x, event.mouse.y);
+				}
+				case Common::EVENT_LBUTTONUP: {
+					const Common::Point p = toLocal(event.mouse);
+					shouldQuit = mouseRaise(p.x, p.y);
 					break;
+				}
 				case Common::EVENT_KEYDOWN:
 					if (event.kbd.keycode == Common::KEYCODE_ESCAPE) {
 						_pressedButton = -1;
@@ -121,7 +140,7 @@ public:
 };
 
 int ColonyEngine::runMacEndgameDialog(const Common::String &message) {
-	if (_renderMode != Common::kRenderMacintosh || !_wm || !_menuSurface || !_gfx)
+	if (!isMacRenderMode() || !_wm || !_menuSurface || !_gfx)
 		return Graphics::kMacDialogQuitRequested;
 
 	if (_macMenu && _wm->isMenuActive())
@@ -218,7 +237,10 @@ void ColonyEngine::playIntro() {
 			_gfx->clear(_gfx->black());
 			if (!drawPict(-32565))  // Color Colony
 				drawPict(-32748);   // B&W Colony
-			_sound->play(Sound::kMars);
+			// Original intro.c: PlayMars() → PlayCSound(mars), looped via VBL
+			// task. Mars stays alive across the next several intro sections
+			// until EndCSound() is called.
+			_sound->play(Sound::kMars, true);
 			qt = makeStars(_screenR, 0);
 
 			if (!qt) {
@@ -395,28 +417,21 @@ void ColonyEngine::playIntro() {
 			_gfx->clear(_gfx->black());
 		}
 
-		// Final crash: DOS IBM_INTR.C lines 119-131
-		// Original DOS: while(!SoundDone()) { EraseRect; PaintRect; } — flashes
-		// for the full Explode2 sound (~7s). On Mac the digitized sample is shorter.
+		// Final crash: DOS IBM_INTR.C lines 119-131.
+		// Keep this much shorter than the original long PC speaker strobe.
 		_sound->stop();
-		if (getPlatform() == Common::kPlatformMacintosh) {
-			// Mac: play short digitized crash sample with brief flash
-			_sound->play(Sound::kExplode);
-			uint32 crashStart = _system->getMillis();
-			int frame = 0;
-			while (!shouldQuit() && _sound->isPlaying() && _system->getMillis() - crashStart < 2000) {
-				_gfx->clear(frame % 2 ? _gfx->black() : _gfx->white());
-				_gfx->copyToScreen();
-				_system->delayMillis(125);
-				frame++;
-			}
-			_sound->stop();
-		} else {
-			// DOS: skip the harsh 7-second PC speaker explode
-			_gfx->clear(_gfx->black());
+		_sound->play(Sound::kExplode);
+		const uint32 crashFlashDurationMs = 700;
+		const uint32 crashFlashStepMs = 200;
+		const uint32 crashStart = _system->getMillis();
+		int frame = 0;
+		while (!shouldQuit() && _system->getMillis() - crashStart < crashFlashDurationMs) {
+			_gfx->clear(frame % 2 ? _gfx->black() : _gfx->white());
 			_gfx->copyToScreen();
-			_system->delayMillis(1000);
+			_system->delayMillis(crashFlashStepMs);
+			frame++;
 		}
+		_sound->stop();
 		_gfx->clear(_gfx->black());
 		_gfx->copyToScreen();
 
@@ -434,7 +449,22 @@ bool ColonyEngine::scrollInfo(const Graphics::Font *macFont) {
 	// waits for click, then scrolls it off the top.
 	// Mac original: TextFont(190 = Commando); TextSize(12);
 	// Text blue starts at 0xFFFF and fades by -4096 per visible line.
-	const char *story[] = {
+	static const char *const kDosStory[] = {
+		"Mankind has left the",
+		"cradle of earth and",
+		"is beginning to eye",
+		"the galaxy. He has",
+		"begun to colonize",
+		"distant planets but has",
+		"yet to meet any alien",
+		"life forms.",
+		"****",
+		"Until now...",
+		"****",
+		"Press any key to begin",
+		"the Adventure..."
+	};
+	static const char *const kMacStory[] = {
 		"",
 		"Mankind has left the",
 		"cradle of earth and",
@@ -444,15 +474,17 @@ bool ColonyEngine::scrollInfo(const Graphics::Font *macFont) {
 		"distant planets but has",
 		"yet to meet any alien",
 		"life forms.",
-		"",      // null separator in original
+		"",
 		"Until now...",
-		"",      // null separator in original
+		"",
 		"Click to begin",
 		"the Adventure..."
 	};
-	const int storyLength = ARRAYSIZE(story);
+	const char *const *story = macFont ? kMacStory : kDosStory;
+	const int storyLength = macFont ? ARRAYSIZE(kMacStory) : ARRAYSIZE(kDosStory);
 
-	if (getPlatform() == Common::kPlatformMacintosh)
+	bool qt = checkSkipRequested();
+	if (!qt)
 		_sound->play(Sound::kBeamMe);
 
 	_gfx->clear(_gfx->black());
@@ -460,16 +492,17 @@ bool ColonyEngine::scrollInfo(const Graphics::Font *macFont) {
 
 	Graphics::DosFont dosFont;
 	const Graphics::Font *font = macFont ? macFont : (const Graphics::Font *)&dosFont;
+	const bool macStyle = (macFont != nullptr);
 
-	// Original uses 19px line height, centers vertically within height
-	int lineHeight = 19;
+	// Mac and DOS use different title layouts here.
+	int lineHeight = macStyle ? 19 : 15;
 	int totalHeight = lineHeight * storyLength;
 	int ht = (_height - totalHeight) / 2;
 
 	// Set up gradient palette entries (200-213) for story text
 	// Mac original: tColor.blue starts at 0xFFFF and decreases by 4096 per visible line
 	// B&W Mac: white gradient instead of blue
-	const bool bwMac = (macFont && !_hasMacColors);
+	const bool bwMac = (macFont && !isMacColorMode());
 	byte pal[14 * 3]; // storyLength entries
 	memset(pal, 0, sizeof(pal));
 	for (int i = 0; i < storyLength; i++) {
@@ -482,32 +515,38 @@ bool ColonyEngine::scrollInfo(const Graphics::Font *macFont) {
 	}
 	_gfx->setPalette(pal, 200, storyLength);
 
-	// Phase 1: Scroll text up from below screen
-	// Original: scrollRect starts at bottom (stayRect.bottom..stayRect.bottom*2),
-	// moves up by inc=4 each frame until text is visible at its correct position.
-	// We simulate by drawing text with a y-offset that starts at _height and decreases to 0.
-	int inc = 4;
-	bool qt = false;
+	int inc = macStyle ? 4 : 8;
+	if (macStyle) {
+		// Mac: scroll the text in from below.
+		for (int scrollOff = _height; scrollOff > 0 && !qt; scrollOff -= inc) {
+			if (checkSkipRequested()) {
+				qt = true;
+				_sound->stop();
+				break;
+			}
 
-	for (int scrollOff = _height; scrollOff > 0 && !qt; scrollOff -= inc) {
-		if (checkSkipRequested()) {
-			qt = true;
-			_sound->stop();
-			break;
+			_gfx->clear(_gfx->black());
+			for (int i = 0; i < storyLength; i++) {
+				int drawY = ht + lineHeight * i + scrollOff;
+				if (strlen(story[i]) > 0 && drawY >= 0 && drawY < _height)
+					_gfx->drawString(font, story[i], _width / 2, drawY, 200 + i, Graphics::kTextAlignCenter);
+			}
+			_gfx->copyToScreen();
+			_system->delayMillis(16);
 		}
 
-		_gfx->clear(_gfx->black());
-		for (int i = 0; i < storyLength; i++) {
-			int drawY = ht + lineHeight * i + scrollOff;
-			if (strlen(story[i]) > 0 && drawY >= 0 && drawY < _height)
-				_gfx->drawString(font, story[i], _width / 2, drawY, 200 + i, Graphics::kTextAlignCenter);
+		// Draw final position (scrollOff = 0)
+		if (!qt) {
+			_gfx->clear(_gfx->black());
+			for (int i = 0; i < storyLength; i++) {
+				if (strlen(story[i]) > 0)
+					_gfx->drawString(font, story[i], _width / 2, ht + lineHeight * i, 200 + i, Graphics::kTextAlignCenter);
+			}
+			_gfx->copyToScreen();
 		}
-		_gfx->copyToScreen();
-		_system->delayMillis(16);
-	}
-
-	// Draw final position (scrollOff = 0)
-	if (!qt) {
+	} else {
+		// DOS: draw the whole story immediately, then wait for input before
+		// scrolling it off the top.
 		_gfx->clear(_gfx->black());
 		for (int i = 0; i < storyLength; i++) {
 			if (strlen(story[i]) > 0)
@@ -525,10 +564,10 @@ bool ColonyEngine::scrollInfo(const Graphics::Font *macFont) {
 	if (!qt) {
 		for (int scrollOff = 0; scrollOff > -_height && !qt; scrollOff -= inc) {
 			if (checkSkipRequested()) {
-			qt = true;
-			_sound->stop();
-			break;
-		}
+				qt = true;
+				_sound->stop();
+				break;
+			}
 
 			_gfx->clear(_gfx->black());
 			for (int i = 0; i < storyLength; i++) {
@@ -541,9 +580,9 @@ bool ColonyEngine::scrollInfo(const Graphics::Font *macFont) {
 		}
 	}
 
-	// Original does NOT stop the sound here  BeamMe continues playing
-	// and intro() waits for it with while(!SoundDone()) after ScrollInfo returns.
-	// Only stop if skipping (qt already stops in the modifier+click handlers above).
+	// DOS stops BeamMe here; Mac lets it continue and waits in playIntro().
+	if (!qt && !macFont)
+		_sound->stop();
 	_gfx->clear(_gfx->black());
 	_gfx->copyToScreen();
 	return qt;
@@ -917,13 +956,9 @@ bool ColonyEngine::makePlanet() {
 
 bool ColonyEngine::timeSquare(const Common::String &str, const Graphics::Font *macFont) {
 	// Original: TimeSquare() in intro.c
-	// 1. Draw horizontal blue gradient lines above/below center
-	// 2. Scroll red text from right to center
-	// 3. Flash klaxon 6 times with inverted rect
-	// 4. Play Mars again, scroll text off to the left
-	//
-	// Mac original: fcolor starts at (0,0,0xFFFF) and subtracts 4096 per pair of lines.
-	// Text is drawn in red (0xFFFF,0,0) on black background.
+	// Mac and DOS use different presentation here. DOS is a monochrome/gray
+	// warning band with 16-pixel blits and white text; Mac uses the colorful
+	// gradient treatment.
 
 	_gfx->clear(_gfx->black());
 
@@ -933,80 +968,114 @@ bool ColonyEngine::timeSquare(const Common::String &str, const Graphics::Font *m
 
 	int centery = _height / 2 - 10;
 
-	// Set up gradient palette entries (160-175) for the gradient lines
-	// Mac original: blue starts at 0xFFFF and decreases by 4096 per line pair
-	// B&W Mac: white gradient instead of blue
-	const bool bwMac = (macFont && !_hasMacColors);
-	for (int i = 0; i < 16; i++) {
-		int val = 255 - i * 16; // 255, 239, 223, ... 15
-		if (val < 0)
-			val = 0;
-		byte pal[3] = { (byte)(bwMac ? val : 0), (byte)(bwMac ? val : 0), (byte)val };
-		_gfx->setPalette(pal, 160 + i, 1);
-	}
-	// Set palette entry 176 for text (red in color, white in B&W)
-	{
-		byte pal[3] = { 255, (byte)(bwMac ? 255 : 0), (byte)(bwMac ? 255 : 0) };
-		_gfx->setPalette(pal, 176, 1);
-	}
+	const bool bwMac = (macFont && !isMacColorMode());
+	const bool macStyle = (macFont != nullptr);
+	const uint32 grayIndex = 160;
+	const uint32 textIndex = 176;
+	const Common::Rect textBand(0, centery + 1, _width, centery + 16);
 
-	// Draw blue gradient lines above/below center band
-	for (int i = 0; i < 16; i++) {
-		_gfx->drawLine(0, centery - 2 - i * 2, _width, centery - 2 - i * 2, 160 + i);
-		_gfx->drawLine(0, centery - 2 - (i * 2 + 1), _width, centery - 2 - (i * 2 + 1), 160 + i);
-		_gfx->drawLine(0, centery + 16 + i * 2, _width, centery + 16 + i * 2, 160 + i);
-		_gfx->drawLine(0, centery + 16 + i * 2 + 1, _width, centery + 16 + i * 2 + 1, 160 + i);
+	if (macStyle) {
+		// Mac original: blue starts at 0xFFFF and decreases by 4096 per line pair.
+		for (int i = 0; i < 16; i++) {
+			int val = 255 - i * 16; // 255, 239, 223, ... 15
+			if (val < 0)
+				val = 0;
+			byte pal[3] = { (byte)(bwMac ? val : 0), (byte)(bwMac ? val : 0), (byte)val };
+			_gfx->setPalette(pal, 160 + i, 1);
+		}
+
+		// Text is red in color, white in B&W.
+		{
+			byte pal[3] = { 255, (byte)(bwMac ? 255 : 0), (byte)(bwMac ? 255 : 0) };
+			_gfx->setPalette(pal, textIndex, 1);
+		}
+
+		// Draw the blue gradient bands above/below the center band — each
+		// iteration is a 2-pixel-tall stripe in palette index 160+i.
+		for (int i = 0; i < 16; i++) {
+			_gfx->fillRect(Common::Rect(0, centery - 3 - i * 2, _width, centery - 1 - i * 2), 160 + i);
+			_gfx->fillRect(Common::Rect(0, centery + 16 + i * 2, _width, centery + 18 + i * 2), 160 + i);
+		}
+	} else {
+		// DOS warning band: white outer lines, gray inner lines, white text.
+		const byte grayPal[3] = { 170, 170, 170 };
+		const byte whitePal[3] = { 255, 255, 255 };
+		_gfx->setPalette(grayPal, grayIndex, 1);
+		_gfx->setPalette(whitePal, textIndex, 1);
+
+		_gfx->drawLine(0, centery - 3, _width, centery - 3, textIndex);
+		_gfx->drawLine(0, centery - 2, _width, centery - 2, grayIndex);
+		_gfx->drawLine(0, centery - 1, _width, centery - 1, textIndex);
+		_gfx->drawLine(0, centery + 17, _width, centery + 17, textIndex);
+		_gfx->drawLine(0, centery + 18, _width, centery + 18, grayIndex);
+		_gfx->drawLine(0, centery + 19, _width, centery + 19, textIndex);
 	}
 	_gfx->copyToScreen();
 
-	// Phase 1: Scroll text in from the right to center
-	// Original: if(Button()) if(qt=OptionKey()) break;
+	// Phase 1: Scroll text in from the right to center.
+	// DOS uses 16-pixel blits of a black text box; Mac scrolls smoothly.
 	int targetX = (_width - swidth) / 2;
-	for (int x = _width; x > targetX; x -= 2) {
-		_gfx->fillRect(Common::Rect(0, centery + 1, _width, centery + 16), 0);
-		_gfx->drawString(font, str, x, centery + 2, 176, Graphics::kTextAlignLeft);
+	const int startX = macStyle ? _width : (_width + 16);
+	const int stepX = macStyle ? 2 : 16;
+	const int endX = macStyle ? -swidth : (-swidth - 16);
+	const uint32 scrollDelayMs = macStyle ? 8 : (1000 / 60);
+
+	for (int x = startX; x > targetX; x -= stepX) {
+		_gfx->fillRect(textBand, 0);
+		_gfx->drawString(font, str, x, centery + 2, textIndex, Graphics::kTextAlignLeft);
 		_gfx->copyToScreen();
 
 		if (checkSkipRequested())
 			return true;
-		_system->delayMillis(8);
+		_system->delayMillis(scrollDelayMs);
 	}
 
-	// Phase 2: Klaxon flash — original intro.c lines 312-322:
-	// EndCSound(); for 6 iterations: wait for sound, stop, play klaxon,
-	// InvertRect. The klaxon is short (~200ms). Inversions happen rapidly
-	// at the start of each klaxon, creating a fast strobe effect.
+	// Phase 2: Klaxon flash — original intro.c lines 312-322.
+	// DOS does 4 full klaxon cycles here; Mac uses the longer 6-flash variant.
 	_sound->stop();
 	_gfx->setXorMode(true);
-	for (int i = 0; i < 6; i++) {
+	const int klaxonCount = macStyle ? 6 : 4;
+	const uint32 dosKlaxonFlashMs = 12 * 1000 / 60;
+	for (int i = 0; i < klaxonCount; i++) {
 		if (checkSkipRequested()) {
 			_gfx->setXorMode(false);
 			return true;
 		}
 
-		_sound->play(Sound::kKlaxon);
 		// InvertRect(&invrt) — XOR the text band
-		_gfx->fillRect(Common::Rect(0, centery + 1, _width, centery + 16), 0xFFFFFFFF);
+		_gfx->fillRect(textBand, 0xFFFFFFFF);
 		_gfx->copyToScreen();
-		// Brief pause matching klaxon duration (~200ms)
-		_system->delayMillis(200);
+
+		_sound->play(Sound::kKlaxon);
+		if (macStyle) {
+			// Keep the snappier Mac timing.
+			_system->delayMillis(200);
+		} else {
+			// At modern frame rates, waiting for the synthesized klaxon to end
+			// drags these warning cards out too long. Keep a short fixed flash.
+			_system->delayMillis(dosKlaxonFlashMs);
+		}
 	}
 	_gfx->setXorMode(false);
-	// Wait for last klaxon to finish
-	while (_sound->isPlaying() && !shouldQuit())
-		_system->delayMillis(10);
+	if (macStyle) {
+		// Wait for last klaxon to finish
+		while (_sound->isPlaying() && !shouldQuit())
+			_system->delayMillis(10);
+	}
 	_sound->stop();
 
-	// Phase 3: PlayMars(), scroll text off to the left
-	_sound->play(Sound::kMars);
-	for (int x = targetX; x > -swidth; x -= 2) {
-		_gfx->fillRect(Common::Rect(0, centery + 1, _width, centery + 16), 0);
-		_gfx->drawString(font, str, x, centery + 2, 176, Graphics::kTextAlignLeft);
+	// Phase 3: Mac resumes Mars here; DOS scrolls out silently.
+	// Original intro.c TimeSquare line 323: PlayMars() restarts the loop.
+	if (macStyle)
+		_sound->play(Sound::kMars, true);
+	for (int x = targetX; x > endX; x -= stepX) {
+		_gfx->fillRect(textBand, 0);
+		_gfx->drawString(font, str, x, centery + 2, textIndex, Graphics::kTextAlignLeft);
 		_gfx->copyToScreen();
 
 		if (checkSkipRequested())
 			return true;
-		_system->delayMillis(8);
+		_system->delayMillis(scrollDelayMs);
 	}
 
 	return false;
@@ -1074,7 +1143,7 @@ bool ColonyEngine::drawPict(int resID) {
 						uint32 pixel = surface->getPixel(ix, iy);
 						surface->format.colorToRGB(pixel, r, g, b);
 					}
-					_gfx->setPixel(sx, sy, 0xFF000000 | ((uint32)r << 16) | ((uint32)g << 8) | b);
+					_gfx->setPixel(sx, sy, packRGB(r, g, b));
 				}
 			}
 			_gfx->copyToScreen();
@@ -1103,7 +1172,6 @@ void ColonyEngine::terminateGame(bool blowup) {
 	_animationRunning = false;
 	_mouseLocked = false;
 	_system->lockMouse(false);
-	_system->showMouse(true);
 	CursorMan.setDefaultArrowCursor(true);
 	CursorMan.showMouse(true);
 
@@ -1146,7 +1214,7 @@ void ColonyEngine::terminateGame(bool blowup) {
 	_centerX = savedCenterX;
 	_centerY = savedCenterY;
 
-	if (_renderMode == Common::kRenderMacintosh) {
+	if (isMacRenderMode()) {
 		while (!shouldQuit()) {
 			switch (runMacEndgameDialog(_("You have been terminated."))) {
 			case 0:
@@ -1253,7 +1321,6 @@ void ColonyEngine::gameOver(bool kill) {
 
 	_mouseLocked = false;
 	_system->lockMouse(false);
-	_system->showMouse(true);
 	CursorMan.setDefaultArrowCursor(true);
 	CursorMan.showMouse(true);
 

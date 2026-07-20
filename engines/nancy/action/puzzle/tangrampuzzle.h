@@ -43,12 +43,12 @@ public:
 	void execute() override;
 	void handleInput(NancyInput &input) override;
 
-protected:
-	Common::String getRecordTypeName() const override { return "TangramPuzzle"; }
 	bool isViewportRelative() const override { return true; }
 
+protected:
+	Common::String getRecordTypeName() const override { return "TangramPuzzle"; }
+
 	class Tile : public Misc::MouseFollowObject {
-		friend class TangramPuzzle;
 	public:
 		Tile();
 		virtual ~Tile();
@@ -65,7 +65,6 @@ protected:
 		byte _rotation;
 		bool _isHighlighted;
 
-	protected:
 		bool isViewportRelative() const override { return true; }
 	};
 

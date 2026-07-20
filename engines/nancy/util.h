@@ -22,9 +22,12 @@
 #define NANCY_UTIL_H
 
 #include "common/array.h"
+#include "common/hashmap.h"
 #include "common/path.h"
 #include "common/rect.h"
 #include "common/serializer.h"
+
+#include "engines/nancy/commontypes.h"
 
 namespace Nancy {
 
@@ -56,6 +59,11 @@ void readFilenameArray(Common::SeekableReadStream &stream, Common::Array<Common:
 void readFilenameArray(Common::Serializer &stream, Common::Array<Common::Path> &inArray, uint num, Common::Serializer::Version minVersion = 0, Common::Serializer::Version maxVersion = Common::Serializer::kLastVersion);
 
 void assembleTextLine(char *rawCaption, Common::String &output, uint size);
+
+void readUIButton(Common::SeekableReadStream &stream, UIButtonRecord &dst);
+void readUISlider(Common::SeekableReadStream &stream, UISliderRecord &dst);
+void readUIPopupHeader(Common::SeekableReadStream &stream, UIPopupHeader &dst);
+void readUIButtonSlot(Common::SeekableReadStream &stream, UIButtonSlot &dst);
 
 // Abstract base class used for loading data that would take too much time in a single frame
 class DeferredLoader {

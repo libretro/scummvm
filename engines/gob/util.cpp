@@ -421,6 +421,20 @@ void Util::forceMouseUp(bool onlyWhenSynced) {
 	_mouseButtons             = kMouseButtonsNone;
 }
 
+// TODO: Consider removing _mouseButtons to use only EventManager's buttonState, making this sync unnecessary.
+void Util::forceMouseButtonsSync() {
+	int backendButtonState = g_system->getEventManager()->getButtonState();
+
+	_mouseButtons = kMouseButtonsNone;
+	if (backendButtonState & Common::EventManager::LBUTTON)
+		_mouseButtons = (MouseButtons) (((uint32) _mouseButtons) | ((uint32) kMouseButtonsLeft));
+
+	if (backendButtonState & Common::EventManager::RBUTTON)
+		_mouseButtons = (MouseButtons) (((uint32) _mouseButtons) | ((uint32) kMouseButtonsRight));
+
+	_vm->_game->_mouseButtons = _mouseButtons;
+}
+
 void Util::clearPalette() {
 	int16 i;
 	byte colors[768];

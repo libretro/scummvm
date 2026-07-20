@@ -25,6 +25,7 @@
 #include "video/avi_decoder.h"
 #include "video/dxa_decoder.h"
 #include "video/flic_decoder.h"
+#include "video/mpegps_decoder.h"
 #include "video/mve_decoder.h"
 #include "video/qt_decoder.h"
 #include "video/qt_data.h"
@@ -71,6 +72,8 @@ Common::Error Videotests::videoTest(Common::SeekableReadStream *stream, const Co
 		video = new Video::DXADecoder();
 	} else if (name.hasSuffixIgnoreCase(".flc")) {
 		video = new Video::FlicDecoder();
+	} else if (name.hasSuffixIgnoreCase(".mpg") || name.hasSuffixIgnoreCase(".mpeg")) {
+		video = new Video::MPEGPSDecoder();
 	} else if (name.hasSuffixIgnoreCase(".mve")) {
 		video = new Video::MveDecoder();
 	} else if (name.hasSuffixIgnoreCase(".smk")) {

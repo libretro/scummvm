@@ -34,6 +34,10 @@
 #include "common/translation.h"
 #endif
 
+#if defined(USE_IMGUI) && defined(ENABLE_EVENTRECORDER)
+#include "gui/EventRecorder.h"
+#endif
+
 #ifdef EMSCRIPTEN
 #include "backends/platform/sdl/emscripten/emscripten.h"
 #endif
@@ -71,7 +75,7 @@ static void getMouseState(int *x, int *y) {
 SdlGraphicsManager::SdlGraphicsManager(SdlEventSource *source, SdlWindow *window)
 	: _eventSource(source), _window(window), _hwScreen(nullptr)
 #if SDL_VERSION_ATLEAST(2, 0, 0)
-	, _allowWindowSizeReset(false), _hintedWidth(0), _hintedHeight(0), _lastFlags(0)
+	, _allowWindowSizeReset(false), _hintedWidth(0), _hintedHeight(0)
 #endif
 {
 	ConfMan.registerDefault("fullscreen_res", "desktop");
@@ -346,7 +350,7 @@ bool SdlGraphicsManager::createOrUpdateWindow(int width, int height, const Uint3
 	// size or pixel format of the internal game surface (since a user may have
 	// resized the game window), or when the launcher is visible (since a user
 	// may change the scaler, which should reset the window size)
-	if (!_window->getSDLWindow() || _lastFlags != flags || _overlayVisible || _allowWindowSizeReset) {
+	if (!_window->getSDLWindow() || _window->getWindowFlags() != flags || _overlayVisible || _allowWindowSizeReset) {
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 		const bool fullscreen = (flags & (SDL_WINDOW_FULLSCREEN)) != 0;
 #else
@@ -374,7 +378,6 @@ bool SdlGraphicsManager::createOrUpdateWindow(int width, int height, const Uint3
 		}
 #endif
 
-		_lastFlags = flags;
 		_allowWindowSizeReset = false;
 	}
 
@@ -719,6 +722,9 @@ void SdlGraphicsManager::renderImGui() {
 
 	ImGui::NewFrame();
 	_imGuiCallbacks.render();
+#if defined(USE_IMGUI) && defined(ENABLE_EVENTRECORDER)
+	g_eventRec.showImGui();
+#endif
 	ImGui::Render();
 #ifdef USE_IMGUI_SDLRENDERER3
 	if (_imGuiSDLRenderer) {

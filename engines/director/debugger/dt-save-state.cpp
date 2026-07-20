@@ -49,6 +49,7 @@ Common::Array<WindowFlag> getWindowFlags() {
 		{ "Settings",			&_state->_w.settings		 },
 		{ "Vars",				&_state->_w.vars			 },
 		{ "Watched Vars",		&_state->_w.watchedVars		 },
+		{ "Windows",			&_state->_w.windows			 },
 	};
 }
 
@@ -140,6 +141,16 @@ void loadSavedState() {
 	debugC(7, kDebugImGui, "ImGui::loaded state: %s", saved->stringify(true).c_str());
 
 	// Load open/closed window flags
+	if (!saved->asObject()["Windows"] || !saved->asObject()["Window Settings"] ||
+			!saved->asObject()["Log"] || !saved->asObject()["ScoreWindow"] ||
+			!saved->asObject()["ChannelsWindow"] || !saved->asObject()["CastWindow"] ||
+			!saved->asObject()["IgnoreMouse"] || !saved->asObject()["EnableMultiViewport"]) {
+		warning("ImGui::loadSavedState(): save file is missing required fields, ignoring");
+		free(data);
+		delete saved;
+		delete savedState;
+		return;
+	}
 	int64 openFlags = saved->asObject()["Windows"]->asIntegerNumber();
 	Common::Array<WindowFlag> windows = getWindowFlags();
 
@@ -148,7 +159,6 @@ void loadSavedState() {
 		*it.flag = (openFlags & 1 << index) ? true : false;
 		index += 1;
 	}
-	_state->_w.archive = (openFlags & 1) ? true : false;
 	if (debugChannelSet(7, kDebugImGui)) {
 		debugC(7, kDebugImGui, "Window flags: ");
 		for (auto it : windows) {
@@ -157,8 +167,8 @@ void loadSavedState() {
 	}
 
 	// Load window settings
-	const char *windowSettings = saved->asObject()["Window Settings"]->asString().c_str();
-	ImGui::LoadIniSettingsFromMemory(windowSettings);
+	Common::String windowSettingsStr = saved->asObject()["Window Settings"]->asString();
+	ImGui::LoadIniSettingsFromMemory(windowSettingsStr.c_str());
 
 	// Load the log
 	Common::JSONArray log = saved->asObject()["Log"]->asArray();
@@ -172,7 +182,8 @@ void loadSavedState() {
 
 	_state->_logger->clear();
 	for (auto iter : log) {
-		_state->_logger->addLog(iter->asString().c_str());
+		// log lines can contain '%'
+		_state->_logger->addLog("%s", iter->asString().c_str());
 	}
 
 	// Load other settings

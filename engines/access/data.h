@@ -46,6 +46,13 @@ struct TimerEntry {
 	int _timer;
 	byte _flag;
 
+	bool isActive() const { return _flag != 0; }
+
+	void reset() {
+		_timer = _initTm;
+		_flag = 1;
+	}
+
 	TimerEntry() : _flag(0), _initTm(0), _timer(0) { }
 };
 
@@ -81,6 +88,7 @@ public:
 class ExtraCell {
 public:
 	FileIdent _vid;
+	Common::String _vidFilename;
 	FileIdent _vidSound;
 };
 

@@ -499,8 +499,21 @@ enum ScummAction {
 	kScummActionInsaneAttack,
 	kScummActionInsaneSwitch,
 	kScummActionInsaneCheat,
+	kScummActionInsaneBack,
+	kScummActionInsaneSkip,
 
 	kScummActionCount
+};
+
+enum ScummBackendAction {
+	kScummBackendActionRebel1AxisUp = 11000,
+	kScummBackendActionRebel1AxisDown,
+	kScummBackendActionRebel1AxisLeft,
+	kScummBackendActionRebel1AxisRight,
+	kScummBackendActionRebel2AxisUp,
+	kScummBackendActionRebel2AxisDown,
+	kScummBackendActionRebel2AxisLeft,
+	kScummBackendActionRebel2AxisRight
 };
 
 extern const char *const insaneKeymapId;
@@ -877,12 +890,12 @@ public:
 		byte _sputmCmdEnterCount = 0;
 		Common::String _sputmCmdBuf;
 		Common::String _name;
-		
+
 		void reset();
 		bool tryLoadPlayback(ScummEngine *engine, const Common::Path &path = Common::Path("demo.rec"));
 		bool startPlayback(ScummEngine *engine);
 		void playbackPump(ScummEngine *engine);
-		
+
 		//MI2 DOS NI Demo specific playback helpers
 		void mi2DemoArmPlaybackByRoom(ScummEngine *engine);
 		void mi2DemoPlaybackJumpRoom(ScummEngine *engine, int room);
@@ -1029,6 +1042,7 @@ protected:
 
 	/* Script VM - should be in Script class */
 	uint32 _localScriptOffsets[1024];
+	Common::HashMap<int, byte *> _scriptOverrides;
 	const byte *_scriptPointer = nullptr;
 	const byte *_scriptOrgPointer = nullptr;
 	const byte * const *_lastCodePtr = nullptr;
@@ -1074,6 +1088,7 @@ protected:
 	virtual void runInventoryScript(int i);
 	virtual void runInventoryScriptEx(int i);
 	virtual void checkAndRunSentenceScript();
+	bool monkey1HermanNoteWorkaround(const SentenceTab &st);
 	void runExitScript();
 	void runEntryScript();
 	void runQuitScript();
@@ -1156,6 +1171,8 @@ protected:
 //	void nukeResource(ResType type, ResId idx);
 	int getResourceRoomNr(ResType type, ResId idx);
 	virtual uint32 getResourceRoomOffset(ResType type, ResId idx);
+
+	void scriptOverride(ResId room, int script);
 
 public:
 	int getResourceSize(ResType type, ResId idx);
@@ -1722,7 +1739,7 @@ protected:
 	void wrapSegaCDText();
 	void debugMessage(const byte *msg);
 	virtual void showMessageDialog(const byte *msg);
-	
+
 #ifdef USE_TTS
 	void sayText(const Common::String &text, Common::TextToSpeechManager::Action action = Common::TextToSpeechManager::QUEUE) const;
 	void stopTextToSpeech() const;

@@ -35,42 +35,47 @@ namespace Action {
 // Otherwise it returns to its previous position (or home in free placement mode).
 class OneBuildPuzzle : public RenderActionRecord {
 public:
-	OneBuildPuzzle() : RenderActionRecord(7) {}
+	OneBuildPuzzle() : RenderActionRecord(7), _finalAnimOverlay(99) {}
 	virtual ~OneBuildPuzzle() {}
 
 	void init() override;
 	void registerGraphics() override;
 
 	void readData(Common::SeekableReadStream &stream) override;
+	void readDataNancy12(Common::SeekableReadStream &stream);
 	void execute() override;
 	void handleInput(NancyInput &input) override;
 
+	bool isViewportRelative() const override { return true; }
+
 protected:
 	Common::String getRecordTypeName() const override { return "OneBuildPuzzle"; }
-	bool isViewportRelative() const override { return true; }
 
 	struct Piece : RenderObject {
 		Piece() : RenderObject(0) {}
 
 		// File data
-		Common::Rect srcRect;       // Source rect in source image
-		Common::Rect slotRect;      // Correct placement rect (viewport coords)
-		Common::Rect homeRect;      // Starting position (viewport coords)
-		uint8 defaultRotation = 0;  // Rotation index that fits the slot
-		bool isPreRotated = false;  // Piece starts already in place (slotRect position)
+		Common::Rect srcRect;
+		Common::Rect altSrcRect;    // At-home art, shown until first pickup
+		Common::Rect slotRect;
+		Common::Rect homeRect;
+		uint8 defaultRotation = 0;
+		bool isPreRotated = false;
 
 		// Runtime
 		Common::Rect gameRect;      // Current viewport-space rect
 		int curRotation = 0;
 		bool placed = false;
 
-		// Up to 4 rotation surfaces (rotation 1-3 only exist if canRotateAll or isPreRotated)
+		// Rotations 1-3 only built when canRotateAll or isPreRotated
 		Graphics::ManagedSurface rotateSurfaces[4];
 		bool hasSurface[4] = {};
 
+		Graphics::ManagedSurface altSurface;
+		bool useAltSurface = false;
+
 		void setZ(uint16 z) { _z = z; _needsRedraw = true; }
 
-	protected:
 		bool isViewportRelative() const override { return true; }
 	};
 
@@ -84,7 +89,43 @@ protected:
 	bool _orderedPlacement = false; // Pieces must be placed in a specific order
 	Common::Array<int16> _placementOrder; // 1-indexed piece IDs in required placement order
 
+	// --- Nancy 10 additions ---
+
+	// TODO: runtime role unknown; parsed for round-trip but not consumed.
+	bool _legacyOrderedFlag = false;
+	Common::Array<int16> _legacyPlacementOrder;
+
+	// Filename only (no SoundDescription metadata).
+	Common::String _extraSoundName;
+
+	// Cursor type shown while hovering or carrying a piece (Nancy 10+).
+	int16 _pieceCursorType = 0;
+
+	// Post-placement sprite-sheet animation. _animRectA is the on-screen
+	// rect where the animation plays AND the click hotspot the user must
+	// activate after placing all pieces (e.g. the music-box crank in scene
+	// 3637; could be any handle/lever/switch in other puzzles).
+	Common::Rect _animRectA;
+	Common::Rect _animRectB;
+	int16 _animLayout[6] = {}; // cols, framesPerStep, baseX, baseY, spacing, totalRows
+	SoundDescription _animSound1;
+	SoundDescription _animSound2;
+	bool _hasFinalAnim = false;   // true when _animRectA is non-empty
+
+	// Nancy12: pieces with an empty home rect start scattered inside this zone.
+	Common::Rect _scatterZone;
+
 	Common::Array<Piece> _pieces;
+
+	// Nancy12 stores the puzzle's sounds as this many random-sound blocks, in
+	// this fixed on-disk order.
+	static const uint kNumSounds = 6;
+	static const uint kPickupSound = 0;
+	static const uint kRotateSound = 1;
+	static const uint kDropSound = 2;
+	static const uint kGoodSound = 3;
+	static const uint kBadSound = 4;
+	static const uint kCompletionSound = 5;
 
 	SoundDescription _pickupSound;
 	SoundDescription _rotateSound;
@@ -122,13 +163,26 @@ protected:
 		kWaitTimer        = 1, // 300ms delay after pickup/drop before evaluating outcome
 		kWaitPlaceSound   = 2, // waiting for good/bad placement sound (or 1s timer) to finish
 		kWaitCompletion   = 3, // waiting for completion sound to finish before scene change
-		kTriggerCompletion = 4  // play completion sound/text, then transition to kWaitCompletion
+		kTriggerCompletion = 4, // play completion sound/text, then transition to kWaitCompletion
+		kAnimateFinal      = 5  // step the post-placement animation, then trigger completion
 	};
 	SolveState _solveState = kIdle;
 	bool _isDropSound = false;       // True if last sound played was a drop sound
 	bool _correctlyPlaced = false;   // True if the last drop was correctly placed
 	uint16 _piecesPlaced = 0;    // Number of pieces correctly placed so far
 	uint32 _timerEnd = 0;        // Millisecond timestamp when the current timer expires
+
+	// Final-animation gating: after all pieces are placed on a puzzle that
+	// has _animRectA defined, _waitingForFinalAnim is set and the puzzle
+	// stalls in kIdle until the user clicks _animRectA.
+	bool _waitingForFinalAnim = false;
+	bool _finalAnimDone = false;
+
+	// Final-animation runtime state (matches original `+0xc35`/`+0xc33` per-tick counters).
+	Graphics::ManagedSurface _animImage; // Source atlas loaded from _extraSoundName.
+	RenderObject _finalAnimOverlay;      // Single-frame overlay rendered at _animRectA, z above pieces.
+	int16 _animFrameCounter = 0;         // 0..framesPerStep-1, the X index within the current row.
+	int16 _animRowCounter = 0;           // 0..totalRows-1, how many cycles have completed.
 
 	// Previous drag position (for freePlacement restore on wrong drop)
 	Common::Rect _prevDragGameRect;
@@ -140,22 +194,37 @@ protected:
 	// Currently playing sound (scratch copy updated each time a sound is played)
 	SoundDescription _currentSound;
 
+	// Initialization flag, used to ensure that the puzzle pieces have been initialized
+	// before drawing them on screen
+	bool _isInitialized = false;
+
 	// --- Internal methods ---
 
-	void playPickupSound();	// FUN_0047239c
-	void playRotateSoundAndStartTimer();	// FUN_0047212b
-	void playDropSound();	// FUN_004721dc
-	void playGoodPlacementSound();	// FUN_00472792
-	void playBadPlacementSound();	// FUN_00472440
-	void checkAllPlaced();	// FUN_00472ac6
-	void rotatePiece(int pieceIdx);	// FUN_004719a5
-	void updateDragPosition(Common::Point mouseVP);	// FUN_00471490
+	// Read a good/bad caption block: three AUTOTEXT keys then three inline
+	// texts; each caption uses its key if known, else the inline text.
+	void readPlacementTexts(Common::SeekableReadStream &stream, Common::Array<Common::String> &out);
+	void setPieceCursor();
+
+	void playPickupSound();
+	void playRotateSoundAndStartTimer();
+	void playDropSound();
+	void playGoodPlacementSound();
+	void playBadPlacementSound();
+	void checkAllPlaced();
+	// Place a piece at a random spot inside _scatterZone (Nancy12 empty-home pieces)
+	void scatterPiece(Piece &p);
+	void rotatePiece(int pieceIdx);
+	void updateDragPosition(Common::Point mouseVP);
 	// Update the render object for a piece (set _drawSurface and moveTo gameRect)
 	void updatePieceRender(int pieceIdx);
 	// Rotate a surface 90 degrees clockwise into dst (dst is allocated here)
 	static void rotateSurface90CW(const Graphics::ManagedSurface &src, Graphics::ManagedSurface &dst);
-	// Clamp rect to viewport bounds while preserving dimensions - FUN_004713b8
+	// Clamp rect to viewport bounds while preserving dimensions
 	void clampRectToViewport(Common::Rect &rect);
+
+	// Final-animation helpers.
+	void startFinalAnimation();
+	void stepFinalAnimation();
 };
 
 } // End of namespace Action

@@ -102,6 +102,8 @@ public:
 
 	virtual void drawBox();
 
+	virtual void drawBox(int x1, int y1, int x2, int y2, int color);
+
 	virtual void copyBuffer(Graphics::ManagedSurface *src);
 
 	void copyTo(BaseSurface *dest);
@@ -117,6 +119,11 @@ public:
 	void moveBufferDown();
 
 	bool clip(Common::Rect &r);
+
+	/**
+	 * dump to png for debugging
+	 */
+	void dump(const char *fname) const;
 };
 
 class ASurface : public BaseSurface {
@@ -160,9 +167,11 @@ class ImageEntry {
 public:
 	int _frameNumber;
 	SpriteResource *_spritesPtr;
-	int _offsetY;
+	int _offsetY; // offset to apply to y position when sorting draw order
 	Common::Point _position;
 	int _flags;
+	int _scaleOverride;
+	Common::Point _sizeOverride;
 public:
 	ImageEntry();
 };

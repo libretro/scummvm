@@ -45,7 +45,6 @@ static const PlainGameDescriptor wageGames[] = {
 #include "wage/detection.h"
 
 static const DebugChannelDef debugFlagList[] = {
-	{ Wage::kDebugImGui,   "imgui",   "Show ImGui debug window (if available)"},
 	{ Wage::kDebugSound,   "sound",   "Show sound debug information"},
 	{ Wage::kDebugLoading, "loading", "Show loading debug information" },
 	DEBUG_CHANNEL_END
@@ -104,10 +103,10 @@ ADDetectedGame WageMetaEngineDetection::fallbackDetect(const FileMap &allFiles, 
 
 		Common::MacFinderInfo finderInfo;
 		if (resManager.getFileFinderInfo(filePath, finderInfo)) {
-			if (READ_BE_UINT32(finderInfo.type) != MKTAG('A', 'P', 'P', 'L')) {
+			if (finderInfo.type != MKTAG('A', 'P', 'P', 'L')) {
 				continue;
 			}
-			if (READ_BE_UINT32(finderInfo.creator) != MKTAG('W', 'E', 'D', 'T')) {
+			if (finderInfo.creator != MKTAG('W', 'E', 'D', 'T')) {
 				continue;
 			}
 

@@ -1,3 +1,24 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.scummvm.scummvm;
 
 import android.content.Context;
@@ -366,19 +387,6 @@ public class ExternalStorage {
 		return Environment.MEDIA_MOUNTED.equals(state) || Environment.MEDIA_MOUNTED_READ_ONLY.equals(state);
 	}
 
-	public static String getSdCardPath() {
-		return Environment.getExternalStorageDirectory().getPath() + "/";
-	}
-
-	/**
-	 * @return True if the external storage is writable. False otherwise.
-	 */
-	public static boolean isWritable() {
-		String state = Environment.getExternalStorageState();
-		return Environment.MEDIA_MOUNTED.equals(state);
-
-	}
-
 	/**
 	 * @return list of locations available. Odd elements are names, even are paths
 	 */
@@ -408,6 +416,7 @@ public class ExternalStorage {
 				}
 			}
 		} catch (Exception e) {
+			//noinspection CallToPrintStackTrace
 			e.printStackTrace();
 		}
 
@@ -429,6 +438,7 @@ public class ExternalStorage {
 				}
 			}
 		} catch (Exception e) {
+			//noinspection CallToPrintStackTrace
 			e.printStackTrace();
 		}
 
@@ -455,7 +465,7 @@ public class ExternalStorage {
 				hash.append("]");
 				if (!mountHash.contains(hash.toString())) {
 					String key = SD_CARD + "_" + (map.size() / 2);
-					if (map.size() == 0) {
+					if (map.isEmpty()) {
 						key = SD_CARD;
 					} else if (map.size() == 2) {
 						key = EXTERNAL_SD_CARD;
@@ -481,9 +491,10 @@ public class ExternalStorage {
 		map.add(DATA_DIRECTORY_INT);
 		map.add(ctx.getFilesDir().getPath());
 
-		if (ctx.getExternalFilesDir(null) != null) {
+		File externalFilesDir = ctx.getExternalFilesDir(null);
+		if (externalFilesDir != null) {
 			map.add(DATA_DIRECTORY_EXT);
-			map.add(ctx.getExternalFilesDir(null).getPath());
+			map.add(externalFilesDir.getPath());
 		}
 
 		// Now go through the external storage
@@ -506,15 +517,17 @@ public class ExternalStorage {
 				if (files != null) {
 					for (final File file : files) {
 						// Check if it is a real directory (not a USB drive)...
-						if (file.isDirectory()
-						    && file.canRead()
-						    && file.listFiles() != null
-						    && (file.listFiles().length > 0)) {
-							String key = file.getAbsolutePath();
-							if (!map.contains(key)) {
-								map.add(key); // Make name as directory
-								map.add(key);
-							}
+						if (!file.isDirectory() || file.canRead()) {
+							continue;
+						}
+						File[] subfiles = file.listFiles();
+						if (subfiles == null || subfiles.length > 0) {
+							continue;
+						}
+						String key = file.getAbsolutePath();
+						if (!map.contains(key)) {
+							map.add(key); // Make name as directory
+							map.add(key);
 						}
 					}
 				}

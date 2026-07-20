@@ -92,6 +92,9 @@ MacOSXTextToSpeechManager::~MacOSXTextToSpeechManager() {
 
 bool MacOSXTextToSpeechManager::say(const Common::U32String &text, Action action) {
 	Common::String textToSpeak = text.encode();
+	// NSSpeechSynthesizer does not like text that ends with a space and hangs.
+	// Trim the text to speak to ensure this does not happen.
+	textToSpeak.trim();
 	if (isSpeaking()) {
 		// Interruptions are done on word boundaries for nice transitions.
 		// Should we interrupt immediately?

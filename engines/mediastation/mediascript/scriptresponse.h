@@ -36,12 +36,15 @@ public:
 	ScriptResponse(Chunk &chunk);
 	~ScriptResponse();
 
+	int64 lengthInBytes() const;
 	ScriptValue execute(uint actorId);
+	Common::String decompile() const;
 	EventType _type;
 	ScriptValue _argumentValue;
 
 private:
-	CodeChunk *_code = nullptr;
+	byte *_bytecodeBuffer = nullptr;
+	uint32 _bytecodeSize = 0;
 };
 
 } // End of namespace MediaStation

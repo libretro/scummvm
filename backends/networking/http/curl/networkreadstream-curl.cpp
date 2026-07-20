@@ -55,16 +55,31 @@ size_t NetworkReadStreamCurl::curlDataCallback(char *d, size_t n, size_t l, void
 
 size_t NetworkReadStreamCurl::curlReadDataCallback(char *d, size_t n, size_t l, void *p) {
 	NetworkReadStreamCurl *stream = (NetworkReadStreamCurl *)p;
-	if (stream)
-		return stream->fillWithSendingContents(d, n * l);
-	return 0;
+	if (!stream) {
+		return 0;
+	}
+
+	const uint32 maxSize = n * l;
+
+	uint32 sendSize = stream->_sendingContentsSize - stream->_sendingContentsPos;
+	if (sendSize > maxSize)
+		sendSize = maxSize;
+
+	memcpy(d, &stream->_sendingContentsBuffer[stream->_sendingContentsPos], sendSize * sizeof(byte));
+
+	stream->_sendingContentsPos += sendSize;
+	return sendSize;
 }
 
 size_t NetworkReadStreamCurl::curlHeadersCallback(char *d, size_t n, size_t l, void *p) {
 	NetworkReadStreamCurl *stream = (NetworkReadStreamCurl *)p;
-	if (stream)
-		return stream->addResponseHeaders(d, n * l);
-	return 0;
+	if (!stream) {
+		return 0;
+	}
+
+	const size_t bufferSize = n * l;
+	stream->_responseHeaders += Common::String(d, bufferSize);
+	return bufferSize;
 }
 
 static int curlProgressCallback(void *p, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
@@ -216,21 +231,21 @@ void NetworkReadStreamCurl::setupFormMultipart(const Common::HashMap<Common::Str
 }
 
 NetworkReadStreamCurl::NetworkReadStreamCurl(const char *url, RequestHeaders *headersList, const Common::String &postFields, bool uploading, bool usingPatch, bool keepAlive, long keepAliveIdle, long keepAliveInterval)
-	: NetworkReadStream(keepAlive, keepAliveIdle, keepAliveInterval),
+	: NetworkReadStream(keepAlive, keepAliveIdle, keepAliveInterval), _backingStream(DisposeAfterUse::YES),
 	_errorBuffer(nullptr), _headersSlist(nullptr) {
 	initCurl(url, headersList);
 	setupBufferContents((const byte *)postFields.c_str(), postFields.size(), uploading, usingPatch, false);
 }
 
 NetworkReadStreamCurl::NetworkReadStreamCurl(const char *url, RequestHeaders *headersList, const Common::HashMap<Common::String, Common::String> &formFields, const Common::HashMap<Common::String, Common::Path> &formFiles, bool keepAlive, long keepAliveIdle, long keepAliveInterval)
-	: NetworkReadStream(keepAlive, keepAliveIdle, keepAliveInterval),
+	: NetworkReadStream(keepAlive, keepAliveIdle, keepAliveInterval), _backingStream(DisposeAfterUse::YES),
 	_errorBuffer(nullptr), _headersSlist(nullptr) {
 	initCurl(url, headersList);
 	setupFormMultipart(formFields, formFiles);
 }
 
 NetworkReadStreamCurl::NetworkReadStreamCurl(const char *url, RequestHeaders *headersList, const byte *buffer, uint32 bufferSize, bool uploading, bool usingPatch, bool post, bool keepAlive, long keepAliveIdle, long keepAliveInterval)
-	: NetworkReadStream(keepAlive, keepAliveIdle, keepAliveInterval),
+	: NetworkReadStream(keepAlive, keepAliveIdle, keepAliveInterval), _backingStream(DisposeAfterUse::YES),
 	_errorBuffer(nullptr), _headersSlist(nullptr) {
 	initCurl(url, headersList);
 	setupBufferContents(buffer, bufferSize, uploading, usingPatch, post);
@@ -300,6 +315,29 @@ void NetworkReadStreamCurl::finished(CURLcode errorCode) {
 
 bool NetworkReadStreamCurl::hasError() const {
 	return _errorCode != CURLE_OK;
+}
+
+double NetworkReadStreamCurl::getProgress() const {
+	if (_progressTotal < 1)
+		return 0;
+	return (double)_progressDownloaded / (double)_progressTotal;
+}
+
+void NetworkReadStreamCurl::setProgress(uint64 downloaded, uint64 total) {
+	_progressDownloaded = downloaded;
+	_progressTotal = total;
+}
+
+uint32 NetworkReadStreamCurl::read(void *dataPtr, uint32 dataSize) {
+	uint32 actuallyRead = _backingStream.read(dataPtr, dataSize);
+
+	if (actuallyRead == 0) {
+		if (_requestComplete)
+			_eos = true;
+		return 0;
+	}
+
+	return actuallyRead;
 }
 
 const char *NetworkReadStreamCurl::getError() const {

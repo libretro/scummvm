@@ -75,7 +75,7 @@ void SdlEventSource::loadGameControllerMappingFile() {
 SdlEventSource::SdlEventSource()
 	: EventSource(), _scrollLock(false), _joystick(nullptr), _lastScreenID(0), _graphicsManager(nullptr), _queuedFakeMouseMove(false),
 	  _lastHatPosition(SDL_HAT_CENTERED), _mouseX(0), _mouseY(0), _engineRunning(false)
-	  , _queuedFakeKeyUp(false), _fakeKeyUp(), _controller(nullptr) {
+	  , _queuedFakeKeyUp(false), _fakeKeyUp(), _queuedFakeMouseScroll(0), _fakeMouseScroll(), _controller(nullptr) {
 	int joystick_num = ConfMan.getInt("joystick_num");
 	if (joystick_num >= 0) {
 		// Initialize SDL joystick subsystem
@@ -624,6 +624,13 @@ bool SdlEventSource::pollEvent(Common::Event &event) {
 		return true;
 	}
 
+	// In we still need to send scroll events for an event with a scroll amount > 1
+	if (_queuedFakeMouseScroll) {
+		event = _fakeMouseScroll;
+		--_queuedFakeMouseScroll;
+		return true;
+	}
+
 	// If the screen changed, send an Common::EVENT_SCREEN_CHANGED
 	int screenID = g_system->getScreenChangeID();
 	if (screenID != _lastScreenID) {
@@ -671,7 +678,10 @@ bool SdlEventSource::pollEvent(Common::Event &event) {
 #if defined(USE_IMGUI)
 		ImGui_ImplSDL3_ProcessEvent(&ev);
 		ImGuiIO &io = ImGui::GetIO();
-		if (io.WantTextInput || io.WantCaptureMouse)
+		bool mouseEvent = ev.type == SDL_EVENT_MOUSE_MOTION || ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+			ev.type == SDL_EVENT_MOUSE_BUTTON_UP || ev.type == SDL_EVENT_MOUSE_WHEEL;
+		bool textEvent = ev.type == SDL_EVENT_TEXT_INPUT;
+		if ((mouseEvent && io.WantCaptureMouse) || (textEvent && io.WantTextInput))
 			continue;
 #endif
 		if (dispatchSDLEvent(ev, event))
@@ -695,18 +705,25 @@ bool SdlEventSource::dispatchSDLEvent(SDL_Event &ev, Common::Event &event) {
 		return handleMouseButtonUp(ev, event);
 
 	case SDL_EVENT_MOUSE_WHEEL: {
+#if SDL_VERSION_ATLEAST(3, 2, 12)
+		Sint32 yDir = ev.wheel.integer_y;
+#else
+		// We only have the precise y available. Ir would be better to accumulate it
+		// until we get at least -1 or +1 so that we can handle slow scrolling with abs values < 1.
 		Sint32 yDir = ev.wheel.y;
-		// We want the mouse coordinates supplied with a mouse wheel event.
-		// However, SDL2 does not supply these, thus we use whatever we got
-		// last time.
-		if (!processMouseEvent(event, _mouseX, _mouseY)) {
+#endif
+		if (!processMouseEvent(event, ev.wheel.mouse_x, ev.wheel.mouse_y)) {
 			return false;
 		}
 		if (yDir < 0) {
 			event.type = Common::EVENT_WHEELDOWN;
+			_fakeMouseScroll = event;
+			_queuedFakeMouseScroll = -yDir - 1;
 			return true;
 		} else if (yDir > 0) {
 			event.type = Common::EVENT_WHEELUP;
+			_fakeMouseScroll = event;
+			_queuedFakeMouseScroll = yDir - 1;
 			return true;
 		} else {
 			return false;
@@ -733,6 +750,16 @@ bool SdlEventSource::dispatchSDLEvent(SDL_Event &ev, Common::Event &event) {
 
 		return _queuedFakeKeyUp;
 		}
+
+	case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+		if (_graphicsManager) {
+			uint32 windowID = SDL_GetWindowID(_graphicsManager->getWindow()->getSDLWindow());
+			if (windowID != ev.window.windowID)
+				return false;
+		}
+
+		event.type = Common::EVENT_QUIT;
+		return true;
 
 		case SDL_EVENT_WINDOW_EXPOSED:
 			if (_graphicsManager) {
@@ -917,7 +944,7 @@ bool SdlEventSource::handleJoystickAdded(const SDL_JoyDeviceEvent &device, Commo
 	debug(5, "SdlEventSource: Received joystick added event for index '%d'", device.which);
 
 	int joystick_num = ConfMan.getInt("joystick_num");
-	if (joystick_num != device.which) {
+	if (joystick_num != static_cast<int>(device.which)) {
 		return false;
 	}
 

@@ -21,6 +21,8 @@
 
 namespace Freescape {
 
+class MusicPlayer;
+
 struct RiddleText {
 	int8 _dx;
 	int8 _dy;
@@ -66,10 +68,14 @@ public:
 	void loadAssetsDOSFullGame() override;
 	void loadAssetsDOSDemo() override;
 	void loadAssetsAmigaDemo() override;
+	void loadAssetsAmigaFullGame() override;
+	void loadAssetsAtariFullGame() override;
 	void loadAssetsZXFullGame() override;
 	void loadAssetsCPCFullGame() override;
 	void borderScreen() override;
 	void selectCharacterScreen();
+	bool playAmigaIntro();
+	bool playAtariIntro();
 	void drawOption();
 
 	void initZX();
@@ -171,6 +177,7 @@ public:
 	Common::String _ghostInAreaMessage;
 
 	Common::Array<byte> _modData; // Embedded ProTracker module (Amiga demo)
+	MusicPlayer *_playerMusic;
 	Common::Array<int> _keysCollected;
 	bool _useRockTravel;
 	int _spiritsMeter;
@@ -180,13 +187,18 @@ public:
 
 	int _lastTenSeconds;
 	int _soundIndexStartFalling;
+	bool _selectedPrincess;
 
 private:
 	Common::SeekableReadStream *decryptFile(const Common::Path &filename);
+	Common::SeekableReadStream *decompressAtari(const Common::Path &filename);
 	void loadRiddles(Common::SeekableReadStream *file, int offset, int number);
+	void loadMessagesC64(Common::SeekableReadStream *file, int offset, int number);
+	void loadRiddlesC64(Common::SeekableReadStream *file, int offset, int number);
 	void loadDOSFonts(Common::SeekableReadStream *file, int pos);
 	void drawFullscreenRiddleAndWait(uint16 riddle);
 	void drawFullscreenEndGameAndWait();
+	void drawFullscreenAmigaEndGameAndWait();
 	void drawFullscreenGameOverAndWait();
 	void drawRiddle(uint16 riddle, uint32 front, uint32 back, Graphics::Surface *surface);
 	void tryToCollectKey();
@@ -195,7 +207,7 @@ private:
 	bool ghostInArea();
 	void updateThunder();
 
-	Audio::SoundHandle _soundFxGhostHandle;
+	/*Audio::SoundHandle _soundFxGhostHandle;*/
 	Texture *_optionTexture;
 	Font _fontRiddle;
 	int _droppingGateStartTicks;

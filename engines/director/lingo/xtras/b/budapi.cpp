@@ -19,9 +19,11 @@
  *
  */
 
+#include "common/formats/ini-file.h"
 #include "common/system.h"
 
 #include "director/director.h"
+#include "director/util.h"
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingo-object.h"
 #include "director/lingo/lingo-utils.h"
@@ -31,6 +33,12 @@
  *
  * USED IN:
  * I Spy Spooky Mansion
+ * Loewenzahn 2 / 3 / 4 / 5 / 6 / 7 / 8 / Adventskalender / Spielebox
+ * TKKG 6 / 7 / 8 / 9 / 11 / 13 / 14
+ * Oscar the Balloonist Flies into the Mountains
+ * Physicus / Physikus (l'Espresso, Italian; Ruske & Pühretmaier)
+ * Bioscopia / Biolab
+ * Der Regenbogenfisch Junior 2: Kraktors Geburtstag
  *
  **************************************************/
 
@@ -187,6 +195,7 @@ namespace Director {
 const char *BudAPIXtra::xlibName = "BudAPI";
 const XlibFileDesc BudAPIXtra::fileNames[] = {
 	{ "budapi",   nullptr },
+	{ "budapi32", nullptr },
 	{ nullptr,        nullptr },
 };
 
@@ -371,13 +380,78 @@ void BudAPIXtra::m_new(int nargs) {
 XOBJSTUB(BudAPIXtra::m_baVersion, 0)
 XOBJSTUB(BudAPIXtra::m_baSysFolder, 0)
 XOBJSTUB(BudAPIXtra::m_baCpuInfo, 0)
-XOBJSTUB(BudAPIXtra::m_baDiskInfo, 0)
+void BudAPIXtra::m_baDiskInfo(int nargs) {
+	Common::String infoType = g_lingo->pop().asString();
+	Common::String disk = g_lingo->pop().asString();
+
+	if (!infoType.equalsIgnoreCase("type")) {
+		warning("STUB: BudAPIXtra::m_baDiskInfo: unsupported InfoType '%s'", infoType.c_str());
+		g_lingo->push(Datum());
+		return;
+	}
+
+	if (disk.hasSuffix(":"))
+		disk.deleteLastChar();
+
+	if (disk.equalsIgnoreCase("e"))
+		g_lingo->push(Datum(Common::String("CD-Rom")));
+	else if (disk.equalsIgnoreCase("c"))
+		g_lingo->push(Datum(Common::String("Hard")));
+	else
+		g_lingo->push(Datum(Common::String("")));
+}
 XOBJSTUB(BudAPIXtra::m_baMemoryInfo, 0)
 XOBJSTUB(BudAPIXtra::m_baFindApp, 0)
-XOBJSTUB(BudAPIXtra::m_baReadIni, 0)
-XOBJSTUB(BudAPIXtra::m_baWriteIni, 0)
+void BudAPIXtra::m_baReadIni(int nargs) {
+	ARGNUMCHECK(4);
+	Common::String iniFile = g_lingo->pop().asString();
+	Common::String defaultVal = g_lingo->pop().asString();
+	Common::String key = g_lingo->pop().asString();
+	Common::String section = g_lingo->pop().asString();
+
+	Common::String saveName = savePrefix() + lastPathComponent(iniFile, g_director->_dirSeparator);
+	Common::INIFile ini;
+	ini.allowNonEnglishCharacters();
+	Common::String value;
+	if (ini.loadFromSaveFile(saveName) && ini.getKey(key, section, value)) {
+		g_lingo->push(Datum(value));
+		return;
+	}
+
+	Common::Path resolved = findPath(iniFile);
+	if (!resolved.empty()) {
+		Common::INIFile bundled;
+		bundled.allowNonEnglishCharacters();
+		if (bundled.loadFromFile(resolved) && bundled.getKey(key, section, value)) {
+			g_lingo->push(Datum(value));
+			return;
+		}
+	}
+	g_lingo->push(Datum(defaultVal));
+}
+void BudAPIXtra::m_baWriteIni(int nargs) {
+	ARGNUMCHECK(4);
+	Common::String iniFile = g_lingo->pop().asString();
+	Common::String value = g_lingo->pop().asString();
+	Common::String key = g_lingo->pop().asString();
+	Common::String section = g_lingo->pop().asString();
+
+	Common::String saveName = savePrefix() + lastPathComponent(iniFile, g_director->_dirSeparator);
+	Common::INIFile ini;
+	ini.allowNonEnglishCharacters();
+	ini.loadFromSaveFile(saveName);
+	ini.setKey(key, section, value);
+	g_lingo->push(Datum(ini.saveToSaveFile(saveName) ? 1 : 0));
+}
 XOBJSTUB(BudAPIXtra::m_baFlushIni, 0)
-XOBJSTUB(BudAPIXtra::m_baReadRegString, 0)
+void BudAPIXtra::m_baReadRegString(int nargs) {
+	ARGNUMCHECK(4);
+	/* branch  */ g_lingo->pop();
+	Common::String defaultVal = g_lingo->pop().asString();
+	/* value   */ g_lingo->pop();
+	/* keyName */ g_lingo->pop();
+	g_lingo->push(Datum(defaultVal));
+}
 XOBJSTUB(BudAPIXtra::m_baWriteRegString, 0)
 XOBJSTUB(BudAPIXtra::m_baReadRegNumber, 0)
 XOBJSTUB(BudAPIXtra::m_baWriteRegNumber, 0)
@@ -433,7 +507,10 @@ XOBJSTUB(BudAPIXtra::m_baPrinterInfo, 0)
 XOBJSTUB(BudAPIXtra::m_baSetPrinter, 0)
 XOBJSTUB(BudAPIXtra::m_baRefreshDesktop, 0)
 XOBJSTUB(BudAPIXtra::m_baFileAge, 0)
-XOBJSTUB(BudAPIXtra::m_baFileExists, 0)
+void BudAPIXtra::m_baFileExists(int nargs) {
+	Common::String name = g_lingo->pop().asString();
+	g_lingo->push(Datum(findPath(name, true, true, false).empty() ? 0 : 1));
+}
 XOBJSTUB(BudAPIXtra::m_baFolderExists, 0)
 XOBJSTUB(BudAPIXtra::m_baCreateFolder, 0)
 XOBJSTUB(BudAPIXtra::m_baDeleteFolder, 0)

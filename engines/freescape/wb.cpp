@@ -87,31 +87,41 @@ byte buildArpeggioTable(const byte intervals[8], byte mask, byte *outTable, byte
 
 } // End of namespace WBCommon
 
-// TEXT-relative offsets for data tables within HDSMUSIC.AM
+// Default TEXT-relative offsets for Dark Side HDSMUSIC.AM
 // All addresses verified against disassembly of the 68000 code.
-static const uint32 kPeriodTableOffset    = 0x0AAE; // 48 x uint16 BE (note 0=silence, 1-47=C-1..B-3)
-static const uint32 kSamplePtrTableOffset = 0x0C42; // 16 x uint32 BE (TEXT-relative PCM offsets)
-static const uint32 kInstrumentTableOffset = 0x0C82; // 16 x 8 bytes (sample#, loopFlag, len, loopOff, loopLen)
-static const uint32 kArpeggioIntervalsOffset = 0x0D02; // 8 bytes (semitone offsets for arpeggio bitmask)
-static const uint32 kEnvelopeTableOffset  = 0x0D0A; // 10 x 8 bytes (atk, dec, fadeRate, rel, mod, vib, arp, flags)
-static const uint32 kSongTableOffset      = 0x0DBA; // 2 songs x 4 channels x uint32 BE order-list pointers
-static const uint32 kPatternPtrTableOffset = 0x0DCA; // up to 128 x uint32 BE (overlaps Song 2 order ptrs)
-static const uint32 kMaxPatternEntries    = 128;
+const WBTableOffsets kDarkSideOffsets = {
+	0x0AAE, // periodTable: 48 x uint16 BE
+	0x0C42, // samplePtrTable: 16 x uint32 BE
+	0x0C82, // instrumentTable: 16 x 8 bytes
+	0x0D02, // arpeggioIntervals: 8 bytes
+	0x0D0A, // envelopeTable: 10 x 8 bytes
+	0x0DBA, // songTable: 2 songs x 4 channels
+	0x0DCA, // patternPtrTable: up to 128 x uint32 BE
+	16, 16, 10 // numSamples, numInstruments, numEnvelopes
+};
+
+const uint32 kMaxPatternEntries = 128;
 
 class WallyBebenStream : public Audio::Paula {
 public:
-	WallyBebenStream(const byte *data, uint32 dataSize, int songNum, int rate, bool stereo);
+	WallyBebenStream(const byte *data, uint32 dataSize, int songNum, int rate, bool stereo,
+	                 const WBTableOffsets &offsets);
 	~WallyBebenStream() override;
 
 private:
 	void interrupt() override;
 
-	// --- Data tables (parsed from HDSMUSIC.AM TEXT segment) ---
+	// --- Data tables (parsed from TEXT segment) ---
 
 	const byte *_data;
 	uint32 _dataSize;
+	WBTableOffsets _offsets;
 
 	uint16 _periods[48];
+
+	static const int kMaxSamples = 16;
+	static const int kMaxInstruments = 16;
+	static const int kMaxEnvelopes = 16;
 
 	struct InstrumentDesc {
 		byte sampleIndex;
@@ -120,7 +130,7 @@ private:
 		uint16 loopOffset;
 		uint16 loopLength;
 	};
-	InstrumentDesc _instruments[16];
+	InstrumentDesc _instruments[kMaxInstruments];
 
 	struct EnvelopeDesc {
 		byte attackLevel;
@@ -132,10 +142,10 @@ private:
 		byte arpeggioMask;
 		byte flags;
 	};
-	EnvelopeDesc _envelopes[10];
+	EnvelopeDesc _envelopes[kMaxEnvelopes];
 
 	// Sample offsets within the data buffer
-	uint32 _sampleOffsets[16];
+	uint32 _sampleOffsets[kMaxSamples];
 
 	// Song order list pointers (TEXT-relative)
 	uint32 _songOrderPtrs[2][4];
@@ -253,9 +263,10 @@ private:
 // ---------------------------------------------------------------------------
 
 WallyBebenStream::WallyBebenStream(const byte *data, uint32 dataSize,
-                                   int songNum, int rate, bool stereo)
+                                   int songNum, int rate, bool stereo,
+                                   const WBTableOffsets &offsets)
 	: Paula(stereo, rate, rate / 50), // 50 Hz PAL VBI interrupt rate
-	  _data(data), _dataSize(dataSize),
+	  _data(data), _dataSize(dataSize), _offsets(offsets),
 	  _musicActive(false), _tickSpeed(6), _tickCounter(0),
 	  _pendingSongCommand(-1), _numPatterns(0), _firstSampleOffset(0) {
 
@@ -282,20 +293,19 @@ WallyBebenStream::~WallyBebenStream() {
 }
 
 void WallyBebenStream::loadTables() {
-	// Period table: 48 x uint16 BE at TEXT+$AAE
+	// Period table: 48 x uint16 BE
 	for (int i = 0; i < 48; i++) {
-		_periods[i] = readDataWord(kPeriodTableOffset + i * 2);
+		_periods[i] = readDataWord(_offsets.periodTable + i * 2);
 	}
 
-	// Sample pointer table: 16 x uint32 BE at TEXT+$C42
-	// These are TEXT-relative offsets to PCM sample data
-	for (int i = 0; i < 16; i++) {
-		_sampleOffsets[i] = readDataLong(kSamplePtrTableOffset + i * 4);
+	// Sample pointer table: TEXT-relative offsets to PCM sample data
+	for (int i = 0; i < _offsets.numSamples; i++) {
+		_sampleOffsets[i] = readDataLong(_offsets.samplePtrTable + i * 4);
 	}
 
-	// Instrument table: 16 x 8 bytes at TEXT+$C82
-	for (int i = 0; i < 16; i++) {
-		uint32 off = kInstrumentTableOffset + i * 8;
+	// Instrument table
+	for (int i = 0; i < _offsets.numInstruments; i++) {
+		uint32 off = _offsets.instrumentTable + i * 8;
 		_instruments[i].sampleIndex  = readDataByte(off + 0);
 		_instruments[i].loopFlag     = readDataByte(off + 1);
 		_instruments[i].totalLength  = readDataWord(off + 2);
@@ -303,14 +313,14 @@ void WallyBebenStream::loadTables() {
 		_instruments[i].loopLength   = readDataWord(off + 6);
 	}
 
-	// Arpeggio interval table: 8 bytes at TEXT+$D02
+	// Arpeggio interval table: 8 bytes
 	for (int i = 0; i < 8; i++) {
-		_arpeggioIntervals[i] = readDataByte(kArpeggioIntervalsOffset + i);
+		_arpeggioIntervals[i] = readDataByte(_offsets.arpeggioIntervals + i);
 	}
 
-	// Envelope table: 10 x 8 bytes at TEXT+$D0A
-	for (int i = 0; i < 10; i++) {
-		uint32 off = kEnvelopeTableOffset + i * 8;
+	// Envelope table
+	for (int i = 0; i < _offsets.numEnvelopes; i++) {
+		uint32 off = _offsets.envelopeTable + i * 8;
 		_envelopes[i].attackLevel  = readDataByte(off + 0);
 		_envelopes[i].decayTarget  = readDataByte(off + 1);
 		_envelopes[i].sustainLevel = readDataByte(off + 2);
@@ -321,47 +331,47 @@ void WallyBebenStream::loadTables() {
 		_envelopes[i].flags        = readDataByte(off + 7);
 	}
 
-	// Song table: 2 songs x 4 channels x uint32 BE at TEXT+$DBA
+	// Song table: 2 songs x 4 channels x uint32 BE
 	for (int s = 0; s < 2; s++) {
 		for (int ch = 0; ch < 4; ch++) {
-			_songOrderPtrs[s][ch] = readDataLong(kSongTableOffset + s * 16 + ch * 4);
+			_songOrderPtrs[s][ch] = readDataLong(_offsets.songTable + s * 16 + ch * 4);
 		}
 	}
 
 	// Compute the first sample offset — this is the upper bound for valid
 	// pattern/order-list data. Anything at or above this is PCM sample data.
 	_firstSampleOffset = _dataSize;
-	for (int i = 0; i < 16; i++) {
+	for (int i = 0; i < _offsets.numSamples; i++) {
 		if (_sampleOffsets[i] > 0 && _sampleOffsets[i] < _firstSampleOffset)
 			_firstSampleOffset = _sampleOffsets[i];
 	}
 
-	// Pattern pointer table at TEXT+$DCA.
+	// Pattern pointer table.
 	// Valid pattern pointers must be > 0 and < _firstSampleOffset (i.e., they
 	// point into the song data area between the tables and the PCM samples).
 	// Entries at or beyond _firstSampleOffset are stale data, not real patterns.
 	_numPatterns = 0;
 	for (uint32 i = 0; i < kMaxPatternEntries; i++) {
-		uint32 ptr = readDataLong(kPatternPtrTableOffset + i * 4);
+		uint32 ptr = readDataLong(_offsets.patternPtrTable + i * 4);
 		_patternPtrs[i] = ptr;
 		if (ptr > 0 && ptr < _firstSampleOffset)
 			_numPatterns = i + 1;
 	}
 
 	// Debug: dump loaded data tables for verification
-	debug(3, "WB: Data loaded from HDSMUSIC.AM TEXT segment (%u bytes)", _dataSize);
+	debug(3, "WB: Data loaded from TEXT segment (%u bytes)", _dataSize);
 
 	debug(3, "WB: Period table (first 12): %d %d %d %d %d %d %d %d %d %d %d %d",
 		_periods[0], _periods[1], _periods[2], _periods[3],
 		_periods[4], _periods[5], _periods[6], _periods[7],
 		_periods[8], _periods[9], _periods[10], _periods[11]);
 
-	for (int i = 0; i < 16; i++) {
+	for (int i = 0; i < _offsets.numSamples; i++) {
 		if (_sampleOffsets[i])
 			debug(3, "WB: Sample %d: offset=$%X", i, _sampleOffsets[i]);
 	}
 
-	for (int i = 0; i < 16; i++) {
+	for (int i = 0; i < _offsets.numInstruments; i++) {
 		const InstrumentDesc &inst = _instruments[i];
 		if (inst.totalLength > 0)
 			debug(3, "WB: Inst %d: sample=%d loop=%d len=%d loopOff=%d loopLen=%d",
@@ -369,7 +379,7 @@ void WallyBebenStream::loadTables() {
 				inst.loopOffset, inst.loopLength);
 	}
 
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < _offsets.numEnvelopes; i++) {
 		const EnvelopeDesc &env = _envelopes[i];
 		debug(3, "WB: Env %d: atk=%d dec=%d sus=%d rel=%d mod=%d arp=$%02X",
 			i, env.attackLevel, env.decayTarget, env.sustainLevel,
@@ -545,12 +555,12 @@ void WallyBebenStream::readPatternCommands(int ch) {
 		}
 
 		if (cmd >= 0xC0) {
-			// Set envelope: low 5 bits (0-31, but only 1-9 valid)
+			// Set envelope: low 5 bits (0-31)
 			// Asm ref: TEXT+$2C8 — envelope command handler
 			// $C0 (index 0) is a no-op: Env 0 is all zeros (sentinel entry).
 			// The original engine treats index 0 as "no envelope change".
 			byte envIdx = cmd & 0x1F;
-			if (envIdx == 0 || envIdx > 9) {
+			if (envIdx == 0 || envIdx >= _offsets.numEnvelopes) {
 				// Index 0 or out-of-range: skip, keep current envelope params
 				continue;
 			}
@@ -720,7 +730,7 @@ void WallyBebenStream::triggerNote(int ch) {
 	// Load instrument
 	const InstrumentDesc &inst = _instruments[c.instrumentIdx];
 	byte sampleIdx = inst.sampleIndex;
-	if (sampleIdx >= 16)
+	if (sampleIdx >= _offsets.numSamples)
 		sampleIdx = 0;
 
 	uint32 sampleOffset = _sampleOffsets[sampleIdx];
@@ -895,16 +905,26 @@ void WallyBebenStream::processEnvelope(int ch) {
 		break;
 
 	case 1: // Decay — decrease toward decay target.
+		// The 68K code decreases volume each tick; when it reaches exactly
+		// decayTarget it enters sustain. If attack == decay, the volume
+		// never changes and the engine stays in this phase (holds forever).
 		if (c.volume > c.decayTarget) {
 			c.volume--;
-		} else {
-			c.volume = c.sustainLevel;
-			c.envelopePhase = 2;
+			if (c.volume <= c.decayTarget) {
+				c.volume = c.decayTarget;
+				c.envelopePhase = 2;
+			}
 		}
 		break;
 
-	case 2: // Sustain — hold sustain level until note-off.
-		c.volume = c.sustainLevel;
+	case 2: // Sustain — hold at decay target; sustainLevel is the fade rate
+		// (0 = hold forever, >0 = fade by sustainLevel per tick toward 0).
+		if (c.sustainLevel > 0) {
+			if (c.volume > c.sustainLevel)
+				c.volume -= c.sustainLevel;
+			else
+				c.volume = 0;
+		}
 		break;
 
 	case 3: // Release — decrease volume on note-off
@@ -1034,13 +1054,15 @@ void WallyBebenStream::interrupt() {
 // ---------------------------------------------------------------------------
 
 Audio::AudioStream *makeWallyBebenStream(const byte *data, uint32 dataSize,
-                                         int songNum, int rate, bool stereo) {
-	if (!data || dataSize < 0xF000) {
+                                         int songNum, int rate, bool stereo,
+                                         const WBTableOffsets *offsets) {
+	if (!data || dataSize < 0x1000) {
 		warning("WallyBeben: invalid data (size %u)", dataSize);
 		return nullptr;
 	}
 
-	return new WallyBebenStream(data, dataSize, songNum, rate, stereo);
+	const WBTableOffsets &tbl = offsets ? *offsets : kDarkSideOffsets;
+	return new WallyBebenStream(data, dataSize, songNum, rate, stereo, tbl);
 }
 
 } // End of namespace Freescape

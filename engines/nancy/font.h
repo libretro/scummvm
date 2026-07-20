@@ -44,13 +44,22 @@ public:
 	void read(Common::SeekableReadStream &stream);
 
 	int getFontHeight() const override { return _fontHeight - 1; }
+
+	// The vertical advance between text lines (height of the first glyph).
+	int getLineHeight() const;
+
 	int getMaxCharWidth() const override { return _maxCharWidth; }
 	int getCharWidth(uint32 chr) const override;
-	int getKerningOffset(uint32 left, uint32 right) const override { return 1; }
+	int getKerningOffset(uint32 left, uint32 right) const override { return 0; }
 
 	void drawChar(Graphics::Surface *dst, uint32 chr, int x, int y, uint32 color) const override;
 
 	const Graphics::ManagedSurface &getImageSurface() const { return _image; }
+
+	// Samples an opaque pixel from a solid glyph rendered in the given color
+	// variant, so callers can match the exact text color. Used to draw
+	// underlines (the <u> markup toggle), for which the atlas has no glyph.
+	uint32 getColorPixel(uint color) const;
 
 	// Custom word wrapping function to fix an edge case with overflowing whitespaces
 	void wordWrap(const Common::String &str, int maxWidth, Common::Array<Common::String> &lines, int initWidth = 0) const;

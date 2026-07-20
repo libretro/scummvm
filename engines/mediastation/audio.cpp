@@ -29,7 +29,7 @@
 namespace MediaStation {
 
 AudioSequence::~AudioSequence() {
-	g_engine->_mixer->stopHandle(_handle);
+	stop();
 
 	for (Audio::SeekableAudioStream *stream : _streams) {
 		delete stream;
@@ -37,7 +37,14 @@ AudioSequence::~AudioSequence() {
 	_streams.clear();
 }
 
-void AudioSequence::play() {
+void AudioSequence::start() {
+	if (_state != kSoundPlayStateStopped) {
+		return;
+	}
+
+	g_engine->registerAudioSequence(this);
+	playStateChanged(kSoundPlayStatePlaying);
+
 	_handle = Audio::SoundHandle();
 	if (!_streams.empty()) {
 		Audio::QueuingAudioStream *audio = Audio::makeQueuingAudioStream(22050, false);
@@ -51,16 +58,48 @@ void AudioSequence::play() {
 }
 
 void AudioSequence::pause() {
+	playStateChanged(kSoundPlayStatePaused);
 	g_engine->_mixer->pauseHandle(_handle, true);
 }
 
 void AudioSequence::resume() {
+	playStateChanged(kSoundPlayStatePlaying);
 	g_engine->_mixer->pauseHandle(_handle, false);
 }
 
 void AudioSequence::stop() {
 	g_engine->_mixer->stopHandle(_handle);
 	_handle = Audio::SoundHandle();
+	g_engine->unregisterAudioSequence(this);
+	playStateChanged(kSoundPlayStateStopped, kSoundStopForScriptStop);
+}
+
+void AudioSequence::sleep() {
+	g_engine->unregisterAudioSequence(this);
+	playStateChanged(kSoundPlayStatePaused);
+}
+
+void AudioSequence::awake() {
+	// Not much happens here because the original CD-ROM streaming/caching
+	// logic has not been reimplemented.
+	playStateChanged(kSoundPlayStateAwake);
+}
+
+void AudioSequence::service() {
+	bool soundActuallyPlaying = g_engine->_mixer->isSoundHandleActive(_handle);
+	if (_state == kSoundPlayStatePlaying && !soundActuallyPlaying) {
+		makeSoundIdle(kSoundStopForEnd);
+	}
+}
+
+void AudioSequence::makeSoundIdle(SoundStopReason stopReason) {
+	g_engine->unregisterAudioSequence(this);
+	playStateChanged(kSoundPlayStateStopped, stopReason);
+}
+
+void AudioSequence::playStateChanged(SoundPlayState state, SoundStopReason why) {
+	_state = state;
+	_client->soundPlayStateChanged(state, why);
 }
 
 void AudioSequence::readParameters(Chunk &chunk) {
@@ -86,10 +125,6 @@ void AudioSequence::readChunk(Chunk &chunk) {
 		error("%s: Unknown audio encoding 0x%x", __func__, static_cast<uint>(_bitsPerSample));
 	}
 	_streams.push_back(stream);
-}
-
-bool AudioSequence::isActive() {
-	return g_engine->_mixer->isSoundHandleActive(_handle);
 }
 
 } // End of namespace MediaStation

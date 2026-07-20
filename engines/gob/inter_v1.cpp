@@ -1889,9 +1889,18 @@ void Inter_v1::o1_setMousePos(OpFuncParams &params) {
 	_vm->_draw->adjustCoords(0, &_vm->_global->_inter_mouseX, &_vm->_global->_inter_mouseY);
 	_vm->_global->_inter_mouseX -= _vm->_video->_scrollOffsetX;
 	_vm->_global->_inter_mouseY -= _vm->_video->_scrollOffsetY;
-	if (_vm->_global->_useMouse != 0)
+	if (_vm->_global->_useMouse != 0) {
 		_vm->_util->setMousePos(_vm->_global->_inter_mouseX,
 				_vm->_global->_inter_mouseY);
+		if (_vm->getGameType() == kGameTypeAdi4) {
+			// WORKAROUND: setMousePos() calls g_system->warpMouse() which calls purgeMouseEvents(),
+			// which will eat any pending mouse up event. This lead to a lock in Adi4 "cereal farm"
+			// simulation activity, where the script is waiting for a mouse up event that gets intercepted
+			// by the purge, if the click was fast enough.
+			// Force syncing with the EventManager's mouse state to recover from this as a workaround.
+			_vm->_util->forceMouseButtonsSync();
+		}
+	}
 }
 
 void Inter_v1::o1_setFrameRate(OpFuncParams &params) {

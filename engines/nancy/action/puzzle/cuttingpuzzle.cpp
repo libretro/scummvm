@@ -67,9 +67,9 @@ void CuttingPuzzle::readData(Common::SeekableReadStream &stream) {
 		_correctGrooves[i] = stream.readSint16LE();  // +0x3cc..0x3db
 
 	_latheSound.readNormal(stream);                  // +0x3dc (49 bytes)
-	_clickSound.readNormal(stream);                  // +0x40d (49 bytes)
-	_clickSound2.readNormal(stream);                 // +0x43e (49 bytes)
-	_clickSound3.readNormal(stream);                 // +0x46f (49 bytes)
+	_moveSound.readNormal(stream);                   // +0x40d (49 bytes)
+	_startStopSound.readNormal(stream);              // +0x43e (49 bytes)
+	_depthSound.readNormal(stream);                  // +0x46f (49 bytes)
 	_cutSound.readNormal(stream);                    // +0x4a0 (49 bytes)
 
 	_puzzleSolvedScene.readData(stream);                 // +0x4d1 (25 bytes)
@@ -85,6 +85,7 @@ void CuttingPuzzle::readData(Common::SeekableReadStream &stream) {
 	stream.skip(2);                                  // +0x534 skip
 
 	_cancelScene.readData(stream);                   // +0x536 (25 bytes)
+	readRect(stream, _exitHotspot);
 }
 
 void CuttingPuzzle::init() {
@@ -183,9 +184,9 @@ void CuttingPuzzle::execute() {
 		registerGraphics();
 
 		g_nancy->_sound->loadSound(_latheSound);
-		g_nancy->_sound->loadSound(_clickSound);
-		g_nancy->_sound->loadSound(_clickSound2);
-		g_nancy->_sound->loadSound(_clickSound3);
+		g_nancy->_sound->loadSound(_moveSound);
+		g_nancy->_sound->loadSound(_startStopSound);
+		g_nancy->_sound->loadSound(_depthSound);
 		g_nancy->_sound->loadSound(_cutSound);
 
 		_state = kRun;
@@ -215,7 +216,7 @@ void CuttingPuzzle::execute() {
 					++_animFrame;
 					redrawSurface();
 				} else {
-					// Completed one full animation loop → one macro-cycle.
+					// Completed one full animation loop -> one macro-cycle.
 					_animFrame = 0;
 
 					// Play the lathe loop sound if it's not already playing.
@@ -307,9 +308,9 @@ void CuttingPuzzle::execute() {
 		// Stop all sounds.
 		g_nancy->_sound->stopSound(_latheSound);
 		g_nancy->_sound->stopSound(_cutSound);
-		g_nancy->_sound->stopSound(_clickSound);
-		g_nancy->_sound->stopSound(_clickSound2);
-		g_nancy->_sound->stopSound(_clickSound3);
+		g_nancy->_sound->stopSound(_moveSound);
+		g_nancy->_sound->stopSound(_startStopSound);
+		g_nancy->_sound->stopSound(_depthSound);
 
 		if (_cancelled) {
 			// Player explicitly cancelled: go to the cancel scene and possibly set
@@ -340,60 +341,65 @@ void CuttingPuzzle::execute() {
 }
 
 void CuttingPuzzle::handleInput(NancyInput &input) {
-	if (_state != kRun || _latheRunning)
+	if (_state != kRun)
 		return;
-
-	// Right-click cancels the puzzle (no dedicated exit hotspot in the data).
-	if (input.input & NancyInput::kRightMouseButtonUp) {
-		_cancelled = true;
-		_state = kActionTrigger;
-		return;
-	}
 
 	// Convert mouse position to viewport-local coordinates.
 	Common::Point localMouse = input.mousePos;
 	Common::Rect vpPos = NancySceneState.getViewport().getScreenPosition();
 	localMouse -= Common::Point(vpPos.left, vpPos.top);
 
-	// Lever: left half of the rect rotates the knob left (decrement depth),
-	// right half rotates right (increment depth).
-	if (_leverDest.contains(localMouse)) {
-		int midX = (_leverDest.left + _leverDest.right) / 2;
-		bool rotateLeft = localMouse.x < midX;
+	// Allow stopping the lathe by clicking on the on/off switch hotspot.
 
-		g_nancy->_cursor->setCursorType(rotateLeft ? CursorManager::kRotateCCW
-		                                            : CursorManager::kRotateCW);
-
-		if (input.input & NancyInput::kLeftMouseButtonUp) {
-			if (rotateLeft)
-				_currentLeverDepth = (_currentLeverDepth == 0) ? 3 : _currentLeverDepth - 1;
-			else
-				_currentLeverDepth = (_currentLeverDepth + 1) % 4;
-			g_nancy->_sound->playSound(_clickSound);
-			redrawSurface();
-		}
-		return;
-	}
-
-	// Start/stop switch: start the lathe (re-clicking while stopped is a no-op
+	// Start/stop switch: toggle the lathe (re-clicking while stopped is a no-op
 	// since the lathe auto-stops after 14 cycles).
 	if (_switchDest.contains(localMouse)) {
 		g_nancy->_cursor->setCursorType(CursorManager::kHotspot);
 
 		if (input.input & NancyInput::kLeftMouseButtonUp) {
-			_latheRunning    = true;
+			_latheRunning = !_latheRunning;
 			_macroCycleCount = 0;
-			_animFrame       = 0;
-			g_nancy->_sound->playSound(_clickSound2);
+			_animFrame = 0;
+			g_nancy->_sound->playSound(_startStopSound);
+			redrawSurface();
+		}
+		return;
+	}
+
+	if (_latheRunning)
+		return;
+
+	if (!_exitHotspot.isEmpty() && _exitHotspot.contains(localMouse)) {
+		g_nancy->_cursor->setCursorType(CursorManager::kMoveBackward);
+		if (input.input & NancyInput::kLeftMouseButtonUp) {
+			_cancelled = true;
+			_state = kActionTrigger;
+			return;
+		}
+	}
+
+	// Lever: clicking it increases the depth (right rotation)
+	// and clicking it at max depth resets it to 0 (left rotation).
+	if (_leverDest.contains(localMouse)) {
+		bool rotateLeft = _currentLeverDepth == 3;
+
+		g_nancy->_cursor->setCursorType(rotateLeft ? CursorManager::kRotateCCW
+		                                            : CursorManager::kRotateCW);
+
+		if (input.input & NancyInput::kLeftMouseButtonUp) {
+			_currentLeverDepth = (_currentLeverDepth == 3) ? 0 : _currentLeverDepth + 1;
+			g_nancy->_sound->playSound(_depthSound);
 			redrawSurface();
 		}
 		return;
 	}
 
 	// Blade-position needle: clicking the left half moves the blade left,
-	// clicking the right half moves it right.
+	// clicking the right half moves it right. The needle can only move
+	// when the lathe is clear of the wood.
 	if (_currentMarkerPos < _markerDest.size() &&
-	        _markerDest[_currentMarkerPos].contains(localMouse)) {
+		_markerDest[_currentMarkerPos].contains(localMouse) &&
+		_currentLeverDepth == 0) {
 		int midX = (_markerDest[_currentMarkerPos].left + _markerDest[_currentMarkerPos].right) / 2;
 		bool goLeft = localMouse.x < midX;
 
@@ -401,14 +407,14 @@ void CuttingPuzzle::handleInput(NancyInput &input) {
 			g_nancy->_cursor->setCursorType(CursorManager::kMoveLeft);
 			if (input.input & NancyInput::kLeftMouseButtonUp) {
 				--_currentMarkerPos;
-				g_nancy->_sound->playSound(_clickSound3);
+				g_nancy->_sound->playSound(_moveSound);
 				redrawSurface();
 			}
 		} else if (!goLeft && _currentMarkerPos + 1 < _numGrooves) {
 			g_nancy->_cursor->setCursorType(CursorManager::kMoveRight);
 			if (input.input & NancyInput::kLeftMouseButtonUp) {
 				++_currentMarkerPos;
-				g_nancy->_sound->playSound(_clickSound3);
+				g_nancy->_sound->playSound(_moveSound);
 				redrawSurface();
 			}
 		}

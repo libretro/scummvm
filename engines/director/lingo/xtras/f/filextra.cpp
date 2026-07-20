@@ -20,8 +20,10 @@
  */
 
 #include "common/system.h"
+#include "common/fs.h"
 
 #include "director/director.h"
+#include "director/util.h"
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingo-object.h"
 #include "director/lingo/lingo-utils.h"
@@ -31,6 +33,10 @@
  *
  * USED IN:
  * I Spy
+ * Loewenzahn 2 / 3 / 4 / 5 / 7 / 8 / Adventskalender / Spielebox
+ * TKKG 7 / 8 / 9 / 10
+ * Oscar the Balloonist Discovers the Sea
+ * Ich sehe was...
  *
  **************************************************/
 
@@ -153,12 +159,54 @@ XOBJSTUB(FileXtra::m_RenameFile, 0)
 XOBJSTUB(FileXtra::m_DeleteFile, 0)
 XOBJSTUB(FileXtra::m_CopyFile, 0)
 XOBJSTUB(FileXtra::m_GetFileModDate, 0)
-XOBJSTUB(FileXtra::m_DirectoryExists, 0)
+
+void FileXtra::m_DirectoryExists(int nargs) {
+	ARGNUMCHECK(1)
+	Common::String dirName = g_lingo->pop().asString();
+
+	Common::Path path = findPath(dirName, true, true, true);
+	g_lingo->push(Datum(path.empty() ? -1 : 0));
+}
+
+void FileXtra::m_DirectoryToList(int nargs) {
+	ARGNUMCHECK(1)
+	Common::String dirName = g_lingo->pop().asString();
+
+	Datum result;
+
+	Common::Path path = findPath(dirName, true, true, true);
+	if (path.empty()) {
+		warning("FileXtra::m_DirectoryToList(): directory not found: %s", dirName.c_str());
+		g_lingo->push(result);
+		return;
+	}
+
+	Common::Path absPath = Common::Path(g_director->getGameDataDir()->getPath());
+	absPath.appendInPlace(Common::String(g_director->_dirSeparator), g_director->_dirSeparator);
+	absPath.appendInPlace(path);
+	Common::FSNode dir(absPath);
+	Common::FSList fslist;
+	if (!dir.isDirectory() || !dir.getChildren(fslist, Common::FSNode::kListAll)) {
+		g_lingo->push(result);
+		return;
+	}
+
+	result.type = ARRAY;
+	result.u.farr = new FArray();
+	for (auto &node : fslist) {
+		Common::String name = node.getName();
+		if (node.isDirectory())
+			name += g_director->_dirSeparator;
+		result.u.farr->arr.push_back(Datum(name));
+	}
+
+	g_lingo->push(result);
+}
+
 XOBJSTUB(FileXtra::m_CreateDirectory, 0)
 XOBJSTUB(FileXtra::m_DeleteDirectory, 0)
 XOBJSTUB(FileXtra::m_XDeleteDirectory, 0)
 XOBJSTUB(FileXtra::m_CopyDirectory, 0)
 XOBJSTUB(FileXtra::m_XCopyDirectory, 0)
-XOBJSTUB(FileXtra::m_DirectoryToList, 0)
 
 }

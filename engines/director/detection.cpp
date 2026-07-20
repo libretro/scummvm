@@ -25,6 +25,7 @@
 
 #include "common/config-manager.h"
 #include "common/file.h"
+#include "common/macresman.h"
 #include "common/formats/winexe.h"
 
 #include "director/director.h"
@@ -91,7 +92,6 @@ static const DebugChannelDef debugFlagList[] = {
 	{Director::kDebugText, "text", "Text rendering"},
 	{Director::kDebugXObj, "xobj", "XObjects"},
 	{Director::kDebugLingoThe, "lingothe", "Lingo \"the\" entities"},
-	{Director::kDebugImGui, "imgui", "Show ImGui debug window (if available)"},
 	{Director::kDebugPaused, "paused", "Pause first movie right after start"},
 	{Director::kDebugPauseOnLoad, "pauseonload", "Pause every movie right after loading"},
 	{Director::kDebugSaving, "saving", "Show Debug output while saving movies"},
@@ -108,7 +108,7 @@ public:
 	DirectorMetaEngineDetection() : AdvancedMetaEngineDetection(Director::gameDescriptions, directorGames) {
 		_maxScanDepth = 5;
 		_directoryGlobs = Director::directoryGlobs;
-		_flags = kADFlagMatchFullPaths | kADFlagCanPlayUnknownVariants;
+		_flags = kADFlagMatchFullPaths | kADFlagCanPlayUnknownVariants | kADFlagUseExtraAsHint;
 
 		_fallback_blacklisted_names["Macromedia Projector"] = true;
 		_fallback_blacklisted_names["Projector Skeleton"] = true;
@@ -352,8 +352,85 @@ ADDetectedGame DirectorMetaEngineDetection::fallbackDetect(const FileMap &allFil
 
 	// Now, if we have --start-movie supplied, let's consider that
 	// the developer knows what they're doing and report Director game
-	if (ConfMan.hasKey("start_movie"))
-		return ADDetectedGame(&desc->desc);
+	if (ConfMan.hasKey("start_movie")) {
+		// Check if the start movie is in MacBinary format
+
+		if (ConfMan.get("start_movie").hasSuffixIgnoreCase(".exe")) {
+			warning("Director fallback detection: Start movie has .exe extension, reporting as Windows Director game");
+			desc->desc.platform = Common::kPlatformWindows;
+			return ADDetectedGame(&desc->desc);
+		}
+
+		for (Common::FSList::const_iterator file = fslist.begin(); file != fslist.end(); ++file) {
+			Common::String fileName = file->getName();
+
+			if (!fileName.equalsIgnoreCase(ConfMan.get("start_movie")))
+				continue;
+
+			Common::File f;
+			if (!f.open(*file))
+				continue;
+
+			if (Common::MacResManager::isMacBinary(f)) {
+				warning("Director fallback detection: Start movie is in MacBinary format, reporting as Mac Director game");
+				desc->desc.platform = Common::kPlatformMacintosh;
+
+				f.seek(0);
+
+				Common::MacFinderInfo info;
+				Common::MacFinderExtendedInfo fxinfo;
+				if (Common::MacResManager::getFinderInfoFromMacBinary(&f, info, fxinfo)) {
+					switch (info.type) {
+					case MKTAG('V', 'W', 'S', 'C'):	// VideoWorks II movies ("scenes")
+						desc->version = 10;
+						break;
+					case MKTAG('V', 'W', 'Z', 'P'):	// VideoWorks + Director Overview ("Zorro")
+						desc->version = 20;
+						break;
+					case MKTAG('V', 'W', 'P', 'R'):	// "VideoWorks Pro" = Director 1.0 / 2.0
+						desc->version = 100;
+						break;
+					case MKTAG('V', 'W', 'M', 'D'):	// Director 3.0
+						desc->version = 300;
+						break;
+					default:
+						warning("Director fallback detection: Start movie has unrecognized Finder type %s, cannot determine version", tag2str(info.type));
+						break;
+					}
+
+					warning("Director fallback detection: Start movie Finder info type %s, version guessed as %d", tag2str(info.type), desc->version);
+				}
+			} else {
+				f.seek(0);
+				uint32 initialTag = f.readUint32BE();
+
+				if (ConfMan.get("start_movie").hasSuffixIgnoreCase(".mmm")) {
+					desc->version = 200;
+				} else {
+					desc->version = 400; // We start from 400, and then the VWCF file will tell us the actual version
+				}
+
+				// Non-MacBinary files start from D3
+				switch (initialTag) {
+				case MKTAG('R', 'I', 'F', 'F'):
+				case MKTAG('R', 'I', 'F', 'X'):
+					desc->desc.platform = Common::kPlatformMacintosh;
+					break;
+				case MKTAG('X', 'F', 'I', 'R'):
+				case MKTAG('F', 'F', 'I', 'R'):
+					desc->desc.platform = Common::kPlatformWindows;
+					break;
+				default:
+					warning("Director fallback detection: Start movie does not have a valid RIFF tag, cannot determine platform");
+					return ADDetectedGame();
+				}
+			}
+
+			return ADDetectedGame(&desc->desc);
+		}
+
+		warning("Director fallback detection: Failed to open start movie at %s", ConfMan.get("start_movie").c_str());
+	}
 
 	return ADDetectedGame();
 }
@@ -364,7 +441,7 @@ DetectedGame DirectorMetaEngineDetection::toDetectedGame(const ADDetectedGame &a
 
 	if (desc->desc.platform == Common::kPlatformMacintosh || desc->desc.platform == Common::kPlatformPippin)
 		game.appendGUIOptions(Common::getGameGUIOptionsDescription(GAMEOPTION_GAMMA_CORRECTION));
-	if (!(desc->desc.flags & Director::GF_32BPP))
+	if (!(desc->desc.flags & Director::GF_TRUECOLOR))
 		game.appendGUIOptions(Common::getGameGUIOptionsDescription(GAMEOPTION_TRUE_COLOR));
 
 	return game;

@@ -22,6 +22,7 @@
 #include "common/config-manager.h"
 #include "common/debug-channels.h"
 #include "common/events.h"
+#include "common/savefile.h"
 #include "common/scummsys.h"
 #include "common/system.h"
 
@@ -133,6 +134,7 @@ void TotEngine::syncSoundSettings() {
 
 int TotEngine::engineStart() {
 	if (ConfMan.hasKey("save_slot")) {
+		_mouse->setMouseArea(Common::Rect(0, 0, 305, 185));
 		return startGame();
 	}
 	_graphics->clear();
@@ -168,8 +170,21 @@ int TotEngine::engineStart() {
 	return startGame();
 }
 
+bool TotEngine::autosaveExists() {
+	int saveSlot = getAutosaveSlot();
+	if (saveSlot == -1)
+		return false;
+	Common::InSaveFile *f = getSaveFileManager()->openForLoading(getSaveStateName(saveSlot));
+	if (!f)
+		return false;
+	delete f;
+	return true;
+}
+
 void TotEngine::resumeGame() {
-	loadGameState(getMetaEngine()->getAutosaveSlot());
+	if (!autosaveExists())
+		return;
+	loadGameState(getAutosaveSlot());
 }
 
 void TotEngine::processEvents(bool &escapePressed) {
@@ -1252,9 +1267,11 @@ void TotEngine::mainMenu(bool fade) {
 				}
 			} else if (y > 174 && y < 190) {
 				if (x > 20 && x < 145) {
-					_startNewGame = false;
-					validOption = true;
-					_continueGame = true;
+					if (autosaveExists()) {
+						_startNewGame = false;
+						validOption = true;
+						_continueGame = true;
+					}
 				} else if (x > 173 && x < 288) {
 					exitToDOS();
 				}

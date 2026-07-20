@@ -30,6 +30,7 @@
 #include "director/castmember/bitmap.h"
 #include "director/picture.h"
 #include "director/lingo/lingo-code.h"
+#include "director/lingo/xtras-cast/cursorxtra.h"
 
 namespace Director {
 
@@ -61,6 +62,22 @@ bool Cursor::operator==(const CursorRef &c) {
 
 void Cursor::readFromCast(Datum cursorCasts) {
 	if (cursorCasts.type != ARRAY || cursorCasts.u.farr->arr.size() < 1) {
+		// D6+: a bare cast member reference is accepted when it names a
+		// Cursor Asset Xtra member, e.g. `sprite.cursor = member "myCursor"`.
+		if (g_director->getVersion() >= 600 && cursorCasts.type != ARRAY) {
+			CursorXtraCastMember *cursorXtra = dynamic_cast<CursorXtraCastMember *>(g_director->getCurrentMovie()->getCastMember(cursorCasts.asMemberID()));
+			CastMemberID imageId, maskId2;
+			if (cursorXtra && cursorXtra->getCursorInfo(imageId, maskId2)) {
+				Datum d;
+				d.type = ARRAY;
+				d.u.farr = new FArray;
+				d.u.farr->arr.push_back(Datum(imageId));
+				if (!maskId2.isNull())
+					d.u.farr->arr.push_back(Datum(maskId2));
+				readFromCast(d);
+				return;
+			}
+		}
 		warning("Cursor::readFromCast: Needs array of at least 1");
 		return;
 	}
@@ -69,6 +86,7 @@ void Cursor::readFromCast(Datum cursorCasts) {
 
 	CastMemberID cursorId = cursorCasts.u.farr->arr[0].asMemberID();
 	CastMember *cursorCast = g_director->getCurrentMovie()->getCastMember(cursorId);
+
 	if (!cursorCast || cursorCast->_type != kCastBitmap) {
 		warning("Cursor::readFromCast: No bitmap cast for cursor");
 		return;
@@ -215,13 +233,13 @@ void Cursor::readFromResource(Datum resourceId) {
 
 		Cast *cast = g_director->getCurrentMovie()->getCast();
 		if (cast && cast->getArchive()) {
-			readSuccessful = readFromArchive(cast->getArchive(), resourceId.asInt());
+			readSuccessful = readFromArchive(cast->getArchive().get(), resourceId.asInt());
 			if (readSuccessful)
 				break;
 		}
 
 		for (auto &it : g_director->_allOpenResFiles) {
-			readSuccessful = readFromArchive(g_director->_allSeenResFiles[it], resourceId.asInt());
+			readSuccessful = readFromArchive(g_director->_allSeenResFiles[it].get(), resourceId.asInt());
 			if (readSuccessful)
 				break;
 		}
@@ -229,7 +247,7 @@ void Cursor::readFromResource(Datum resourceId) {
 		// Cursors can be located in the main archive, which may not
 		// be in _allOpenResFiles
 		if (!readSuccessful && g_director->getPlatform() == Common::kPlatformMacintosh) {
-			readSuccessful = readFromArchive(g_director->getMainArchive(), resourceId.asInt());
+			readSuccessful = readFromArchive(g_director->getMainArchive().get(), resourceId.asInt());
 		}
 
 		// TODO: figure out where to read custom cursor in windows platform

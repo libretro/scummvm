@@ -353,6 +353,31 @@ const char *FontSurface::writeString(const Common::String &s, const Common::Rect
 	return _displayString;
 }
 
+const char *FontSurface::fitToWidth(const char *s, int maxWidth) {
+	const char *strSave = _displayString;
+
+	for (;;) {
+		// Measure the rendered width of the string
+		_displayString = s;
+		int total = 0;
+		while (*_displayString && !getNextCharWidth(total)) {
+		}
+
+		// writeString wraps once its running position reaches the right
+		// edge, so the text only fits if it stays strictly narrower
+		if (total < maxWidth || !*s)
+			break;
+
+		// Too wide, so drop the leading character and remeasure
+		_displayString = s;
+		getNextChar();
+		s = _displayString;
+	}
+
+	_displayString = strSave;
+	return s;
+}
+
 void FontSurface::writeCharacter(uint16_t c, const Common::Rect &clipRect) {
 	Justify justify = _fontJustify;
 	_fontJustify = JUSTIFY_NONE;
@@ -363,6 +388,32 @@ void FontSurface::writeCharacter(uint16_t c, const Common::Rect &clipRect) {
 	_fontJustify = justify;
 }
 
+// The French version stores accented characters as their code page 437
+// codes, while its font keeps the corresponding glyphs in repurposed ASCII
+// slots, so translate the former into the latter
+static uint16_t frenchChar(byte c) {
+	switch (c) {
+	case 0x81: return 0x5E;   // u with diaeresis
+	case 0x82: return 0x24;   // e with acute accent
+	case 0x83: return 0x26;   // a with circumflex
+	case 0x85: return 0x5D;   // a with grave accent
+	case 0x87: return 0x7D;   // c with cedilla
+	case 0x88: return 0x23;   // e with circumflex
+	case 0x8A: return 0x25;   // e with grave accent
+	case 0x8B: return 0x5F;   // i with diaeresis
+	case 0x8C: return 0x7B;   // i with circumflex
+	case 0x93: return 0x5B;   // o with circumflex
+	case 0x96: return 0x3D;   // u with circumflex
+	case 0x97: return 0x5C;   // u with grave accent
+	case 0x80: return 'C';    // capital C with cedilla, which has no glyph
+	case 0x90: return 'E';    // capital E with acute accent, which has no glyph
+	default:
+		// Never let an unknown high byte become a control code
+		c &= 0x7f;
+		return (c < ' ') ? ' ' : c;
+	}
+}
+
 uint16_t FontSurface::getNextChar() {
 	if (_isBig5) {
 		uint8_t lead = *_displayString++;
@@ -371,6 +422,8 @@ uint16_t FontSurface::getNextChar() {
 		return (lead << 8) | (*_displayString++ & 0xff);
 	} else if (Common::RU_RUS == lang)
 		return *_displayString++ & 0xff;
+	else if (Common::FR_FRA == lang && (*_displayString & 0x80))
+		return frenchChar(*_displayString++ & 0xff);
 	else
 		return *_displayString++ & 0x7f;
 }

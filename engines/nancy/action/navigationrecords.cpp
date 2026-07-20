@@ -39,7 +39,18 @@ void SceneChange::execute() {
 }
 
 void HotMultiframeSceneChange::readData(Common::SeekableReadStream &stream) {
-	SceneChange::readData(stream);
+	if (_isTerse) {
+		_hoverCursor = (CursorManager::CursorType)stream.readUint16LE();
+		_sceneChange.sceneID = stream.readUint16LE();
+		_sceneChange.frameID = stream.readUint16LE();
+		_sceneChange.verticalOffset = 0;
+		_sceneChange.continueSceneSound = stream.readUint16LE();
+		_sceneChange.listenerFrontVector.set(0, 0, 1);
+		_sceneChange.frontVectorFrameID = _sceneChange.frameID;
+	} else {
+		SceneChange::readData(stream);
+	}
+	
 	uint16 numHotspots = stream.readUint16LE();
 
 	_hotspots.reserve(numHotspots);
@@ -71,17 +82,38 @@ void HotMultiframeSceneChange::execute() {
 	}
 }
 
+// The hover cursor is stored as the id of the matching directional scene-change
+// action record type, which gets translated into the actual cursor to display.
+static CursorManager::CursorType getNavigationCursor(uint16 id) {
+	switch (id) {
+	case 14:
+		return CursorManager::kExit;
+	case 15:
+	case 23:
+		return CursorManager::kMoveForward;
+	case 16:
+		return CursorManager::kMoveBackward;
+	case 17:
+	case 24:
+		return CursorManager::kMoveUp;
+	case 18:
+	case 25:
+		return CursorManager::kMoveDown;
+	case 19:
+		return CursorManager::kMoveLeft;
+	case 20:
+		return CursorManager::kMoveRight;
+	default:
+		return CursorManager::kHotspot;
+	}
+}
+
 void HotSingleFrameSceneChange::readData(Common::SeekableReadStream &stream) {
-	_hoverCursor = (CursorManager::CursorType)stream.readUint16LE();
+	_hoverCursor = getNavigationCursor(stream.readUint16LE());
 	_sceneChange.sceneID = stream.readUint16LE();
 	_sceneChange.continueSceneSound = kContinueSceneSound;
 	_sceneChange.listenerFrontVector.set(0, 0, 1);
 	readRect(stream, _sceneHotspot.coords);
-	if (_readExtra) {
-		uint16 unk1 = stream.readUint16LE();
-		uint16 unk2 = stream.readUint16LE();
-		debug("Read extra data for HotSingleFrameSceneChange: %u, %u", unk1, unk2);
-	}
 }
 
 void HotSingleFrameSceneChange::execute() {
@@ -100,12 +132,20 @@ void HotSingleFrameSceneChange::execute() {
 }
 
 void Hot1FrSceneChange::readData(Common::SeekableReadStream &stream) {
+	if (_dynamicCursor)
+		_hoverCursor = (CursorManager::CursorType)stream.readUint16LE();
+
 	if (!_isTerse) {
 		SceneChange::readData(stream);
 		_hotspotDesc.readData(stream);
 	} else {
 		_sceneChange.sceneID = stream.readUint16LE();
-		_sceneChange.continueSceneSound = kContinueSceneSound;
+		if (g_nancy->getGameType() >= kGameTypeNancy10 && _dynamicCursor) {
+			_sceneChange.frameID = stream.readUint16LE();
+			_sceneChange.continueSceneSound = stream.readUint16LE();
+		} else {
+			_sceneChange.continueSceneSound = kContinueSceneSound;
+		}
 		_sceneChange.listenerFrontVector.set(0, 0, 1);
 		readRect(stream, _hotspotDesc.coords);
 	}
@@ -130,7 +170,7 @@ void Hot1FrSceneChange::execute() {
 	}
 }
 
-void HotMultiframeMultisceneChange::readData(Common::SeekableReadStream &stream) {
+void HotMultiframeMultiSceneChange::readData(Common::SeekableReadStream &stream) {
 	if (g_nancy->getGameType() <= kGameTypeNancy2) {
 		_onTrue._sceneChange.readData(stream);
 		_onFalse._sceneChange.readData(stream);
@@ -151,7 +191,7 @@ void HotMultiframeMultisceneChange::readData(Common::SeekableReadStream &stream)
 	}
 }
 
-void HotMultiframeMultisceneChange::execute() {
+void HotMultiframeMultiSceneChange::execute() {
 	switch (_state) {
 	case kBegin:
 		// set something to 1
@@ -193,13 +233,14 @@ void HotMultiframeMultisceneChange::execute() {
 		} else {
 			_onFalse.execute();
 		}
+		_isDone = true;
 
 		break;
 	}
 	}
 }
 
-void HotMultiframeMultisceneCursorTypeSceneChange::readData(Common::SeekableReadStream &stream) {
+void HotMultiframeMultiSceneCursorTypeSceneChange::readData(Common::SeekableReadStream &stream) {
 	uint16 numScenes = stream.readUint16LE();
 	_scenes.resize(numScenes);
 	_cursorTypes.resize(numScenes);
@@ -218,7 +259,7 @@ void HotMultiframeMultisceneCursorTypeSceneChange::readData(Common::SeekableRead
 	}
 }
 
-void HotMultiframeMultisceneCursorTypeSceneChange::execute() {
+void HotMultiframeMultiSceneCursorTypeSceneChange::execute() {
 	switch (_state) {
 	case kBegin:
 		// turn main rendering on

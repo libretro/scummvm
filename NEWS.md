@@ -1,11 +1,86 @@
 For a more comprehensive changelog of the latest experimental code, see:
         https://github.com/scummvm/scummvm/commits/
 
-#### 2026.3.0 (2026-06-XX)
+#### 2026.4.0 (2026-10-XX)
+
+ New games:
+   - Added support for Mortadelo y Filemón: Una Aventura de Cine Edición Original.
+   - Added support for Mortadelo y Filemón: Dos vaqueros chapuceros.
+   - Added support for Mortadelo y Filemón: Terror, Espanto y Pavor.
+   - Added support for Mortadelo y Filemón: La Sexta Secta.
+   - Added support for Mortadelo y Filemón: Operación Moscú.
+   - Added support for Mortadelo y Filemón: El Escarabajo de Cleopatra.
+   - Added support for Mortadelo y Filemón: La Banda de Corvino.
+   - Added support for Mortadelo y Filemón: Balones y Patadones.
+   - Added support for Mortadelo y Filemón: Mamelucos a la Romana.
+   - Added support for Dracula: Resurrection.
+   - Added support for Dracula 2: The Last Sanctuary.
+   - Added support for Nancy Drew: The Secret of Shadow Ranch.
+   - Added support for Nancy Drew: Curse of Blackmoor Manor.
+
+ General:
+   - Optimised mixing and rate converters, for better performance.
+   - Implemented ImGui-based interface for the Event Recorder.
+   - Fixed bug with inability to specify game overrides for MIDI and MT-32
+     devices.
+   - Switched Nuked-OPL3 AdLib emulator to Nuked-OPL3-fast fork.
+
+ Bagel:
+   - Fix saving options for Hodj n' Podj's Th Gesng Gme.
+
+ GLK:
+   - Fixed saved font selections not being applied correctly in some games.
+   - Added support for loading ZX Spectrum games directly from TAP/TZX tape images.
+
+ Freescape:
+   - Added support for loading ZX Spectrum games directly from TAP/TZX tape images.
+
+ Lure:
+   - Improved character pathfinding.
+   - Fix being unable to talk to characters after a one-sided conversation.
+
+ MM:
+   - Fix multiple M&M1 classic combat crashes.
+   - Implement M&M1 classic PC speaker sound.
+   - Fix stale view close handling causing crash.
+   - Fix M&M1 spelling mistakes.
+   - Improved M&M1 Enhanced mouse support, character generation, and general in-game UI.
+   - Fixed cutscene subtitle rendering.
+
+ NANCY:
+   - Generic flags are no longer cleared when saving or auto-saving. Clearing
+     them introduced issues when auto-saving was done in some scenes.
+   - Loading from the GMM is now possible before starting a new scene.
+
+ SCUMM:
+   - Improved cursor scale in early Windows HE games.
+
+ SLUDGE:
+   - Added detection for Shape-Shift Escape.
+
+ Atari port:
+   - Added integration with nFM library.
+
+#### 2026.3.0 "Carousels & Killer Whales" (2026-06-20)
+
+ New games:
+   - Added support for Nancy Drew: The Haunted Carousel.
+   - Added support for Nancy Drew: Danger on Deception Island.
+   - Added support for Noctropolis.
+   - Added support for Cartoon Carnival.
+   - Added support for Alfred Pelrock: En Busca de un Sueño.
+   - Added support for Pilot Brothers: On the Track of Striped Elephant,
+     Pilot Brothers: The Case of Serial Maniac, and five minor
+     games built on the Gamos engine.
+
  General:
    - Highlight clickable links in the GUI with a cursor change.
    - Fixed window size when switching out of fullscreen mode on 3D engines.
    - Implemented NULL OPL driver for lower-base systems.
+   - Implemented kinetic scolling in GUI lists.
+
+ ACCESS:
+   - Fixed various script issues in Martian Memorandum.
 
  AGOS:
    - Added support for language files used by Amiga and Macintosh
@@ -14,9 +89,56 @@ For a more comprehensive changelog of the latest experimental code, see:
  GLK:
    - Exposed text and engine settings in the GUI.
 
+ LastExpress:
+   - The game has been supported for a while now (2026.1.0), we just
+     forgot to add a news entry here. Whoops!
+   - Several inaccuracies from the character logic have been fixed,
+     which means that some rare issues concerning characters behavior
+     should now be gone.
+
+ MADS:
+   - In Rex Nebular fix game being semi-stuck while using binoculars.
+
  MM:
    - Reworked keymapper for MM1.
+   - Fixed MM1 Enhanced allowing trading more than the character owned.
+   - Fixed MM1 Enhanced allowing free temple healing where it shouldn't.
+   - MM1 Enhanced most recently played music was restarting after opening and closing the GMM.
 
+ MYST3:
+   - Fixed a regression for the animation of the control wheel at J'nanin's shore.
+   - Camera movement is now free after placing a symbol on the pedestal at the watch tower in J'nanin.
+
+ NANCY:
+   - Fixed a regression in ripped letter types of puzzles, affecting all the Nancy games that feature such puzzles.
+   - Fixed potential crashes in ripped letter types of puzzles, after loading a saved game.
+   - Show the correct mouse cursor in rotating lock types of puzzles.
+   - Enter the game scene directly when loading a saved game from the launcher or the GMM, instead of starting in the main game menu.
+   - Properly handle the "Continue Game" button after clicking on the "More Nancy" button.
+   - Fixed an edge case in piano types of puzzles, where clicking on a key while another was still down produced a graphical glitch.
+   - Fixed some sounds stopping prematurely in Nancy Drew: Secret of the Scarlet Hand and newer games.
+   - Fixed animation speed and timing in turning types of puzzles.
+
+ SLUDGE:
+   - Added two more games to detection, "Sam and Max Flintlocked" and
+     "Full Moon".
+
+ TwinE:
+   - Fixed soft lock collision bug with bulldozer.
+   - Fixed wrong scaling for plasma menu effect.
+   - Fixed holomap model rendering.
+   - Disable autosaves while driving a vehicle.
+
+ Atari port:
+   - Added native CDDA support.
+   - Added plugin support (now ScummVM can run with as little as a few megs of RAM).
+   - Added native YM2149 support (currently usable for Elvira 1 and 2).
+   - Reworked audio mixer (this fixes the barking poodles in SOMI).
+   - Autosave is disabled by default as it leads to audible artefacts during gameplay.
+
+ PS3 port:
+   - Added support for running ScummVM engines as separate modules/executables.
+     This saves about 90 MB of RAM. It is enabled only for release packages.
 
 #### 2026.2.0 "Railmonicon" (2026-03-28)
 

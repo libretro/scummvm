@@ -43,7 +43,7 @@ public:
 	~Sound();
 
 	void init();
-	void play(int soundID);
+	void play(int soundID, bool loop = false);
 	void stop();
 	bool isPlaying() const;
 
@@ -90,8 +90,8 @@ private:
 	Audio::SoundHandle _handle;
 
 	void playPCSpeaker(int soundID);
-	bool playMacSound(int soundID);
-	bool playResource(int resID);
+	bool playMacSound(int soundID, bool loop);
+	bool playResource(int resID, bool loop);
 };
 
 } // End of namespace Colony

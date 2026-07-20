@@ -15,6 +15,7 @@ MODULE_OBJS := \
 	render_features.o \
 	render_objects.o \
 	renderer_opengl.o \
+	renderer_opengl_shaders.o \
 	savegame.o \
 	sound.o \
 	think.o \

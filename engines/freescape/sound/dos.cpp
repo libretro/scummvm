@@ -19,11 +19,67 @@
  *
  */
 
+#include "common/array.h"
+
 #include "freescape/freescape.h"
 
 namespace Freescape {
 
-void FreescapeEngine::loadSpeakerFxDOS(Common::SeekableReadStream *file, int offsetFreq, int offsetTable, int numberSounds) {
+struct soundSpeakerFx {
+	uint16 frequencyStart;
+	uint8 frequencyDuration;
+	uint8 frequencyStepsNumber;
+	uint16 frequencyStep;
+	uint8 repetitions;
+	Common::Array<struct soundSpeakerFx *>additionalSteps;
+};
+
+// TODO: Migrate to Audio::PCSpeaker
+class SoundDOS : public Sound {
+public:
+	SoundDOS(Audio::Mixer *mixer) : _mixer(mixer) {
+		_speaker = new SizedPCSpeaker();
+	}
+
+	~SoundDOS() {
+		delete _speaker;
+	}
+
+	void loadSpeakerFx(Common::SeekableReadStream *file, int offsetFreq, int offsetTable, int numberSounds);
+
+	void playSound(int index, Type type) override {
+		soundSpeakerFx *speakerFxInfo = _soundsSpeakerFx[index];
+		if (speakerFxInfo)
+			playSoundDOS(speakerFxInfo);
+		else
+			debugC(1, kFreescapeDebugMedia, "WARNING: Sound %d is not available", index);
+	}
+
+	void stopSound(Type type) override {
+		_speaker->stop(); // flush the queue too, or isPlayingSound() hangs waitForSounds()
+		_mixer->stopHandle(_soundFxHandle);
+	}
+
+	bool isPlayingSound(Type type) const override {
+		return !_speaker->endOfStream();
+	}
+
+	bool isSoundAvailable(int index) const override {
+		return _soundsSpeakerFx.getValOrDefault(index) != nullptr;
+	}
+
+private:
+	Common::HashMap<uint16, soundSpeakerFx *> _soundsSpeakerFx;
+
+	Audio::Mixer *_mixer;
+	Audio::SoundHandle _soundFxHandle;
+	SizedPCSpeaker *_speaker;
+
+	uint16 playSoundDOSSpeaker(uint16 frequencyStart, soundSpeakerFx *speakerFxInfo);
+	void playSoundDOS(soundSpeakerFx *speakerFxInfo);
+};
+
+void SoundDOS::loadSpeakerFx(Common::SeekableReadStream *file, int offsetFreq, int offsetTable, int numberSounds) {
 	debugC(1, kFreescapeDebugParser, "Reading PC speaker sound table for DOS");
 	for (int i = 1; i <= numberSounds; i++) {
 		debugC(1, kFreescapeDebugParser, "Reading sound table entry: %d ", i);
@@ -91,14 +147,19 @@ void FreescapeEngine::loadSpeakerFxDOS(Common::SeekableReadStream *file, int off
 	}
 }
 
-uint16 FreescapeEngine::playSoundDOSSpeaker(uint16 frequencyStart, soundSpeakerFx *speakerFxInfo) {
+uint16 SoundDOS::playSoundDOSSpeaker(uint16 frequencyStart, soundSpeakerFx *speakerFxInfo) {
 	uint8 frequencyStepsNumber = speakerFxInfo->frequencyStepsNumber;
 	int16 frequencyStep = speakerFxInfo->frequencyStep;
 	uint8 frequencyDuration = speakerFxInfo->frequencyDuration;
 
 	int16 freq = frequencyStart;
-	int waveDurationMultipler = 1800;
-	int waveDuration = waveDurationMultipler * (frequencyDuration + 1);
+	// The DOS build advances the speaker sequencer from its timer IRQ, which
+	// the executable reprograms to ~300 Hz (PIT channel 0 reload = 3977, i.e.
+	// 1193182/3977). Each step holds its frequency for frequencyDuration timer
+	// ticks; the original 8-bit counter makes a duration of 0 wrap to 256 ticks.
+	const int kTimerHz = 300;
+	int durationTicks = frequencyDuration ? frequencyDuration : 256;
+	int waveDuration = (1000000 / kTimerHz) * durationTicks; // microseconds
 
 	while (true) {
 		if (freq > 0) {
@@ -117,7 +178,7 @@ uint16 FreescapeEngine::playSoundDOSSpeaker(uint16 frequencyStart, soundSpeakerF
 	return freq;
 }
 
-void FreescapeEngine::playSoundDOS(soundSpeakerFx *speakerFxInfo, bool sync, Audio::SoundHandle &handle) {
+void SoundDOS::playSoundDOS(soundSpeakerFx *speakerFxInfo) {
 	uint freq = speakerFxInfo->frequencyStart;
 
 	for (int i = 0; i < speakerFxInfo->repetitions; i++) {
@@ -129,8 +190,14 @@ void FreescapeEngine::playSoundDOS(soundSpeakerFx *speakerFxInfo, bool sync, Aud
 		}
 	}
 
-	_mixer->stopHandle(handle);
-	_mixer->playStream(Audio::Mixer::kSFXSoundType, &handle, _speaker, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::NO);
+	_mixer->stopHandle(_soundFxHandle);
+	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, _speaker, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::NO);
+}
+
+Sound *FreescapeEngine::loadSpeakerFxDOS(Common::SeekableReadStream *file, int offsetFreq, int offsetTable, int numberSounds) {
+	SoundDOS *sound = new SoundDOS(_mixer);
+	sound->loadSpeakerFx(file, offsetFreq, offsetTable, numberSounds);
+	return sound;
 }
 
 } // namespace Freescape

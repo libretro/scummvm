@@ -91,7 +91,7 @@ public:
 	 */
 	virtual bool notifyMousePosition(Common::Point &mouse);
 
-	virtual bool showMouse(bool visible) override;
+	bool showMouse(bool visible) override;
 	bool lockMouse(bool lock) override;
 
 	virtual bool saveScreenshot(const Common::Path &filename) const { return false; }
@@ -202,7 +202,6 @@ public:
 	virtual void destroyingWindow() {}
 
 protected:
-	Uint32 _lastFlags;
 	bool _allowWindowSizeReset;
 	int _hintedWidth, _hintedHeight;
 

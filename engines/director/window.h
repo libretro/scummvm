@@ -109,6 +109,7 @@ public:
 	~Window();
 
 	bool render(bool forceRedraw = false, Graphics::ManagedSurface *blitTo = nullptr);
+	void renderChannel(Channel *channel, const Common::Rect &rect, Graphics::ManagedSurface *blitTo = nullptr, bool invert = false);
 	void invertChannel(Channel *channel, const Common::Rect &destRect);
 
 	bool needsAppliedColor(DirectorPlotData *pd);
@@ -177,7 +178,7 @@ public:
 	void freezeLingoState();
 	void thawLingoState();
 	void freezeLingoPlayState();
-	bool thawLingoPlayState();
+	bool requeueLingoPlayState();
 	LingoState *getLastFrozenLingoState() { return _frozenLingoStates.empty() ? nullptr : _frozenLingoStates[_frozenLingoStates.size() - 1]; }
 	void moveLingoState(Window *target);
 
@@ -186,7 +187,7 @@ public:
 	static void inkBlitFrom(Channel *channel, Common::Rect destRect, Graphics::ManagedSurface *blitTo = nullptr);
 
 	// events.cpp
-	bool processEvent(Common::Event &event);
+	bool processSysEvent(Common::Event &event);
 	bool processWMEvent(Graphics::WindowClick click, Common::Event &event);
 	void sendWindowEvent(LEvent event);
 
@@ -220,13 +221,15 @@ public:
 	Graphics::MacWindow *_window;
 	Graphics::MacWindowManager *_wm;
 
-	Common::List<Channel *> _dirtyChannels;
 	TransParams *_puppetTransition;
 
 	MovieReference _nextMovie;
 	Common::List<MovieReference> _movieStack;
 	bool _newMovieStarted;
+	bool _newMovieFirstDraw;
 	bool _skipFrameAdvance;
+	bool _resetScreen;
+	bool _playbackPaused;
 
 private:
 	uint32 _stageColor;

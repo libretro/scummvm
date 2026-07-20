@@ -47,9 +47,10 @@ public:
 	void execute() override;
 	void handleInput(NancyInput &input) override;
 
+	bool isViewportRelative() const override { return true; }
+
 protected:
 	Common::String getRecordTypeName() const override { return "ArcadePuzzle"; }
-	bool isViewportRelative() const override { return true; }
 
 	// ---------- Inner types ----------
 
@@ -66,26 +67,25 @@ protected:
 		bool pendingExplosion = false;  // true while queued in explosion list (not yet erased)
 	};
 
-	// ---------- Subfunction translations ----------
-	void paddleMovement();              // FUN_0044b99b
-	void ballAndCollision();            // FUN_0044bca3
-	void processExplosions();           // FUN_0044f9dd
-	void updateTimer();                 // FUN_00450276
-	void updateScore();                 // FUN_00450354
-	int  getNextLevel() const;          // FUN_0044e1a8
-	void initSublevel();                // FUN_0044d3c7
-	void resetRound();                  // FUN_0044b78e
+	void paddleMovement();
+	void ballAndCollision();
+	void processExplosions();
+	void updateTimer();
+	void updateScore();
+	int  getNextLevel() const;
+	void initSublevel();
+	void resetRound();
 	void wallAndPaddleCollision(int &ballLeft, int &ballTop, int &ballRight, int &ballBottom,
-	                             int &ballCenterX, int &ballCenterY);  // FUN_0044c378
+	                             int &ballCenterX, int &ballCenterY);
 	bool brickCollision(int &ballLeft, int &ballTop, int &ballRight, int &ballBottom,
-	                     int &ballCenterX, int &ballCenterY);            // FUN_0044cad5
-	void applyCollision();              // FUN_0044ced2
+	                     int &ballCenterX, int &ballCenterY);
+	void applyCollision();
 	bool ballExited(int ballLeft, int ballTop, int ballRight, int ballBottom,
-	                int &ballCenterX, int &ballCenterY);                 // FUN_0044d20e
-	void playBrickHitSound();           // FUN_0044fff5
+	                int &ballCenterX, int &ballCenterY);
+	void playBrickHitSound();
 	void addToExplosionList(int brickIdx, uint32 delay);
-	void generateBricks();              // FUN_0044e0b5
-	void buildAngleTable();				// FUN_0044e1a8
+	void generateBricks();
+	void buildAngleTable();
 	void drawBrick(int idx);
 	void eraseBrick(int idx);
 	void drawPaddle();
@@ -95,6 +95,10 @@ protected:
 	void drawDigit(const Common::Rect &destRect, int digit, bool useTimerRects);
 	void drawTimer();
 	void drawScore();
+	// Blit a banner rect centred on the playfield (no-op if empty).
+	void drawBanner(const Common::Rect &srcRect);
+	void drawTryAgain();   // shown during the kLifeLost wait state
+	void drawYouWin();     // shown during the kLevelClear / kGameOverWin wait states
 
 	// ---------- Data (read from stream) ----------
 	Common::Path _imageName;
@@ -116,9 +120,14 @@ protected:
 	Common::Rect _scoreDigitSrc[10]; // 10-frame sprite sheet for score digits (0x125)
 	Common::Rect _timerDigitSrc[10]; // 10-frame sprite sheet for timer digits (0x1c5)
 
-	Common::Rect _timerDisplayDest; // destination on screen for timer (0x265)
+	// Source rect for the timer colon glyph (0x265).
+	Common::Rect _timerColonSrc;
 
-	Common::Rect _lifeSrc[3];       // life indicator source rects (0x275, 0x285, 0x295)
+	// Text banners
+	//   _textSrc[0] — "BLASTED!"   (unused; appears to be leftover art)
+	//   _textSrc[1] — "YOU WIN!"   (shown after a level clear / final win)
+	//   _textSrc[2] — "TRY AGAIN!" (shown after losing a life)
+	Common::Rect _textSrc[3];
 
 	uint32 _stateDelayMs = 0;       // wait-state duration in ms (0x2a5)
 
@@ -144,9 +153,11 @@ protected:
 	bool _wallBounceMode  = false; // true=ball bounces off bottom, false=dies (0x302)
 	bool _cumulativeScore = false; // true=score accumulates across levels (0x303)
 
-	int32 _scoreStepSize  = 1;    // score per brick tier (0x305)
+	int32 _scoreStepSize  = 1;    // score-milestone interval used for the score-tick sound (0x305)
 	int32 _timeBonusMax   = 100;  // max time bonus (0x309)
 	int32 _timeLimitSec   = 60;   // time limit in seconds (0x30d)
+	// Points per brick before the time-bonus multiplier is applied (0x311)
+	int32 _pointsPerBrick = 1;
 
 	// Sounds: 6 permanent + 3 dynamic
 	SoundDescription _sounds[6];         // 0x315..0x43a (bounce, launch, brick hit A/B/C, wall)
@@ -159,15 +170,17 @@ protected:
 
 	// ---------- Runtime state ----------
 
+	// Note: this game has no lives — losing a ball just rewinds to a
+	// "TRY AGAIN" wait state, never to a "you lost" terminal screen.
+	// The only terminal substate is kGameOverWin.
 	enum GameSubState {
 		kPlaying      = 0, // normal gameplay loop
 		kLevelClear   = 1, // play level-clear sound then wait
-		kLifeLost     = 2, // decrement lives, play sound, then wait
+		kLifeLost     = 2, // play TRY AGAIN sound then wait, then reset board
 		kResetBoard   = 3, // init new sublevel
 		kGameOverWin  = 4, // play game-over sound then wait
-		kFinish       = 5, // trigger win/lose scene
-		kWaitTimer    = 6, // wait for _stateWaitUntil
-		kGameOverLose = 7  // wait then finish (no lives left)
+		kFinish       = 5, // trigger win scene
+		kWaitTimer    = 6  // wait for _stateWaitUntil
 	};
 
 	enum BallState {
@@ -185,9 +198,8 @@ protected:
 	bool _lifeLostBall = false;  // 0x24 (set by ball exit, used to stop paddle)
 	bool _gameHalted  = false;   // 0x28
 
-	int _livesLeft = 3;          // remaining lives (starts at 3)
-
 	uint32 _stateWaitUntil = 0;  // absolute ms for wait-state expiry
+
 
 	// Level tracking
 	int  _currentLevel = 0;      // 0xb0

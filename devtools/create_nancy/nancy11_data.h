@@ -30,7 +30,7 @@ const GameConstants _nancy11Constants ={
 	{	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,			// genericEventFlags
 		11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 		21, 22, 23, 24, 25, 26, 27, 28, 29, 30 },
-	20,												// numCursorTypes
+	37,												// numCursorTypes
 	4000,											// logoEndAfter
 	32												// wonGameFlagID
 };
@@ -180,7 +180,9 @@ const Common::Array<Common::Array<ConditionalDialogue>> _nancy11ConditionalDialo
 	{	0, 1559, "NLL59",
 		{ { kEv, 932, true }, { kEv, 967, false }, { kEv, 447, false }, { kEv, 487, false } } },
 	{	0, 1569, "NLL69",
-		{ { kEv, 487, true }, { kIn, 0, true }, { kIn, 1, true } } },
+		{ { kEv, 487, true }, { kIn, 0, true } } },
+	{	0, 1569, "NLL69",
+		{ { kEv, 487, true }, { kIn, 1, true } } },
 	{	0, 1560, "NLL60",
 		{ { kEv, 835, true }, { kEv, 966, false }, { kEv, 446, false }, { kEv, 487, false } } },
 	{	0, 1561, "NLL61",
@@ -258,7 +260,15 @@ const Common::Array<Common::Array<ConditionalDialogue>> _nancy11ConditionalDialo
 	{	0, 5039, "NHIN36",
 		{ { kEv, 290, true }, { kEv, 483, false } } },
 	{	0, 5037, "NLX37",
-		{ { kEv, 894, true }, { kEv, 843, true }, { kEv, 953, true }, { kEv, 949, true }, { kEv, 834, true }, { kEv, 464, false } } },
+		{ { kEv, 894, true }, { kEv, 464, false } } },
+	{	0, 5037, "NLX37",
+		{ { kEv, 843, true }, { kEv, 464, false } } },
+	{	0, 5037, "NLX37",
+		{ { kEv, 953, true }, { kEv, 464, false } } },
+	{	0, 5037, "NLX37",
+		{ { kEv, 949, true }, { kEv, 464, false } } },
+	{	0, 5037, "NLX37",
+		{ { kEv, 834, true }, { kEv, 464, false } } },
 	{	0, 5039, "NHIN39",
 		{ { kEv, 287, true }, { kEv, 481, false } } },
 },
@@ -284,7 +294,9 @@ const Common::Array<Common::Array<ConditionalDialogue>> _nancy11ConditionalDialo
 	{	0, 1984, "NXP84",
 		{ { kEv, 144, true }, { kEv, 494, true }, { kEv, 141, false } } },
 	{	0, 1986, "NXP86",
-		{ { kEv, 145, true }, { kEv, 566, true }, { kEv, 610, true }, { kEv, 140, false } } },
+		{ { kEv, 145, true }, { kEv, 566, true }, { kEv, 140, false } } },
+	{	0, 1986, "NXP86",
+		{ { kEv, 145, true }, { kEv, 610, true }, { kEv, 140, false } } },
 	{	0, 1988, "NXP88",
 		{ { kEv, 145, true }, { kEv, 880, true }, { kEv, 142, false } } },
 },

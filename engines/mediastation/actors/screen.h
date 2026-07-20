@@ -36,6 +36,7 @@ public:
 	ScreenActor() : Actor(kActorTypeScreen) {};
 
 	virtual void readParameter(Chunk &chunk, ActorHeaderSectionType paramType) override;
+	virtual void onEvent(const ActorEvent &event) override;
 
 	uint _cursorResourceId = 0;
 };

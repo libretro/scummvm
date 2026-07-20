@@ -1118,6 +1118,7 @@ protected:
 	GameFileHandler             *_adibou2AppliIniHandler[kAdibou2NbrOfApplications];
 
 	FakeFileHandler             *_adi4TempFileHandler[kAdi4NbrOfTempFiles];
+	TempSpriteHandler           *_adi4TempSpriteHandler;
 	GameFileHandler             *_adi4GameFileHandler[kAdi4NbrOfGameFiles];
 
 	SaveHandler *getHandler(const char *fileName) const override;

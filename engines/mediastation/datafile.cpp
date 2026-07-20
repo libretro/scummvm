@@ -130,16 +130,6 @@ ChannelIdent ParameterReadStream::readTypedChannelIdent() {
 	return readUint32BE();
 }
 
-Polygon ParameterReadStream::readTypedPolygon() {
-	Polygon polygon;
-	uint totalPoints = readTypedUint16();
-	for (uint i = 0; i < totalPoints; ++i) {
-		Common::Point point = readTypedGraphicSize();
-		polygon.push_back(point);
-	}
-	return polygon;
-}
-
 Chunk::Chunk(Common::SeekableReadStream *stream) : _parentStream(stream) {
 	_id = _parentStream->readUint32BE();
 	_length = _parentStream->readUint32LE();
@@ -220,12 +210,12 @@ bool Subfile::atEnd() {
 }
 
 void CdRomStream::openStream(uint streamId) {
-	const StreamInfo &streamInfo = g_engine->streamInfoForIdent(streamId);
+	const StreamInfo &streamInfo = g_engine->getImtGod()->streamInfoForIdent(streamId);
 	if (streamInfo._fileId == 0) {
 		error("%s: Stream %d not found in current title", __func__, streamId);
 	}
 
-	const FileInfo &fileInfo = g_engine->fileInfoForIdent(streamInfo._fileId);
+	const FileInfo &fileInfo = g_engine->getImtGod()->fileInfoForIdent(streamInfo._fileId);
 	if (fileInfo._id == 0) {
 		error("%s: File %s for stream %d not found in current title", __func__, g_engine->formatFileName(streamInfo._fileId).c_str(), streamId);
 	}
@@ -293,7 +283,7 @@ void ImtStreamFeed::readData() {
 	Subfile subfile = _stream->getNextSubfile();
 	Chunk chunk = subfile.nextChunk();
 	g_engine->getDocument()->streamWillRead(_id);
-	g_engine->readHeaderSections(subfile, chunk);
+	g_engine->getImtGod()->readHeaderSections(subfile, chunk);
 	g_engine->getDocument()->streamDidFinish(_id);
 }
 
@@ -312,7 +302,7 @@ void StreamFeedManager::closeStreamFeed(StreamFeed *streamFeed) {
 
 void StreamFeedManager::registerChannelClient(ChannelClient *client) {
 	if (_channelClients.getValOrDefault(client->channelIdent()) != nullptr) {
-		error("%s: Channel %s already has a client", __func__, g_engine->formatAssetNameForChannelIdent(client->channelIdent()).c_str());
+		warning("%s: Channel %s already has a client", __func__, g_engine->formatAssetNameForChannelIdent(client->channelIdent()).c_str());
 	}
 	_channelClients.setVal(client->channelIdent(), client);
 }

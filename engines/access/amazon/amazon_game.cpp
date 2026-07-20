@@ -24,6 +24,7 @@
 #include "access/amazon/amazon_resources.h"
 #include "access/amazon/amazon_room.h"
 #include "access/amazon/amazon_scripts.h"
+#include "access/amazon/amazon_inventory.h"
 
 namespace Access {
 
@@ -97,8 +98,10 @@ void AmazonEngine::configSelect() {
 }
 
 void AmazonEngine::initObjects() {
+	_inventory = new AmazonInventory(this);
 	_room = new AmazonRoom(this);
 	_scripts = new AmazonScripts(this);
+	_video = new VideoPlayer_v1(this);
 
 	_ant = new Ant(this);
 	_cast = new Cast(this);
@@ -216,7 +219,7 @@ void AmazonEngine::loadEstablish(int estabIndex) {
 		int oldGroup = _establishGroup;
 		_establishGroup = 0;
 
-		_establish = _files->loadFile(EST_TABLE[oldGroup]);
+		_establish = _files->loadRawFile(EST_TABLE[oldGroup]);
 		_establishCtrlTblOfs = READ_LE_UINT16(_establish->data());
 
 		int ofs = _establishCtrlTblOfs + (estabIndex * 2);
@@ -235,7 +238,7 @@ void AmazonEngine::loadEstablish(int estabIndex) {
 		_narateFile = 0;
 		_txtPages = 0;
 		_sndSubFile = 0;
-		_establish = _files->loadFile("ETEXT.DAT");
+		_establish = _files->loadRawFile("ETEXT.DAT");
 	}
 }
 
@@ -307,7 +310,7 @@ void AmazonEngine::tileScreen() {
 	if (!_files->existFile(_tileFiles[idx]))
 		return;
 
-	Resource *res = _files->loadFile(_tileFiles[idx]);
+	Resource *res = _files->loadRawFile(_tileFiles[idx]);
 	int x = res->_stream->readSint16LE();
 	int y = res->_stream->readSint16LE();
 	int size = ((x + 2) * y) + 10;
@@ -667,7 +670,7 @@ void AmazonEngine::dead(int deathId) {
 	_events->debounceLeft();
 	_events->zeroKeysActions();
 
-	_sound->_soundTable.push_back(SoundEntry(_files->loadFile(98, 44), 1));
+	_sound->loadAndAddSound(98, 44);
 
 	_screen->clearScreen();
 	_screen->setPanel(3);
@@ -769,7 +772,7 @@ void AmazonEngine::dead(int deathId) {
 	}
 }
 
-void AmazonEngine::synchronize(Common::Serializer &s) {
+Common::Error AmazonEngine::synchronize(Common::Serializer &s) {
 	AccessEngine::synchronize(s);
 
 	s.syncAsSint16LE(_chapter);
@@ -785,6 +788,8 @@ void AmazonEngine::synchronize(Common::Serializer &s) {
 
 	_river->synchronize(s);
 	_ant->synchronize(s);
+
+	return Common::kNoError;
 }
 
 } // End of namespace Amazon

@@ -34,8 +34,9 @@ struct NancyInput;
 namespace UI {
 
 class Scrollbar;
+class ScrollTextBox;
 
-class Textbox : public Nancy::RenderObject, public Misc::HypertextParser {
+class Textbox : public RenderObject, public Misc::HypertextParser {
 public:
 	Textbox();
 	virtual ~Textbox();
@@ -51,12 +52,20 @@ public:
 	void addTextLine(const Common::String &text, uint32 autoClearTime = 0);
 	void setOverrideFont(const uint fontID);
 
+	// Vestigial "full mode" toggle, now a no-op. Kept for the FrameTextBox AR.
+	void setFullMode(bool open, uint32 timeoutMs = 15000);
+	bool isFullMode() const { return false; }
+
 private:
 	uint16 getInnerHeight() const;
 	void onScrollbarMove();
 
 	RenderObject _highlightRObj;
 	Scrollbar *_scrollbar;
+
+	// Nancy 10+ overlay popup the public API forwards to (UICO/SCTB-driven).
+	// The legacy members above are unused in that mode.
+	ScrollTextBox *_scrollTextBox;
 
 	float _scrollbarPos;
 

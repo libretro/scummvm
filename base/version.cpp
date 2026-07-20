@@ -58,8 +58,6 @@ const char gScummVMVersion[] = SCUMMVM_VERSION SCUMMVM_REVISION;
 #if defined(__amigaos4__) || defined(__MORPHOS__)
 static const char *version_cookie __attribute__((used)) = "$VER: ScummVM " SCUMMVM_VERSION SCUMMVM_REVISION " (" AMIGA_DATE ")";
 #endif
-const char gScummVMBuildDate[] = __DATE__ " " __TIME__;
-const char gScummVMVersionDate[] = SCUMMVM_VERSION SCUMMVM_REVISION " (" __DATE__ " " __TIME__ ")";
 const char gScummVMCompiler[] = ""
 #define STR_HELPER(x)	#x
 #define STR(x)		STR_HELPER(x)
@@ -80,7 +78,15 @@ const char gScummVMCompiler[] = ""
 #undef STR
 #undef STR_HELPER
 	;
-const char gScummVMFullVersion[] = "ScummVM " SCUMMVM_VERSION SCUMMVM_REVISION " (" __DATE__ " " __TIME__ ")";
+
+#ifdef RELEASE_BUILD
+	const char gScummVMFullVersion[] = "ScummVM " SCUMMVM_VERSION;
+	const char gScummVMBuildDate[] = SCUMMVM_VERSION;
+#else
+	const char gScummVMFullVersion[] = "ScummVM " SCUMMVM_VERSION SCUMMVM_REVISION " (" __DATE__ " " __TIME__ ")";
+	const char gScummVMBuildDate[] = __DATE__ " " __TIME__;
+#endif
+
 const char gScummVMFeatures[] = ""
 #ifdef TAINTED_BUILD
 	// TAINTED means the build contains engines/subengines not enabled by default
@@ -247,4 +253,9 @@ const char gScummVMFeatures[] = ""
 #ifdef USE_RETROWAVE
 	"RetroWave "
 #endif
+
+#ifdef USE_NFM
+	"Nokturnal nFM "
+#endif
+
 	;

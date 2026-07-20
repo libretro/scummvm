@@ -50,8 +50,8 @@ Common::Path resolvePathWithFuzz(const Common::String &path, const Common::Path 
 Common::Path resolvePartialPathWithFuzz(const Common::String &path, const Common::Path &base, bool directory, const char **exts);
 Common::Path findAbsolutePath(const Common::String &path, bool directory = false, const char **exts = nullptr);
 Common::Path findPath(const Common::Path &path, bool currentFolder = true, bool searchPaths = true, bool directory = false, const char **exts = nullptr);
-Common::Path findPath(const Common::String &path, bool currentFolder = true, bool searchPaths = true, bool directory = false, const char **exts = nullptr);
-Common::Path findMoviePath(const Common::String &path, bool currentFolder = true, bool searchPaths = true);
+Common::Path findPath(const Common::String &path, bool currentFolder = true, bool searchPaths = true, bool directory = false, const char **exts = nullptr, Common::String currentPath_ = "");
+Common::Path findMoviePath(const Common::String &path, bool currentFolder = true, bool searchPaths = true, Common::String currentPath = "");
 Common::Path findXLibPath(const Common::String &path, bool currentFolder = true, bool searchPaths = true);
 Common::Path findAudioPath(const Common::String &path, bool currentFolder = true, bool searchPaths = true);
 
@@ -71,6 +71,8 @@ Common::Path dumpFactoryName(const char *prefix, const char *name, const char *e
 
 bool isButtonSprite(SpriteType spriteType);
 
+uint32 macTimeSeed();
+
 class RandomState {
 public:
 	uint32 _seed;
@@ -81,7 +83,7 @@ public:
 		_seed = _mask = _len = 0;
 	}
 
-	void setSeed(int seed);
+	void setSeed(uint32 seed, bool runInit = true);
 	uint32 getSeed() { return _seed; }
 	int32 getRandom(int32 range);
 

@@ -1,8 +1,31 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.scummvm.scummvm;
 
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.content.res.Resources;
@@ -12,10 +35,6 @@ import android.graphics.Insets;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
-import android.media.AudioAttributes;
-import android.media.AudioFormat;
-import android.media.AudioManager;
-import android.media.AudioTrack;
 import android.view.DisplayCutout;
 import android.view.View;
 import android.view.Window;
@@ -30,7 +49,6 @@ import androidx.annotation.RequiresApi;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -48,8 +66,8 @@ class CompatHelpers {
 			}
 		}
 
-		@RequiresApi(android.os.Build.VERSION_CODES.JELLY_BEAN)
-		@SuppressWarnings("deprecation")
+		//@RequiresApi(android.os.Build.VERSION_CODES.JELLY_BEAN)
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
 		private static class HideSystemStatusBarJellyBean {
 			public static void hide(final Window window) {
 				View view = window.getDecorView();
@@ -60,7 +78,7 @@ class CompatHelpers {
 		}
 
 		@RequiresApi(android.os.Build.VERSION_CODES.KITKAT)
-		@SuppressWarnings("deprecation")
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
 		private static class HideSystemStatusBarKitKat {
 			public static void hide(final Window window) {
 				View view = window.getDecorView();
@@ -76,6 +94,9 @@ class CompatHelpers {
 		private static class HideSystemStatusBarR {
 			public static void hide(final Window window) {
 				WindowInsetsController insetsController = window.getInsetsController();
+				if (insetsController == null) {
+					return;
+				}
 				insetsController.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
 				insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
 			}
@@ -106,7 +127,7 @@ class CompatHelpers {
 		}
 
 		@RequiresApi(android.os.Build.VERSION_CODES.LOLLIPOP)
-		@SuppressWarnings("deprecation")
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
 		private static class OnApplyWindowInsetsListenerLollipop implements View.OnApplyWindowInsetsListener {
 			final private SystemInsetsListener l;
 
@@ -115,6 +136,7 @@ class CompatHelpers {
 			}
 
 			@Override
+			@NonNull
 			public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
 				// No system gestures inset before Android Q
 				int[] gestureInsets = new int[] {
@@ -137,7 +159,7 @@ class CompatHelpers {
 		}
 
 		@RequiresApi(android.os.Build.VERSION_CODES.P)
-		@SuppressWarnings("deprecation")
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
 		private static class OnApplyWindowInsetsListenerP implements View.OnApplyWindowInsetsListener {
 			final private SystemInsetsListener l;
 
@@ -146,7 +168,8 @@ class CompatHelpers {
 			}
 
 			@Override
-			public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+			@NonNull
+			public WindowInsets onApplyWindowInsets(@NonNull View v, WindowInsets insets) {
 				// No system gestures inset before Android Q
 				int[] gestureInsets = new int[] {
 					insets.getStableInsetLeft(),
@@ -178,7 +201,7 @@ class CompatHelpers {
 		}
 
 		@RequiresApi(android.os.Build.VERSION_CODES.Q)
-		@SuppressWarnings("deprecation")
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
 		private static class OnApplyWindowInsetsListenerQ implements View.OnApplyWindowInsetsListener {
 			final private SystemInsetsListener l;
 
@@ -187,7 +210,8 @@ class CompatHelpers {
 			}
 
 			@Override
-			public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+			@NonNull
+			public WindowInsets onApplyWindowInsets(@NonNull View v, WindowInsets insets) {
 				Insets insetsStruct = insets.getSystemGestureInsets();
 				int[] gestureInsets = new int[] {
 					insetsStruct.left,
@@ -228,7 +252,8 @@ class CompatHelpers {
 			}
 
 			@Override
-			public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+			@NonNull
+			public WindowInsets onApplyWindowInsets(@NonNull View v, WindowInsets insets) {
 				Insets insetsStruct = insets.getInsetsIgnoringVisibility(WindowInsets.Type.systemGestures());
 				int[] gestureInsets = new int[] {
 					insetsStruct.left,
@@ -261,86 +286,6 @@ class CompatHelpers {
 		}
 	}
 
-	static class AudioTrackCompat {
-		public static class AudioTrackCompatReturn {
-			public AudioTrack audioTrack;
-			public int bufferSize;
-		}
-
-		public static AudioTrackCompatReturn make(int sample_rate, int buffer_size) {
-			if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-				return AudioTrackCompatM.make(sample_rate, buffer_size);
-			} else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-				return AudioTrackCompatLollipop.make(sample_rate, buffer_size);
-			} else {
-				return AudioTrackCompatOld.make(sample_rate, buffer_size);
-			}
-		}
-
-		/**
-		 * Support for Android KitKat or lower
-		 */
-		@SuppressWarnings("deprecation")
-		private static class AudioTrackCompatOld {
-			public static AudioTrackCompatReturn make(int sample_rate, int buffer_size) {
-				AudioTrackCompatReturn ret = new AudioTrackCompatReturn();
-				ret.audioTrack = new AudioTrack(
-					AudioManager.STREAM_MUSIC,
-					sample_rate,
-					AudioFormat.CHANNEL_OUT_STEREO,
-					AudioFormat.ENCODING_PCM_16BIT,
-					buffer_size,
-					AudioTrack.MODE_STREAM);
-				ret.bufferSize = buffer_size;
-				return ret;
-			}
-		}
-
-		@RequiresApi(android.os.Build.VERSION_CODES.LOLLIPOP)
-		private static class AudioTrackCompatLollipop {
-			public static AudioTrackCompatReturn make(int sample_rate, int buffer_size) {
-				AudioTrackCompatReturn ret = new AudioTrackCompatReturn();
-				ret.audioTrack = new AudioTrack(
-					new AudioAttributes.Builder()
-						.setUsage(AudioAttributes.USAGE_GAME)
-						.setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-						.build(),
-					new AudioFormat.Builder()
-						.setSampleRate(sample_rate)
-						.setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-						.setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build(),
-					buffer_size,
-					AudioTrack.MODE_STREAM,
-					AudioManager.AUDIO_SESSION_ID_GENERATE);
-				ret.bufferSize = buffer_size;
-				return ret;
-			}
-		}
-
-		@RequiresApi(android.os.Build.VERSION_CODES.M)
-		private static class AudioTrackCompatM {
-			public static AudioTrackCompatReturn make(int sample_rate, int buffer_size) {
-				AudioTrackCompatReturn ret = new AudioTrackCompatReturn();
-				ret.audioTrack = new AudioTrack(
-					new AudioAttributes.Builder()
-						.setUsage(AudioAttributes.USAGE_GAME)
-						.setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-						.build(),
-					new AudioFormat.Builder()
-						.setSampleRate(sample_rate)
-						.setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-						.setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build(),
-					buffer_size,
-					AudioTrack.MODE_STREAM,
-					AudioManager.AUDIO_SESSION_ID_GENERATE);
-				// Keep track of the actual obtained audio buffer size, if supported.
-				// We just requested 16 bit PCM stereo pcm so there are 4 bytes per frame.
-				ret.bufferSize = ret.audioTrack.getBufferSizeInFrames() * 4;
-				return ret;
-			}
-		}
-	}
-
 	static class AccessibilityEventConstructor {
 		public static AccessibilityEvent make(int eventType) {
 			if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
@@ -350,7 +295,7 @@ class CompatHelpers {
 			}
 		}
 
-		@SuppressWarnings("deprecation")
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
 		private static class AccessibilityEventConstructorOld {
 			public static AccessibilityEvent make(int eventType) {
 				return AccessibilityEvent.obtain(eventType);
@@ -383,7 +328,7 @@ class CompatHelpers {
 			// No support for older versions
 		}
 
-		@SuppressWarnings("deprecation")
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
 		private static class ShortcutCreatorOld {
 			public static Intent createShortcutResultIntent(@NonNull Context context, String ignoredId, @NonNull Intent intent, @NonNull String label, @Nullable Drawable icon, @DrawableRes int fallbackIconId) {
 				Intent result = new Intent();
@@ -459,21 +404,19 @@ class CompatHelpers {
 				}
 				List<ShortcutInfo> shortcuts = shortcutManager.getDynamicShortcuts();
 				// Sort shortcuts by rank, timestamp and id
-				Collections.sort(shortcuts, new Comparator<ShortcutInfo>() {
-					@Override
-					public int compare(ShortcutInfo a, ShortcutInfo b) {
-						int ret = Integer.compare(a.getRank(), b.getRank());
-						if (ret != 0) {
-							return ret;
-						}
-
-						ret = Long.compare(a.getLastChangedTimestamp(), b.getLastChangedTimestamp());
-						if (ret != 0) {
-							return ret;
-						}
-
-						return a.getId().compareTo(b.getId());
+				//noinspection ComparatorCombinators
+				Collections.sort(shortcuts, (ShortcutInfo a, ShortcutInfo b) -> {
+					int ret = Integer.compare(a.getRank(), b.getRank());
+					if (ret != 0) {
+						return ret;
 					}
+
+					ret = Long.compare(a.getLastChangedTimestamp(), b.getLastChangedTimestamp());
+					if (ret != 0) {
+						return ret;
+					}
+
+					return a.getId().compareTo(b.getId());
 				});
 
 				// In old Android versions, only 4 shortcuts are displayed but 5 maximum are supported
@@ -522,10 +465,15 @@ class CompatHelpers {
 
 		private static Bitmap drawableToBitmap(@NonNull Drawable drawable) {
 			// We resize to 128x128 to avoid having too big bitmaps for Binder
+			Bitmap.Config config;
 			if (drawable instanceof BitmapDrawable) {
 				Bitmap bm = ((BitmapDrawable)drawable).getBitmap();
 				bm = Bitmap.createScaledBitmap(bm, 128, 128, true);
-				return bm.copy(bm.getConfig(), false);
+				config = bm.getConfig();
+				if (config == null) {
+					config = Bitmap.Config.ARGB_8888;
+				}
+				return bm.copy(config, false);
 			}
 
 			Bitmap bitmap = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888);
@@ -534,7 +482,11 @@ class CompatHelpers {
 			drawable.draw(canvas);
 
 			// Create an immutable bitmap
-			return bitmap.copy(bitmap.getConfig(), false);
+			config = bitmap.getConfig();
+			if (config == null) {
+				config = Bitmap.Config.ARGB_8888;
+			}
+			return bitmap.copy(config, false);
 		}
 	}
 
@@ -555,11 +507,61 @@ class CompatHelpers {
 			}
 		}
 
-		@SuppressWarnings("deprecation")
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
 		private static class DrawableCompatOld {
 			@SuppressLint("UseCompatLoadingForDrawables")
 			public static Drawable getDrawable(@NonNull Context context, @DrawableRes int id) throws Resources.NotFoundException {
 				return context.getResources().getDrawable(id);
+			}
+		}
+	}
+
+	static class ReceiverCompat {
+
+		@SuppressWarnings("UnusedReturnValue")
+		public static Intent registerReceiver(Context context, BroadcastReceiver receiver, IntentFilter filter) {
+			if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+				return ReceiverCompat.ReceiverCompatTiramisu.registerReceiver(context, receiver, filter);
+			} else {
+				return ReceiverCompat.ReceiverCompatOld.registerReceiver(context, receiver, filter);
+			}
+		}
+
+		@RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)
+		private static class ReceiverCompatTiramisu {
+			public static Intent registerReceiver(Context context, BroadcastReceiver receiver, IntentFilter filter) {
+				return context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+			}
+		}
+
+		private static class ReceiverCompatOld {
+			@SuppressLint("UnspecifiedRegisterReceiverFlag")
+			public static Intent registerReceiver(Context context, BroadcastReceiver receiver, IntentFilter filter) {
+				return context.registerReceiver(receiver, filter);
+			}
+		}
+	}
+
+	static class IntentCompat {
+		public static <T extends android.os.Parcelable> T getParcelableExtra(Intent i, String extra, Class<T> clazz) {
+			if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+				return IntentCompat.IntentCompatTiramisu.getParcelableExtra(i, extra, clazz);
+			} else {
+				return IntentCompat.IntentCompatOld.getParcelableExtra(i, extra, clazz);
+			}
+		}
+
+		@RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)
+		private static class IntentCompatTiramisu {
+			public static <T extends android.os.Parcelable> T getParcelableExtra(Intent i, String extra, Class<T> clazz) {
+				return i.getParcelableExtra(extra, clazz);
+			}
+		}
+
+		@SuppressWarnings({"deprecation", "RedundantSuppression"})
+		private static class IntentCompatOld {
+			public static <T extends android.os.Parcelable> T getParcelableExtra(Intent i, String extra, Class<T> ignoredClazz) {
+				return i.getParcelableExtra(extra);
 			}
 		}
 	}

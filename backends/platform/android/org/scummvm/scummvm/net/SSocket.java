@@ -1,6 +1,29 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.scummvm.scummvm.net;
 
 import android.util.Log;
+
+import androidx.annotation.Keep;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,7 +45,9 @@ import java.util.Locale;
 
 import javax.net.ssl.SSLSocketFactory;
 
-/** @noinspection unused*/
+/** @noinspection unused
+ * Used from JNI
+ */
 public class SSocket {
 	final static String LOG_TAG = "ScummVM";
 
@@ -30,6 +55,10 @@ public class SSocket {
 
 	protected int _buffer = -2;
 
+	/** @noinspection unused
+	 * Called from JNI
+	 */
+	@Keep
 	public SSocket(String url_) {
 		final URL url;
 		try {
@@ -178,6 +207,10 @@ public class SSocket {
 		}
 	}
 
+	/** @noinspection unused
+	 * Called from JNI
+	 */
+	@Keep
 	public int ready() {
 		if (_buffer != -2) {
 			// We have at least one byte or an EOF
@@ -198,6 +231,10 @@ public class SSocket {
 		}
 	}
 
+	/** @noinspection unused
+	 * Called from JNI
+	 */
+	@Keep
 	public int send(byte[] data) {
 		try {
 			// Setup unlimited read timeout to allow for SSL exchanges to work
@@ -211,6 +248,10 @@ public class SSocket {
 		}
 	}
 
+	/** @noinspection unused
+	 * Called from JNI
+	 */
+	@Keep
 	public int recv(byte[] data) {
 		if (data.length == 0) {
 			return 0;
@@ -256,6 +297,10 @@ public class SSocket {
 		}
 	}
 
+	/** @noinspection unused
+	 * Called from JNI
+	 */
+	@Keep
 	public void close() {
 		try {
 			_socket.close();

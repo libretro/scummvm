@@ -343,6 +343,20 @@ const ExtraGuiOptions AdvancedMetaEngineBase::getExtraGuiOptions(const Common::S
 	return options;
 }
 
+Common::String AdvancedMetaEngineBase::getGameId(const char *target) const {
+	// Store a copy of the active domain
+	Common::String currDomain = ConfMan.getActiveDomainName();
+
+	// Switch to the given target domain and get it's game Id
+	ConfMan.setActiveDomain(target);
+	Common::String gameId = ConfMan.get("gameid");
+
+	// Switch back to the original domain and return the game Id
+	ConfMan.setActiveDomain(currDomain);
+
+	return gameId;
+}
+
 Common::Error AdvancedMetaEngineDetectionBase::identifyGame(DetectedGame &game, const void **descriptor) {
 	Common::Language language = Common::UNK_LANG;
 	Common::Platform platform = Common::kPlatformUnknown;
@@ -718,6 +732,20 @@ ADDetectedGames AdvancedMetaEngineDetectionBase::detectGame(const Common::FSNode
 
 	preprocessDescriptions();
 
+	// Early rejection: if none of the file names referenced by this engine's
+	// detection entries exist in the game folder, there is no chance of a match.
+	bool anyFileFound = false;
+	for (auto it = allFiles.begin(); it != allFiles.end(); ++it) {
+		if (_fileNamesMap.contains(it->_key)) {
+			anyFileFound = true;
+			break;
+		}
+	}
+	if (!anyFileFound) {
+		debugC(3, kDebugGlobalDetection, "Skipping engine '%s': no matching file names in directory", getName());
+		return matched;
+	}
+
 	// Check which files are included in some ADGameDescription *and* whether
 	// they are present. Compute MD5s and file sizes for the available files.
 	for (descPtr = _gameDescriptors; ((const ADGameDescription *)descPtr)->gameId != nullptr; descPtr += _descItemSize) {
@@ -815,7 +843,7 @@ ADDetectedGames AdvancedMetaEngineDetectionBase::detectGame(const Common::FSNode
 			curFilesMatched++;
 		}
 
-		debugC(3, kDebugGlobalDetection, "Game '%s' matched %d files all files present: %d has unknown files: %d, total files: %d",
+		debugC(5, kDebugGlobalDetection, "Game '%s' matched %d files all files present: %d has unknown files: %d, total files: %d",
 				g->gameId, curFilesMatched, allFilesPresent, game.hasUnknownFiles, numFilesInEntry);
 
 		// We found at least one entry with all required files present.
@@ -1004,6 +1032,27 @@ void AdvancedMetaEngineDetectionBase::preprocessDescriptions() {
 	for (const byte *descPtr = _gameDescriptors; ((const ADGameDescription *)descPtr)->gameId != nullptr; descPtr += _descItemSize) {
 		const ADGameDescription *g = (const ADGameDescription *)descPtr;
 
+		// Collect all unique file names for early rejection
+		for (const ADGameFileDescription *fileDesc = g->filesDescriptions; fileDesc->fileName; fileDesc++) {
+			Common::String fname = fileDesc->fileName;
+
+			// For archive entries, extract the archive name
+			if (gameFileToMD5Props(fileDesc, g->flags) & kMD5Archive) {
+				Common::StringTokenizer tok(fname, ":");
+				tok.nextToken(); // skip archive type
+				fname = tok.nextToken(); // archive name
+			}
+
+			// For paths with directory components, extract the leaf filename
+			// unless kADFlagMatchFullPaths is set
+			if (!(_flags & kADFlagMatchFullPaths) && fname.contains('/')) {
+				fname = Common::Path(fname).baseName();
+			}
+
+			_fileNamesMap.setVal(Common::Path(fname, fname.contains('/')
+				? '/' : Common::Path::kNoSeparator), true);
+		}
+
 		// Scan for potential directory globs
 		for (const ADGameFileDescription *fileDesc = g->filesDescriptions; fileDesc->fileName; fileDesc++) {
 			if (strchr(fileDesc->fileName, '/')) {
@@ -1147,17 +1196,12 @@ Common::Error AdvancedMetaEngineBase::createInstance(OSystem *syst, Engine **eng
 	// file transparently.
 	ConfMan.setAndFlush("guioptions", gameDescriptor.getGUIOptions());
 
-	bool showTestingWarning = false;
-
-#ifdef RELEASE_BUILD
-	showTestingWarning = true;
-#endif
-
-	if (((gameDescriptor.gameSupportLevel == kUnstableGame
-			|| (gameDescriptor.gameSupportLevel == kTestingGame
-					&& showTestingWarning)))
+	if (gameDescriptor.gameSupportLevel == kUnstableGame
 			&& !Engine::warnUserAboutUnsupportedGame())
 		return Common::kUserCanceled;
+
+	if (gameDescriptor.gameSupportLevel == kTestingGame)
+		Engine::warnUserAboutTestingMode();
 
 	if (gameDescriptor.gameSupportLevel == kWarningGame
 			&& !Engine::warnUserAboutUnsupportedGame(gameDescriptor.extra))

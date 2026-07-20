@@ -53,26 +53,25 @@ public:
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
 	virtual void draw(DisplayContext &displayContext) override;
 	virtual uint16 findActorToAcceptKeyboardEvents(uint16 charCode, uint16 eventMask, MouseActorState &state) override;
-	virtual void keyboardEvent(const Common::Event &event) override;
+	virtual void keyboardEvent(const KeyboardEvent &event) override;
 
 private:
-	static const uint CURSOR_CHAR_ID = 0x104;
 	bool _isEditable = false;
 	Common::String _text;
 	uint _maxLength = 0;
 	FontActor *_fontActor = nullptr;
 	TextJustification _justification = kTextJustificationLeft;
 	TextPosition _position = kTextPositionTop;
-	Common::HashMap<uint, uint> _acceptedChars;
 	uint _cursorPosition = 0;
-	uint _pressedCharCode = 0;
+	uint _lastCharCode = 0;
 	bool _cursorIsVisible = false;
 	bool _constrainToWidth = false;
 	bool _overwriteMode = false;
+	// This lets us transparently convert lowercase to uppercase, for instance.
+	Common::HashMap<uint, uint> _standardizedChars;
 
 	void setText();
 	void addAcceptedChars(uint firstCharCode, uint lastCharCode, uint charCodeOffset = 0);
-	bool hasScriptResponse(EventType eventType, const ScriptValue &arg) const;
 
 	int16 calcStartingXPosition();
 	int16 calcBaseline();

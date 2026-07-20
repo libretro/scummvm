@@ -28,8 +28,6 @@
 
 namespace Colony {
 
-namespace {
-
 const uint32 kSaveVersion = 1;
 const uint32 kMaxSaveObjects = 4096;
 const uint32 kMaxSavePatches = 100;
@@ -274,12 +272,15 @@ bool findInvalidActiveObjectSlot(const Common::Array<Thing> &objects, uint32 &in
 	return false;
 }
 
-} // anonymous namespace
-
 bool ColonyEngine::hasFeature(EngineFeature f) const {
 	return f == kSupportsReturnToLauncher ||
 		f == kSupportsLoadingDuringRuntime ||
-		f == kSupportsSavingDuringRuntime;
+		f == kSupportsSavingDuringRuntime ||
+		// Skip the OpenGL backend's FBO compositing pass: render directly
+		// to the default framebuffer (Freescape's pattern, freescape.cpp:
+		// 1170). Side effect: the user-facing screenshot hotkey now reads
+		// the correct buffer because there's no FBO bound between frames.
+		f == kSupportsArbitraryResolutions;
 }
 
 bool ColonyEngine::canSaveGameStateCurrently(Common::U32String *msg) {
@@ -370,6 +371,14 @@ Common::Error ColonyEngine::saveGameStream(Common::WriteStream *stream, bool isA
 			stream->writeByte(_robotArray[x][y]);
 			stream->writeByte(_foodArray[x][y]);
 			stream->writeByte(_dirXY[x][y]);
+		}
+	}
+
+	// Minimap fog-of-war, all levels
+	for (uint lv = 0; lv < ARRAYSIZE(_visited); lv++) {
+		for (int y = 0; y < 32; y++) {
+			for (int x = 0; x < 32; x++)
+				stream->writeByte(_visited[lv][x][y] ? 1 : 0);
 		}
 	}
 
@@ -483,6 +492,14 @@ Common::Error ColonyEngine::loadGameStream(Common::SeekableReadStream *stream) {
 		}
 	}
 
+	// Minimap fog-of-war, all levels
+	for (uint lv = 0; lv < ARRAYSIZE(_visited); lv++) {
+		for (int y = 0; y < 32; y++) {
+			for (int x = 0; x < 32; x++)
+				_visited[lv][x][y] = stream->readByte() != 0;
+		}
+	}
+
 	const uint32 objectCount = stream->readUint32LE();
 	if (objectCount > kMaxSaveObjects)
 		return makeCorruptSaveError(Common::String::format("object count %u exceeds max %u", objectCount, kMaxSaveObjects).c_str());
@@ -576,6 +593,8 @@ Common::Error ColonyEngine::loadGameStream(Common::SeekableReadStream *stream) {
 	_lastWarningChimeTime = 0;
 	_battledx = _width / 59;
 	updateViewportLayout();
+	if (_gameMode == kModeBattle)
+		normalizeBattlePlayerPosition();
 
 	return Common::kNoError;
 }

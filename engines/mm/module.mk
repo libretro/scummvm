@@ -4,6 +4,7 @@ MODULE_OBJS := \
 	metaengine.o \
 	mm.o \
 	shared/utils/bitmap_font.o \
+	shared/classic/pc_speaker.o \
 	shared/utils/strings.o \
 	shared/utils/strings_data.o \
 	shared/utils/xeen_font.o \
@@ -182,6 +183,7 @@ MODULE_OBJS += \
 	mm1/views_enh/text_entry.o \
 	mm1/views_enh/text_view.o \
 	mm1/views_enh/title.o \
+	mm1/views_enh/town_select.o \
 	mm1/views_enh/trade.o \
 	mm1/views_enh/trap.o \
 	mm1/views_enh/unlock.o \

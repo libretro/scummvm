@@ -226,7 +226,7 @@ void DrillerEngine::loadAssetsAmigaFullGame() {
 		loadGlobalObjects(&file, 0xbd62, 8);
 		load8bitBinary(&file, 0x29c16, 16);
 		loadPalettes(&file, 0x297d4);
-		loadSoundsFx(&file, 0x30e80, 25);
+		_sound = loadSoundsFx(&file, 0x30e80, 25);
 
 		byte *palette = getPaletteFromNeoImage(&file, 0x137f4);
 		loadRigSprites(&file, 0x2407A);
@@ -282,7 +282,7 @@ void DrillerEngine::loadAssetsAmigaFullGame() {
 		if (!file.isOpen())
 			error("Failed to open 'soundfx' executable for Amiga");
 
-		loadSoundsFx(&file, 0, 25);
+		_sound = loadSoundsFx(&file, 0, 25);
 	} else
 		error("Invalid or unknown Amiga release");
 
@@ -374,7 +374,7 @@ void DrillerEngine::loadAssetsAmigaDemo() {
 	if (!file.isOpen())
 		error("Failed to open 'soundfx' executable for Amiga");
 
-	loadSoundsFx(&file, 0, 25);
+	_sound = loadSoundsFx(&file, 0, 25);
 
 	_indicators.push_back(loadBundledImage("driller_tank_indicator_0"));
 	_indicators.push_back(loadBundledImage("driller_tank_indicator_1"));
@@ -543,9 +543,7 @@ void DrillerEngine::drawAmigaAtariSTUI(Graphics::Surface *surface) {
 	// then scrolling N/E/S/W needle (SPRCOG) drawn on top one line below.
 	// Background at x=$32→48, y=$8E=142. Needle at y=$8E+1=143.
 	if (!_compassYawFrames.empty()) {
-		float yaw = _yaw;
-		if (yaw < 0) yaw += 360;
-		if (yaw >= 360) yaw -= 360;
+		float yaw = compassYaw();
 		int rot = ((int)(yaw / 5.0f)) % 72;
 		surface->copyRectToSurfaceWithKey(*_compassYawFrames[rot], 49, 143,
 			Common::Rect(_compassYawFrames[rot]->w, _compassYawFrames[rot]->h), transparent);

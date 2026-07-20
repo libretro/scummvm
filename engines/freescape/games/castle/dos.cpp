@@ -20,10 +20,12 @@
  */
 
 #include "common/file.h"
+#include "common/config-manager.h"
 #include "common/memstream.h"
 
 #include "freescape/freescape.h"
 #include "freescape/games/castle/castle.h"
+#include "freescape/games/castle/opl.music.h"
 #include "freescape/language/8bitDetokeniser.h"
 
 namespace Freescape {
@@ -153,7 +155,7 @@ void CastleEngine::loadAssetsDOSFullGame() {
 		file.open("CME.EXE");
 		stream = unpackEXE(file);
 		if (stream) {
-			loadSpeakerFxDOS(stream, 0x636d + 0x200, 0x63ed + 0x200, 30);
+			_sound = loadSpeakerFxDOS(stream, 0x636d + 0x200, 0x63ed + 0x200, 30);
 
 			stream->seek(0x197c0);
 			_endGameBackgroundFrame = loadFrameFromPlanes(stream, 112, 108);
@@ -301,6 +303,9 @@ void CastleEngine::loadAssetsDOSFullGame() {
 		stream = decryptFile("CMEDF");
 		load8bitBinary(stream, 0, 16);
 		delete stream;
+
+		if (ConfMan.getBool("opl_music"))
+			_playerMusic = new CastleOPLMusicPlayer();
 	} else
 		error("Not implemented yet");
 
@@ -320,7 +325,7 @@ void CastleEngine::loadAssetsDOSDemo() {
 		file.open("CMDE.EXE");
 		stream = unpackEXE(file);
 		if (stream) {
-			loadSpeakerFxDOS(stream, 0x636d + 0x200, 0x63ed + 0x200, 30);
+			_sound = loadSpeakerFxDOS(stream, 0x636d + 0x200, 0x63ed + 0x200, 30);
 
 			stream->seek(0x197c0 - 0x2a0);
 			_endGameBackgroundFrame = loadFrameFromPlanes(stream, 112, 108);
@@ -433,6 +438,9 @@ void CastleEngine::loadAssetsDOSDemo() {
 		stream = decryptFile("CDEDF");
 		load8bitBinary(stream, 0, 16);
 		delete stream;
+
+		if (ConfMan.getBool("opl_music"))
+			_playerMusic = new CastleOPLMusicPlayer();
 	} else
 		error("Not implemented yet");
 

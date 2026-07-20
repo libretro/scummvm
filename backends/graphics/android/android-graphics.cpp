@@ -219,7 +219,7 @@ float AndroidGraphicsManager::getHiDPIScreenFactor() const {
 }
 
 bool AndroidGraphicsManager::loadVideoMode(uint requestedWidth, uint requestedHeight, bool resizable, int antialiasing) {
-	ENTER("%d, %d, %s", requestedWidth, requestedHeight, format.toString().c_str());
+	ENTER("%d, %d, %d, %d", requestedWidth, requestedHeight, resizable, antialiasing);
 
 	// As GLES2 provides FBO, OpenGL graphics manager must ask us for a resizable surface
 	assert(resizable);
@@ -265,7 +265,7 @@ void AndroidGraphicsManager::syncVirtkeyboardState(bool virtkeybd_on) {
 }
 
 void AndroidGraphicsManager::touchControlInitSurface(const Graphics::ManagedSurface &surf) {
-	if (_touchcontrols->getWidth() == surf.w && _touchcontrols->getHeight() == surf.h) {
+	if (_touchcontrols->getWidth() == (uint)surf.w && _touchcontrols->getHeight() == (uint)surf.h) {
 		return;
 	}
 

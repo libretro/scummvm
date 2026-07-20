@@ -52,13 +52,13 @@ const char *actorTypeToStr(ActorType type) {
 		return "Cursor";
 	case kActorTypeSprite:
 		return "Sprite";
-	case kActorTypeLKZazu:
-		return "LKZazu";
-	case kActorTypeLKConstellations:
-		return "LKConstellations";
+	case kActorTypeStalkingZazu:
+		return "StalkingZazu";
+	case kActorTypeDotGame:
+		return "DotGame";
 	case kActorTypeDocument:
 		return "Document";
-	case kActorTypeImageSet:
+	case kActorTypeDiskImage:
 		return "ImageSet";
 	case kActorTypeMovie:
 		return "Movie";
@@ -89,12 +89,44 @@ const char *actorTypeToStr(ActorType type) {
 	}
 }
 
-void Actor::setId(uint id) {
-	_id = id;
-	updateDebugName();
+void Polygon::loadFromParameterStream(Chunk & chunk) {
+	uint16 totalPoints = chunk.readTypedUint16();
+	for (uint16 i = 0; i < totalPoints; i++) {
+		Common::Point point = chunk.readTypedPoint();
+		_polygon.push_back(point);
+	}
 }
 
-void Actor::updateDebugName() {
+bool Polygon::containsPoint(const Common::Point &point) const {
+	// We're in the bbox, but there might not be a polygon to check.
+	if (_polygon.empty()) {
+		return true;
+	}
+
+	// Each edge is checked whether it cuts the outgoing stream from the point.
+	int rcross = 0; // Number of right-side overlaps
+	for (unsigned i = 0; i < _polygon.size(); i++) {
+		const Common::Point &edgeStart = _polygon[i];
+		const Common::Point &edgeEnd = _polygon[(i + 1) % _polygon.size()];
+
+		// A vertex is a point? Then it lies on one edge of the polygon.
+		if (point == edgeStart)
+			return true;
+
+		if ((edgeStart.y > point.y) != (edgeEnd.y > point.y)) {
+			int term1 = (edgeStart.x - point.x) * (edgeEnd.y - point.y) - (edgeEnd.x - point.x) * (edgeStart.y - point.y);
+			int term2 = (edgeEnd.y - point.y) - (edgeStart.y - edgeEnd.y);
+			if ((term1 > 0) == (term2 >= 0))
+				rcross++;
+		}
+	}
+
+	// The point is strictly inside the polygon if and only if the number of overlaps is odd.
+	return ((rcross % 2) == 1);
+}
+
+void Actor::setId(uint id) {
+	_id = id;
 	_debugName = g_engine->formatActorName(this);
 }
 
@@ -117,6 +149,7 @@ void Actor::initFromParameterStream(Chunk &chunk) {
 	ActorHeaderSectionType paramType = kActorHeaderEmptySection;
 	while (true) {
 		paramType = static_cast<ActorHeaderSectionType>(chunk.readTypedUint16());
+		debugC(5, kDebugLoading, "[%s] %s: Got section type 0x%x", debugName(), __func__, static_cast<uint>(paramType));
 		if (paramType == 0) {
 			break;
 		} else {
@@ -134,13 +167,17 @@ void Actor::readParameter(Chunk &chunk, ActorHeaderSectionType paramType) {
 		// This is not a hashmap because we don't want to have to hash ScriptValues.
 		for (ScriptResponse *existingScriptResponse : scriptResponsesForType) {
 			if (existingScriptResponse->_argumentValue == scriptResponse->_argumentValue) {
-				error("[%s] %s: Script response for %s (%s) already exists", debugName(), __func__,
+				warning("[%s] %s: Script response for %s (%s) already exists", debugName(), __func__,
 					eventTypeToStr(scriptResponse->_type), scriptResponse->_argumentValue.getDebugString().c_str());
 			}
 		}
 		scriptResponsesForType.push_back(scriptResponse);
 		break;
 	}
+
+	case kActorHeaderActorName:
+		_debugName = chunk.readTypedString();
+		break;
 
 	default:
 		error("[%s] %s: Got unimplemented actor parameter 0x%x", debugName(), __func__, static_cast<uint>(paramType));
@@ -160,23 +197,37 @@ ScriptValue Actor::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue>
 	return ScriptValue();
 }
 
-void Actor::processTimeScriptResponses() {
-	// TODO: Replace with a queue.
-	uint currentTime = g_system->getMillis();
-	const Common::Array<ScriptResponse *> &_timeResponses = _scriptResponses.getValOrDefault(kTimerEvent);
+void Actor::onEvent(const ActorEvent &event) {
+	warning("[%s] %s: No handler for engine event %s", debugName(), __func__, eventTypeToStr(event.type));
+}
+
+ScriptResponse *Actor::findNextTimeScriptResponseAfter(uint32 after) const {
+	const Common::Array<ScriptResponse *> &_timeResponses = _scriptResponses.getValOrDefault(kTimerScriptEvent);
 	for (ScriptResponse *timeEvent : _timeResponses) {
-		// Indeed float, not time.
 		double timeEventInFractionalSeconds = timeEvent->_argumentValue.asFloat();
-		uint timeEventInMilliseconds = timeEventInFractionalSeconds * 1000;
-		bool timeEventAlreadyProcessed = timeEventInMilliseconds < _lastProcessedTime;
-		bool timeEventNeedsToBeProcessed = timeEventInMilliseconds < currentTime - _startTime;
-		if (!timeEventAlreadyProcessed && timeEventNeedsToBeProcessed) {
-			debugC(5, kDebugScript, "%s: Running On Time response for time %d ms (lastProcessedTime: %d, currentTime: %d)",
-				__func__, timeEventInMilliseconds, _lastProcessedTime, currentTime);
-			timeEvent->execute(_id);
+		uint32 timeEventInMilliseconds = static_cast<uint32>(timeEventInFractionalSeconds * 1000);
+		if (timeEventInMilliseconds >= after) {
+			return timeEvent;
 		}
 	}
-	_lastProcessedTime = currentTime - _startTime;
+
+	return nullptr;
+}
+
+bool Actor::hasScriptResponse(EventType eventType, const ScriptValue &arg) const {
+	const Common::Array<ScriptResponse *> &scriptResponses = _scriptResponses.getValOrDefault(eventType);
+	for (const ScriptResponse *scriptResponse : scriptResponses) {
+		const ScriptValue &argToCheck = scriptResponse->_argumentValue;
+
+		if (arg.getType() != argToCheck.getType()) {
+			continue;
+		}
+
+		if (arg == argToCheck) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void Actor::runScriptResponseIfExists(EventType eventType, const ScriptValue &arg) {
@@ -203,6 +254,76 @@ void Actor::runScriptResponseIfExists(EventType eventType, const ScriptValue &ar
 void Actor::runScriptResponseIfExists(EventType eventType) {
 	ScriptValue scriptValue;
 	runScriptResponseIfExists(eventType, scriptValue);
+}
+
+void Actor::processTimeScriptResponses() {
+	// The original had this logic duplicated across several actors, but it made more sense
+	// to consolidate it into the main Actor in the reimplementation. This does NOT set up the
+	// next timer - client code has to do that itself.
+	// Get current runtime time.
+	uint32 currentTimeInMilliseconds = g_engine->getTotalPlayTime();
+	uint32 elapsedTimeInMilliseconds = currentTimeInMilliseconds - _startTime;
+
+	// Process all events that have elapsed up to current time.
+	ScriptResponse *nextTimeScriptResponse = findNextTimeScriptResponseAfter(_lastProcessedTime);
+	while (nextTimeScriptResponse != nullptr) {
+		// If this event is in the future, stop processing.
+		double eventTimeInSeconds = nextTimeScriptResponse->_argumentValue.asFloat();
+		uint32 eventTimeInMilliseconds = eventTimeInSeconds * 1000;
+		if (eventTimeInMilliseconds > elapsedTimeInMilliseconds) {
+			break;
+		}
+
+		// Execute the event.
+		debugC(5, kDebugScript, "[%s] %s: Running On Time response for time %d ms (lastProcessedTime: %d, elapsedTime: %d)",
+			debugName(), __func__, eventTimeInMilliseconds, _lastProcessedTime, elapsedTimeInMilliseconds);
+		nextTimeScriptResponse->execute(_id);
+
+		// Increment by 1 to prevent re-triggering the same event. This works because in the original,
+		// timer events are at least 10 ms apart anyway.
+		_lastProcessedTime = eventTimeInMilliseconds + 1;
+		nextTimeScriptResponse = findNextTimeScriptResponseAfter(_lastProcessedTime);
+	}
+}
+
+bool Actor::setupNextScriptResponseTimer() {
+	// Find the next event after the last processed time.
+	ScriptResponse *nextEvent = findNextTimeScriptResponseAfter(_lastProcessedTime);
+	if (nextEvent == nullptr) {
+		// No more events to schedule.
+		debugC(5, kDebugScript, "[%s] %s: No more events to schedule", debugName(), __func__);
+		return false;
+	}
+
+	// Calculate duration until next event from current elapsed time.
+	double nextEventTimeInFractionalSeconds = nextEvent->_argumentValue.asFloat();
+	uint32 nextEventTimeInMilliseconds = nextEventTimeInFractionalSeconds * 1000;
+	uint32 currentTimeInMilliseconds = g_engine->getTotalPlayTime();
+	uint32 elapsedTimeInMilliseconds = currentTimeInMilliseconds - _startTime;
+	uint32 durationUntilNextEventInMilliseconds = nextEventTimeInMilliseconds - elapsedTimeInMilliseconds;
+	debugC(5, kDebugEvents, "[%s] %s: Scheduling timer for %d ms (next event at %d ms)",
+		debugName(), __func__, durationUntilNextEventInMilliseconds, nextEventTimeInMilliseconds);
+	g_engine->getTimerService()->startTimer(_timer, durationUntilNextEventInMilliseconds);
+	return true;
+}
+
+void Actor::triggerRemainingTimerEvents() {
+	uint32 currentTimeInMilliseconds = g_engine->getTotalPlayTime();
+	uint32 elapsedTimeInMilliseconds = currentTimeInMilliseconds - _startTime;
+
+	ScriptResponse *nextTimeScriptResponse = findNextTimeScriptResponseAfter(_lastProcessedTime);
+	while (nextTimeScriptResponse != nullptr) {
+		double eventTimeInSeconds = nextTimeScriptResponse->_argumentValue.asFloat();
+		uint32 eventTimeInMilliseconds = eventTimeInSeconds * 1000;
+
+		debugC(5, kDebugEvents, "[%s] %s: Running remaining On Time response for time %d ms (lastProcessedTime: %d, elapsedTime: %d)",
+			debugName(), __func__, eventTimeInMilliseconds,  _lastProcessedTime, elapsedTimeInMilliseconds);
+
+		// Increment by 1 to prevent re-triggering the same event.
+		_lastProcessedTime = eventTimeInMilliseconds + 1;
+		nextTimeScriptResponse->execute(_id);
+		nextTimeScriptResponse = findNextTimeScriptResponseAfter(_lastProcessedTime);
+	}
 }
 
 SpatialEntity::~SpatialEntity() {
@@ -332,35 +453,35 @@ ScriptValue SpatialEntity::callMethod(BuiltInMethod methodId, Common::Array<Scri
 		break;
 	}
 
-	case kGetXScaleMethod1:
-	case kGetXScaleMethod2:
+	case kGetParallaxFactorXMethod1:
+	case kGetParallaxFactorXMethod2:
 		ARGCOUNTCHECK(0);
-		returnValue.setToFloat(_scaleX);
+		returnValue.setToFloat(_parallaxFactorX);
 		break;
 
-	case kSetScaleMethod:
+	case kSetParallaxFactorMethod:
 		ARGCOUNTCHECK(1);
 		invalidateLocalBounds();
-		_scaleX = _scaleY = args[0].asFloat();
+		_parallaxFactorX = _parallaxFactorY = args[0].asFloat();
 		invalidateLocalBounds();
 		break;
 
-	case kSetXScaleMethod:
+	case kSetParallaxFactorXMethod:
 		ARGCOUNTCHECK(1);
 		invalidateLocalBounds();
-		_scaleX = args[0].asFloat();
+		_parallaxFactorX = args[0].asFloat();
 		invalidateLocalBounds();
 		break;
 
-	case kGetYScaleMethod:
+	case kGetParallaxFactorYMethod:
 		ARGCOUNTCHECK(0);
-		returnValue.setToFloat(_scaleY);
+		returnValue.setToFloat(_parallaxFactorY);
 		break;
 
-	case kSetYScaleMethod:
+	case kSetParallaxFactorYMethod:
 		ARGCOUNTCHECK(1);
 		invalidateLocalBounds();
-		_scaleY = args[0].asFloat();
+		_parallaxFactorY = args[0].asFloat();
 		invalidateLocalBounds();
 		break;
 
@@ -377,9 +498,11 @@ void SpatialEntity::readParameter(Chunk &chunk, ActorHeaderSectionType paramType
 		setAdjustedBounds(kWrapNone);
 		break;
 
-	case kActorHeaderDissolveFactor:
-		_dissolveFactor = chunk.readTypedDouble();
+	case kActorHeaderDissolveFactor: {
+		double dissolveFactor = chunk.readTypedDouble();
+		setDissolveFactor(dissolveFactor);
 		break;
+	}
 
 	case kActorHeaderZIndex:
 		_zIndex = chunk.readTypedGraphicUnit();
@@ -394,15 +517,15 @@ void SpatialEntity::readParameter(Chunk &chunk, ActorHeaderSectionType paramType
 		break;
 
 	case kActorHeaderScaleXAndY:
-		_scaleX = _scaleY = chunk.readTypedDouble();
+		_parallaxFactorX = _parallaxFactorY = chunk.readTypedDouble();
 		break;
 
 	case kActorHeaderScaleX:
-		_scaleX = chunk.readTypedDouble();
+		_parallaxFactorX = chunk.readTypedDouble();
 		break;
 
 	case kActorHeaderScaleY:
-		_scaleY = chunk.readTypedDouble();
+		_parallaxFactorY = chunk.readTypedDouble();
 		break;
 
 	default:
@@ -413,7 +536,7 @@ void SpatialEntity::readParameter(Chunk &chunk, ActorHeaderSectionType paramType
 void SpatialEntity::loadIsComplete() {
 	Actor::loadIsComplete();
 	if (_stageId != 0) {
-		StageActor *pendingParentStage = static_cast<StageActor *>(g_engine->getActorByIdAndType(_stageId, kActorTypeStage));
+		StageActor *pendingParentStage = static_cast<StageActor *>(g_engine->getImtGod()->getActorByIdAndType(_stageId, kActorTypeStage));
 		pendingParentStage->addChildSpatialEntity(this);
 	}
 }
@@ -425,12 +548,8 @@ void SpatialEntity::currentMousePosition(Common::Point &point) {
 }
 
 void SpatialEntity::invalidateMouse() {
-	// TODO: Invalidate the mouse properly when we have custom events.
-	// For now, we simulate the mouse update event with a mouse moved event.
-	Common::Event mouseEvent;
-	mouseEvent.type = Common::EVENT_MOUSEMOVE;
-	mouseEvent.mouse = g_system->getEventManager()->getMousePos();
-	g_system->getEventManager()->pushEvent(mouseEvent);
+	MouseEvent event(kMouseEnterExitEvent, g_system->getEventManager()->getMousePos());
+	g_engine->getEventLoop()->queueEvent(event);
 }
 
 void SpatialEntity::moveTo(int16 x, int16 y) {
@@ -438,7 +557,7 @@ void SpatialEntity::moveTo(int16 x, int16 y) {
 	debugC(3, kDebugGraphics, "[%s] %s: (%d, %d) -> (%d, %d)", debugName(), __func__,
 		_originalBoundingBox.origin().x, _originalBoundingBox.origin().y, x, y);
 
-	if (dest == _boundingBox.origin()) {
+	if (dest == _originalBoundingBox.origin()) {
 		// We aren't actually moving anywhere.
 		return;
 	}
@@ -464,7 +583,7 @@ void SpatialEntity::moveToCentered(int16 x, int16 y) {
 }
 
 void SpatialEntity::setBounds(const Common::Rect &bounds) {
-	if (_boundingBox == bounds) {
+	if (_originalBoundingBox == bounds) {
 		// We aren't actually moving anywhere.
 		return;
 	}
@@ -511,10 +630,8 @@ void SpatialEntity::setDissolveFactor(double dissolveFactor) {
 
 void SpatialEntity::invalidateLocalBounds() {
 	if (_parentStage != nullptr) {
-		_parentStage->setAdjustedBounds(kWrapNone);
+		setAdjustedBounds(kWrapNone);
 		_parentStage->invalidateRect(getBbox());
-	} else {
-		warning("[%s] %s: No parent stage", debugName(), __func__);
 	}
 }
 
@@ -524,7 +641,7 @@ void SpatialEntity::invalidateLocalZIndex() {
 	}
 }
 
-void SpatialEntity::setAdjustedBounds(CylindricalWrapMode alignmentMode) {
+void SpatialEntity::setAdjustedBounds(CylindricalWrapMode wrapMode) {
 	_boundingBox = _originalBoundingBox;
 	if (_parentStage == nullptr) {
 		return;
@@ -532,70 +649,113 @@ void SpatialEntity::setAdjustedBounds(CylindricalWrapMode alignmentMode) {
 
 	Common::Point offset(0, 0);
 	Common::Point stageExtent = _parentStage->extent();
-	switch (alignmentMode) {
-	case kWrapRight: {
+
+	// Calculate position offset for cylindrical wrapping.
+	switch (wrapMode) {
+	case kWrapRight:
 		offset.x = stageExtent.x;
 		offset.y = 0;
 		break;
-	}
 
-	case kWrapLeft: {
+	case kWrapDown:
+		offset.x = 0;
+		offset.y = stageExtent.y;
+		break;
+
+	case kWrapRightDown:
+		offset.x = stageExtent.x;
+		offset.y = stageExtent.y;
+		break;
+
+	case kWrapLeft:
 		offset.x = -stageExtent.x;
 		offset.y = 0;
 		break;
-	}
 
-	case kWrapBottom: {
-		offset.x = 0;
-		offset.y = stageExtent.y;
-		break;
-	}
-
-	case kWrapLeftTop: {
+	case kWrapUp:
 		offset.x = 0;
 		offset.y = -stageExtent.y;
 		break;
-	}
 
-	case kWrapTop: {
-		offset.x = stageExtent.x;
-		offset.y = stageExtent.y;
-		break;
-	}
-
-	case kWrapRightBottom: {
+	case kWrapLeftUp:
 		offset.x = -stageExtent.x;
 		offset.y = -stageExtent.y;
 		break;
-	}
 
-	case kWrapRightTop: {
+	case kWrapLeftDown:
 		offset.x = -stageExtent.x;
 		offset.y = stageExtent.y;
 		break;
-	}
 
-	case kWrapLeftBottom: {
+	case kWrapRightUp:
 		offset.x = stageExtent.x;
 		offset.y = -stageExtent.y;
 		break;
-	}
 
 	case kWrapNone:
 	default:
 		// No offset adjustment.
 		break;
 	}
+	_boundingBox.translate(-offset.x, -offset.y);
 
-	if (alignmentMode != kWrapNone) {
-		// TODO: Implement this once we have a title that actually uses it.
-		warning("[%s] %s: Wrapping mode %d not handled yet: (%d, %d, %d, %d) -= (%d, %d)", debugName(),  __func__,
-			static_cast<uint>(alignmentMode), PRINT_RECT(_boundingBox), offset.x, offset.y);
+	// Apply parallax scrolling if parallax factors are set.
+	// This simulates depth by adjusting position based on distance from viewport center.
+	// parallax 0.0 means no parallax (ignores camera movement).
+	// parallax 1.0 means neutral depth (moves with camera at focal plane).
+	// parallax >1.0 means appears closer (moves more than camera).
+	// parallax <1.0 means appears farther (moves less than camera).
+	bool hasHorizontalParallax = _parallaxFactorX != 0.0;
+	bool hasVerticalParallax = _parallaxFactorY != 0.0;
+	if (!hasHorizontalParallax && !hasVerticalParallax) {
+		return;
 	}
 
-	if (_scaleX != 0.0 || _scaleY != 0.0) {
-		// TODO: Implement this once we have a title that actually uses it.
-		warning("[%s] %s: Scale not handled yet (scaleX: %f, scaleY: %f)", debugName(), __func__, _scaleX, _scaleY);
+	// Transform camera viewport to object's local coordinate space (inside any stages).
+	CameraActor *currentCamera = _parentStage->getCurrentCamera();
+	if (currentCamera == nullptr) {
+		return;
+	}
+
+	Common::Rect viewportBounds = currentCamera->getViewportBounds();
+	Common::Rect localViewport = viewportBounds;
+	Common::Point accumulatedOffset = viewportBounds.origin();
+	StageActor *currentStage = _parentStage;
+	while (currentStage != nullptr && currentStage != currentCamera->getParentStage()) {
+		Common::Rect parentBounds = currentStage->getBbox();
+		accumulatedOffset -= parentBounds.origin();
+		currentStage = currentStage->getParentStage();
+	}
+	localViewport.moveTo(accumulatedOffset.x, accumulatedOffset.y);
+
+	if (_boundingBox.intersects(localViewport)) {
+		// Apply horizontal parallax.
+		int16 parallaxAdjustedLeft = _boundingBox.left;
+		if (hasHorizontalParallax) {
+			// Calculate offset from viewport center to object center.
+			int16 viewportHalfWidth = localViewport.width() / 2;
+			int16 boundsHalfWidth = _boundingBox.width() / 2;
+			int centerOffset = (_boundingBox.left + boundsHalfWidth) - (localViewport.left + viewportHalfWidth);
+
+			// Multiply by parallax factor to simulate depth.
+			double parallaxOffset = static_cast<double>(centerOffset) * _parallaxFactorX;
+			parallaxAdjustedLeft += static_cast<int16>(parallaxOffset);
+		}
+
+		// Apply vertical parallax.
+		int16 parallaxAdjustedTop = _boundingBox.top;
+		if (hasVerticalParallax) {
+			// Calculate offset from viewport center to object center.
+			int16 viewportHalfHeight = localViewport.height() / 2;
+			int16 boundsHalfHeight = _boundingBox.height() / 2;
+			int centerOffset = (_boundingBox.top + boundsHalfHeight) - (localViewport.top + viewportHalfHeight);
+
+			// Multiply by parallax factor to simulate depth.
+			double parallaxOffset = static_cast<double>(centerOffset) * _parallaxFactorY;
+			parallaxAdjustedTop += static_cast<int16>(parallaxOffset);
+		}
+
+		_boundingBox.moveTo(parallaxAdjustedLeft, parallaxAdjustedTop);
 	}
 }
 

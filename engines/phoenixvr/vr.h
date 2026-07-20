@@ -62,6 +62,8 @@ class VR {
 	float _hint = 0;
 	bool _showWaves = false;
 	float _wavesT = 0;
+	bool _ignoreRightPixel = false;
+	bool _v2 = false;
 
 public:
 	static VR loadStatic(const Graphics::PixelFormat &format, Common::SeekableReadStream &s);

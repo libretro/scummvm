@@ -27,13 +27,11 @@
 
 namespace Audio {
 
-PCSpeakerStream::Command::Command(PCSpeaker::WaveForm aWaveForm, float aFrequency, uint32 aLength) :
-	waveForm(aWaveForm), frequency(aFrequency), length(aLength) { }
+PCSpeakerStream::Command::Command(PCSpeaker::WaveForm aWaveForm, float aFrequency, uint32 aLength, byte aVolume) :
+	waveForm(aWaveForm), frequency(aFrequency), length(aLength), volume(aVolume) { }
 
 const PCSpeakerStream::generatorFunc PCSpeakerStream::generateWave[] =
-	{&PCSpeakerStream::generateSquare, &PCSpeakerStream::generateSine,
-	 &PCSpeakerStream::generateSaw,    &PCSpeakerStream::generateTriangle,
-	 &PCSpeakerStream::generateSilence};
+	{&PCSpeakerStream::generateSquare, &PCSpeakerStream::generateSilence};
 
 PCSpeakerStream::PCSpeakerStream(int rate) {
 	_rate = rate;
@@ -43,7 +41,7 @@ PCSpeakerStream::PCSpeakerStream(int rate) {
 	_oscSamples = 0;
 	_remainingSamples = 0;
 	_mixedSamples = 0;
-	_volume = 20; // The maximum volume is 255
+	_volume = PCSPK_DEFAULT_VOLUME;
 	_commandQueue = new Common::Queue<Command>();
 	_commandActive = false;
 }
@@ -52,10 +50,10 @@ PCSpeakerStream::~PCSpeakerStream() {
 	delete _commandQueue;
 }
 
-void PCSpeakerStream::play(PCSpeaker::WaveForm wave, int freq, int32 length) {
+void PCSpeakerStream::play(PCSpeaker::WaveForm wave, int freq, int32 length, byte volume) {
 	Common::StackLock lock(_mutex);
 
-	assert((wave >= PCSpeaker::kWaveFormSquare) && (wave <= PCSpeaker::kWaveFormTriangle));
+	assert(wave == PCSpeaker::kWaveFormSquare);
 
 	if (_commandActive || !_commandQueue->empty())
 		// Currently playing back a queued instruction. Stop playback and clear
@@ -73,14 +71,15 @@ void PCSpeakerStream::play(PCSpeaker::WaveForm wave, int freq, int32 length) {
 		_playForever = false;
 	}
 	_mixedSamples = 0;
+	_volume = volume;
 }
 
-void PCSpeakerStream::playQueue(PCSpeaker::WaveForm wave, float freq, uint32 lengthus) {
+void PCSpeakerStream::playQueue(PCSpeaker::WaveForm wave, float freq, uint32 lengthus, byte volume) {
 	Common::StackLock lock(_mutex);
 
 	// Put the new instruction in the queue. This will be picked up by the
 	// readBuffer method.
-	_commandQueue->push(Command(wave, freq, lengthus));
+	_commandQueue->push(Command(wave, freq, lengthus, volume));
 }
 
 void PCSpeakerStream::stop(int32 delay) {
@@ -120,6 +119,7 @@ int PCSpeakerStream::readBuffer(int16 *buffer, const int numSamples) {
 			_wave = command.waveForm;
 			_oscLength = command.frequency > 0 ? (uint32)(_rate / command.frequency) : 0;
 			_oscSamples = 0;
+			_volume = command.volume;
 			// Length is in microseconds.
 			_remainingSamples = ((uint64)_rate * (uint64)command.length) / 1000000;
 			_playForever = false;
@@ -158,30 +158,6 @@ int8 PCSpeakerStream::generateSquare(uint32 x, uint32 oscLength) {
 	return (x < (oscLength / 2)) ? 127 : -128;
 }
 
-int8 PCSpeakerStream::generateSine(uint32 x, uint32 oscLength) {
-	if (oscLength == 0)
-		return 0;
-
-	// TODO: Maybe using a look-up-table would be better?
-	return CLIP<int16>((int16) (128 * sin(2.0 * M_PI * x / oscLength)), -128, 127);
-}
-
-int8 PCSpeakerStream::generateSaw(uint32 x, uint32 oscLength) {
-	if (oscLength == 0)
-		return 0;
-
-	return ((x * (65536 / oscLength)) >> 8) - 128;
-}
-
-int8 PCSpeakerStream::generateTriangle(uint32 x, uint32 oscLength) {
-	if (oscLength == 0)
-		return 0;
-
-	int y = ((x * (65536 / (oscLength / 2))) >> 8) - 128;
-
-	return (x <= (oscLength / 2)) ? y : (256 - y);
-}
-
 int8 PCSpeakerStream::generateSilence(uint32 x, uint32 oscLength) {
 	return 0;
 }
@@ -216,14 +192,14 @@ void PCSpeaker::quit() {
 	_speakerStream = nullptr;
 }
 
-void PCSpeaker::play(WaveForm wave, int freq, int32 length) {
+void PCSpeaker::play(WaveForm wave, int freq, int32 length, byte volume) {
 	assert(_speakerStream);
-	_speakerStream->play(wave, freq, length);
+	_speakerStream->play(wave, freq, length, volume);
 }
 
-void PCSpeaker::playQueue(WaveForm wave, float freq, uint32 lengthus) {
+void PCSpeaker::playQueue(WaveForm wave, float freq, uint32 lengthus, byte volume) {
 	assert(_speakerStream);
-	_speakerStream->playQueue(wave, freq, lengthus);
+	_speakerStream->playQueue(wave, freq, lengthus, volume);
 }
 
 void PCSpeaker::stop(int32 delay) {

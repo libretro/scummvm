@@ -878,6 +878,60 @@ static const ExtraGuiOption enableTTS = {
 };
 #endif
 
+static const ExtraGuiOption enableRebel2HiRes = {
+	_s("High resolution mode"),
+	_s("Run the game in 640x400 high resolution mode instead of 320x200"),
+	"rebel2_hires",
+	false,
+	0,
+	0
+};
+
+static const ExtraGuiOption enableRebel2UnlockAll = {
+	_s("Unlock all levels"),
+	_s("All levels will be available without requiring passwords"),
+	"rebel2_unlock_all",
+	false,
+	0,
+	0
+};
+
+static const ExtraGuiOption enableRebel2NoDamage = {
+	_s("No damage"),
+	_s("Disable player damage"),
+	"rebel2_no_damage",
+	false,
+	0,
+	0
+};
+
+static const ExtraGuiOption enableRebel2YodaMode = {
+	_s("Yoda mode"),
+	_s("Enable original Yoda mode shortcuts, including movie mode and auto play"),
+	"rebel2_yoda_mode",
+	false,
+	0,
+	0
+};
+
+const ExtraGuiOption enableRebel1UnlockAll = {
+	_s("Unlock all levels"),
+	_s("All levels will be available without requiring passwords"),
+	"rebel1_unlock_all",
+	false,
+	0,
+	0
+};
+
+const ExtraGuiOption enableRebel1NoDamage = {
+	_s("No damage"),
+	_s("Disable player damage"),
+	"rebel1_no_damage",
+	false,
+	0,
+	0
+};
+
 const ExtraGuiOptions ScummMetaEngine::getExtraGuiOptions(const Common::String &target) const {
 	ExtraGuiOptions options;
 	// Query the GUI options
@@ -919,6 +973,24 @@ const ExtraGuiOptions ScummMetaEngine::getExtraGuiOptions(const Common::String &
 		options.push_back(enableTTS);
 	}
 #endif
+	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL2_HIRES)) {
+		options.push_back(enableRebel2HiRes);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL2_UNLOCK_ALL)) {
+		options.push_back(enableRebel2UnlockAll);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL2_NO_DAMAGE)) {
+		options.push_back(enableRebel2NoDamage);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL2_YODA_MODE)) {
+		options.push_back(enableRebel2YodaMode);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL1_UNLOCK_ALL)) {
+		options.push_back(enableRebel1UnlockAll);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL1_NO_DAMAGE)) {
+		options.push_back(enableRebel1NoDamage);
+	}
 	if (target.empty() || gameid == "comi") {
 		options.push_back(comiObjectLabelsOption);
 
@@ -994,6 +1066,18 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 	Common::KeymapArray keymaps = MetaEngine::initKeymaps(target);
 	Common::String gameId = ConfMan.get("gameid", target);
 	Action *act;
+
+	if (gameId == "rebel1" || gameId == "rebel2") {
+		for (uint i = 0; i < keymaps.size(); ++i) {
+			if (keymaps[i]->getId() == "engine-default") {
+				delete keymaps.remove_at(i);
+				Keymap *engineKeyMap = new Keymap(Keymap::kKeymapTypeGame, "engine-default", _("Default game keymappings"));
+				engineKeyMap->setPartialMatchAllowed(false);
+				keymaps.insert_at(i, engineKeyMap);
+				break;
+			}
+		}
+	}
 
 	if (gameId == "ft") {
 		Keymap *insaneKeymap = new Keymap(Keymap::kKeymapTypeGame, insaneKeymapId, "SCUMM - Bike Fights");
@@ -1076,6 +1160,161 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 		insaneKeymap->addAction(act);
 
 		keymaps.push_back(insaneKeymap);
+	}
+
+	if (gameId == "rebel1") {
+		Keymap *rebel1Keymap = new Keymap(Keymap::kKeymapTypeGame, "scumm-rebel1", _("Rebel Assault controls"));
+
+		act = new Action("RA1UP", _("Aim up / menu up"));
+		act->setCustomEngineActionEvent(kScummActionInsaneUp);
+		act->addDefaultInputMapping("JOY_UP");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1DOWN", _("Aim down / menu down"));
+		act->setCustomEngineActionEvent(kScummActionInsaneDown);
+		act->addDefaultInputMapping("JOY_DOWN");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1LEFT", _("Aim left / menu left"));
+		act->setCustomEngineActionEvent(kScummActionInsaneLeft);
+		act->addDefaultInputMapping("JOY_LEFT");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1RIGHT", _("Aim right / menu right"));
+		act->setCustomEngineActionEvent(kScummActionInsaneRight);
+		act->addDefaultInputMapping("JOY_RIGHT");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1STICKUP", _("Stick up"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionRebel1AxisUp);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_Y-");
+		act->addDefaultInputMapping("JOY_RIGHT_STICK_Y-");
+		act->addDefaultInputMapping("JOY_HAT_Y-");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1STICKDOWN", _("Stick down"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionRebel1AxisDown);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_Y+");
+		act->addDefaultInputMapping("JOY_RIGHT_STICK_Y+");
+		act->addDefaultInputMapping("JOY_HAT_Y+");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1STICKLEFT", _("Stick left"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionRebel1AxisLeft);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_X-");
+		act->addDefaultInputMapping("JOY_RIGHT_STICK_X-");
+		act->addDefaultInputMapping("JOY_HAT_X-");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1STICKRIGHT", _("Stick right"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionRebel1AxisRight);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_X+");
+		act->addDefaultInputMapping("JOY_RIGHT_STICK_X+");
+		act->addDefaultInputMapping("JOY_HAT_X+");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1FIRE", _("Fire / select"));
+		act->setCustomEngineActionEvent(kScummActionInsaneAttack);
+		act->addDefaultInputMapping("MOUSE_LEFT");
+		act->addDefaultInputMapping("JOY_A");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1CANCEL", _("Walk / menu back"));
+		act->setCustomEngineActionEvent(kScummActionInsaneSwitch);
+		act->addDefaultInputMapping("JOY_B");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1SKIP", _("Skip / menu back"));
+		act->setCustomEngineActionEvent(kScummActionInsaneSkip);
+		act->addDefaultInputMapping("JOY_X");
+		rebel1Keymap->addAction(act);
+
+		act = new Action("RA1BACK", _("Menu"));
+		act->setCustomEngineActionEvent(kScummActionInsaneBack);
+		act->addDefaultInputMapping("ESCAPE");
+		act->addDefaultInputMapping("JOY_START");
+		act->addDefaultInputMapping("AC_BACK");
+		rebel1Keymap->addAction(act);
+
+		keymaps.push_back(rebel1Keymap);
+	}
+
+	if (gameId == "rebel2") {
+		Keymap *rebel2Keymap = new Keymap(Keymap::kKeymapTypeGame, "scumm-rebel2", _("Rebel Assault II controls"));
+
+		act = new Action("RA2UP", _("Aim up / menu up"));
+		act->setCustomEngineActionEvent(kScummActionInsaneUp);
+		act->addDefaultInputMapping("JOY_UP");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2DOWN", _("Aim down / menu down"));
+		act->setCustomEngineActionEvent(kScummActionInsaneDown);
+		act->addDefaultInputMapping("JOY_DOWN");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2LEFT", _("Aim left / menu left"));
+		act->setCustomEngineActionEvent(kScummActionInsaneLeft);
+		act->addDefaultInputMapping("JOY_LEFT");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2RIGHT", _("Aim right / menu right"));
+		act->setCustomEngineActionEvent(kScummActionInsaneRight);
+		act->addDefaultInputMapping("JOY_RIGHT");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2STICKUP", _("Stick up"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionRebel2AxisUp);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_Y-");
+		act->addDefaultInputMapping("JOY_RIGHT_STICK_Y-");
+		act->addDefaultInputMapping("JOY_HAT_Y-");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2STICKDOWN", _("Stick down"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionRebel2AxisDown);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_Y+");
+		act->addDefaultInputMapping("JOY_RIGHT_STICK_Y+");
+		act->addDefaultInputMapping("JOY_HAT_Y+");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2STICKLEFT", _("Stick left"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionRebel2AxisLeft);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_X-");
+		act->addDefaultInputMapping("JOY_RIGHT_STICK_X-");
+		act->addDefaultInputMapping("JOY_HAT_X-");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2STICKRIGHT", _("Stick right"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionRebel2AxisRight);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_X+");
+		act->addDefaultInputMapping("JOY_RIGHT_STICK_X+");
+		act->addDefaultInputMapping("JOY_HAT_X+");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2FIRE", _("Fire / select"));
+		act->setCustomEngineActionEvent(kScummActionInsaneAttack);
+		act->addDefaultInputMapping("JOY_A");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2COVER", _("Cover"));
+		act->setCustomEngineActionEvent(kScummActionInsaneSwitch);
+		act->addDefaultInputMapping("JOY_X");
+		act->addDefaultInputMapping("JOY_Y");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2SKIP", _("Skip / back"));
+		act->setCustomEngineActionEvent(kScummActionInsaneSkip);
+		act->addDefaultInputMapping("JOY_B");
+		act->addDefaultInputMapping("JOY_RIGHT_TRIGGER");
+		act->addDefaultInputMapping("AC_BACK");
+		rebel2Keymap->addAction(act);
+
+		act = new Action("RA2BACK", _("Skip / menu"));
+		act->setCustomEngineActionEvent(kScummActionInsaneBack);
+		act->addDefaultInputMapping("ESCAPE");
+		act->addDefaultInputMapping("JOY_START");
+		rebel2Keymap->addAction(act);
+
+		keymaps.push_back(rebel2Keymap);
 	}
 
 	return keymaps;

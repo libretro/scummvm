@@ -79,6 +79,8 @@ void ScummEngine::runScript(int script, bool freezeResistant, bool recursive, in
 		scriptOffs = _localScriptOffsets[script - _numGlobalScripts];
 		if (scriptOffs == 0)
 			error("Local script %d is not in room %d", script, _roomResource);
+		if (_scriptOverrides.contains(_roomResource * 100000 + script))
+			scriptOffs = 0;
 		scriptType = WIO_LOCAL;
 
 		debugC(DEBUG_SCRIPTS, "runScript(%d) from %d-%d", script,
@@ -441,6 +443,13 @@ void ScummEngine::getScriptBaseAddress() {
 			_scriptOrgPointer = getResourceAddress(rtRoom, _roomResource);
 			assert(_roomResource < _numRooms);
 			_lastCodePtr = &_res->_types[rtRoom][_roomResource]._address;
+
+			int cacheIdx = _roomResource * 100000 + ss->number;
+			if (_scriptOverrides.contains(cacheIdx)) {
+				_lastCodePtr = (const byte *const *)_scriptOverrides[cacheIdx];
+				// LSC2 block layout: [4 tag][4 BE size][4 LE script id][bytecode]
+				_scriptOrgPointer = (const byte *)_scriptOverrides[cacheIdx] + _resourceHeaderSize + 4;
+			}
 		}
 		break;
 
@@ -505,7 +514,7 @@ void ScummEngine::executeScript() {
 		_opcode = fetchScriptByte();
 		if (_game.version > 2) // V0-V2 games didn't use the didexec flag
 			vm.slot[_currentScript].didexec = true;
-		debugC(DEBUG_OPCODES, "Script %d, offset 0x%x: [%X] %s()",
+				debugC(DEBUG_OPCODES, "Script %d, offset 0x%x: [%X] %s()",
 				vm.slot[_currentScript].number,
 				(uint)(_scriptPointer - _scriptOrgPointer),
 				_opcode,
@@ -740,8 +749,16 @@ void ScummEngine::writeVar(uint var, int value) {
 			// value is likely to be bogus. See also bug #4008.
 			if (_currentRoom == 0 && ConfMan.hasKey("talkspeed", _targetName)) {
 				value = 9 - getTalkSpeed();
-			} else {
-				// Save the new talkspeed value to ConfMan
+			} else if (value >= 0 && value <= 9) {
+				// Save the new talkspeed value to ConfMan.
+				// UPDATE: Only do this if the value is in valid range
+				// (e. g. DOTT, right before showing the final credits,
+				// will repeatedly set a value of 255, which would get
+				// stored as -246 and thus corrupt the text display in
+				// the next game session). I don't know why we do this
+				// at all, in my understanding, the script should not
+				// really change the user setting? Also, readVar()
+				// does not have an equivalent counterpart for this.
 				setTalkSpeed(9 - value);
 			}
 		}
@@ -1188,6 +1205,9 @@ void ScummEngine::checkAndRunSentenceScript() {
 	_sentenceNum--;
 	SentenceTab &st = _sentence[_sentenceNum];
 
+	if (monkey1HermanNoteWorkaround(st))
+		return;
+
 	if (_game.version < 7)
 		if (st.preposition && st.objectB == st.objectA)
 			return;
@@ -1259,6 +1279,30 @@ void ScummEngine_v0::walkToActorOrObject(int object) {
 		a->stopActorMoving();
 		a->_newWalkBoxEntered = false;
 	}
+}
+
+bool ScummEngine::monkey1HermanNoteWorkaround(const SentenceTab &st) {
+	// WORKAROUND: Monkey Island 1 note/Herman bug #12010.
+	//
+	// This workaround fixes an issue where the scripts would get stuck in a loop
+	// if you tried to give a note to Herman while the note was still in the room
+	// and not in the inventory.
+	// This intercepts the specific note objects that appear in rooms where Herman
+	// can be present, consumes the invalid give, and queues a pickup instead.
+	if ((_game.id == GID_MONKEY || _game.id == GID_MONKEY_EGA || _game.id == GID_MONKEY_VGA) &&
+		enhancementEnabled(kEnhMinorBugFixes) &&
+		// Give(EGA 3, VGA 4)
+		st.verb == (_game.id == GID_MONKEY_EGA ? 3 : 4) &&
+		st.objectB == 7 && // Herman
+		getOwner(st.objectA) == OF_OWNER_ROOM && // Object in room, not inventory
+		// note (volcano beach VGA), note (dry pond VGA), note (volcano beach EGA), note (dry pond EGA)
+		(st.objectA == 27 || st.objectA == 545 || st.objectA == 296 || st.objectA == 297)) {
+		// Pick up(EGA 11, VGA 9)
+		doSentence(_game.id == GID_MONKEY_EGA ? 11 : 9, st.objectA, 0);
+		return true;
+	}
+
+	return false;
 }
 
 bool ScummEngine_v0::checkPendingWalkAction() {

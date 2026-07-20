@@ -29,7 +29,7 @@ namespace Freescape {
 
 // 21 SFX entries extracted from totec2.prg at $C802 (address $C802-$CB49).
 // Each entry is 40 bytes. Same descriptor format as Dark Side C64.
-static const C64SFXData kEclipseSFXData[21] = {
+const C64SFXData kEclipseSFXData[21] = {
 	// SFX #1: Noise, 2 notes, repeat 1
 	{2, 1, 0,
 	 {0x00, 0x44, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -236,11 +236,11 @@ void EclipseC64SFXPlayer::onTimer() {
 	sfxTick();
 }
 
-bool EclipseC64SFXPlayer::isSfxActive() const {
+bool EclipseC64SFXPlayer::isPlayingSound(Type type) const {
 	return _state != 0;
 }
 
-void EclipseC64SFXPlayer::stopAllSfx() {
+void EclipseC64SFXPlayer::stopSound(Type type) {
 	_state = 0;
 	silenceAll();
 }
@@ -296,7 +296,7 @@ void EclipseC64SFXPlayer::setupSfx(int index) {
 	_state = 1;
 }
 
-void EclipseC64SFXPlayer::playSfx(int sfxIndex) {
+void EclipseC64SFXPlayer::playSound(int sfxIndex, Type type) {
 	if (sfxIndex < 1 || sfxIndex > 21) {
 		debugC(1, kFreescapeDebugMedia, "Eclipse C64 SFX: invalid index %d", sfxIndex);
 		return;

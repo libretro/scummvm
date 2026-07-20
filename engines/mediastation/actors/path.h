@@ -38,14 +38,14 @@ class PathActor : public Actor {
 public:
 	PathActor() : Actor(kActorTypePath) {};
 
-	virtual void process() override;
-
 	virtual void readParameter(Chunk &chunk, ActorHeaderSectionType paramType) override;
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
 
+	virtual void onEvent(const ActorEvent &event) override;
+	virtual void timerEvent(const TimerEvent &event) override;
+
 private:
 	PathPlayState _playState = kPathStopped;
-	double _percentComplete = 0.0;
 	bool _useTimeForCompletion = false;
 	double _duration = 0.0;
 	double _stepRate = 0.0;
@@ -67,7 +67,6 @@ private:
 
 	double getPercentComplete();
 	bool step();
-	void timerEvent();
 	void scheduleNextTimerEvent();
 };
 

@@ -1,3 +1,24 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.scummvm.scummvm.net;
 
 /*
@@ -8,7 +29,6 @@ package org.scummvm.scummvm.net;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -42,7 +62,7 @@ public class TLSSocketFactory extends SSLSocketFactory {
 	}
 
 	public TLSSocketFactory() {
-		SSLContext context = null;
+		SSLContext context;
 		try {
 			context = LETrustManager.getContext();
 		} catch (NoSuchAlgorithmException e) {
@@ -74,12 +94,12 @@ public class TLSSocketFactory extends SSLSocketFactory {
 	}
 
 	@Override
-	public Socket createSocket(String host, int port) throws IOException, UnknownHostException {
+	public Socket createSocket(String host, int port) throws IOException {
 		return enableTLSOnSocket(_factory.createSocket(host, port));
 	}
 
 	@Override
-	public Socket createSocket(String host, int port, InetAddress localHost, int localPort) throws IOException, UnknownHostException {
+	public Socket createSocket(String host, int port, InetAddress localHost, int localPort) throws IOException {
 		return enableTLSOnSocket(_factory.createSocket(host, port, localHost, localPort));
 	}
 

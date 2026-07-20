@@ -68,9 +68,10 @@ public:
 	int _vesaMode;
 	int _startColor, _numColors;
 	Common::Point _bufferStart;
-	int _windowXAdd, _windowYAdd;
+	int _windowXAdd, _windowYAdd; // the offset between the screen and the 2 buffers
 	int _screenYOff;
-	byte _manPal[0x60];
+	byte _manPal[0x84];
+	byte _stilPal[99]; // only used in Noctropolis
 	byte _scaleTable1[256];
 	byte _scaleTable2[256];
 	int _vWindowWidth;
@@ -114,9 +115,24 @@ public:
 	 */
 	void forceFadeIn();
 
+	/**
+	 * Fade to white
+	 */
+	void forceFadeWhite();
+
 	void fadeOut() { forceFadeOut(); }
 	void fadeIn() { forceFadeIn(); }
 	void clearScreen();
+
+	/**
+	 * Fade out, clear the screen, then restore the palette (Noctropolis)
+	 */
+	void fadeOutThenClearAndSetPal();
+
+	/**
+	 * Save the current "raw" palette into the effect (temp) palette
+	 */
+	void copyRawPalToTempPal();
 
 	/**
 	 * Set the initial palette
@@ -129,13 +145,25 @@ public:
 	void setIconPalette();
 
 	/**
-	 * Set Tex palette (Martian Memorandum)
+	 * Set player palette (Martian Memorandum and Noctropolis)
 	 */
 	void setManPalette();
+
+	/**
+	 * Set Stiletto palette (Noctropolis)
+	 */
+	void setStilPalette();
+
+	/**
+	 * Dim the palette a bit
+     */
+	void setDarkPalette(int16 mulValue, uint firstIndex, uint count);
 
 	void loadPalette(int fileNum, int subfile, int srcOffset = 0);
 
 	void setPalette();
+
+	void setRawPalette(const Graphics::Palette &p);
 
 	void loadRawPalette(Common::SeekableReadStream *stream);
 
@@ -172,7 +200,11 @@ public:
 
 	void cyclePaletteBackwards();
 
-	void dump(const char *fname) const;
+	/**
+	 * Clear colour 0 in the palette back to black
+	 * (workaround for Noctropolis)
+	 */
+	void clearColor0();
 };
 
 } // End of namespace Access

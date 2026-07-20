@@ -166,6 +166,7 @@ TheEntity entities[] = {					//	hasId  ver.	isFunction
 	{ kTheSerialNumber,		"serialNumber",		false, 500, false },//				D5 p, documnted in D7
 	{ kTheShiftDown,		"shiftDown",		false, 200, true },	// D2 f
 	{ kTheSoundEnabled,		"soundEnabled",		false, 200, false },// D2 p
+	{ kTheSoundDevice,		"soundDevice",		false, 700, false },//					D7 p
 	{ kTheSoundEntity,		"sound",			true,  300, false },// 		D3 p
 	{ kTheSoundKeepDevice,	"soundKeepDevice",	false, 600, false },//					D6 p, documented in D7
 	{ kTheSoundLevel,		"soundLevel",		false, 200, false },// D2 p
@@ -285,6 +286,7 @@ const TheEntityField fields[] = {
 	{ kTheSprite,	"movieTime",	kTheMovieTime,	300 },//		D3.1 P
 	{ kTheCast,		"pausedAtStart",kThePausedAtStart,400 },//				D4 p
 	{ kTheCast,		"preLoad",		kThePreLoad,	300 },//		D3.1 p
+	{ kTheCast,		"scale",		kTheScale,		700 },//							D7 p
 	{ kTheSprite,	"setTrackEnabled",kTheSetTrackEnabled, 500 },//				D5 p
 	{ kTheCast,		"sound",		kTheSound,		300 },//		D3.1 p // 0-1 off-on
 	{ kTheSprite,	"startTime",	kTheStartTime,	300 },//		D3.1 p
@@ -634,7 +636,7 @@ Datum Lingo::getTheEntity(int entity, Datum &id, int field) {
 		break;
 	case kTheFrameLabel:
 		d.type = STRING;
-		d.u.s = score->getFrameLabel(score->getCurrentFrameNum());
+		d.u.s = new Common::String(score->getFrameLabel(score->getCurrentFrameNum()));
 		break;
 	case kTheFramePalette:
 		d = score->getCurrentPalette().toMultiplex();
@@ -961,7 +963,7 @@ Datum Lingo::getTheEntity(int entity, Datum &id, int field) {
 		d = g_lingo->_state->callstack[g_lingo->_state->callstack.size() - 1]->paramCount;
 		break;
 	case kThePauseState:
-		d = (int) g_director->_playbackPaused;
+		d = (int) g_director->getCurrentWindow()->_playbackPaused;
 		break;
 	case kThePerFrameHook:
 		d = _perFrameHook;
@@ -1092,6 +1094,9 @@ Datum Lingo::getTheEntity(int entity, Datum &id, int field) {
 			}
 		}
 		break;
+	case kTheSoundDevice:
+		d = _soundDevice;
+		break;
 	case kTheSoundKeepDevice:
 		// System property; for Windows only, prevents the sound driver from unloading
 		// and reloading each time a sound needs to play. The default value is TRUE.
@@ -1108,32 +1113,20 @@ Datum Lingo::getTheEntity(int entity, Datum &id, int field) {
 		d = _vm->getStage();
 		break;
 	case kTheStageBottom:
-		{
-			Window *window = _vm->getCurrentWindow();
-			d = window->_window->getInnerDimensions().bottom;
-		}
+		d = _vm->getStage()->_window->getInnerDimensions().bottom;
 		break;
 	case kTheStageColor:
 		// TODO: Provide proper reverse transform for non-indexed color
 		d = (int)g_director->transformColor(g_director->getCurrentWindow()->getStageColor());
 		break;
 	case kTheStageLeft:
-		{
-			Window *window = _vm->getCurrentWindow();
-			d = window->_window->getInnerDimensions().left;
-		}
+		d = _vm->getStage()->_window->getInnerDimensions().left;
 		break;
 	case kTheStageRight:
-		{
-			Window *window = _vm->getCurrentWindow();
-			d = window->_window->getInnerDimensions().right;
-		}
+		d = _vm->getStage()->_window->getInnerDimensions().right;
 		break;
 	case kTheStageTop:
-		{
-			Window *window = _vm->getCurrentWindow();
-			d = window->_window->getInnerDimensions().top;
-		}
+		d = _vm->getStage()->_window->getInnerDimensions().top;
 		break;
 	case kTheStillDown:
 		if (Director::DT::isMouseInputIgnored()) {
@@ -1462,6 +1455,10 @@ void Lingo::setTheEntity(int entity, Datum &id, int field, Datum &d) {
 			}
 		}
 		break;
+	case kTheSoundDevice:
+		// Ignored: ScummVM has one fixed output with no switchable backend,
+		// as in Director when the requested device is unavailable.
+		break;
 	case kTheSoundKeepDevice:
 		// We do not need to unload the sound driver, so just ignore this.
 		break;
@@ -1489,9 +1486,11 @@ void Lingo::setTheEntity(int entity, Datum &id, int field, Datum &d) {
 		movie->_timeOutKeyDown = d.asInt();
 		break;
 	case kTheTimeoutLapsed:
-		// timeOutLapsed can be set in D4, but can't in D3. see D3.1 interactivity manual p312 and D4 dictionary p296.
-		if (g_director->getVersion() >= 400 && (d.type == INT || d.type == FLOAT)) {
-			g_director->_tickBaseline = (int)g_director->getMacTicks() - d.asInt();
+		// The D3.1 interactivity interactivity manual p312 says timeoutLapsed can't be set,
+		// but it is lying. D2 and D3 Mac will let you set it, and games like ybr1 use it.
+		// See D4 dictionary p296.
+		if ((d.type == INT || d.type == FLOAT)) {
+			movie->_lastTimeOut = (int)g_director->getMacTicks() - d.asInt();
 		}
 		if (d.type != INT) {
 			warning("Lingo::setTheEntity() : Wrong DatumType %d for setting of Lingo Property timeOutLapsed", d.type);
@@ -1843,7 +1842,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 			uint32 newColor = g_director->transformColor(d.asInt());
 			if (newColor != sprite->_backColor) {
 				sprite->_backColor = newColor;
-				channel->_dirty = true;
+				channel->setDirty();
 
 				// Based on Director in a Nutshell, page 15
 				sprite->setAutoPuppet(kAPBackColor, true);
@@ -1856,7 +1855,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 			int blend = (100 - CLIP(d.asInt(), 0, 100)) * 255 / 100;
 			if (blend != sprite->_blendAmount) {
 				sprite->_blendAmount = blend;
-				channel->_dirty = true;
+				channel->setDirty();
 			}
 
 			if (d.asInt() == 0)
@@ -1874,11 +1873,8 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 			CastMemberID targetMember = d.asMemberID();
 
 			if (targetMember != sprite->_castId) {
-				movie->getWindow()->addDirtyRect(channel->getBbox());
 				channel->setCast(targetMember);
 				// Ensure the new sprite, whether larger or smaller, appears correctly on the screen
-				movie->getWindow()->addDirtyRect(channel->getBbox());
-				channel->_dirty = true;
 			}
 		}
 		break;
@@ -1912,12 +1908,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 			// Since Digital Video dimensions get clarified after loading,
 			// we enforce them here
 			if (castId != sprite->_castId || (castMember && castMember->_type == kCastDigitalVideo)) {
-				if (!sprite->_trails) {
-					movie->getWindow()->addDirtyRect(channel->getBbox());
-					channel->_dirty = true;
-				}
 				channel->setCast(castId);
-				channel->_dirty = true;
 			}
 		}
 		break;
@@ -1939,7 +1930,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 			}
 			if (channelId != -1 && channelId != (int)channel->_constraint) {
 				channel->_constraint = d.u.i;
-				channel->_dirty = true;
+				channel->setDirty();
 			}
 		}
 		break;
@@ -1956,7 +1947,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheFlipH: // D7
 		sprite->_thickness = (sprite->_thickness & ~kTFlipH) | ((d.asInt() ? kTFlipH : 0));
-		channel->_dirty = true;
+		channel->setDirty();
 
 		sprite->setAutoPuppet(kAPThickness, true);
 
@@ -1964,7 +1955,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheFlipV: // D7
 		sprite->_thickness = (sprite->_thickness & ~kTFlipV) | ((d.asInt() ? kTFlipV : 0));
-		channel->_dirty = true;
+		channel->setDirty();
 
 		sprite->setAutoPuppet(kAPThickness, true);
 
@@ -1975,7 +1966,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 			uint32 newColor = g_director->transformColor(d.asInt());
 			if (newColor != sprite->_foreColor) {
 				sprite->_foreColor = newColor;
-				channel->_dirty = true;
+				channel->setDirty();
 			}
 
 			// Based on Director in a Nutshell, page 15
@@ -1984,9 +1975,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheHeight:
 		if (d.asInt() != channel->getHeight()) {
-			g_director->getCurrentWindow()->addDirtyRect(channel->getBbox());
 			channel->setHeight(d.asInt());
-			channel->_dirty = true;
 		}
 
 		// Based on Director in a Nutshell, page 15
@@ -1999,7 +1988,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 	case kTheInk:
 		if (d.asInt() != sprite->_ink) {
 			sprite->_ink = static_cast<InkType>(d.asInt());
-			channel->_dirty = true;
+			channel->setDirty();
 		}
 
 		// Based on Director in a Nutshell, page 15
@@ -2008,26 +1997,20 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheLineSize:
 		sprite->_thickness = (sprite->_thickness & ~kTThickness) | ((d.asInt() + 1) & kTThickness);
-		channel->_dirty = true;
+		channel->setDirty();
 
 		sprite->setAutoPuppet(kAPThickness, true);
 		break;
 	case kTheLoc:
 		if (channel->getPosition() != d.asPoint()) {
-			movie->getWindow()->addDirtyRect(channel->getBbox());
-			channel->_dirty = true;
+			channel->setNeedsDraw();
 		}
 		channel->setPosition(d.asPoint().x, d.asPoint().y);
 		break;
 	case kTheLocH:
 		if (d.asInt() != channel->getPosition().x) {
-			// Only add a dirty rectangle for the original position if we're not rendering in trails mode.
-			// Otherwise, it will erase the trail.
-			if (!channel->_sprite->_trails) {
-				movie->getWindow()->addDirtyRect(channel->getBbox());
-			}
-			channel->_dirty = true;
 			channel->setPosition(d.asInt(), channel->getPosition().y);
+			channel->setNeedsDraw();
 		}
 
 		// Based on Director in a Nutshell, page 15
@@ -2036,11 +2019,8 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheLocV:
 		if (d.asInt() != channel->getPosition().y) {
-			if (!channel->_sprite->_trails) {
-				movie->getWindow()->addDirtyRect(channel->getBbox());
-			}
-			channel->_dirty = true;
 			channel->setPosition(channel->getPosition().x, d.asInt());
+			channel->setNeedsDraw();
 		}
 
 		// Based on Director in a Nutshell, page 15
@@ -2056,22 +2036,24 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheMovieRate:
 		channel->_movieRate = d.asFloat();
-		if (sprite->_cast && sprite->_cast->_type == kCastDigitalVideo)
+		if (sprite->_cast && sprite->_cast->_type == kCastDigitalVideo) {
+			((DigitalVideoCastMember *)sprite->_cast)->setChannel(channel);
 			((DigitalVideoCastMember *)sprite->_cast)->setMovieRate(channel->_movieRate);
-		else
+		} else
 			warning("Setting movieTime for non-digital video");
 		break;
 	case kTheMovieTime:
 		channel->_movieTime = d.asInt();
-		if (sprite->_cast->_type == kCastDigitalVideo)
+		if (sprite->_cast && sprite->_cast->_type == kCastDigitalVideo) {
+			((DigitalVideoCastMember *)sprite->_cast)->setChannel(channel);
 			((DigitalVideoCastMember *)sprite->_cast)->seekMovie(channel->_movieTime);
-		else
+		} else
 			warning("Setting movieTime for non-digital video");
 		break;
 	case kThePattern:
 		if (d.asInt() != sprite->getPattern()) {
 			sprite->setPattern(d.asInt());
-			channel->_dirty = true;
+			channel->setDirty();
 		}
 		break;
 	case kThePuppet:
@@ -2088,7 +2070,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 				d.u.farr->arr[0].u.i, d.u.farr->arr[1].u.i,
 				d.u.farr->arr[2].u.i, d.u.farr->arr[3].u.i
 			);
-			channel->_dirty = true;
+			channel->setDirty();
 		}
 
 		// Based on Director in a Nutshell, page 15
@@ -2100,16 +2082,18 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheStartTime:
 		channel->_startTime = d.asInt();
-		if (sprite->_cast->_type == kCastDigitalVideo)
+		if (sprite->_cast && sprite->_cast->_type == kCastDigitalVideo) {
+			((DigitalVideoCastMember *)sprite->_cast)->setChannel(channel);
 			((DigitalVideoCastMember *)sprite->_cast)->seekMovie(channel->_startTime);
-		else
+		} else
 			warning("Setting startTime for non-digital video");
 		break;
 	case kTheStopTime:
 		channel->_stopTime = d.asInt();
-		if (sprite->_cast->_type == kCastDigitalVideo)
+		if (sprite->_cast && sprite->_cast->_type == kCastDigitalVideo) {
+			((DigitalVideoCastMember *)sprite->_cast)->setChannel(channel);
 			((DigitalVideoCastMember *)sprite->_cast)->setStopTime(channel->_stopTime);
-		else
+		} else
 			warning("Setting stopTime for non-digital video");
 		break;
 	case kTheStretch:
@@ -2121,12 +2105,12 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 	case kTheType:
 		if (d.asInt() != sprite->_spriteType) {
 			sprite->_spriteType = static_cast<SpriteType>(d.asInt());
-			channel->_dirty = true;
+			channel->setDirty();
 		}
 		break;
 	case kTheTweened: // D6
 		sprite->_thickness = (sprite->_thickness & ~kTTweened) | ((d.asInt() ? kTTweened : 0));
-		channel->_dirty = true;
+		channel->setDirty();
 
 		sprite->setAutoPuppet(kAPThickness, true);
 
@@ -2136,7 +2120,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 	case kTheVisible:
 		if ((bool)d.asInt() != channel->_visible) {
 			channel->_visible = (bool)d.asInt();
-			channel->_dirty = true;
+			channel->setNeedsDraw();
 		}
 		break;
 	case kTheVolume:
@@ -2145,9 +2129,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		break;
 	case kTheWidth:
 		if (d.asInt() != channel->getWidth()) {
-			g_director->getCurrentWindow()->addDirtyRect(channel->getBbox());
 			channel->setWidth(d.asInt());
-			channel->_dirty = true;
 		}
 
 		// Based on Director in a Nutshell, page 15
@@ -2158,8 +2140,6 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 		warning("Lingo::setTheSprite(): Unprocessed setting field \"%s\" of sprite", field2str(field));
 	}
 
-	if (channel->_dirty)
-		movie->getWindow()->addDirtyRect(channel->getBbox());
 }
 
 Datum Lingo::getTheCast(Datum &id1, int field) {
@@ -2215,9 +2195,15 @@ void Lingo::setTheCast(Datum &id1, int field, Datum &d) {
 	}
 
 	CastMemberID id = id1.asMemberID();
-
 	CastMember *member = movie->getCastMember(id);
+
 	if (!member) {
+		if (id.member >= 1 && id.member <= movie->getMaxCastID()) {
+			debugC(1, kDebugLingoExec,
+				  "Lingo::setTheCast(): %s not found, ignoring (empty slot within cast bounds)",
+				  id.asString().c_str());
+			return;
+		}
 		g_lingo->lingoError("Lingo::setTheCast(): %s not found", id.asString().c_str());
 		return;
 	}
@@ -2261,7 +2247,12 @@ Datum Lingo::getTheCastLib(Datum &id1, int field) {
 
 	switch (field) {
 	case kTheFileName:
-		d = cast->getArchive()->getPathName().toString(g_director->_dirSeparator);
+		// The cast archive may not be attached yet, e.g. when Lingo runs
+		// before the movie finished loading.
+		if (cast->getArchive())
+			d = cast->getArchive()->getPathName().toString(g_director->_dirSeparator);
+		else
+			d = Common::String();
 		break;
 	case kTheName:
 		d = cast->getCastName();
@@ -2337,7 +2328,7 @@ Datum Lingo::getTheField(Datum &id1, int field) {
 		return d;
 	}
 
-	CastMemberID id = id1.asMemberID();
+	CastMemberID id = id1.asMemberID(kCastText);
 
 	CastMember *member = movie->getCastMember(id);
 	if (!member) {
@@ -2523,6 +2514,10 @@ void Lingo::getObjectProp(Datum &obj, Common::String &propName) {
 			d = obj.u.farr->arr[2];
 		} else if (propName.equalsIgnoreCase("bottom")) {
 			d = obj.u.farr->arr[3];
+		} else if (propName.equalsIgnoreCase("width")) {
+			d = obj.u.farr->arr[2].asInt() - obj.u.farr->arr[0].asInt();
+		} else if (propName.equalsIgnoreCase("height")) {
+			d = obj.u.farr->arr[3].asInt() - obj.u.farr->arr[1].asInt();
 		} else {
 			g_lingo->lingoError("Lingo::getObjectProp: Rect <%s> has no property '%s'", obj.asString(true).c_str(), propName.c_str());
 		}
@@ -2683,6 +2678,10 @@ void Lingo::setObjectProp(Datum &obj, Common::String &propName, Datum &val) {
 			obj.u.farr->arr[2] = val.asInt();
 		} else if (propName.equalsIgnoreCase("bottom")) {
 			obj.u.farr->arr[3] = val.asInt();
+		} else if (propName.equalsIgnoreCase("width")) {
+			obj.u.farr->arr[2] = obj.u.farr->arr[0].asInt() + val.asInt();
+		} else if (propName.equalsIgnoreCase("height")) {
+			obj.u.farr->arr[3] = obj.u.farr->arr[1].asInt() + val.asInt();
 		} else {
 			g_lingo->lingoError("Lingo::setObjectProp: Rect <%s> has no property '%s'", obj.asString(true).c_str(), propName.c_str());
 		}

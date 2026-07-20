@@ -133,13 +133,13 @@ public:
 	Common::String _name;
 };
 
-class EngineResourceDeclaration {
+class ParamTokenDeclaration {
 public:
-	EngineResourceDeclaration(Common::String resourceName, int resourceId) : _name(resourceName), _id(resourceId) {};
-	EngineResourceDeclaration() {};
+	ParamTokenDeclaration(Common::String resourceName, Common::String resourceId) : _name(resourceName), _id(resourceId) {};
+	ParamTokenDeclaration() {};
 
 	Common::String _name;
-	int _id = 0;
+	Common::String _id;
 };
 
 enum BootSectionType {
@@ -149,8 +149,8 @@ enum BootSectionType {
 	kBootUnk1 = 0x0191,
 	kBootFunctionTableSize = 0x0192,
 	kBootUnk3 = 0x0193,
-	kBootEngineResource = 0x0bba,
-	kBootEngineResourceId = 0x0bbb,
+	kBootParamTokenDeclaration = 0x0bba,
+	kBootParamTokenValue = 0x0bbb,
 	kBootScreenReference = 0x0007,
 	kBootFileInfo = 0x000a,
 	kBootStreamInfo = 0x000b,

@@ -20,14 +20,22 @@
  */
 
 #include "audio/ym2149.h"
+#ifdef ATARI
+#include "audio/atari_ym2149.h"
+#else
 #include "audio/softsynth/ym2149.h"
+#endif
 
 #include "common/textconsole.h"
 
 namespace YM2149 {
 
 YM2149 *Config::create() {
+#ifdef ATARI
+	return new Audio::YM2149Atari();
+#else
 	return new Audio::YM2149Emu();
+#endif
 }
 
 bool YM2149::_hasInstance = false;

@@ -22,6 +22,7 @@
 #include "common/config-manager.h"
 
 #include "mediastation/mediastation.h"
+#include "mediastation/debugger.h"
 #include "mediastation/debugchannels.h"
 #include "mediastation/detection.h"
 #include "mediastation/boot.h"
@@ -50,69 +51,45 @@ MediaStationEngine::MediaStationEngine(OSystem *syst, const ADGameDescription *g
 		Common::String directoryGlob = directoryGlobs[i];
 		SearchMan.addSubDirectoryMatching(_gameDataDir, directoryGlob, 0, 5);
 	}
-
-	_channelIdent = MKTAG('i', 'g', 'o', 'd'); // ImtGod
 }
 
 MediaStationEngine::~MediaStationEngine() {
-	for (auto it = _loadedContexts.begin(); it != _loadedContexts.end(); ++it) {
-		destroyContext(it->_value->_id, false);
-	}
-	_loadedContexts.clear();
-
-	// Only delete the document actor.
-	// The root stage is deleted from stage director, and
-	// the other actors are deleted from their contexts.
-	destroyActor(DocumentActor::DOCUMENT_ACTOR_ID);
-
-	delete _displayManager;
-	_displayManager = nullptr;
-
-	delete _cursorManager;
-	_cursorManager = nullptr;
-
-	delete _functionManager;
-	_functionManager = nullptr;
-
-	delete _document;
-	_document = nullptr;
-
+	// The base Engine cleans up the debugger.
+	_imtGod->destroyAllContexts();
 	delete _deviceOwner;
-	_deviceOwner = nullptr;
-
+	// _cacheManager->removeCache();
 	delete _stageDirector;
-	_stageDirector = nullptr;
-
-	unregisterWithStreamManager();
+	delete _cursorManager;
+	delete _document;
+	_imtGod->destroyActor(DocumentActor::DOCUMENT_ACTOR_ID);
+	delete _displayManager;
+	delete _displayUpdateManager;
+	delete _functionManager;
+	delete _printManager;
+	delete _imtGod;
+	// delete _streamProfiler;
 	delete _streamFeedManager;
-	_streamFeedManager = nullptr;
-
+	// delete _cacheManager;
+	delete _timerService;
+	delete _eventLoop;
 	delete _profile;
-	_profile = nullptr;
-
-	_contextReferences.clear();
-	_streamMap.clear();
-	_engineResourceDeclarations.clear();
-	_screenReferences.clear();
-	_fileMap.clear();
-	_actors.clear();
 }
 
-Actor *MediaStationEngine::getActorById(uint actorId) {
+Actor *ImtGod::getActorById(uint actorId) {
 	return _actors.getValOrDefault(actorId);
 }
 
-Actor *MediaStationEngine::getActorByIdAndType(uint actorId, ActorType expectedType) {
+Actor *ImtGod::getActorByIdAndType(uint actorId, ActorType expectedType) {
 	Actor *actor = getActorById(actorId);
 	if (actor == nullptr) {
-		error("[%s] %s: Actor doesn't exist", g_engine->formatActorName(actorId).c_str(), __func__);
+		error("[%s] %s: Actor doesn't exist", _vm->formatActorName(actorId).c_str(), __func__);
 	} else if (actor->type() != expectedType) {
 		error("[%s] %s: Expected type %s, got %s", actor->debugName(), __func__, actorTypeToStr(actor->type()), actorTypeToStr(expectedType));
 	}
 	return actor;
 }
 
-SpatialEntity *MediaStationEngine::getSpatialEntityById(uint spatialEntityId) {
+SpatialEntity *ImtGod::getSpatialEntityById(uint spatialEntityId) {
 	Actor *actor = getActorById(spatialEntityId);
 	if (actor != nullptr) {
 		if (!actor->isSpatialActor()) {
@@ -123,11 +100,11 @@ SpatialEntity *MediaStationEngine::getSpatialEntityById(uint spatialEntityId) {
 	return nullptr;
 }
 
-ChannelClient *MediaStationEngine::getChannelClientByChannelIdent(uint channelIdent) {
-	return _streamFeedManager->channelClientForChannel(channelIdent);
+ChannelClient *ImtGod::getChannelClientByChannelIdent(uint channelIdent) {
+	return _vm->getStreamFeedManager()->channelClientForChannel(channelIdent);
 }
 
-ScriptValue *MediaStationEngine::getVariable(uint variableId) {
+ScriptValue *ImtGod::getVariable(uint variableId) {
 	for (auto it = _loadedContexts.begin(); it != _loadedContexts.end(); ++it) {
 		ScriptValue *variable = it->_value->_variables.getValOrDefault(variableId);
 		if (variable != nullptr) {
@@ -135,6 +112,14 @@ ScriptValue *MediaStationEngine::getVariable(uint variableId) {
 		}
 	}
 	return nullptr;
+}
+
+Context *ImtGod::getContextById(uint contextId) {
+	return _loadedContexts.getValOrDefault(contextId);
+}
+
+bool ImtGod::isFirstGenerationEngine() const {
+	return _versionInfo.major == 0;
 }
 
 uint32 MediaStationEngine::getFeatures() const {
@@ -153,57 +138,42 @@ const char *MediaStationEngine::getAppName() const {
 	return _gameDescription->filesDescriptions[0].fileName;
 }
 
-bool MediaStationEngine::isFirstGenerationEngine() {
-	return _versionInfo.major == 0;
+bool MediaStationEngine::hasFeature(EngineFeature f) const {
+	return (f == kSupportsReturnToLauncher);
+}
+
+uint MediaStationEngine::currentTimeInSeconds() {
+	// Calculate seconds since midnight.
+	TimeDate timeDate;
+	g_system->getTimeAndDate(timeDate);
+	uint secondsSinceMidnight = (timeDate.tm_hour * 60 + timeDate.tm_min) * 60 + timeDate.tm_sec;
+	return secondsSinceMidnight;
 }
 
 Common::Error MediaStationEngine::run() {
-	initDisplayManager();
-	initCursorManager();
-	initFunctionManager();
-	initDocument();
-	initDeviceOwner();
-	initStageDirector();
-	initStreamFeedManager();
-	initProfile();
-	setupInitialStreamMap();
-
-	if (ConfMan.hasKey("entry_context")) {
-		// For development purposes, we can choose to start at an arbitrary context
-		// in this title. This might not work in all cases.
-		uint entryContextId = ConfMan.get("entry_context").asUint64();
-		warning("%s: Starting at user-requested context %d", __func__, entryContextId);
-		_document->beginTitle(entryContextId);
-	} else {
-		_document->beginTitle();
-	}
-
-	runEventLoop();
-	return Common::kNoError;
-}
-
-void MediaStationEngine::runEventLoop() {
-	while (true) {
-		dispatchSystemEvents();
-		if (shouldQuit()) {
-			break;
-		}
-		_document->process();
-
-		debugC(9, kDebugGraphics, "***** START SCREEN UPDATE ***");
-		for (auto it = _actors.begin(); it != _actors.end(); ++it) {
-			it->_value->process();
-		}
-		draw();
-		debugC(9, kDebugGraphics, "***** END SCREEN UPDATE ***");
-
-		g_system->delayMillis(10);
-	}
-}
-
-void MediaStationEngine::initDisplayManager() {
+	_debugger = new Debugger(this);
+	setDebugger(_debugger);
+	_eventLoop = new EventLoop;
+	_timerService = new TimerService;
+	_streamFeedManager = new StreamFeedManager;
+	// _cacheManager = new CacheManager;
+	// _streamProfiler = new StreamProfiler;
+	_imtGod = new ImtGod(this);
+	_deviceOwner = new ImtDeviceOwner;
+	_functionManager = new FunctionManager;
+	_displayUpdateManager = new DisplayUpdateManager;
 	_displayManager = new VideoDisplayManager(this);
-	_parameterClients.push_back(_displayManager);
+	_printManager = new PrintManager;
+	_document = new Document;
+	DocumentActor *documentActor = new DocumentActor;
+	_imtGod->addConstructedActor(documentActor);
+	initCursorManager();
+	_stageDirector = new StageDirector;
+	_profile = new Profile();
+	_profile->load();
+	_document->beginTitle();
+	_eventLoop->run();
+	return Common::kNoError;
 }
 
 void MediaStationEngine::initCursorManager() {
@@ -214,43 +184,31 @@ void MediaStationEngine::initCursorManager() {
 	} else {
 		error("%s: Attempted to use unsupported platform %s", __func__, Common::getPlatformDescription(getPlatform()));
 	}
-	_parameterClients.push_back(_cursorManager);
 	_cursorManager->showCursor();
 }
 
-void MediaStationEngine::initFunctionManager() {
-	_functionManager = new FunctionManager();
-	_parameterClients.push_back(_functionManager);
+void MediaStationEngine::registerAudioSequence(AudioSequence *sequence) {
+	_activeAudioSequences[sequence] = sequence;
 }
 
-void MediaStationEngine::initDocument() {
-	_document = new Document();
-	_parameterClients.push_back(_document);
-
-	DocumentActor *documentActor = new DocumentActor;
-	registerActor(documentActor);
+void MediaStationEngine::unregisterAudioSequence(AudioSequence *sequence) {
+	_activeAudioSequences.erase(sequence);
 }
 
-void MediaStationEngine::initDeviceOwner() {
-	_deviceOwner = new DeviceOwner();
-	_parameterClients.push_back(_deviceOwner);
+void MediaStationEngine::serviceSounds() {
+	for (auto it = _activeAudioSequences.begin(); it != _activeAudioSequences.end(); ++it) {
+		AudioSequence *sequence = it->_value;
+		sequence->service();
+	}
 }
 
-void MediaStationEngine::initStageDirector() {
-	_stageDirector = new StageDirector;
-}
-
-void MediaStationEngine::initStreamFeedManager() {
-	_streamFeedManager = new StreamFeedManager;
+ImtGod::ImtGod(MediaStationEngine *vm) : _vm(vm) {
+	_channelIdent = MKTAG('i', 'g', 'o', 'd');
 	registerWithStreamManager();
+	setupInitialStreamMap();
 }
 
-void MediaStationEngine::initProfile() {
-	_profile = new Profile();
-	_profile->load("PROFILE._ST");
-}
-
-void MediaStationEngine::setupInitialStreamMap() {
+void ImtGod::setupInitialStreamMap() {
 	StreamInfo streamInfo;
 	streamInfo._actorId = 0;
 	streamInfo._fileId = MediaStationEngine::BOOT_STREAM_ID;
@@ -264,87 +222,54 @@ void MediaStationEngine::setupInitialStreamMap() {
 	_fileMap.setVal(fileInfo._id, fileInfo);
 }
 
-void MediaStationEngine::dispatchSystemEvents() {
-	while (g_system->getEventManager()->pollEvent(_event)) {
-		debugC(9, kDebugEvents, "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-		debugC(9, kDebugEvents, "@@@@   Dispatching system events");
-		debugC(9, kDebugEvents, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
-
-		switch (_event.type) {
-		case Common::EVENT_MOUSEMOVE:
-			_stageDirector->handleMouseMovedEvent(_event);
-			break;
-
-		case Common::EVENT_KEYDOWN:
-			_stageDirector->handleKeyboardEvent(_event);
-			break;
-
-		case Common::EVENT_LBUTTONDOWN:
-			_stageDirector->handleMouseDownEvent(_event);
-			break;
-
-		case Common::EVENT_LBUTTONUP:
-			_stageDirector->handleMouseUpEvent(_event);
-			break;
-
-		case Common::EVENT_FOCUS_LOST:
-			_stageDirector->handleMouseOutOfFocusEvent(_event);
-			break;
-
-		case Common::EVENT_RBUTTONDOWN:
-			// We are using the right button as a quick exit since the Media
-			// Station engine doesn't seem to use the right button itself.
-			warning("%s: EVENT_RBUTTONDOWN: Quitting for development purposes", __func__);
-			quitGame();
-			break;
-
-		default:
-			// Avoid warnings about unimplemented cases by having an explicit
-			// default case.
-			break;
-		}
-	}
+ImtGod::~ImtGod() {
+	unregisterWithStreamManager();
+	destroyAllContexts();
+	_contextReferences.clear();
+	_streamMap.clear();
+	_paramTokenDeclarations.clear();
+	_screenReferences.clear();
+	_fileMap.clear();
+	_actors.clear();
 }
 
-void MediaStationEngine::draw(bool dirtyOnly) {
-	if (dirtyOnly) {
-		_stageDirector->drawDirtyRegion();
-	} else {
-		_stageDirector->drawAll();
-	}
-	_stageDirector->clearDirtyRegion();
-	_displayManager->updateScreen();
-	_displayManager->doTransitionOnSync();
-}
-
-void MediaStationEngine::registerActor(Actor *actorToAdd) {
+void ImtGod::addConstructedActor(Actor *actorToAdd) {
 	if (getActorById(actorToAdd->id())) {
 		error("[%s] %s: Already defined in this title", actorToAdd->debugName(), __func__);
 	}
 	_actors.setVal(actorToAdd->id(), actorToAdd);
 }
 
-void MediaStationEngine::destroyActor(uint actorId) {
+void ImtGod::destroyActor(uint actorId) {
+	// This performs the role of both destroyActor and removeConstructedActor in the original.
 	Actor *actorToDestroy = getActorById(actorId);
 	if (actorToDestroy) {
 		delete _actors[actorId];
 		_actors.erase(actorId);
 	} else {
-		warning("[%s] %s: Not currently loaded", formatActorName(actorId).c_str(), __func__);
+		warning("[%s] %s: Not currently loaded", _vm->formatActorName(actorId).c_str(), __func__);
 	}
 }
 
-void MediaStationEngine::destroyContext(uint contextId, bool eraseFromLoadedContexts) {
-	debugC(5, kDebugScript, "%s: Context %d", __func__, contextId);
+void ImtGod::registerParameterClient(ParameterClient *client) {
+	_parameterClients[client] = client;
+}
+
+void ImtGod::unregisterParameterClient(ParameterClient * client) {
+	_parameterClients.erase(client);
+}
+
+void ImtGod::destroyContext(uint contextId, bool eraseFromLoadedContexts) {
+	debugC(5, kDebugScript, "%s: Context %s", __func__, _vm->formatActorName(contextId).c_str());
 	Context *context = _loadedContexts.getValOrDefault(contextId);
 	if (context == nullptr) {
-		warning("%s: Attempted to unload context %d that is not currently loaded", __func__, contextId);
+		warning("%s: Attempted to unload context %s that is not currently loaded", __func__, _vm->formatActorName(contextId).c_str());
 		return;
 	}
 
-	getRootStage()->deleteChildrenFromContextId(contextId);
+	_vm->getRootStage()->deleteChildrenFromContextId(contextId);
 	destroyActorsInContext(contextId);
-	_functionManager->deleteFunctionsForContext(contextId);
+	_vm->getFunctionManager()->deleteFunctionsForContext(contextId);
 
 	delete context;
 	if (eraseFromLoadedContexts) {
@@ -354,20 +279,19 @@ void MediaStationEngine::destroyContext(uint contextId, bool eraseFromLoadedCont
 	}
 }
 
-bool MediaStationEngine::contextIsLocked(uint contextId) {
-	for (auto it = _loadedContexts.begin(); it != _loadedContexts.end(); ++it) {
-		uint id = it->_key;
-		ContextReference contextReference = _contextReferences.getVal(id);
-		for (uint childContextId : contextReference._parentContextIds) {
-			if (childContextId == contextId) {
-				return true;
-			}
-		}
-	}
-	return false;
+void ImtGod::lockContext(uint contextId) {
+	_lockedContextIds.setVal(contextId, true);
 }
 
-void MediaStationEngine::destroyActorsInContext(uint contextId) {
+bool ImtGod::contextIsLocked(uint contextId) {
+	return _lockedContextIds.contains(contextId);
+}
+
+void ImtGod::clearAllContextLocks() {
+	_lockedContextIds.clear();
+}
+
+void ImtGod::destroyActorsInContext(uint contextId) {
 	// Collect actors to remove first, then delete them.
 	// This is necessary because calling erase on a hashmap invalidates
 	// the iterators, so collecting them all first makes more sense.
@@ -385,9 +309,19 @@ void MediaStationEngine::destroyActorsInContext(uint contextId) {
 	}
 }
 
-void MediaStationEngine::readUnrecognizedFromStream(Chunk &chunk, uint sectionType) {
+void ImtGod::destroyAllContexts() {
+	// The original had a bug where loaded assets would not be explicitly freed upon quitting
+	// the engine. To avoid these leaks, call the full destroyContext each time.
+	for (auto it = _loadedContexts.begin(); it != _loadedContexts.end(); ++it) {
+		destroyContext(it->_value->_id, false);
+	}
+	_loadedContexts.clear();
+}
+
+void ImtGod::readUnrecognizedFromStream(Chunk &chunk, uint sectionType) {
 	bool paramHandled = false;
-	for (ParameterClient *client : g_engine->_parameterClients) {
+	for (auto it = _parameterClients.begin(); it != _parameterClients.end(); ++it) {
+		ParameterClient *client = it->_value;
 		if (client->attemptToReadFromStream(chunk, sectionType)) {
 			paramHandled = true;
 			break;
@@ -399,7 +333,7 @@ void MediaStationEngine::readUnrecognizedFromStream(Chunk &chunk, uint sectionTy
 	}
 }
 
-void MediaStationEngine::readChunk(Chunk &chunk) {
+void ImtGod::readChunk(Chunk &chunk) {
 	StreamType streamType = static_cast<StreamType>(chunk.readTypedUint16());
 	switch (streamType) {
 	case kDocumentDefStream:

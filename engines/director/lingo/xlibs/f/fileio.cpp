@@ -128,6 +128,7 @@ delete object me -- deletes the open file
 #include "image/pict.h"
 
 #include "director/director.h"
+#include "director/archive.h"
 #include "director/picture.h"
 #include "director/types.h"
 #include "director/util.h"
@@ -208,7 +209,6 @@ FileObject::FileObject(ObjectType objType) : Object<FileObject>("FileIO") {
 	_objType = objType;
 	_filename = nullptr;
 	_inStream = nullptr;
-	_outFile = nullptr;
 	_outStream = nullptr;
 	_lastError = kErrorNone;
 }
@@ -217,7 +217,6 @@ FileObject::FileObject(const FileObject &obj) : Object<FileObject>(obj) {
 	_objType = obj.getObjType();
 	_filename = nullptr;
 	_inStream = nullptr;
-	_outFile = nullptr;
 	_outStream = nullptr;
 	_lastError = kErrorNone;
 }
@@ -288,32 +287,23 @@ FileIOError FileObject::open(const Common::String &origpath, const Common::Strin
 		}
 	} else if (option.equalsIgnoreCase("write")) {
 		// OutSaveFile is not seekable so create a separate seekable stream
-		// which will be written to the _outFile upon disposal
-		_outFile = saves->openForSaving(filename, false);
+		// which will be written to the save file upon disposal
 		_outStream = new Common::MemoryWriteStreamDynamic(DisposeAfterUse::YES);
-		if (!_outFile) {
-			return saveFileError();
-		}
 	} else if (option.equalsIgnoreCase("append")) {
 		Common::SeekableReadStream *inFile = saves->openForLoading(filename);
 		if (!inFile) {
+			// Create file if it doesn't exist.
 			Common::Path location = findPath(origpath);
-			Common::SeekableReadStream *file = Common::MacResManager::openFileOrDataFork(location);
-			if (!file) {
-				return saveFileError();
-			}
-			inFile = file;
+			inFile = Common::MacResManager::openFileOrDataFork(location);
 		}
 		_outStream = new Common::MemoryWriteStreamDynamic(DisposeAfterUse::YES);
-		byte b = inFile->readByte();
-		while (!inFile->eos() && !inFile->err()) {
-			_outStream->writeByte(b);
-			b = inFile->readByte();
-		}
-		delete inFile;
-		_outFile = saves->openForSaving(filename, false);
-		if (!_outFile) {
-			return saveFileError();
+		if (inFile) {
+			byte b = inFile->readByte();
+			while (!inFile->eos() && !inFile->err()) {
+				_outStream->writeByte(b);
+				b = inFile->readByte();
+			}
+			delete inFile;
 		}
 	} else {
 		error("Unsupported FileIO option: '%s'", option.c_str());
@@ -324,6 +314,23 @@ FileIOError FileObject::open(const Common::String &origpath, const Common::Strin
 }
 
 void FileObject::clear() {
+	if (_outStream) {
+		// When opening a file in write mode with FileIO, any existing data is only destroyed
+		// after the first write. In order to be compatible with the POSIX expectation that
+		// opening a write handle destroys the file, we need to defer the actual save operation
+		// until after we know data has been written.
+		if (_outStream->size()) {
+			Common::SaveFileManager *saves = g_system->getSavefileManager();
+			Common::OutSaveFile *outFile = saves->openForSaving(*_filename, false);
+			outFile->write(_outStream->getData(), _outStream->size());
+			outFile->finalize();
+			// Add to search index
+			((SavedArchive *)SearchMan.getArchive(kSavedFilesArchive))->_addFile(*_filename);
+			delete outFile;
+		}
+		delete _outStream;
+		_outStream = nullptr;
+	}
 	if (_filename) {
 		delete _filename;
 		_filename = nullptr;
@@ -331,14 +338,6 @@ void FileObject::clear() {
 	if (_inStream) {
 		delete _inStream;
 		_inStream = nullptr;
-	}
-	if (_outFile) {
-		_outFile->write(_outStream->getData(), _outStream->size());
-		_outFile->finalize();
-		delete _outFile;
-		delete _outStream;
-		_outFile = nullptr;
-		_outStream = nullptr;
 	}
 }
 
@@ -396,13 +395,15 @@ void FileIO::m_openFile(int nargs) {
 	int mode = d1.asInt();
 	Common::String option;
 	switch (mode) {
+	case 0:
+		option = "append";
+		break;
 	case 1:
 		option = "read";
 		break;
 	case 2:
 		option = "write";
 		break;
-	case 0:
 	default:
 		warning("FIXME: Mode %d not supported, falling back to read", mode);
 		option = "read";
@@ -568,7 +569,17 @@ void FileIO::m_writeChar(int nargs) {
 		return;
 	}
 
-	me->_outStream->writeByte(d.asInt());
+	// The XObject API passes an integer ASCII code (mWriteChar, charNum),
+	// while the Xtra API passes the character itself as a string (writeChar, theChar).
+	byte ch;
+	if (d.type == STRING) {
+		Common::String s = d.asString();
+		ch = s.empty() ? 0 : (byte)s[0];
+	} else {
+		ch = (byte)d.asInt();
+	}
+
+	me->_outStream->writeByte(ch);
 	g_lingo->push(Datum(kErrorNone));
 }
 

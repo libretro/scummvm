@@ -22,6 +22,7 @@
 #include "audio/audiostream.h"
 #include "audio/mixer.h"
 
+#include "engines/freescape/music.h"
 #include "engines/freescape/games/driller/c64.music.h"
 #include "engines/freescape/games/driller/c64.sfx.h"
 
@@ -45,11 +46,10 @@ public:
 
 	bool _useAutomaticDrilling;
 
-	DrillerSIDPlayer *_playerSid;
+	MusicPlayer *_playerMusic;
 	DrillerC64SFXPlayer *_playerC64Sfx;
 	bool _c64UseSFX;
 
-	void playSoundC64(int index) override;
 	void toggleC64Sound();
 
 	// Only used for Amiga and Atari ST
@@ -68,7 +68,6 @@ public:
 
 	void gotoArea(uint16 areaID, int entranceID) override;
 
-	void playSoundZX(int index, Audio::SoundHandle &handle) override;
 	void drawInfoMenu() override;
 	void drawSensorShoot(Sensor *sensor) override;
 	void drawCompass(Graphics::Surface *surface, int x, int y, double degrees, double magnitude, double fov, uint32 color);
@@ -81,8 +80,8 @@ private:
 	int _finalAreaWinConditionIndex;
 	int _amigaAtariEndGameStep;
 	bool drillDeployed(Area *area);
-	GeometricObject *_drillBase;
 	Math::Vector3d drillPosition();
+	float compassYaw() const;
 	void addDrill(const Math::Vector3d position, bool gasFound);
 	bool checkDrill(const Math::Vector3d position);
 	void removeDrill(Area *area);
@@ -155,7 +154,6 @@ private:
 	Texture *_borderExtraTexture;
 
 	Common::SeekableReadStream *decryptFileAtari(const Common::Path &filename);
-	Common::SeekableReadStream *decryptFileAtariVirtualWorlds(const Common::Path &filename);
 };
 
 enum DrillerReleaseFlags {

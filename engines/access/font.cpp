@@ -37,16 +37,24 @@ int Font::charWidth(char c) const {
 	if (c < _firstCharIndex)
 		return 0;
 
-	return _chars[c - _firstCharIndex].w;
+	return _chars[(byte)c - _firstCharIndex].w;
 }
 
 int Font::stringWidth(const Common::String &msg) const {
 	int total = 0;
+	int maxtotal = 0;
 
-	for (const char *c = msg.c_str(); *c != '\0'; ++c)
+	for (const char *c = msg.c_str(); *c != '\0'; ++c) {
+		if (*c == '\r' || *c == '\n') {
+			maxtotal = MAX(total, maxtotal);
+			total = 0;
+			continue;
+		}
 		total += charWidth(*c);
+	}
 
-	return total;
+	// Include the last line length too..
+	return MAX(total, maxtotal);
 }
 
 bool Font::getLine(Common::String &s, int maxWidth, Common::String &line, int &width,
@@ -57,7 +65,7 @@ bool Font::getLine(Common::String &s, int maxWidth, Common::String &line, int &w
 	char c;
 
 	while ((c = *src) != '\0') {
-		if (c == '\r') {
+		if (c == '\r' || c == '\n') {
 			// End of line, so return calculated line
 			line = Common::String(s.c_str(), src);
 			s = Common::String(src + 1);
@@ -109,7 +117,7 @@ void Font::drawString(BaseSurface *s, const Common::String &msg, const Common::P
 }
 
 int Font::drawChar(BaseSurface *s, char c, Common::Point &pt) const {
-	const Graphics::Surface &ch = _chars[c - _firstCharIndex];
+	const Graphics::Surface &ch = _chars[(byte)c - _firstCharIndex];
 	Graphics::Surface dest = s->getSubArea(Common::Rect(pt.x, pt.y, pt.x + ch.w, pt.y + ch.h));
 
 	// Loop through the lines of the character
@@ -126,6 +134,16 @@ int Font::drawChar(BaseSurface *s, char c, Common::Point &pt) const {
 
 	return ch.w;
 }
+
+int Font::stringHeight(const Common::String &msg) const {
+	int16 height = _height;
+	for (uint i = 0; i < msg.size(); i++) {
+		if (msg[i] == '\r' || msg[i] == '\n')
+			height += _height;
+	}
+	return height;
+}
+
 
 /*------------------------------------------------------------------------*/
 
@@ -256,7 +274,7 @@ FontManager::FontManager() : _font1(nullptr), _font2(nullptr), _bitFont(nullptr)
 	Common::fill(&Font::_fontColors[0], &Font::_fontColors[4], 0);
 }
 
-void FontManager::load(Font *font1, Font *font2, Font *bitFont) {
+void FontManager::load(const Font *font1, const Font *font2, const Font *bitFont) {
 	_font1 = font1;
 	_font2 = font2;
 	_bitFont = bitFont;

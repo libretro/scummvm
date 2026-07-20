@@ -257,7 +257,7 @@ void LauncherDialog::build() {
 		_logo = new GraphicsWidget(this, _title + ".Logo");
 		_logo->setGfxFromTheme(ThemeEngine::kImageLogo);
 
-		new StaticTextWidget(this, _title + ".Version", Common::U32String(gScummVMVersionDate));
+		new StaticTextWidget(this, _title + ".Version", Common::U32String(gScummVMFullVersion));
 	} else
 #endif
 		new StaticTextWidget(this, _title + ".Version", Common::U32String(gScummVMFullVersion));
@@ -888,7 +888,7 @@ void LauncherDialog::reflowLayout() {
 		StaticTextWidget *ver = (StaticTextWidget *)findWidget(Common::String(_title + ".Version").c_str());
 		if (ver) {
 			ver->setAlign(g_gui.xmlEval()->getWidgetTextHAlign(_title + ".Version"));
-			ver->setLabel(Common::U32String(gScummVMVersionDate));
+			ver->setLabel(Common::U32String(gScummVMFullVersion));
 		}
 
 		if (!_logo)
@@ -1001,7 +1001,7 @@ ButtonWidget *LauncherDialog::createSwitchButton(const Common::String &name, con
 #ifndef DISABLE_FANCY_THEMES
 	if (g_gui.xmlEval()->getVar("Globals.ShowChooserPics") == 1 && g_gui.theme()->supportsImages()) {
 		button = new PicButtonWidget(this, name, tooltip, cmd);
-		((PicButtonWidget *)button)->setGfxFromTheme(image, kPicButtonStateEnabled, false);
+		((PicButtonWidget *)button)->setGfxFromTheme(image);
 	} else
 #endif
 		button = new ButtonWidget(this, name, desc, tooltip, cmd);
@@ -1099,7 +1099,30 @@ int LauncherChooser::runModal() {
 	do {
 		ret = _impl->run();
 		if (ret == kSwitchLauncherDialog) {
+			Common::StringArray selectedDomains;
+			const Common::Array<bool> &selections = _impl->getSelectedItems();
+			const Common::StringArray &domains = _impl->getDomains();
+			for (uint i = 0; i < selections.size() && i < domains.size(); ++i) {
+				if (selections[i]) {
+					selectedDomains.push_back(domains[i]);
+				}
+			}
+
 			selectLauncher();
+
+			if (_impl && !selectedDomains.empty()) {
+				const Common::StringArray &newDomains = _impl->getDomains();
+				Common::Array<bool> &newSelections = const_cast<Common::Array<bool>&>(_impl->getSelectedItems());
+				for (const auto &domain : selectedDomains) {
+					for (uint i = 0; i < newDomains.size(); ++i) {
+						if (newDomains[i] == domain) {
+							if (i < newSelections.size())
+								newSelections[i] = true;
+							break;
+						}
+					}
+				}
+			}
 		}
 	} while (ret < -1);
 	return ret;
@@ -1111,7 +1134,7 @@ static const int kSelPosGroupingChange = -2;
 
 LauncherSimple::LauncherSimple(const Common::String &title)
 	: LauncherDialog(title),
-	_list(nullptr) {
+	_list(nullptr), _listInitialized(false) {
 	build();
 }
 
@@ -1255,10 +1278,13 @@ void LauncherSimple::updateListing(int selPos) {
 		savedSelection = _list->saveSelection();
 	}
 
-	// Preserve the current collapsed groups before rebuilding the grouped list
-	if (_groupBy != kGroupByNone) {
+	/* Preserve the current collapsed groups before rebuilding the grouped list
+	 * Skip this on the very first call as it would overwrite the config state
+	 * saved by the previous view's destructor */
+	if (_groupBy != kGroupByNone && _listInitialized) {
 		_list->saveClosedGroups(Common::U32String(groupingModes[_groupBy].name));
 	}
+	_listInitialized = true;
 
 	_list->setList(l);
 
@@ -1704,7 +1730,7 @@ void LauncherGrid::handleCommand(CommandSender *sender, uint32 cmd, uint32 data)
 				}
 				++mode;
 			}
-			updateListing();
+			updateListing(kSelPosGroupingChange);
 		}
 		break;
 	}
@@ -1759,12 +1785,18 @@ void LauncherGrid::updateListing(int selPos) {
 
 	const int oldSel = _grid->getSelected();
 
+	Common::Array<bool> savedSelection;
+	const bool restoringGroupedSelection = (selPos == kSelPosGroupingChange);
+	if (restoringGroupedSelection)
+		savedSelection = _grid->getSelectedItems();
 	_grid->setEntryList(&gridList);
 	groupEntries(domainList);
 
-	if (_groupBy != kGroupByNone && selPos != -1) {
+	if (restoringGroupedSelection)
+		const_cast<Common::Array<bool>&>(_grid->getSelectedItems()) = savedSelection;
+	else if (_groupBy != kGroupByNone && selPos != -1)
 		_grid->setSelected(_grid->getNewSel(selPos));
-	} else if (oldSel < (int)gridList.size() && oldSel >= 0)
+	else if (oldSel < (int)gridList.size() && oldSel >= 0)
 		_grid->setSelected(oldSel);	// Restore the old selection
 	else if (oldSel != -1)
 		// Select the last entry if the list has been reduced

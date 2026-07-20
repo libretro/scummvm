@@ -123,6 +123,30 @@ struct CachedFile {
 		"PATH.INI",
 		(const byte *)"[cd-path]\r\npath=d:\\\r\n", -1
 	},
+	{"tkkg5", Common::kPlatformWindows,
+		"TKKG_5.ini",
+		(const byte *)"[CD]\r\npath=d\r\n", -1
+	},
+	{"tkkg6", Common::kPlatformWindows,
+		"TKKG_6.ini",
+		(const byte *)"[CD]\r\npath=d\r\n", -1
+	},
+	{"tkkg7", Common::kPlatformWindows,
+		"TKKG_7.ini",
+		(const byte *)"[CDpath]\r\npath=d:\\\r\n", -1
+	},
+	{"tkkg8", Common::kPlatformWindows,
+		"TKKG_8.ini",
+		(const byte *)"[CDpath]\r\npath=d:\\\r\n", -1
+	},
+	{"tkkg9", Common::kPlatformWindows,
+		"TKKG_9.ini",
+		(const byte *)"[CDpath]\r\npath=d:\\\r\n", -1
+	},
+	{"oscar5", Common::kPlatformWindows,
+		"Oscar_Be.ini",
+		(const byte *)"[CDpath]\r\npath=d:\\\r\n", -1
+	},
 
 	// Professor Finkle's Times Table Factory has an installer that copies a bunch of empty files,
 	// which the game gets upset about if they don't exist.
@@ -153,6 +177,7 @@ struct SaveFilePath {
 	const char *path;
 } const saveFilePaths[] = {
 	{ "darkeye", Common::kPlatformWindows, "SAVEDDKY/" },
+	{ "missionplanetx", Common::kPlatformWindows, "" },
 	{"simpsonsstudio", Common::kPlatformWindows, "SIMPSONS/SUPPORT/TOONDATA/"},
 	{"simpsonsstudio", Common::kPlatformMacintosh, "SIMPSONS/SUPPORT/TOONDATA/"},
 	{ nullptr, Common::kPlatformUnknown, nullptr },
@@ -292,6 +317,8 @@ const struct Quirk {
 	{ "pipcatalog", Common::kPlatformPippin, &quirkPipCatalog },
 
 	// Some games pop up a nag mesasage if the color depth isn't exactly 16 bit.
+	{ "badday", Common::kPlatformWindows, &quirkPretend16Bit },
+	{ "badday", Common::kPlatformMacintosh, &quirkPretend16Bit },
 	{ "vnc", Common::kPlatformWindows, &quirkPretend16Bit },
 	{ "vnc", Common::kPlatformMacintosh, &quirkPretend16Bit },
 	{ "finkletimes", Common::kPlatformWindows, &quirkPretend16Bit },
@@ -300,6 +327,7 @@ const struct Quirk {
 	{ "flipper", Common::kPlatformWindows, &quirkPretend16Bit },
 	{ "incarnatia", Common::kPlatformMacintosh, &quirkPretend16Bit },
 	{ "incarnatia", Common::kPlatformWindows, &quirkPretend16Bit },
+	{ "loewe4", Common::kPlatformWindows, &quirkPretend16Bit },
 
 	// The standard FileIO xlib exists as both an XObject and Xtra version, with similar functionality
 	// but incompatible APIs.
@@ -308,6 +336,10 @@ const struct Quirk {
 	// in the projector as a resource. New edition expects Xtra, old edition is D4 and won't be affected.
 	{ "puppetmotel", Common::kPlatformWindows, &quirkForceFileIOXtra },
 	{ "puppetmotel", Common::kPlatformMacintosh, &quirkForceFileIOXtra },
+
+	// Pink Gear Collection uses the Xtra version, but loads it manually with openXLib.
+	{ "pinkgear", Common::kPlatformWindows, &quirkForceFileIOXtra },
+	{ "pinkgear", Common::kPlatformMacintosh, &quirkForceFileIOXtra },
 
 	// Stay Tooned is D5, but expects the XObject version to be used.
 	{ "staytooned", Common::kPlatformWindows, &quirkForceFileIOXObj },

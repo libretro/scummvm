@@ -36,6 +36,7 @@
 #include "freescape/gfx.h"
 #include "freescape/games/castle/castle.h"
 #include "freescape/language/8bitDetokeniser.h"
+#include "freescape/music.h"
 
 namespace Freescape {
 
@@ -113,6 +114,7 @@ CastleEngine::CastleEngine(OSystem *syst, const ADGameDescription *gd) : Freesca
 	_menuRunIndicator = nullptr;
 	_menuFxOnIndicator = nullptr;
 	_menuFxOffIndicator = nullptr;
+	_playerMusic = nullptr;
 
 	_spiritsMeter = 32;
 	_spiritsToKill = 26;
@@ -121,6 +123,7 @@ CastleEngine::CastleEngine(OSystem *syst, const ADGameDescription *gd) : Freesca
 	_thunderTicks = 0;
 	_thunderFrameDuration = 0;
 	_thunderFrameIndex = 0;
+	_selectedPrincess = false;
 }
 
 CastleEngine::~CastleEngine() {
@@ -258,6 +261,11 @@ CastleEngine::~CastleEngine() {
 	if (_menuFxOffIndicator) {
 		_menuFxOffIndicator->free();
 		delete _menuFxOffIndicator;
+	}
+
+	if (_playerMusic) {
+		_playerMusic->stopMusic();
+		delete _playerMusic;
 	}
 }
 
@@ -574,12 +582,12 @@ void CastleEngine::gotoArea(uint16 areaID, int entranceID) {
 
 	if (areaID == _startArea && entranceID == _startEntrance) {
 		if (getGameBit(31))
-			playSound(13, true, _soundFxHandle);
+			playSound(13, true);
 		else
-			playSound(_soundIndexStart, false, _soundFxHandle);
+			playSound(_soundIndexStart, false);
 
-		// Start ProTracker background music for Amiga demo
-		if (isAmiga() && !_modData.empty() && !_mixer->isSoundHandleActive(_musicHandle)) {
+		// Start ProTracker background music for Amiga and Atari ST builds.
+		if ((isAmiga() || isAtariST()) && !_modData.empty() && !_mixer->isSoundHandleActive(_musicHandle)) {
 			Common::MemoryReadStream modStream(_modData.data(), _modData.size());
 			Audio::AudioStream *musicStream = Audio::makeProtrackerStream(&modStream);
 			if (musicStream)
@@ -590,9 +598,9 @@ void CastleEngine::gotoArea(uint16 areaID, int entranceID) {
 	} else {
 		// If escaped, play a different sound
 		if (hasEscaped())
-			playSound(13, true, _soundFxHandle);
+			playSound(13, true);
 		else
-			playSound(_soundIndexAreaChange, true, _soundFxHandle);
+			playSound(_soundIndexAreaChange, true);
 	}
 
 	debugC(1, kFreescapeDebugMove, "starting player position: %f, %f, %f", _position.x(), _position.y(), _position.z());
@@ -600,7 +608,7 @@ void CastleEngine::gotoArea(uint16 areaID, int entranceID) {
 	// Ignore sky/ground fields
 	_gfx->_keyColor = 0;
 	_gfx->clearColorPairArray();
-	if (isCPC())
+	if (isCPC() || isC64())
 		_gfx->fillColorPairArray();
 
 	swapPalette(areaID);
@@ -617,8 +625,9 @@ void CastleEngine::gotoArea(uint16 areaID, int entranceID) {
 		_gfx->_colorPair[_currentArea->_usualBackgroundColor] = _currentArea->_extraColor[0];
 		_gfx->_colorPair[_currentArea->_paperColor] = _currentArea->_extraColor[2];
 		_gfx->_colorPair[_currentArea->_inkColor] = _currentArea->_extraColor[3];
-	} else if (isAmiga()) {
-		// Unclear why these colors are always overwritten
+	} else if (isAmiga() || isAtariST()) {
+		// Unclear why these colors are always overwritten (the Atari ST build
+		// shares the Amiga rendering and needs the same 3D-world greys).
 		byte (*palette)[16][3] = (byte (*)[16][3])_gfx->_palette;
 
 		(*palette)[1][0] = 0x44;
@@ -698,6 +707,8 @@ void CastleEngine::initGameState() {
 	_spiritsMeterPosition = _spiritsMeter * _spiritsToKill / _spiritsToKill;
 
 	_exploredAreas[_startArea] = true;
+	if (_selectedPrincess)
+		setGameBit(32);
 	if (_useRockTravel) // Enable cheat
 		setGameBit(k8bitGameBitTravelRock);
 
@@ -710,13 +721,16 @@ void CastleEngine::initGameState() {
 
 	_droppingGateStartTicks = 0;
 	_thunderFrameDuration = 0;
+
+	if (_playerMusic)
+		_playerMusic->startMusic();
 }
 
 bool CastleEngine::checkIfGameEnded() {
 	if (_gameStateControl == kFreescapeGameStatePlaying) {
 		if (_hasFallen && _avoidRenderingFrames == 0) {
 			_hasFallen = false;
-			playSound(_soundIndexFallen, false, _soundFxHandle);
+			playSound(_soundIndexFallen, false);
 
 			stopMovement();
 			// If shield is less than 11 after a fall, the game ends
@@ -758,10 +772,12 @@ void CastleEngine::endGame() {
 	_endGamePlayerEndArea = true;
 
 	if (hasEscaped()) {
-		insertTemporaryMessage(_messagesList[5], INT_MIN);
+		insertTemporaryMessage(_messagesList[(isAmiga() || isAtariST()) ? 15 : 5], INT_MIN);
 
 		if (isDOS() && !isCastleMaster2()) {
 			drawFullscreenEndGameAndWait();
+		} else if (isAmiga() && !isDemo() && _endGameBackgroundFrame) {
+			drawFullscreenAmigaEndGameAndWait();
 		} else if (isCastleMaster2()) {
 			executeEscapeCameraSequence();
 			drawFullscreenGameOverAndWait();
@@ -924,7 +940,7 @@ void CastleEngine::setAmigaCursor(bool crosshair) {
 			scaledCursor[y * sw + x] = srcData[(y / scale) * _cursorW + (x / scale)];
 
 	Graphics::PixelFormat cursorFormat = Graphics::PixelFormat::createFormatCLUT8();
-	CursorMan.replaceCursor(scaledCursor, sw, sh, hotX, hotY, 0, false, &cursorFormat);
+	CursorMan.replaceCursor(scaledCursor, sw, sh, hotX, hotY, 0, &cursorFormat);
 	CursorMan.replaceCursorPalette(cursorPalette, 0, 16);
 	delete[] scaledCursor;
 }
@@ -1148,7 +1164,7 @@ void CastleEngine::drawInfoMenu() {
 					_eventManager->purgeMouseEvents();
 					if (isDOS() || isAmiga() || isAtariST()) {
 						g_system->lockMouse(false);
-						g_system->showMouse(true);
+						CursorMan.showMouse(true);
 					}
 
 					_gfx->setViewport(_viewArea);
@@ -1161,7 +1177,7 @@ void CastleEngine::drawInfoMenu() {
 					_eventManager->purgeMouseEvents();
 					if (isDOS() || isAmiga() || isAtariST()) {
 						g_system->lockMouse(false);
-						g_system->showMouse(true);
+						CursorMan.showMouse(true);
 					}
 
 					_gfx->setViewport(_viewArea);
@@ -1208,7 +1224,7 @@ void CastleEngine::drawInfoMenu() {
 					_eventManager->purgeKeyboardEvents();
 					loadGameDialog();
 					g_system->lockMouse(false);
-					g_system->showMouse(true);
+					CursorMan.showMouse(true);
 
 					_gfx->setViewport(_viewArea);
 				} else if (saveGameRect.contains(mousePos)) {
@@ -1216,7 +1232,7 @@ void CastleEngine::drawInfoMenu() {
 					_eventManager->purgeKeyboardEvents();
 					saveGameDialog();
 					g_system->lockMouse(false);
-					g_system->showMouse(true);
+					CursorMan.showMouse(true);
 
 					_gfx->setViewport(_viewArea);
 				} else if (toggleSoundRect.contains(mousePos)) {
@@ -1309,6 +1325,51 @@ void CastleEngine::drawFullscreenEndGameAndWait() {
 	delete surface;
 }
 
+void CastleEngine::drawFullscreenAmigaEndGameAndWait() {
+	Graphics::Surface *surface = new Graphics::Surface();
+	surface->create(_screenW, _screenH, _gfx->_texturePixelFormat);
+	surface->fillRect(_fullscreenViewArea, _gfx->_texturePixelFormat.ARGBToColor(0x00, 0x00, 0x00, 0x00));
+	surface->fillRect(_viewArea, _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x00, 0x00, 0x00));
+
+	int dx = _viewArea.left + (_viewArea.width() - _endGameBackgroundFrame->w) / 2;
+	int dy = _viewArea.top + (_viewArea.height() - _endGameBackgroundFrame->h) / 2;
+	surface->copyRectToSurface(*_endGameBackgroundFrame, dx, dy,
+		Common::Rect(0, 0, _endGameBackgroundFrame->w, _endGameBackgroundFrame->h));
+
+	Common::Event event;
+	bool cont = true;
+	while (!shouldQuit() && cont) {
+		while (_eventManager->pollEvent(event)) {
+			switch (event.type) {
+			case Common::EVENT_LBUTTONDOWN:
+				cont = false;
+				break;
+			case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
+				if (event.customType == kActionShoot || event.customType == kActionChangeMode || event.customType == kActionSkip)
+					cont = false;
+				break;
+			case Common::EVENT_SCREEN_CHANGED:
+				_gfx->computeScreenViewport();
+				break;
+			default:
+				break;
+			}
+		}
+		_gfx->clear(0, 0, 0, true);
+		drawBorder();
+		if (_currentArea)
+			drawUI();
+
+		drawFullscreenSurface(surface);
+		_gfx->flipBuffer();
+		g_system->updateScreen();
+		g_system->delayMillis(15); // try to target ~60 FPS
+	}
+
+	surface->free();
+	delete surface;
+}
+
 void CastleEngine::drawFullscreenGameOverAndWait() {
 	Common::Event event;
 	bool cont = true;
@@ -1366,13 +1427,13 @@ void CastleEngine::drawFullscreenGameOverAndWait() {
 	_droppingGateStartTicks = _ticks;
 
 	if (isDOS()) {
-		// TODO: playSound(X, false, _soundFxHandle);
+		// TODO: playSound(X, false);
 	} else if (isSpectrum() || isCPC()) {
-		playSound(9, false, _soundFxHandle);
+		playSound(9, false);
 	}
 
 	if (!isDOS() && hasEscaped()) {
-		insertTemporaryMessage(_messagesList[5], _countdown - 1);
+		insertTemporaryMessage(_messagesList[(isAmiga() || isAtariST()) ? 15 : 5], _countdown - 1);
 	}
 
 	while (!shouldQuit() && cont) {
@@ -1381,7 +1442,7 @@ void CastleEngine::drawFullscreenGameOverAndWait() {
 			insertTemporaryMessage(spiritsDestroyedString, _countdown - 4);
 			insertTemporaryMessage(keysCollectedString, _countdown - 6);
 			if (!isDOS() && hasEscaped()) {
-				insertTemporaryMessage(_messagesList[5], _countdown - 8);
+				insertTemporaryMessage(_messagesList[(isAmiga() || isAtariST()) ? 15 : 5], _countdown - 8);
 			}
 		}
 
@@ -1484,7 +1545,7 @@ void CastleEngine::loadAssets() {
 	_outOfReachMessage = _messagesList[7];
 	_noEffectMessage = _messagesList[8];
 
-	if (!isAmiga() && !isCPC()) {
+	if (!isAmiga() && !isAtariST() && !isCPC() && !isC64()) {
 		Graphics::Surface *tmp;
 		tmp = loadBundledImage("castle_gate", !isDOS());
 		_gameOverBackgroundFrame = new Graphics::ManagedSurface;
@@ -1913,7 +1974,7 @@ void CastleEngine::checkSensors() {
 	}
 
 	if (!ghostInArea()) {
-		_mixer->stopHandle(_soundFxGhostHandle);
+		/*_mixer->stopHandle(_soundFxGhostHandle);*/
 		_gfx->_shakeOffset = Common::Point();
 		return;
 	}
@@ -1922,8 +1983,10 @@ void CastleEngine::checkSensors() {
 		return;
 
 	/*if (!_mixer->isSoundHandleActive(_soundFxGhostHandle)) {
-		_speaker->play(Audio::PCSpeaker::kWaveFormSquare, 25.0f, -1);
-		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxGhostHandle, _speaker, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::NO);
+		// TODO: Reimplement inside Sound class using existing chip instances
+		SizedPCSpeaker *speaker = new SizedPCSpeaker();
+		speaker->play(Audio::PCSpeaker::kWaveFormSquare, 25.0f, -1);
+		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxGhostHandle, speaker, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::YES);
 	}*/
 
 	// This is the frequency to shake the screen
@@ -1999,6 +2062,16 @@ void CastleEngine::updateTimeVariables() {
 void CastleEngine::borderScreen() {
 	if (isAmiga() && isDemo())
 		return; // Skip character selection
+	if (isAtariST()) {
+		playAtariIntro();
+		return;
+	}
+	if (isAmiga()) {
+		if (playAmigaIntro())
+			return;
+		selectCharacterScreen();
+		return;
+	}
 
 	if (isSpectrum() || isCPC() || isC64())
 		FreescapeEngine::borderScreen();
@@ -2022,6 +2095,17 @@ void CastleEngine::borderScreen() {
 		drawBorderScreenAndWait(surface, 6 * 60);
 		surface->free();
 		delete surface;
+	}
+
+	if (isC64()) {
+		// The bundled C64 border preserves the original loader text in the
+		// view area; clear it before drawing ScummVM's character selection.
+		if (_border) {
+			_border->fillRect(_viewArea, _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0, 0, 0));
+			delete _borderTexture;
+			_borderTexture = nullptr;
+			loadBorder();
+		}
 	}
 
 	if (!isCastleMaster2())
@@ -2049,7 +2133,7 @@ void CastleEngine::selectCharacterScreen() {
 	surface->create(_screenW, _screenH, _gfx->_texturePixelFormat);
 	surface->fillRect(_fullscreenViewArea, color);
 
-	if (isSpectrum() || isCPC()) {
+	if (isSpectrum() || isCPC() || isC64() || isAmiga()) {
 		if (_language == Common::ES_ESP) {
 			// No accent in "príncipe" since it is not supported by the font
 			lines.push_back(centerAndPadString("*******************", 21));
@@ -2121,23 +2205,31 @@ void CastleEngine::selectCharacterScreen() {
 
 	if (isTouchscreenActive()) {
 		CursorMan.setDefaultArrowCursor();
-		CursorMan.showMouse(true);
 	}
 	_system->lockMouse(false);
-	_system->showMouse(true);
+	CursorMan.showMouse(true);
 
 	// Calculate tap/click rectangles from actual rendered text positions.
-	// lines[5] = prince, lines[6] = princess for ZX/CPC.
+	// lines[5] = prince, lines[6] = princess for 8-bit text menus.
 	// For DOS, use riddle text line positions.
 	Common::Rect princeSelector, princessSelector;
-	if (isSpectrum() || isCPC()) {
+	Common::Rect princeHitArea, princessHitArea;
+	if (isSpectrum() || isCPC() || isC64() || isAmiga()) {
 		int x = _viewArea.left + 3;
 		int lineHeight = 12; // Castle Master line spacing in drawStringsInSurface
 		int princeY = _viewArea.top + 3 + 5 * lineHeight;
 		int princessY = _viewArea.top + 3 + 6 * lineHeight;
-		// Use the full padded line (what's actually rendered on screen)
-		princeSelector = _font.getBoundingBox(lines[5], x, princeY);
-		princessSelector = _font.getBoundingBox(lines[6], x, princessY);
+		if (_fontLoaded) {
+			// Use the full padded line (what's actually rendered on screen)
+			princeSelector = _font.getBoundingBox(lines[5], x, princeY);
+			princessSelector = _font.getBoundingBox(lines[6], x, princessY);
+		} else {
+			int selectorWidth = 21 * 9;
+			princeSelector = Common::Rect(x, princeY, x + selectorWidth, princeY + lineHeight);
+			princessSelector = Common::Rect(x, princessY, x + selectorWidth, princessY + lineHeight);
+		}
+		princeHitArea = Common::Rect(_viewArea.left, princeY, _viewArea.right, princeY + lineHeight);
+		princessHitArea = Common::Rect(_viewArea.left, princessY, _viewArea.right, princessY + lineHeight);
 	} else {
 		// DOS: text comes from _riddleList[21], calculate from actual riddle line positions
 		Common::Array<RiddleText> selectMessage = _riddleList[21]._lines;
@@ -2150,6 +2242,9 @@ void CastleEngine::selectCharacterScreen() {
 			else if (i == int(selectMessage.size()) - 1)
 				princessSelector = _font.getBoundingBox(selectMessage[i]._text, x, y);
 		}
+		int splitX = _fullscreenViewArea.left + _fullscreenViewArea.width() / 2;
+		princeHitArea = Common::Rect(_fullscreenViewArea.left, _fullscreenViewArea.top, splitX, _fullscreenViewArea.bottom);
+		princessHitArea = Common::Rect(splitX, _fullscreenViewArea.top, _fullscreenViewArea.right, _fullscreenViewArea.bottom);
 	}
 
 	// On touchscreen, highlight the tap areas with red outlines (expand 1px for readability)
@@ -2176,15 +2271,14 @@ void CastleEngine::selectCharacterScreen() {
 			case Common::EVENT_LBUTTONDOWN:
 				// fallthrough
 			case Common::EVENT_RBUTTONDOWN:
-				mouse.x = _screenW * event.mouse.x / g_system->getWidth();
-				mouse.y = _screenH * event.mouse.y / g_system->getHeight();
+				mouse = getNormalizedPosition(event.mouse);
 
-				if (princeSelector.contains(mouse)) {
+				if (princeHitArea.contains(mouse) || princeSelector.contains(mouse)) {
 					selected = true;
-					// Nothing, since game bit should be already zero
-				} else if (princessSelector.contains(mouse)) {
+					_selectedPrincess = false;
+				} else if (princessHitArea.contains(mouse) || princessSelector.contains(mouse)) {
 					selected = true;
-					setGameBit(32);
+					_selectedPrincess = true;
 				}
 				break;
 			case Common::EVENT_SCREEN_CHANGED:
@@ -2197,11 +2291,11 @@ void CastleEngine::selectCharacterScreen() {
 			switch (event.customType) {
 				case kActionSelectPrince:
 					selected = true;
-					// Nothing, since game bit should be already zero
+					_selectedPrincess = false;
 					break;
 				case kActionSelectPrincess:
 					selected = true;
-					setGameBit(32);
+					_selectedPrincess = true;
 					break;
 				default:
 					break;
@@ -2218,7 +2312,6 @@ void CastleEngine::selectCharacterScreen() {
 		g_system->delayMillis(15); // try to target ~60 FPS
 	}
 	_system->lockMouse(true);
-	_system->showMouse(false);
 	CursorMan.showMouse(false);
 	_gfx->clear(0, 0, 0, true);
 
@@ -2237,7 +2330,7 @@ void CastleEngine::drawLiftingGate(Graphics::Surface *surface) {
 	else if (isCPC())
 		duration = 100;
 
-	if ((_gameStateControl == kFreescapeGameStateStart || _gameStateControl == kFreescapeGameStateRestart) && _ticks <= duration) { // Draw the _gameOverBackgroundFrame gate lifting up slowly
+	if (_gameOverBackgroundFrame && (_gameStateControl == kFreescapeGameStateStart || _gameStateControl == kFreescapeGameStateRestart) && _ticks <= duration) { // Draw the _gameOverBackgroundFrame gate lifting up slowly
 		int gate_w = _gameOverBackgroundFrame->w;
 		int gate_h = _gameOverBackgroundFrame->h;
 
@@ -2272,6 +2365,9 @@ void CastleEngine::drawDroppingGate(Graphics::Surface *surface) {
 		return; // No gate dropping when the player escaped
 
 	if (_droppingGateStartTicks <= 0)
+		return;
+
+	if (!_gameOverBackgroundFrame)
 		return;
 
 	uint32 keyColor = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x00, 0x24, 0xA5);
@@ -2390,7 +2486,7 @@ void CastleEngine::updateThunder() {
 
 		if (_thunderFrameDuration == 0)
 			if (isSpectrum() || isCPC() || isDOS())
-				playSound(8, false, _soundFxHandle);
+				playSound(8, false);
 		return;
 	}
 

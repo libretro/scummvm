@@ -170,7 +170,7 @@ void CanvasActor::stampImage(const Common::Point &dest, uint actorId) {
 	// Although this method is named stampImage, it can actually stamp other spatial entities too.
 	debugC(5, kDebugGraphics, "[%s] %s: %s at (%d, %d)",
 		debugName(), __func__, g_engine->formatActorName(actorId).c_str(), dest.x, dest.y);
-	SpatialEntity *imageToStamp = g_engine->getSpatialEntityById (actorId);
+	SpatialEntity *imageToStamp = g_engine->getImtGod()->getSpatialEntityById(actorId);
 	Common::Point imageToStampOriginalBoundsOrigin = imageToStamp->getBbox().origin();
 	imageToStamp->moveTo(dest.x, dest.y);
 

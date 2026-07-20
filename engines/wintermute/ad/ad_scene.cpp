@@ -1652,6 +1652,21 @@ bool AdScene::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack,
 		}
 		return STATUS_OK;
 	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// SetCurrentFOV
+	//////////////////////////////////////////////////////////////////////////
+	if (strcmp(name, "SetCurrentFOV") == 0) {
+		stack->correctParams(1);
+
+		float fov = stack->pop()->getFloat();
+		if (_geom->_activeCamera >= 0 && _geom->_activeCamera < _geom->_cameras.getSize()) {
+			_geom->_cameras[_geom->_activeCamera]->_fov = fov;
+		}
+
+		stack->pushNULL();
+		return STATUS_OK;
+	}
 #endif
 
 	//////////////////////////////////////////////////////////////////////////
@@ -2360,6 +2375,18 @@ bool AdScene::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack,
 		return STATUS_OK;
 	}
 #endif
+
+	//////////////////////////////////////////////////////////////////////////
+	// Close
+	//////////////////////////////////////////////////////////////////////////
+	else if (strcmp(name, "Close") == 0) {
+		if (BaseEngine::instance().getGameId() == "darkfallls") {
+			// Stub function to silence script error report in 'Dark Fall: Lost Souls'
+			return STATUS_OK;
+		} else {
+			return BaseObject::scCallMethod(script, stack, thisStack, name);
+		}
+	}
 
 	else {
 		return BaseObject::scCallMethod(script, stack, thisStack, name);

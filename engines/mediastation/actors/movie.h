@@ -114,15 +114,21 @@ private:
 };
 
 // This is called `RT_stmvSound` in the original.
-class StreamMovieActorSound : public ChannelClient {
+class StreamMovieActorSound : public ChannelClient, public SoundClient {
 public:
+	StreamMovieActorSound(StreamMovieActor *parent) : ChannelClient(), _audioSequence(this), _parent(parent) {}
 	~StreamMovieActorSound();
 	virtual void readChunk(Chunk &chunk) override;
+	virtual void soundPlayStateChanged(SoundPlayState state, SoundStopReason why) override;
 
+	AudioSequence &getAudioSequence() { return _audioSequence; }
+
+private:
 	AudioSequence _audioSequence;
+	StreamMovieActor *_parent = nullptr;
 };
 
-class StreamMovieActor : public SpatialEntity, public ChannelClient {
+class StreamMovieActor : public SpatialEntity, public ChannelClient, public PreDisplaySyncClient {
 friend class StreamMovieActorFrames;
 friend class StreamMovieActorSound;
 
@@ -134,7 +140,11 @@ public:
 	virtual void loadIsComplete() override;
 	virtual void readParameter(Chunk &chunk, ActorHeaderSectionType paramType) override;
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
-	virtual void process() override;
+	virtual bool isActive() const override { return _isPlaying; }
+
+	virtual PreDisplaySyncState preDisplaySync() override;
+	virtual void onEvent(const ActorEvent &event) override;
+	virtual void timerEvent(const TimerEvent &event) override;
 
 	virtual void draw(DisplayContext &displayContext) override;
 	void drawLayer(DisplayContext &displayContext, uint layerId);
@@ -146,6 +156,7 @@ private:
 	uint _fullTime = 0;
 	uint _chunkCount = 0;
 	double _frameRate = 0;
+	uint _disableScreenAutoUpdateToken = 0;
 
 	bool _shouldCache = false;
 	bool _isPlaying = false;
@@ -160,7 +171,7 @@ private:
 
 	// Script method implementations.
 	void timePlay();
-	void timeStop();
+	void timeStop(bool isMovieEnd);
 
 	void setVisibility(bool visibility);
 	void updateFrameState();

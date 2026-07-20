@@ -801,12 +801,14 @@ void mouseAction() {
 				g_events->_kbInfo._scanCode = Common::KEYCODE_ESCAPE;
 			}
 		} else if (_G(minfo).button == 1 || g_events->_kbInfo._keyCode == Common::KEYCODE_RETURN) {
+			g_events->_kbInfo._keyCode = '\0';
 			if (!_G(flags).mainMouseFlag) {
 				if (_G(menu_display) == MENU_DISPLAY)
 					g_events->_kbInfo._scanCode = Common::KEYCODE_RETURN;
 				else if (_G(cur)->usingInventoryCursor()) {
 					if (_G(inv_disp_ok)) {
 						if (_G(cur)->usingInventoryCursor()) {
+							invent_2_slot(_G(cur)->getInventoryCursor());
 							_G(menu_item) = CUR_USE;
 							cursorChoice(_G(menu_item));
 							_G(cur)->setInventoryCursor(-1);

@@ -98,13 +98,7 @@ static inline ImU32 U32(const ImVec4 &c) {
 	return ImGui::GetColorU32(c);
 }
 
-// helper to draw thin rectangles for table grid
-static void addThinRect(ImDrawList *dl, ImVec2 min, ImVec2 max, ImU32 col, float thickness = 0.1f) {
-	dl->AddLine(ImVec2(min.x, min.y), ImVec2(max.x, min.y), col, thickness); // top
-	dl->AddLine(ImVec2(max.x, min.y), ImVec2(max.x, max.y), col, thickness); // right
-	dl->AddLine(ImVec2(max.x, max.y), ImVec2(min.x, max.y), col, thickness); // bottom
-	dl->AddLine(ImVec2(min.x, max.y), ImVec2(min.x, min.y), col, thickness); // left
-}
+
 
 // help to draw tool tip with wrapped text
 static void setTooltip(const char *fmt, ...) {
@@ -156,6 +150,9 @@ static void buildContinuationData(Window *window) {
 	Score *score = window->getCurrentMovie()->getScore();
 	uint numFrames = score->_scoreCache.size();
 
+	if (numFrames == 0)
+		return;
+
 	uint numChannels = score->_scoreCache[0]->_sprites.size();
 	_state->_continuationData.resize(numChannels);
 
@@ -165,10 +162,16 @@ static void buildContinuationData(Window *window) {
 		uint currentContinuation = 1;
 		for (int f = 0; f < (int)numFrames; f++) {
 			const Frame &frame = *score->_scoreCache[f];
+			// not every frame is guaranteed to carry the same channel count
+			if (ch >= (int)frame._sprites.size()) {
+				_state->_continuationData[ch][f].first = f;
+				currentContinuation = f;
+				continue;
+			}
 			Sprite &sprite = *frame._sprites[ch];
 
 			const Frame *prevFrame = (f == 0) ? nullptr : score->_scoreCache[f - 1];
-			Sprite *prevSprite = (prevFrame) ? prevFrame->_sprites[ch] : nullptr;
+			Sprite *prevSprite = (prevFrame && ch < (int)prevFrame->_sprites.size()) ? prevFrame->_sprites[ch] : nullptr;
 
 			if (prevSprite) {
 				if (!(*prevSprite == sprite)) {
@@ -203,10 +206,15 @@ static void buildContinuationData(Window *window) {
 		currentContinuation = 1;
 		for (int f = (int)numFrames - 1; f >= 0; f--) {
 			const Frame &frame = *score->_scoreCache[f];
+			if (ch >= (int)frame._sprites.size()) {
+				_state->_continuationData[ch][f].second = f;
+				currentContinuation = f;
+				continue;
+			}
 			Sprite &sprite = *frame._sprites[ch];
 
 			const Frame *nextFrame = (f == (int)numFrames - 1) ? nullptr : score->_scoreCache[f + 1];
-			Sprite *nextSprite = (nextFrame) ? nextFrame->_sprites[ch] : nullptr;
+			Sprite *nextSprite = (nextFrame && ch < (int)nextFrame->_sprites.size()) ? nextFrame->_sprites[ch] : nullptr;
 
 			if (nextSprite) {
 				if (!(*nextSprite == sprite)) {
@@ -269,7 +277,7 @@ static void drawSidebar1(ImDrawList *dl, ImVec2 startPos, Score *score) {
 	}
 }
 
-static void drawSidebar2(ImDrawList *dl, ImVec2 startPos, Score *score) {
+static void drawSidebar2(ImDrawList *dl, ImVec2 startPos, Score *score, Window *window) {
 	float toggleColWidth = 20.0f;
 	float labelColWidth  = 40.0f;
 	float totalWidth = toggleColWidth + labelColWidth;
@@ -318,6 +326,7 @@ static void drawSidebar2(ImDrawList *dl, ImVec2 startPos, Score *score) {
 			setTooltip("Playback toggle");
 		if (ImGui::IsItemClicked()) { // determines what happens on toggle of the button
 			score->_channels[ch]->_hideFromStage = !isHiddenFromStage;
+			_state->_windowToRedraw = window;
 		}
 
 		// channel num and extra stuff if extended mode
@@ -386,7 +395,7 @@ static void drawModeSelector(ImVec2 startPos) {
 	}
 }
 
-static void drawSpriteInspector(Score *score, Cast *cast, uint numFrames) {
+static void drawSpriteInspector(Score *score, Movie *movie, uint numFrames) {
 
 	if (_state->_scoreFrameOffset >= (int)numFrames)
 		_state->_scoreFrameOffset = 1;
@@ -396,11 +405,15 @@ static void drawSpriteInspector(Score *score, Cast *cast, uint numFrames) {
 		CastMember *castMember = nullptr;
 		bool shape = false;
 
-		if (_state->_selectedScoreCast.frame != -1 && !_state->_selectedScoreCast.isMainChannel)
+		if (_state->_selectedScoreCast.frame != -1 && !_state->_selectedScoreCast.isMainChannel
+				&& _state->_selectedScoreCast.frame < (int)score->_scoreCache.size()
+				&& _state->_selectedScoreCast.channel < (int)score->_scoreCache[_state->_selectedScoreCast.frame]->_sprites.size())
 			sprite = score->_scoreCache[_state->_selectedScoreCast.frame]->_sprites[_state->_selectedScoreCast.channel];
 
 		if (sprite) {
-			castMember = cast->getCastMember(sprite->_castId.member, true);
+			// resolve through the movie: the member can live in any cast lib
+			// or the shared cast, not just the default one
+			castMember = movie->getCastMember(sprite->_castId);
 
 			shape = sprite->isQDShape();
 		}
@@ -437,8 +450,15 @@ static void drawSpriteInspector(Score *score, Cast *cast, uint numFrames) {
 				ImGui::InvisibleButton("##canvas", ImVec2(32.f, 32.f));
 			}
 			ImGui::SameLine();
+			ImGui::BeginGroup();
 			ImGui::Text("%s", sprite->_castId.asString().c_str());
 			ImGui::Text("%s", spriteType2str(sprite->_spriteType));
+			ImGui::Text("Script:"); ImGui::SameLine();
+			if (sprite->_scriptId.member)
+				displayScriptRef(sprite->_scriptId);
+			else
+				ImGui::TextDisabled("none");
+			ImGui::EndGroup();
 		}
 
 		ImGui::PopStyleColor();
@@ -468,7 +488,9 @@ static void drawSpriteInspector(Score *score, Cast *cast, uint numFrames) {
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
 		ImGui::BeginChild("Range", ImVec2(100.0f, 20.0f));
 
-		if (castMember || shape) {
+		if ((castMember || shape)
+				&& _state->_selectedScoreCast.channel < (int)_state->_continuationData.size()
+				&& _state->_selectedScoreCast.frame < (int)_state->_continuationData[_state->_selectedScoreCast.channel].size()) {
 			ImGui::TextUnformatted("\uf816"); ImGui::SameLine();	// line_start_circle
 			// the continuation data is 0-indexed but the frames are 1-indexed
 			ImGui::Text("%4d", _state->_continuationData[_state->_selectedScoreCast.channel][_state->_selectedScoreCast.frame].first + 1); ImGui::SameLine(50);
@@ -574,8 +596,9 @@ static void drawSpriteInspector(Score *score, Cast *cast, uint numFrames) {
 
 }
 
-static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *cast, Window *window) {
+static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Window *window) {
 	int total_frames = (int)score->_scoreCache.size();
+	Movie *movie = window->getCurrentMovie();
 
 	auto &cfg = _state->_scoreCfg;
 	float cellH = (_state->_scoreMode == kModeExtended) ? cfg._cellHeightExtended : cfg._cellHeight;
@@ -608,6 +631,7 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 			int rf = startFrame + f;
 			if (rf >= total_frames) break;
 			Frame &frame = *score->_scoreCache[rf];
+			if (ch >= (int)frame._sprites.size()) continue;
 			Sprite &sprite = *frame._sprites[ch];
 
 			if (!sprite._castId.member && !sprite.isQDShape()) continue;
@@ -620,9 +644,6 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 			if (rf != spanStart && f != 0) continue;
 			float x1 = startPos.x + MAX<float>(spanStart - startFrame, 0) * cfg._cellWidth;
 			float x2 = MIN<float>(startPos.x + (spanEnd - startFrame + 1) * cfg._cellWidth, startPos.x + cfg._tableWidth);
-
-			if (ch >= (int)_state->_continuationData.size()) continue;
-			if (rf >= (int)_state->_continuationData[ch].size()) break;
 
 			bool startVisible = spanStart >= startFrame;
 			bool endVisible = spanEnd < startFrame + cfg._visibleFrames;
@@ -657,7 +678,7 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 				dl->AddRect(ImVec2(x2 - 7.0f, cy - 3.0f), ImVec2(x2 - 1.0f, cy + 3.0f), U32(_state->theme->line_color), 0.0f, 0, 1.5f);
 
 			float spanWidth = x2 - x1 - 8.0f; // available width inside the span bar
-			CastMember *cm = cast->getCastMember(sprite._castId.member, true);
+			CastMember *cm = movie->getCastMember(sprite._castId);
 			if (spanWidth < 4.0f) continue;
 
 			if (_state->_scoreMode == kModeExtended && startVisible && (sprite._castId.member || sprite.isQDShape())) {
@@ -668,7 +689,7 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 				Common::String member = cm ? getDisplayName(cm) : (sprite.isQDShape() ? "Q" : "");
 				Common::String behavior;
 				if (sprite._scriptId.member) {
-					CastMember *sc = cast->getCastMember(sprite._scriptId.member, true);
+					CastMember *sc = movie->getCastMember(sprite._scriptId);
 					if (sc) behavior = getDisplayName(sc);
 				}
 				Common::String ink = inkType2str(sprite._ink);
@@ -694,7 +715,7 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 					break;
 				case kModeBehavior:
 					if (sprite._scriptId.member) {
-						CastMember *script = cast->getCastMember(sprite._scriptId.member, true);
+						CastMember *script = movie->getCastMember(sprite._scriptId);
 						if (script) label = getDisplayName(script);
 					}
 					break;
@@ -724,7 +745,8 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 			if (rf >= total_frames) break;
 
 			// recompute span info for tooltip
-			if (ch < (int)_state->_continuationData.size() && rf < (int)_state->_continuationData[ch].size()) {
+			if (ch < (int)_state->_continuationData.size() && rf < (int)_state->_continuationData[ch].size()
+					&& ch < (int)score->_scoreCache[rf]->_sprites.size()) {
 				Frame &frame = *score->_scoreCache[rf];
 				Sprite &sprite = *frame._sprites[ch];
 				int spanStart = _state->_continuationData[ch][rf].first;
@@ -742,9 +764,19 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 					_state->_selectedScoreCast.channel = ch;
 					_state->_selectedScoreCast.isMainChannel = false;
 
+					// Open cast member details window
+					if (sprite._castId.member) {
+						CastMember *clickedCM = movie->getCastMember(sprite._castId);
+						if (clickedCM) {
+							_state->_castDetails._castMemberID = CastMemberID(clickedCM->getID(), clickedCM->getCast()->_castLibID);
+							_state->_castDetails._window = _state->_scoreWindow;
+							_state->_w.castDetails = true;
+						}
+					}
+
 					int playheadIdx = score->getCurrentFrameNum() - 1;
 					if (playheadIdx >= spanStart && playheadIdx <= spanEnd) {
-						Director::DT::setSelectedChannel(ch);
+						_state->_selectedChannel = ch;
 						_state->_windowToRedraw = window;
 					}
 				}
@@ -767,14 +799,14 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 					_state->_hoveredScoreCast.channel = ch;
 
 					if (sprite._castId.member || sprite.isQDShape()) {
-						CastMember *cm = cast->getCastMember(sprite._castId.member, true);
+						CastMember *cm = movie->getCastMember(sprite._castId);
 
 						if (_state->_scoreMode == kModeExtended) {
 							// build multi-line tooltip for extended mode
 							Common::String member = cm ? getDisplayName(cm) : (sprite.isQDShape() ? "Q" : "");
 							Common::String behavior;
 							if (sprite._scriptId.member) {
-								CastMember *sc = cast->getCastMember(sprite._scriptId.member, true);
+								CastMember *sc = movie->getCastMember(sprite._scriptId);
 								if (sc) behavior = getDisplayName(sc);
 							}
 							Common::String ink = inkType2str(sprite._ink);
@@ -799,7 +831,7 @@ static void drawSpriteGrid(ImDrawList *dl, ImVec2 startPos, Score *score, Cast *
 								break;
 							case kModeBehavior:
 								if (sprite._scriptId.member) {
-									CastMember *sc = cast->getCastMember(sprite._scriptId.member, true);
+									CastMember *sc = movie->getCastMember(sprite._scriptId);
 									if (sc) label = getDisplayName(sc);
 								}
 								break;
@@ -950,12 +982,6 @@ static void drawMainChannelGrid(ImDrawList *dl, ImVec2 startPos, Score *score) {
 				case kChPalette: // open cast window focused on palette member
 					if (mc.palette.paletteId.member) {
 						_state->_w.cast = true;
-						// select it in the cast so showCast() highlights it
-						for (auto &scriptCast : _state->_scriptCasts) {
-							if (scriptCast == mc.palette.paletteId) {
-								break;
-							}
-						}
 					}
 					break;
 				case kChTransition:
@@ -971,11 +997,20 @@ static void drawMainChannelGrid(ImDrawList *dl, ImVec2 startPos, Score *score) {
 				case kChScript: // open script in script editor
 					if (mc.actionId.member) {
 						ScriptContext *ctx = getScriptContext(mc.actionId);
-						for (auto &handler : ctx->_functionHandlers) {
-							ImGuiScript script = toImGuiScript(kScoreScript, mc.actionId, handler._key);
-							script.byteOffsets = ctx->_functionByteOffsets[script.handlerId];
+						if (ctx) {
+							for (auto &handler : ctx->_functionHandlers) {
+								ImGuiScript script = toImGuiScript(kScoreScript, mc.actionId, handler._key);
+								script.byteOffsets = ctx->_functionByteOffsets[script.handlerId];
+								script.moviePath = g_director->getCurrentMovie()->getArchive()->getPathName().toString();
+								script.handlerName = formatHandlerName(ctx->_scriptId, mc.actionId.member, handler._key, kScoreScript, false);
+								addToOpenHandlers(script);
+							}
+						} else {
+							ImGuiScript script;
+							script.id = mc.actionId;
+							script.type = kScoreScript;
 							script.moviePath = g_director->getCurrentMovie()->getArchive()->getPathName().toString();
-							script.handlerName = formatHandlerName(ctx->_scriptId, mc.actionId.member, handler._key, kScoreScript, false);
+							script.handlerName = Common::String::format("Cast %d (source)", mc.actionId.member);
 							addToOpenHandlers(script);
 						}
 					}
@@ -1071,16 +1106,17 @@ static void drawLabelBar(ImDrawList *dl, ImVec2 pos, Score *score) {
 
 	for (int f = 0; f < cfg._visibleFrames; f++) {
 		int rf = startFrame + f;
-		Common::String *labelName = score->getFrameLabel((uint)rf);
+		// labels are stored with 1-based frame numbers, rf is 0-based
+		Common::String labelName = score->getFrameLabel((uint)rf + 1);
 		float x = cfg._cellWidth * (f + 0.5f) + pos.x;
 		float y = pos.y;
 
 		// Draw label triangle and add tooltip
-		if (labelName && !labelName->empty()) {
+		if (!labelName.empty()) {
 			float textY = y + (cfg._labelBarHeight - ImGui::GetTextLineHeight()) / 2.0f;
 
 			float iconW = ImGui::CalcTextSize(ICON_MS_BEENHERE).x;
-			float textW = ImGui::CalcTextSize(labelName->c_str()).x;
+			float textW = ImGui::CalcTextSize(labelName.c_str()).x;
 			float totalW = iconW + 2.0f + textW;
 
 			// draw background rect sized to icon + text
@@ -1094,12 +1130,12 @@ static void drawLabelBar(ImDrawList *dl, ImVec2 pos, Score *score) {
 			// draw text if it fits
 			float textX = x + 2.0f + iconW + 2.0f;
 			if (textX + textW < finalPos.x)
-				dl->AddText(ImVec2(textX, textY), _state->theme->sidebarTextColor, labelName->c_str());
+				dl->AddText(ImVec2(textX, textY), _state->theme->sidebarTextColor, labelName.c_str());
 
 			ImGui::SetCursorScreenPos(ImVec2(x, y));
 			ImGui::InvisibleButton(Common::String::format("##labelcell_%d", f).c_str(), ImVec2(cfg._cellWidth, cfg._labelBarHeight));
 			if (ImGui::IsItemHovered())
-				setTooltip("%s", labelName->c_str());
+				setTooltip("%s", labelName.c_str());
 
 		}
 	}
@@ -1132,11 +1168,16 @@ void showScore() {
 	if (ImGui::Begin("Score", &_state->_w.score, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
 		Window *selectedWindow = windowListCombo(&_state->_scoreWindow);
 
-		buildContinuationData(selectedWindow);
+		if (!selectedWindow->getCurrentMovie()) {
+			ImGui::Text("No movie loaded");
+			ImGui::End();
+			return;
+		}
 
-		Score *score = selectedWindow->getCurrentMovie()->getScore();
+		buildContinuationData(selectedWindow);
+		Movie *movie = selectedWindow->getCurrentMovie();
+		Score *score = movie->getScore();
 		uint numFrames = score->_scoreCache.size();
-		Cast *cast = selectedWindow->getCurrentMovie()->getCast();
 
 		if (!numFrames) {
 			ImGui::Text("No frames");
@@ -1150,7 +1191,7 @@ void showScore() {
 		if (!numFrames || _state->_selectedScoreCast.channel >= (int)score->_scoreCache[0]->_sprites.size())
 			_state->_selectedScoreCast.channel = 0;
 
-		drawSpriteInspector(score, cast, numFrames);
+		drawSpriteInspector(score, movie, numFrames);
 		int numChannels = MIN<int>(score->_scoreCache[0]->_sprites.size(), score->_maxChannelsUsed + 10);
 		handleScrolling(score, numChannels);
 
@@ -1163,8 +1204,8 @@ void showScore() {
 		drawMainChannelGrid(dl, layout.mainChannelGridPos, score);
 		drawModeSelector(layout.modeSelectorPos);
 		drawRuler(dl, layout.rulerPos);
-		drawSidebar2(dl, layout.sidebar2Pos, score);
-		drawSpriteGrid(dl, layout.gridPos, score, cast, selectedWindow);
+		drawSidebar2(dl, layout.sidebar2Pos, score, selectedWindow);
+		drawSpriteGrid(dl, layout.gridPos, score, selectedWindow);
 		drawPlayhead(dl, layout.rulerPos, layout.mainChannelGridPos, layout.gridPos, score);
 		drawSliderX(layout.sliderPos, score);
 		drawSliderY(layout.sliderYPos, numChannels);
@@ -1185,9 +1226,19 @@ void showChannels() {
 	ImGui::SetNextWindowSize(windowSize, ImGuiCond_FirstUseEver);
 
 	if (ImGui::Begin("Channels", &_state->_w.channels)) {
-		Window *selectedWindow = windowListCombo(&_state->_scoreWindow);
+		Window *selectedWindow = windowListCombo(&_state->_channelsWindow);
 
+		if (!selectedWindow->getCurrentMovie()) {
+			ImGui::Text("No movie loaded");
+			ImGui::End();
+			return;
+		}
 		Score *score = selectedWindow->getCurrentMovie()->getScore();
+		if (!score->_currentFrame) {
+			ImGui::Text("No frame data");
+			ImGui::End();
+			return;
+		}
 		const Frame &frame = *score->_currentFrame;
 
 		CastMemberID defaultPalette = selectedWindow->getCurrentMovie()->_defaultPalette;
@@ -1291,6 +1342,7 @@ void showChannels() {
 					ImGui::PopID();
 				}
 
+				// Channel number
 				ImGui::TableNextColumn();
 
 				bool isSelected = (_state->_selectedChannel == i + 1);
@@ -1306,6 +1358,7 @@ void showChannels() {
 					_state->_windowToRedraw = selectedWindow;
 				}
 
+				// Cast ID
 				ImGui::TableNextColumn();
 
 				if (sprite._castId.member) {
@@ -1314,37 +1367,62 @@ void showChannels() {
 
 					Common::Point position = channel.getPosition();
 					ImGui::Text("%s", sprite._castId.asString().c_str());
+
+					// visibility
 					ImGui::TableNextColumn();
 					colN = "##vis" + chNum;
 					if (ImGui::Checkbox(colN.c_str(), &channel._visible)) {
 						_state->_windowToRedraw = selectedWindow;
 					}
+
+					// inkData
 					ImGui::TableNextColumn();
 					ImGui::Text("0x%02x", sprite._inkData);
+
+					// ink
 					ImGui::TableNextColumn();
 					ImGui::Text("%d (%s)", sprite._ink, inkType2str(sprite._ink));
+
+					// trails
 					ImGui::TableNextColumn();
 					colN = "##trails" + chNum;
 					ImGui::Checkbox(colN.c_str(), &sprite._trails);
+
+					// stretch
 					ImGui::TableNextColumn();
 					colN = "##stretch" + chNum;
 					ImGui::Checkbox(colN.c_str(), &sprite._stretch);
+
+					// line
 					ImGui::TableNextColumn();
 					ImGui::Text("%d", sprite._thickness);
+
+					// dims
 					ImGui::TableNextColumn();
 					ImGui::Text("%dx%d@%d,%d", channel.getWidth(), channel.getHeight(), position.x, position.y);
+
+					// type
 					ImGui::TableNextColumn();
-					ImGui::Text("%d (%s)", sprite._spriteType, spriteType2str(sprite._spriteType));
+					if (sprite._spriteType == kCastMemberSprite && sprite._cast)
+						ImGui::Text("%d (%s)", sprite._spriteType, castType2str(sprite._cast->_type));
+					else
+						ImGui::Text("%d (%s)", sprite._spriteType, spriteType2str(sprite._spriteType));
+
+					// fq
 					ImGui::TableNextColumn();
 					ImGui::PushID(i + 1);
 					ImGui::Text("%3d", sprite._foreColor); ImGui::SameLine();
 					ImGui::ColorButton("foreColor", convertColor(sprite._foreColor));
 					ImGui::PopID();
+
+					// bq
 					ImGui::TableNextColumn();
 					ImGui::PushID(i + 1);
 					ImGui::Text("%3d", sprite._backColor); ImGui::SameLine();
 					ImGui::ColorButton("backColor", convertColor(sprite._backColor));
 					ImGui::PopID();
+
+					// script
 					ImGui::TableNextColumn();
 
 					if (score->_version >= kFileVer600) {
@@ -1379,39 +1457,57 @@ void showChannels() {
 						if (sprite._spriteListIdx) {
 							Common::MemoryReadStreamEndian *stream = score->getSpriteDetailsStream(sprite._spriteListIdx + 2);
 							Common::String name;
-							if (stream)
+							if (stream) {
 								name = stream->readPascalString();
+								delete stream;
+							}
 							ImGui::Text("%s", name.c_str());
 						} else {
 							ImGui::Text(" ");
 						}
 					}
 
+					// colorcode
 					ImGui::TableNextColumn();
 					ImGui::Text("0x%x", sprite._colorcode);
+
+					// blend amount
 					ImGui::TableNextColumn();
 					ImGui::Text("0x%x", sprite._blendAmount);
+
+					// unk3
 					ImGui::TableNextColumn();
 					ImGui::Text("0x%x", sprite._unk3);
+
+					// constraint
 					ImGui::TableNextColumn();
 					ImGui::Text("%d", channel._constraint);
+
+					// puppet
 					ImGui::TableNextColumn();
 					colN = "##puppet" + chNum;
 					ImGui::Checkbox(colN.c_str(), &sprite._puppet);
+
+					// moveable
 					ImGui::TableNextColumn();
 					colN = "##moveable" + chNum;
 					ImGui::Checkbox(colN.c_str(), &sprite._moveable);
+
+					// movieRate
 					ImGui::TableNextColumn();
 					if (channel._movieRate)
 						ImGui::Text("%f", channel._movieRate);
 					else
 						ImGui::Text("0");
+
+					// movieTime
 					ImGui::TableNextColumn();
 					if (channel._movieRate)
 						ImGui::Text("%d (%f)", channel._movieTime, (float)(channel._movieTime/60.0f));
 					else
 						ImGui::Text("0");
 				} else {
+					// invalid castID
 					ImGui::Text("000");
 				}
 			}

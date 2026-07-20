@@ -84,6 +84,13 @@ void resetObjectLayout(Common::Array<Thing> &objects) {
 }
 
 void ColonyEngine::loadMap(int mnum) {
+	// _levelData has room for 8 levels; reject anything else before
+	// initRobots() indexes _levelData[mnum - 1] (CID 1653437)
+	if (mnum < 1 || mnum > 8) {
+		warning("loadMap: invalid level %d", mnum);
+		return;
+	}
+
 	saveLevelState();
 
 	Common::Path mapPath(Common::String::format("MAP.%d", mnum));
@@ -164,8 +171,7 @@ void ColonyEngine::loadMap(int mnum) {
 	doPatch();  // apply object relocations from patch table
 	initRobots();  // spawn robot objects for this level
 
-	if (_me.xindex >= 0 && _me.xindex < 32 && _me.yindex >= 0 && _me.yindex < 32)
-		_robotArray[_me.xindex][_me.yindex] = kMeNum;
+	setPlayerCellMarker();
 	debugC(1, kColonyDebugMap, "Successfully loaded map %d (objects: %d)", mnum, (int)_objects.size());
 }
 

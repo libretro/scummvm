@@ -65,12 +65,12 @@ struct Label {
 
 class Score {
 public:
-	Score(Movie *movie);
+	Score(Movie *movie, bool haveInteractivity);
 	~Score();
 
 	Movie *getMovie() const { return _movie; }
 
-	void loadFrames(Common::SeekableReadStreamEndian &stream, uint16 version);
+	void loadFrames(Common::SeekableReadStreamEndian &stream, uint16 version, bool loadSprites = false);
 	bool loadFrame(int frame, bool loadCast);
 	bool readOneFrame();
 	void updateFrame(Frame *frame);
@@ -86,7 +86,7 @@ public:
 	static int compareLabels(const void *a, const void *b);
 	uint16 getLabel(Common::String &label);
 	Common::String *getLabelList();
-	Common::String *getFrameLabel(uint id);
+	Common::String getFrameLabel(uint id);
 	void setStartToLabel(Common::String &label);
 	void gotoLoop();
 	void gotoNext();
@@ -121,8 +121,9 @@ public:
 	uint16 getActiveSpriteIDFromPos(Common::Point pos);
 	bool checkSpriteRollOver(uint16 spriteId, Common::Point pos);
 	uint16 getRollOverSpriteIDFromPos(Common::Point pos);
-	Common::List<Channel *> getSpriteIntersections(const Common::Rect &r);
+	Common::Array<Channel *> getSpriteIntersections(const Common::Rect &r);
 	uint16 getSpriteIdByMemberId(CastMemberID id);
+	Common::Rect getChannelDirtyRectBounds();
 	bool refreshPointersForCastMemberID(CastMemberID id);
 	bool refreshPointersForCastLib(uint16 castLib);
 
@@ -142,7 +143,6 @@ public:
 	void playSoundChannel(bool puppetOnly, bool sound1Changed = true, bool sound2Changed = true);
 
 	Common::String formatChannelInfo();
-	bool processFrozenPlayScript();
 
 	Common::MemoryReadStreamEndian *getSpriteDetailsStream(int spriteIdx);
 
@@ -230,11 +230,14 @@ public:
 	Cursor _defaultCursor;
 	CursorRef _currentCursor;
 	bool _skipTransition;
+	bool _skipIdle;
 
 	Common::Array<uint32> _spriteDetailOffsets;
 	Common::Array<bool> _spriteDetailAccessed;
 
 	bool _disableGoPlayUpdateStage;
+
+	bool _haveInteractivity;
 
 private:
 	DirectorEngine *_vm;

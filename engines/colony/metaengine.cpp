@@ -32,7 +32,6 @@
 #include "common/system.h"
 #include "common/translation.h"
 #include "graphics/scaler.h"
-#include "graphics/thumbnail.h"
 
 #include "colony/colony.h"
 #include "colony/detection.h"
@@ -84,7 +83,7 @@ void ColonyMetaEngine::getSavegameThumbnail(Graphics::Surface &thumb) {
 	if (!engine || !engine->getSavedScreen())
 		return;
 
-	Graphics::Surface *scaledSavedScreen = scale(*engine->getSavedScreen(), kThumbnailWidth, kThumbnailHeight2);
+	Graphics::Surface *scaledSavedScreen = engine->getSavedScreen()->scale(kThumbnailWidth, kThumbnailHeight2);
 	if (!scaledSavedScreen)
 		return;
 
@@ -150,6 +149,11 @@ Common::KeymapArray ColonyMetaEngine::initKeymaps(const char *target) const {
 	act->addDefaultInputMapping("x");
 	engineKeyMap->addAction(act);
 
+	act = new Common::Action("FACEFRWARD", _("Face forward"));
+	act->setCustomEngineActionEvent(kActionFaceForward);
+	act->addDefaultInputMapping("f");
+	engineKeyMap->addAction(act);
+
 	act = new Common::Action("MOUSE", _("Toggle mouselook"));
 	act->setCustomEngineActionEvent(kActionToggleMouselook);
 	act->addDefaultInputMapping("SPACE");
@@ -171,13 +175,7 @@ Common::KeymapArray ColonyMetaEngine::initKeymaps(const char *target) const {
 	act->addDefaultInputMapping("F11");
 	engineKeyMap->addAction(act);
 
-	act = new Common::Action("SKIP", _("Skip intro"));
-	act->setCustomEngineActionEvent(kActionSkipIntro);
-	act->addDefaultInputMapping("S+s");
-	act->addDefaultInputMapping("JOY_X");
-	engineKeyMap->addAction(act);
-
-	act = new Common::Action("ESCAPE", _("Menu"));
+	act = new Common::Action("ESCAPE", _("Menu / Skip intro"));
 	act->setCustomEngineActionEvent(kActionEscape);
 	act->addDefaultInputMapping("ESCAPE");
 	act->addDefaultInputMapping("JOY_BACK");
@@ -185,7 +183,7 @@ Common::KeymapArray ColonyMetaEngine::initKeymaps(const char *target) const {
 
 	act = new Common::Action("FIRE", _("Fire weapon"));
 	act->setCustomEngineActionEvent(kActionFire);
-	act->addDefaultInputMapping("f");
+	act->addDefaultInputMapping("LCTRL");
 	act->addDefaultInputMapping("JOY_B");
 	engineKeyMap->addAction(act);
 

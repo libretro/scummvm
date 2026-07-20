@@ -143,7 +143,7 @@ Common::SeekableReadStreamEndian *Archive::getFirstResource(uint32 tag) {
 	return getResource(tag, getResourceIDList(tag)[0]);
 }
 
-Common::SeekableReadStreamEndian *Archive::getFirstResource(uint32 tag, uint16 parentId) {
+Common::SeekableReadStreamEndian *Archive::getFirstResource(uint32 tag, uint32 parentId) {
 	return getResource(tag, getResourceIDList(tag)[0]);
 }
 
@@ -887,6 +887,17 @@ bool RIFXArchive::readAfterburnerMap(Common::SeekableReadStreamEndian &stream, u
 	start = stream.pos();
 	_afterBurnerVersion = readVarInt(stream);
 	debugC(3, kDebugLoading, "Fver: version: %x", _afterBurnerVersion);
+
+	if (_afterBurnerVersion >= 0x401) {
+		uint32 imapVersion = readVarInt(stream);
+		uint32 directorVersion = readVarInt(stream);
+		debugC(3, kDebugLoading, "Fver: imapVersion: %d directorVersion: %x", imapVersion, directorVersion);
+	}
+	if (_afterBurnerVersion >= 0x501) {
+		byte versionStringLen = stream.readByte();
+		Common::String versionString = stream.readString(0, versionStringLen);
+		debugC(3, kDebugLoading, "Fver: versionString: %s", versionString.c_str());
+	}
 	end = stream.pos();
 
 	if (end - start != _fverLength) {
@@ -901,7 +912,33 @@ bool RIFXArchive::readAfterburnerMap(Common::SeekableReadStreamEndian &stream, u
 	}
 
 	_fcdrLength = readVarInt(stream);
-	stream.skip(_fcdrLength);
+	_fcdrZlibTypes.clear();
+	{
+		uint32 fcdrStart = stream.pos();
+		uint32 fcdrUncompLength = 16384;	// the table holds a handful of GUIDs plus names; generous cap
+		Common::SeekableReadStreamEndian *fcdrStream = readZlibData(stream, _fcdrLength, &fcdrUncompLength, _isBigEndian);
+		if (fcdrStream) {
+			uint16 compressionTypeCount = fcdrStream->readUint16();
+			for (uint16 i = 0; i < compressionTypeCount; i++) {
+				// MOA GUID identifying the codec for this compression type index
+				uint32 data1 = fcdrStream->readUint32();
+				uint16 data2 = fcdrStream->readUint16();
+				uint16 data3 = fcdrStream->readUint16();
+				uint32 data4 = fcdrStream->readUint32();
+				uint32 data5 = fcdrStream->readUint32();
+				bool zlib = data1 == 0xAC99E904 && data2 == 0x0070 && data3 == 0x0B36 &&
+							((data4 == 0x00080000 && data5 == 0x347A3707) ||
+							 (data4 == 0x00000800 && data5 == 0x07377A34));
+				_fcdrZlibTypes.push_back(zlib);
+				debugC(3, kDebugLoading, "Fcdr: compression type %d: %08x-%04x-%04x-%08x%08x%s",
+					i, data1, data2, data3, data4, data5, zlib ? " (zlib)" : "");
+			}
+			delete fcdrStream;
+		} else {
+			warning("RIFXArchive::readAfterburnerMap(): Could not uncompress Fcdr");
+		}
+		stream.seek(fcdrStart + _fcdrLength);
+	}
 
 	// Afterburner map
 	if (stream.readUint32() != MKTAG('A', 'B', 'M', 'P')) {
@@ -1022,7 +1059,7 @@ bool RIFXArchive::readAfterburnerMap(Common::SeekableReadStreamEndian &stream, u
 	return true;
 }
 
-void RIFXArchive::readCast(Common::SeekableReadStreamEndian &casStream, uint16 libResourceId) {
+void RIFXArchive::readCast(Common::SeekableReadStreamEndian &casStream, uint32 libResourceId) {
 	int castTag = MKTAG('C', 'A', 'S', 't');
 
 	uint casSize = casStream.size() / 4;
@@ -1100,7 +1137,7 @@ Common::SeekableReadStreamEndian *RIFXArchive::getFirstResource(uint32 tag, bool
 	return getResource(tag, getResourceIDList(tag)[0], fileEndianness);
 }
 
-Common::SeekableReadStreamEndian *RIFXArchive::getFirstResource(uint32 tag, uint16 parentId) {
+Common::SeekableReadStreamEndian *RIFXArchive::getFirstResource(uint32 tag, uint32 parentId) {
 	if (!_keyData.contains(tag))
 		return nullptr;
 	if (!_keyData[tag].contains(parentId))
@@ -1133,9 +1170,20 @@ Common::SeekableReadStreamEndian *RIFXArchive::getResource(uint32 tag, uint16 id
 		if (res.offset == -1) {
 			return new Common::MemoryReadStreamEndian(_ilsData[id], res.uncompSize, bigEndian, DisposeAfterUse::NO);
 		} else {
+			// Only inflate resources whose Fcdr compression type is zlib; fontmap,
+			// null-compressed and SWA resources are stored verbatim.
+			bool zlib = res.size != res.uncompSize;
+			if (res.compressionType < _fcdrZlibTypes.size())
+				zlib = zlib && _fcdrZlibTypes[res.compressionType];
+
+			if (!zlib) {
+				auto rawStream = new Common::SeekableSubReadStream(_stream, _ilsBodyOffset + res.offset, _ilsBodyOffset + res.offset + res.size, DisposeAfterUse::NO);
+				return new Common::SeekableReadStreamEndianWrapper(rawStream, bigEndian, DisposeAfterUse::YES);
+			}
+
 			_stream->seek(_ilsBodyOffset + res.offset);
 			uint32 actualUncompLength = res.uncompSize;
-			Common::SeekableReadStreamEndian *stream = readZlibData(*_stream, res.size, &actualUncompLength, _isBigEndian);
+			Common::SeekableReadStreamEndian *stream = readZlibData(*_stream, res.size, &actualUncompLength, bigEndian);
 			if (!stream) {
 				error("RIFXArchive::getResource(): Could not uncompress '%s' %d", tag2str(tag), id);
 			}

@@ -26,7 +26,7 @@
 
 namespace Audio {
 
-class YM2149Emu final : public YM2149::YM2149, public EmulatedChip {
+class YM2149Emu : public YM2149::YM2149, public EmulatedChip {
 public:
 	YM2149Emu();
 	~YM2149Emu() override;

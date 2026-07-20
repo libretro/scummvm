@@ -143,6 +143,10 @@ bool Script::hasProcedure(const Common::String &procedure) const {
 }
 
 String Script::procedureAt(uint32 pc) const {
+	// this can only happen if an error occurs before we load the script
+	if (_procedures.empty())
+		return "<none>";
+
 	// this method is very inefficient but it is only used for debugging
 	typedef Pair<String, uint32> Node;
 	Array<Node> sorted;
@@ -654,20 +658,29 @@ private:
 	template<class TObject = ObjectBase>
 	TObject *getObjectArg(uint argI) {
 		const char *const name = getStringArg(argI);
+		if (!*name)
+			return nullptr;
 		auto *object = g_engine->world().getObjectByName(process().character(), name);
 		return dynamic_cast<TObject *>(object);
 	}
 
 	const Point kInvalidPoint = { INT16_MIN, INT16_MIN };
 	Point getCamLerpTargetArg(const char *action, uint argI) {
-		auto *pointObject = getObjectArg<PointObject>(argI);
+		auto *object = getObjectArg<ObjectBase>(argI);
+
+		auto *pointObject = dynamic_cast<PointObject *>(object);
 		if (pointObject != nullptr)
 			return pointObject->position();
 
 		// in V2 a main character (we can reduce to walking character) can be used instead
-		auto *character = getObjectArg<WalkingCharacter>(argI);
-		if (character != nullptr)
-			return character->position();
+		auto *walkingChar = dynamic_cast<WalkingCharacter *>(object);
+		if (walkingChar != nullptr)
+			return walkingChar->position();
+
+		// in corvino it might even be just a regular stationary character
+		auto stationaryChar = dynamic_cast<Character *>(object);
+		if (stationaryChar != nullptr)
+			return stationaryChar->interactionPoint();
 
 		pointObject = g_engine->game().unknownCamLerpTarget(action, getStringArg(argI));
 		return pointObject == nullptr ? kInvalidPoint : pointObject->position();
@@ -736,6 +749,8 @@ private:
 			auto duration = g_engine->isV1() ? 60 : getNumberArg(0);
 			return TaskReturn::waitFor(new ScriptTimerTask(process(), duration));
 		}
+		case ScriptKernelTask::WaitForMouseClick:
+			return TaskReturn::waitFor(g_engine->input().waitForInput(process()));
 		case ScriptKernelTask::Fork:
 			g_engine->scheduler().createProcess<ScriptTask>(process().character(), *this);
 			return TaskReturn::finish(0); // 0 means this is the forking process
@@ -941,7 +956,16 @@ private:
 				_character = g_engine->game().unknownSayTextCharacter(characterName, dialogId);
 			if (_character == nullptr)
 				return TaskReturn::finish(1);
-			return TaskReturn::waitFor(_character->sayText(process(), dialogId));
+			return TaskReturn::waitFor(_character->sayText(process(), dialogId, nullptr));
+		};
+		case ScriptKernelTask::SayTextOnlySound: {
+			const char *dialogSound = getStringArg(1);
+			Character *_character = getObjectArg<Character>(0);
+			if (_character == nullptr)
+				_character = g_engine->game().unknownSayTextCharacter(getStringArg(0), -1);
+			if (_character == nullptr)
+				return TaskReturn::finish(1);
+			return TaskReturn::waitFor(_character->sayText(process(), -1, dialogSound));
 		};
 		case ScriptKernelTask::SetDialogLineReturn:
 			relatedCharacter().setLastDialogReturnValue(getNumberArg(0));
@@ -1193,6 +1217,8 @@ void Script::fixNestedMenuPop(uint32 pc) {
 	 *   secta-win-es
 	 *   escarabajo-win-es
 	 *   moscu-win-es
+	 *   corvino-win-es
+	 *   mamelucos-win-es
 	 */
 	scumm_assert(pc < _instructions.size());
 	auto &instr = _instructions[pc];

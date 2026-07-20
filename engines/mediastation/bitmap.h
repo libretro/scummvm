@@ -51,12 +51,13 @@ public:
 
 class PixMapImage {
 public:
-	PixMapImage(Chunk &chunk, const ImageInfo &imageInfo);
-	PixMapImage(const ImageInfo &imageInfo);
+	PixMapImage(Chunk &chunk, const ImageInfo &imageInfo, bool decompressInPlace = false);
+	PixMapImage(const ImageInfo &imageInfo, bool decompressInPlace = false);
 	virtual ~PixMapImage();
 
 	bool isCompressed() const;
 	BitmapCompressionType getCompressionType() const { return _imageInfo._compressionType; }
+	void setCompressionType(BitmapCompressionType compressionType) { _imageInfo._compressionType = compressionType; }
 	int16 width() const { return _imageInfo._dimensions.x; }
 	int16 height() const { return _imageInfo._dimensions.y; }
 	int16 stride() const { return _imageInfo._stride; }
@@ -66,6 +67,7 @@ public:
 
 private:
 	ImageInfo _imageInfo;
+	void decompress();
 };
 
 } // End of namespace MediaStation

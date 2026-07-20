@@ -120,16 +120,6 @@ DirectorEngine::DirectorEngine(OSystem *syst, const DirectorGameDescription *gam
 		SearchMan.addSubDirectoryMatching(_gameDataDir, directoryGlob, 0, 5);
 	}
 
-	if (ConfMan.getBool("true_color") || (getGameFlags() & GF_32BPP) || debugChannelSet(-1, kDebug32bpp)) {
-#ifdef USE_RGB_COLOR
-		_colorDepth = 32;
-#else
-		warning("32-bpp color dept is not supported, forcing 8-bit");
-		_colorDepth = 8;
-#endif
-	} else {
-		_colorDepth = 8;	// 256-color
-	}
 	// Enable Macintosh gamma correction. This resolves the issue of Mac games appearing too dark.
 	// Enabled by default for Macintosh and Pippin games in the detection code.
 	// Right now only used in 8-bit mode to adjust the palette.
@@ -157,7 +147,6 @@ DirectorEngine::DirectorEngine(OSystem *syst, const DirectorGameDescription *gam
 		_machineType = 9;	// Macintosh IIci
 	}
 
-	_playbackPaused = false;
 	_centerStage = true;
 
 	_surface = nullptr;
@@ -181,9 +170,7 @@ DirectorEngine::~DirectorEngine() {
 		_currentWindow = nullptr;
 	}
 	delete _wm;
-	for (auto &it : _allSeenResFiles) {
-		delete it._value;
-	}
+	_allSeenResFiles.clear();
 	for (uint i = 0; i < _winCursor.size(); i++)
 		delete _winCursor[i];
 
@@ -227,7 +214,20 @@ void DirectorEngine::forgetWindow(Window *window) {
 			return;
 	}
 	window->setVisible(false, true);
+	window->getSoundManager()->stopSound();
 	_windowsToForget.push_back(window);
+}
+
+bool DirectorEngine::isWindowRegistered(Window *window) const {
+	if (window == _stage) {
+		return true;
+	}
+	for (auto &it : _windowList) {
+		if (it == window) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void DirectorEngine::setCurrentWindow(Window *window) {
@@ -252,6 +252,7 @@ void DirectorEngine::setVersion(uint16 version) {
 namespace DT {
 bool isMouseInputIgnored() { return false; }
 void setSelectedChannel(int channel) { }
+void renderPendingWindow() { }
 }
 #endif
 
@@ -274,10 +275,16 @@ Common::Error DirectorEngine::run() {
 	if (!debugChannelSet(-1, kDebugDesktop))
 		_wmMode |= Graphics::kWMModeFullscreen | Graphics::kWMModeNoDesktop;
 
-#ifdef USE_RGB_COLOR
-	if (ConfMan.getBool("true_color") || (getGameFlags() & GF_32BPP) || debugChannelSet(-1, kDebug32bpp))
-		_wmMode |= Graphics::kWMMode32bpp;
-#endif
+	if (ConfMan.getBool("true_color") || (getGameFlags() & GF_TRUECOLOR) || debugChannelSet(-1, kDebug32bpp)) {
+		// Both 16bpp and 32bpp formats are supported, but 32bpp is always reported to the scripts.
+		_pixelformat = g_system->getSupportedFormats().front();
+		_colorDepth = _pixelformat.isCLUT8() ? 8 : 32;
+	} else {
+		_pixelformat = Graphics::PixelFormat::createFormatCLUT8();
+		_colorDepth = 8;
+	}
+
+	debugC(1, kDebugImages, "Director pixelformat is: %s", _pixelformat.toString().c_str());
 
 	if (getGameFlags() & GF_DESKTOP)
 		_wmMode &= ~Graphics::kWMModeNoDesktop;
@@ -287,7 +294,7 @@ Common::Error DirectorEngine::run() {
 		_wmHeight = 480;
 	}
 
-	_wm = new Graphics::MacWindowManager(_wmMode, &_director3QuickDrawPatterns, getLanguage());
+	_wm = new Graphics::MacWindowManager(_wmMode, &_director3QuickDrawPatterns, getLanguage(), _pixelformat);
 	_wm->setEngine(this);
 
 	gameQuirks(_gameDescription->desc.gameId, _gameDescription->desc.platform);
@@ -298,8 +305,6 @@ Common::Error DirectorEngine::run() {
 	_wm->setDesktopMode(_wmMode);
 
 	_wm->printWMMode();
-
-	_pixelformat = _wm->_pixelformat;
 
 	debugC(1, kDebugImages, "Director pixelformat is: %s", _pixelformat.toString().c_str());
 
@@ -360,7 +365,7 @@ Common::Error DirectorEngine::run() {
 
 	while (loop) {
 		if (_stage->getCurrentMovie())
-			processEvents();
+			processSysEvents();
 
 		setCurrentWindow(_stage);
 		g_lingo->switchStateFromWindow();
@@ -373,6 +378,10 @@ Common::Error DirectorEngine::run() {
 				_currentWindow->step();
 			}
 		}
+
+		// service a debugger-requested redraw before compositing, so it
+		// is visible even when playback is paused and step() renders nothing
+		DT::renderPendingWindow();
 
 		draw();
 		while (!_windowsToForget.empty()) {

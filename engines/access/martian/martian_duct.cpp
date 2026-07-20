@@ -84,13 +84,6 @@ void MartianDuct::doDuct() {
 	drawArrowSprites2();
 	_vm->_room->_function = FN_NONE;
 
-	// FIXME: Quick HACK: skip this part
-	//g_system->displayMessageOnOSD(Common::U32String("Duct section not implemented yet!"));
-	//_vm->_flags[0x62] = 1;
-	//_vm->_flags[0x55] = 1;
-	//_vm->_room->_function = FN_CLEAR1;
-	// END HACK
-
 	while (!_vm->shouldQuit()) {
 		clearWorkScreenArea();
 		updateMatrix();
@@ -739,7 +732,7 @@ int MartianDuct::addPointsToMainPrimArray(int tempCount) {
 		_primZ2Array.resize(dstIdx + tempCount);
 	}
 
-    for (int srcidx = 0; srcidx < tempCount; srcidx += 2) {
+	for (int srcidx = 0; srcidx < tempCount; srcidx += 2) {
 		_primX1Array[dstIdx] = _tempPoints[srcidx].x;
 		_primY1Array[dstIdx] = _tempPoints[srcidx].y;
 		_primZ1Array[dstIdx] = _tempPoints[srcidx].z;

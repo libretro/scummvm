@@ -25477,6 +25477,47 @@ static const uint16 ramaDemoBrokenButtonsPatch[] = {
 	PATCH_END
 };
 
+// The Bangkok addition/subtraction puzzle has an incompatibility with ScummVM's
+//  SCI32 drawing algorithm, causing digits to float in the upper left corner.
+//  The script uses many View objects to display its question digits, but does
+//  not explicitly hide them when they are not in use. Instead it merely sets
+//  their coordinates to (0,0). This appears to be an oversight, as the answer
+//  digits are correctly hidden by setting their cels to a transparent image.
+//  As the question digits have no fixed priority, the interpreter sets their
+//  priority to their y value, leaving them with priority zero. This is the same
+//  as the background view. In SSCI this happened to work because its last-ditch
+//  sorting algorithm used each screen item's internal memory address.
+//
+// We fix this by setting unused digit coordinates to (-2,-2) instead of (0,0),
+//  causing their priority to be set to -2 and hidden below the background view.
+//  A priority of -1 would probably also work, but there are places in scripts
+//  where -1 is a sentinel value, so it is safer to use a different value.
+//
+// Applies to: All versions
+// Responsible methods: quesDigit1:init, quesDigit2:init, ...
+// Fixes bugs: #10261, #16837
+static const uint16 ramaDigitPriorityPcSignature[] = {
+	SIG_MAGICDWORD,
+	0x35, 0x00,                    // ldi 00
+	0x65, 0x1e,                    // aTop x
+	                               // line
+	                               // aTop y
+	SIG_END
+};
+
+static const uint16 ramaDigitPriorityMacSignature[] = {
+	SIG_MAGICDWORD,
+	0x35, 0x00,                    // ldi 00
+	0x65, 0x36,                    // aTop x
+	                               // aTop y
+	SIG_END
+};
+
+static const uint16 ramaDigitPriorityPatch[] = {
+	0x35, 0xfe,                   // ldi fe [ -2 ]
+	PATCH_END
+};
+
 static const SciScriptPatcherEntry ramaSignatures[] = {
 	{  true,     0, "disable video benchmarking",                     1, sci2BenchmarkSignature,          sci2BenchmarkReversePatch },
 	{  true,    12, "disable video benchmarking",                     1, sci2BenchmarkSignature,          sci2BenchmarkReversePatch },
@@ -25485,6 +25526,8 @@ static const SciScriptPatcherEntry ramaSignatures[] = {
 	{  true,    85, "fix SaveManager to use normal readWord calls",   1, ramaSerializeRegTSignature1,     ramaSerializeRegTPatch1 },
 	{  true,    90, "demo: remove broken button handlers",            1, ramaDemoBrokenButtonsSignature,  ramaDemoBrokenButtonsPatch },
 	{  true,   201, "fix crash restoring save games using NukeTimer", 1, ramaNukeTimerSignature,          ramaNukeTimerPatch },
+	{  true,  4008, "fix digit priority",                            17, ramaDigitPriorityPcSignature,    ramaDigitPriorityPatch },
+	{  true,  4008, "fix digit priority",                            17, ramaDigitPriorityMacSignature,   ramaDigitPriorityPatch },
 	{  true, 64928, "Narrator lockup fix",                            1, sciNarratorLockupSignature,      sciNarratorLockupPatch },
 	{  true, 64990, "disable change directory button",                1, ramaChangeDirSignature,          ramaChangeDirPatch },
 	SCI_SIGNATUREENTRY_TERMINATOR
@@ -26070,6 +26113,67 @@ static const uint16 sq6TrashCanPatch[] = {
 	PATCH_END
 };
 
+// WORKAROUND: Pathfinding algorithm difference
+//
+// In the shuttle bay entrance (room 440), clicking on either door button
+//  while the security guard Chesboro is on the floor causes Roger to skip
+//  walking to the door and instead animate from his current position.
+//
+// The polygon deadChesbroPoly is a barred-access polygon that extends beyond
+//  the room's contained-access polygon (gaurdsDead) by one. This causes our
+//  pathfinding algorithm to conclude that the door buttons are unreachable.
+//  This is unrelated to other pathfinding issues in this room, where Roger
+//  can walk up the walls when standing in the left or right alcoves.
+//
+// We work around this by lowering the top edge of deadChesbroPoly by one pixel.
+//
+// Applies to: All versions
+// Responsible method: deadChesbroPoly:init
+// Fixes bug: #9749
+static const uint16 sq6ChesboroPolygonSignature[] = {
+	SIG_MAGICDWORD,
+	0x38, SIG_UINT16(0x00cc),           // pushi 00cc [ x: 204 ]
+	0x39, 0x71,                         // pushi 71   [ y: 113 ]
+	0x38, SIG_UINT16(0x00dd),           // pushi 00dd [ x: 221 ]
+	0x39, 0x71,                         // pushi 71   [ y: 113 ]
+	SIG_END
+};
+
+static const uint16 sq6ChesboroPolygonPatch[] = {
+	PATCH_ADDTOOFFSET(+3),
+	0x39, 0x72,                         // pushi 72   [ y: 114 ]
+	PATCH_ADDTOOFFSET(+3),
+	0x39, 0x72,                         // pushi 72   [ y: 114 ]
+	PATCH_END
+};
+
+// WORKAROUND: Pathfinding algorithm difference
+//
+// In Stella's brain (room 740) ego can walk out of bounds from the upper right
+//  area with the ship to the lower area. This skips solving a puzzle and leaves
+//  the game in a broken state.
+//
+// We work around this by adjusting the upper right polygon. It has a narrow
+//  spike with one point at the end, and our pathfinding algorithm seems to have
+//  trouble with that. By moving a second point near the end, the problematic
+//  spike shape is removed while keeping the same effective walking area.
+//
+// Applies to: All versions
+// Responsible method: rm740:init
+// Fixes bug: #9589
+static const uint16 sq6BrainPolygonSignature[] = {
+	SIG_MAGICDWORD,
+	0x38, SIG_UINT16(0x0337),           // pushi 0337 [ x: 823 ]
+	0x39, 0x0c,                         // pushi 0c   [ y: 12  ]
+	SIG_END
+};
+
+static const uint16 sq6BrainPolygonPatch[] = {
+	0x38, PATCH_UINT16(0x2df),          // pushi 02df [ x: 735 ]
+	0x39, 0x00,                         // pushi 00   [ y: 0   ]
+	PATCH_END
+};
+
 //          script, description,                                      signature                        patch
 static const SciScriptPatcherEntry sq6Signatures[] = {
 	{  true,     0, "fix slow transitions",                        1, sq6SlowTransitionSignature2,     sq6SlowTransitionPatch2 },
@@ -26084,11 +26188,13 @@ static const SciScriptPatcherEntry sq6Signatures[] = {
 	{  true,   330, "fix polysorbate lx music volume",             1, sq6PolysorbateVolumeSignature,   sq6PolysorbateVolumePatch },
 	{  true,   390, "fix trash can",                               1, sq6TrashCanSignature,            sq6TrashCanPatch },
 	{  true,   410, "fix slow transitions",                        1, sq6SlowTransitionSignature2,     sq6SlowTransitionPatch2 },
+	{  true,   440, "pathfinding: chesboro polygon",               1, sq6ChesboroPolygonSignature,     sq6ChesboroPolygonPatch },
 	{  true,   460, "fix invalid array construction",              1, sci21IntArraySignature,          sci21IntArrayPatch },
 	{  true,   490, "fix invalid cockpit icon bar",                1, sq6CockpitIconBarSignature,      sq6CockpitIconBarPatch },
 	{  true,   500, "fix slow transitions",                        1, sq6SlowTransitionSignature1,     sq6SlowTransitionPatch1 },
 	{  true,   510, "fix invalid array construction",              1, sci21IntArraySignature,          sci21IntArrayPatch },
 	{  true,   690, "fix duplicate points",                        1, sq6DuplicatePointsSignature,     sq6DuplicatePointsPatch },
+	{  true,   740, "pathfinding: brain polygon",                  1, sq6BrainPolygonSignature,        sq6BrainPolygonPatch },
 	{  true,    40, "SQNarrator lockup fix",                       1, sq6NarratorLockupSignature,      sq6NarratorLockupPatch },
 	{  true,    40, "SQNarrator lockup fix",                       1, sciNarratorLockupLineSignature,  sciNarratorLockupLinePatch },
 	{  true, 64928, "Narrator lockup fix",                         1, sciNarratorLockupSignature,      sciNarratorLockupPatch },

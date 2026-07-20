@@ -50,8 +50,12 @@
 #include "scumm/imuse/imuse.h"
 #include "scumm/imuse_digi/dimuse_engine.h"
 #include "scumm/smush/smush_player.h"
+#include "scumm/smush/rebel/smush_player_ra1.h"
+#include "scumm/smush/rebel/smush_player_ra2.h"
 #include "scumm/players/player_towns.h"
 #include "scumm/insane/insane.h"
+#include "scumm/insane/rebel2/rebel.h"
+#include "scumm/insane/rebel1/rebel.h"
 #include "scumm/he/animation_he.h"
 #include "scumm/he/font_he.h"
 #include "scumm/he/intern_he.h"
@@ -397,6 +401,9 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 		// #15666, #11290, and <https://forums.scummvm.org/viewtopic.php?p=97395#p97395>).
 		if (_game.id == GID_LOOM || !ConfMan.getBool("trim_fmtowns_to_200_pixels"))
 			_screenHeight = 240;
+	} else if (_game.id == GID_REBEL2 && ConfMan.getBool("rebel2_hires")) {
+		_screenWidth = 640;
+		_screenHeight = 400;
 	} else if (_game.version == 8 || _game.heversion >= 71) {
 		// COMI uses 640x480. Likewise starting from version 7.1, HE games use
 		// 640x480, too.
@@ -528,6 +535,9 @@ ScummEngine::~ScummEngine() {
 	}
 
 	delete _macGui;
+
+	for (auto &it : _scriptOverrides)
+		delete it._value;
 
 #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
 	delete _townsScreen;
@@ -1157,6 +1167,8 @@ Common::Error ScummEngine::init() {
 
 			_filenamePattern.pattern = "%.2d.LFL";
 			_filenamePattern.genMethod = kGenRoomNum;
+		} else if (_game.id == GID_REBEL1 || _game.id == GID_REBEL2) {
+			_fileHandle = new ScummFile(this);
 		} else if (_game.platform == Common::kPlatformMacintosh) {
 			// The mac versions of Indy4, Sam&Max, DOTT, FT and The Dig used a
 			// special meta (container) file format to store the actual SCUMM data
@@ -1504,6 +1516,11 @@ Common::Error ScummEngine::init() {
 
 	setupScumm(macResourceFile);
 
+	if (_game.id == GID_REBEL1 || _game.id == GID_REBEL2) {
+		_setupIsComplete = true;
+		return Common::kNoError;
+	}
+
 	readIndexFile();
 
 	// Create the debugger now that _numVariables has been set
@@ -1778,6 +1795,74 @@ void ScummEngine::setupScumm(const Common::Path &macResourceFile) {
 
 #ifdef ENABLE_SCUMM_7_8
 void ScummEngine_v7::setupScumm(const Common::Path &macResourceFile) {
+	if (_game.id == GID_REBEL1) {
+		_res->allocResTypeData(rtBuffer, 0, 10, kDynamicResTypeMode);
+		initScreens(0, 200);
+
+		_numVariables = 256;
+		_scummVars = (int32 *)calloc(_numVariables, sizeof(int32));
+
+		_numArray = 50;
+		_res->allocResTypeData(rtString, 0, _numArray, kDynamicResTypeMode);
+		_res->allocResTypeData(rtSound, 0, 200, kDynamicResTypeMode);
+		_res->allocResTypeData(rtCostume, 0, 200, kDynamicResTypeMode);
+		_res->allocResTypeData(rtRoom, 0, 20, kDynamicResTypeMode);
+
+		defineArray(0, kIntArray, 0, 1000);
+		_numActors = 0;
+
+		setupScummVars();
+
+		_useOriginalGUI = false;
+
+		_sound = new Sound(this, _mixer, false);
+		_musicEngine = _imuseDigital = nullptr;
+		_res->allocResTypeData(rtBuffer, 0, 10, kDynamicResTypeMode);
+		initScreens(0, 200);
+
+		_insane = new InsaneRebel1(this);
+		_splayer = new SmushPlayerRebel1(this, nullptr, _insane);
+
+		_macGui = nullptr;
+		_charset = new CharsetRendererV7(this);
+
+		initBanners();
+		return;
+	}
+
+	if (_game.id == GID_REBEL2) {
+		_res->allocResTypeData(rtBuffer, 0, 10, kDynamicResTypeMode);
+		initScreens(0, _screenHeight);
+
+		_numVariables = 256;
+		_scummVars = (int32 *)calloc(_numVariables, sizeof(int32));
+
+		_numArray = 50;
+		_res->allocResTypeData(rtString, 0, _numArray, kDynamicResTypeMode);
+		_res->allocResTypeData(rtSound, 0, 200, kDynamicResTypeMode);
+		_res->allocResTypeData(rtCostume, 0, 200, kDynamicResTypeMode);
+		_res->allocResTypeData(rtRoom, 0, 20, kDynamicResTypeMode);
+
+		defineArray(0, kIntArray, 0, 1000);
+		_numActors = 0;
+
+		setupScummVars();
+
+		_useOriginalGUI = false;
+
+		_sound = new Sound(this, _mixer, false);
+		// Rebel Assault 2 doesn't use iMUSE for audio - audio is handled directly by INSANE
+		_musicEngine = _imuseDigital = nullptr;
+		_insane = new InsaneRebel2(this);
+		_splayer = new SmushPlayerRebel2(this, nullptr, _insane);
+
+		// Initialize cursor
+		_macGui = nullptr; // Ensure this is null as we don't want MacGui behavior
+		_charset = new CharsetRendererV7(this); // Just in case
+
+		initBanners();
+		return;
+	}
 
 	// The object line toggle is always synchronized from the main game to
 	// our internal Game Options; at startup we do the opposite, since an user
@@ -2578,6 +2663,10 @@ void ScummEngine_v7::syncSoundSettings() {
 
 	if (!isUsingOriginalGUI()) {
 		ScummEngine::syncSoundSettings();
+		if (_splayer) {
+			_splayer->setChanFlag(0, true);
+			_splayer->setChanFlag(2, true);
+		}
 		return;
 	}
 
@@ -2610,6 +2699,14 @@ void ScummEngine_v7::syncSoundSettings() {
 		_imuseDigital->diMUSESetMusicGroupVol(ConfMan.getInt("music_volume") / 2);
 		_imuseDigital->diMUSESetVoiceGroupVol(ConfMan.getInt("speech_volume") / 2);
 		_imuseDigital->diMUSESetSFXGroupVol(ConfMan.getInt("sfx_volume") / 2);
+	} else if (_game.id == GID_REBEL1) {
+		const int musicVolume = ConfMan.getInt("music_volume");
+		const int sfxVolume = ConfMan.getInt("sfx_volume");
+		const int speechVolume = ConfMan.getInt("speech_volume");
+
+		_mixer->setVolumeForSoundType(Audio::Mixer::kMusicSoundType, musicVolume);
+		_mixer->setVolumeForSoundType(Audio::Mixer::kSFXSoundType, sfxVolume);
+		_mixer->setVolumeForSoundType(Audio::Mixer::kSpeechSoundType, speechVolume);
 	}
 }
 #endif
@@ -2628,6 +2725,22 @@ int ScummEngine::getTalkSpeed() {
 #pragma mark -
 
 Common::Error ScummEngine::go() {
+#ifdef ENABLE_SCUMM_7_8
+	if (_game.id == GID_REBEL1) {
+		ScummEngine_v7 *vm7 = (ScummEngine_v7 *)this;
+		InsaneRebel1 *rebel = (InsaneRebel1 *)vm7->getInsane();
+		rebel->runGame();
+		return Common::kNoError;
+	}
+
+	if (_game.id == GID_REBEL2) {
+		ScummEngine_v7 *vm7 = (ScummEngine_v7 *)this;
+		InsaneRebel2 *rebel = (InsaneRebel2 *)vm7->getInsane();
+		rebel->runGame();
+		return Common::kNoError;
+	}
+#endif
+
 	setTotalPlayTime();
 
 	_lastWaitTime = _system->getMillis();
@@ -2690,7 +2803,7 @@ Common::Error ScummEngine::go() {
 #endif // ENABLE_HE
 
 #ifdef USE_IMGUI
-	if (debugChannelSet(-1, DEBUG_IMGUI)) {
+	if (debugChannelSet(-1, kDebugImGui)) {
 		ImGuiCallbacks callbacks;
 		callbacks.init = Editor::onImGuiInit;
 		callbacks.render = Editor::onImGuiRender;
@@ -4044,6 +4157,9 @@ void ScummEngine_v7::scummLoop_handleSound() {
 		_imuseDigital->flushTracks();
 		_imuseDigital->refreshScripts();
 	}
+
+	if (_game.id == GID_REBEL1 || _game.id == GID_REBEL2)
+		return;
 
 	_splayer->setChanFlag(0, VAR(VAR_VOICE_MODE) != 0);
 	_splayer->setChanFlag(2, VAR(VAR_VOICE_MODE) != 2);

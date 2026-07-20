@@ -23,6 +23,7 @@
 #define NANCY_ENGINEDATA_H
 
 #include "engines/nancy/commontypes.h"
+#include "engines/nancy/util.h"
 
 #include "common/hash-str.h"
 #include "common/path.h"
@@ -44,6 +45,10 @@ struct BSUM : public EngineData {
 
 	Common::Path conversationTextsFilename;
 	Common::Path autotextFilename;
+
+	// Nancy12+
+	Common::Path fontFilename;
+	Common::Path flagsFilename;
 
 	// Game start section
 	SceneChangeDescription firstScene;
@@ -172,6 +177,15 @@ struct TBOX : public EngineData {
 
 	uint32 textBackground;
 	uint32 highlightTextBackground;
+
+	// Nancy 10+ extra layout variables.
+	int32 maxScrollWidth = 0;
+	int32 firstLineY = 0; // added to the y-cursor when starting a new line
+	uint16 lineStartXCursor = 0; // left inset of the text within the text area
+	int32 unknown1 = 0;
+	int32 unknown2 = 0;
+	int32 contentWidth = 0;
+	int32 contentHeight = 0;
 };
 
 // Contains data about the map state. Only used in TVD and nancy1
@@ -466,7 +480,7 @@ struct ImageChunk : public EngineData {
 struct CVTX : public EngineData {
 	CVTX(Common::SeekableReadStream *chunkStream);
 
-	Common::HashMap<Common::String, Common::String> texts;
+	Common::HashMap<Common::String, Common::String, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> texts;
 };
 
 struct TABL : public EngineData {
@@ -493,53 +507,310 @@ struct SHUI : public EngineData {
 	Common::Array<Common::Rect> _sliderRects;	// Slider rects
 };
 
-// Scheduled talk (?) UI. Introduced in Nancy 11
+// ScrollTextBox - introduced in Nancy 11. Standard UI popup header,
+// followed by the rect to restore when the text box is closed.
 struct SCTB : public EngineData {
 	SCTB(Common::SeekableReadStream *chunkStream);
 
-	Common::Path imageName;
+	UIPopupHeader header;
+	Common::Rect restoreSrcRect;
 };
 
-// New task list UI. Introduced in Nancy 10
+enum TaskButton {
+	kTaskButtonMenu = 0,
+	kTaskButtonInventory = 1,
+	kTaskButtonNotebook = 2,
+	kTaskButtonCellphone = 3,
+	// Nancy12 only: a non-clickable coin purse that shows Nancy's money on
+	// hover, inserted before HELP. HELP is therefore always the last taskbar
+	// button (index 4 in games without the coin purse, index 5 in Nancy12) and
+	// has no fixed constant.
+	kTaskButtonCoinPurse = 4
+};
+
+// Taskbar (the always-on strip at the bottom of the screen with MENU /
+// inventory / notebook / cellphone / HELP buttons). Introduced in Nancy 10.
 struct TASK : public EngineData {
+	struct ButtonRecord {
+		UIButtonRecord button;
+		// Source rect for the notification sprite (the badge shown on
+		// the middle three buttons when the popup has new content).
+		// Empty for buttons that don't carry a notification.
+		Common::Rect notificationSrcRect;
+		Common::String clickSoundName[3];
+	};
+
 	TASK(Common::SeekableReadStream *chunkStream);
 
+	// Maximum taskbar button slots: menu / inventory / notebook / cell phone /
+	// help, plus Nancy12's extra coin purse. Earlier games fill only the first 5.
+	static const uint kNumButtons = 6;
+	static const uint kButtonRecordSize = 354;
+	static const uint kNumAltSounds = 3;
+
 	Common::Path imageName;
+
+	Common::Rect srcRect;
+	Common::Rect dstRect;
+	Common::Rect unkRect1;
+	Common::Rect unkRect2;
+
+	ButtonRecord buttons[kNumButtons];
 };
 
-// New web browser UI. Introduced in Nancy 10
+// Web browser popup UI (used from the cell phone to view in-game "web
+// pages"). Introduced in Nancy 10
 struct UIBW : public EngineData {
+	struct Hotspot {
+		uint16 id = 0;
+		Common::Rect rect;
+	};
+
+	struct UrlPage {
+		Common::Path imageName;
+		Common::Array<Hotspot> hotspots;
+	};
+
 	UIBW(Common::SeekableReadStream *chunkStream);
 
+	static const uint kUrlRecordSize = 215;
+	static const uint kMaxHotspotsPerPage = 10;
+
 	Common::Path imageName;
+	Common::Array<UrlPage> pages;
 };
 
-// New cell phone popup UI. Introduced in Nancy 10
+// Cell-phone popup UI. Introduced in Nancy 10.
 struct UICL : public EngineData {
+	struct DialPadSlot {
+		Common::Rect srcRect;
+		Common::Rect destRect;
+		Common::String soundName;
+	};
+
+	struct ThreeRectWidget {
+		Common::Rect srcRectIdle;
+		Common::Rect srcRectPressed;
+		Common::Rect destRect;
+	};
+
+	struct Contact {
+		// Prefix layout:
+		//   [0..1]   visibility flag (10 = always, 11 = never, else =
+		//            scene event-flag index; contact hidden until set).
+		//   [2..8]   7-digit dial pattern (slot indices 0..9).
+		//   [9]      '\n' terminator.
+		//   [10..12] unused.
+		byte unknownPrefix[13];
+		Common::String name;      // 20-byte null-terminated
+		// Suffix layout: [0..1] sceneID, [2..3] frameID,
+		// [4..5] event-flag label, [6] event-flag value, [7] unused.
+		byte unknownSuffix[8];
+	};
+
+	struct SrcDestRectPair {
+		Common::Rect srcRect;
+		Common::Rect destRect;
+	};
+
+	static const uint kNumDialPadSlots = 15;
+	static const uint kNumSubButtons = 10;
+	static const uint kNumStatusLabels = 3;        // No Signal / No Access / Old Email Only
+
 	UICL(Common::SeekableReadStream *chunkStream);
 
-	Common::Path imageName;
+	UIPopupHeader header;
+	Common::Path overlayImageName;
+
+	// Template the call-flow sounds (ring / pickup / invalid) are played
+	// through. Only the name is swapped per call; channel / volume /
+	// loops come from here.
+	SoundDescription callSoundTemplate;
+
+	DialPadSlot dialPadSlots[kNumDialPadSlots];
+
+	// Screen-frame and label rects
+	SrcDestRectPair dialHilite;
+	Common::Rect screenOutSrcRect;
+	int32 statusTextX = 0;                    // text X-baseline
+	int32 statusTextY = 0;                    // text Y-baseline
+	SrcDestRectPair welcomeScreen;
+	Common::String statusLabels[kNumStatusLabels]; // "No Signal", "No Access", "Old Email Only"
+	SrcDestRectPair dialLabel;
+	SrcDestRectPair webLabel;
+	SrcDestRectPair dirLabel;
+
+	// Help "?" button (original button index 15). The visible Talk/Call key
+	// is dial-pad slot 12, not a separate widget.
+	ThreeRectWidget helpButton;
+
+	// Screen-content sprite block
+	Common::String helpTextKey;               // CVTX key for the help page text
+	Common::Rect signalSpriteSrc;
+	Common::Rect signalSpriteSrcAlt;
+	Common::Rect signalSpriteDest;
+	Common::Rect batterySpriteSrc;
+	Common::Rect batterySpriteSrcAlt;
+	Common::Rect batterySpriteDest;
+	SrcDestRectPair typeMessage;
+	SrcDestRectPair connectedLabel;
+	Common::Rect connectingSpriteSrc;
+	Common::Rect connectingSpriteSrcAlt;      // state-8 variant
+	Common::Rect connectingSpriteDest;
+	SrcDestRectPair onlineHeading;
+	Common::Rect fullEmptyScreenSrc;
+	Common::Rect emailListContainer;          // scrollbar/list container
+	Common::Rect dirArrowSrc;
+	Common::Rect dirCursorSrc;
+	SrcDestRectPair dirHeading;
+
+	ThreeRectWidget subButtons[kNumSubButtons];
+
+	// Heading/icon SRC+DEST pairs
+	SrcDestRectPair searchHeading;
+	Common::Rect emailIconUnread;
+	Common::Rect emailIconSelected;
+	SrcDestRectPair emailHeading;
+	SrcDestRectPair helpHeading;
+	SrcDestRectPair browserHeading;
+
+	// One initial email entry and one initial web-search entry can be baked
+	// into the UICL chunk itself; the original seeds them at new-game init
+	// (its cellphone reset). An empty key means the game ships that list empty.
+	SearchLink initialEmail;
+	SearchLink initialSearch;
+
+	uint16 fontId1 = 0;
+	uint16 fontId2 = 0;
+
+	Common::Path outgoingRingSound;           // post-dial ring
+	Common::Path pickupSound;                 // call connect
+	Common::Path invalidNumberSound;          // try again
+
+	uint16 contactCount = 0;
+	Common::Array<Contact> contacts;
+
+	// Nancy 13 added a camera / pictures sub-UI to the cell phone, which
+	// reorganized the chunk body. The fields below are only populated for
+	// Nancy 13 and later.
+	struct PictureRecord {
+		uint16 id = 0;
+		Common::Rect rect;
+		byte unknown[6] = {};
+	};
+
+	Common::Rect cameraViewSrcRect;           // camera viewfinder SRC on the overlay
+	int32 cameraTextX = 0;
+	int32 cameraTextY = 0;
+	Common::Path cameraViewImageName;         // "UI_CellCamView_OVL"
+	Common::Path cameraClickSound;
+	Common::Rect pictureDisplayRect;          // where a captured picture is shown
+	Common::Rect noPictureScreenRect;         // "no pictures" placeholder
+	Common::Path helpTextKey2;                // second CVTX key (phone-use help)
+	byte screenColors[9] = {};                // 3 RGB colors for the phone screen
+	Common::Array<PictureRecord> pictures;    // captured-picture slots (up to 50)
 };
 
-// New conversation popup UI. Introduced in Nancy 10
+// New conversation popup UI (the text strip that appears above the taskbar
+// when a character is speaking). Introduced in Nancy 10.
+// Note: response hotspots are NOT in this chunk — they live in a separate
+// TextBoxSummaryChunk, each carrying a response-sound filename referenced
+// by ProcessConversation when STOP_VIDEO transitions to PLAYER_RESPONSE_SOUND.
 struct UICO : public EngineData {
 	UICO(Common::SeekableReadStream *chunkStream);
 
-	Common::Path imageName;
+	UIPopupHeader header;
+	Common::Rect textRect;      // Text-drawing rect inside the popup overlay
 };
 
-// New inventory UI. Introduced in Nancy 10
+// New inventory popup UI (4x4 item grid with paging slider and category
+// filter tabs along the right edge). Introduced in Nancy 10.
 struct UIIV : public EngineData {
 	UIIV(Common::SeekableReadStream *chunkStream);
 
-	Common::Path imageName;
+	static const uint kNumFilters = 6;
+
+	UIPopupHeader header;
+	Common::Array<Common::Rect> slotSrcRects;       // 16 entries (image coords)
+	Common::Array<Common::Rect> slotDestRects;      // 16 entries (screen coords)
+	Common::Rect slotsHotspot;                      // Nancy13+: clickable region of the item slots
+	// When nonzero, items added while the popup is open are appended to the end
+	// of the inventory order instead of being inserted at the front (so the most
+	// recently dropped item ends up last). See Scene::addItemToInventory.
+	byte appendItemsWhileOpen = 0;
+	UIButtonSlot filters[kNumFilters];              // 6 entries
+	Common::Array<Common::Rect> tabCaptionSrcRects; // 6 entries
+	Common::Rect tabCaptionDestRect;                // on-screen target
 };
 
-// New notebook UI. Introduced in Nancy 10
+// New notebook UI. Introduced in Nancy 10.
 struct UINB : public EngineData {
 	UINB(Common::SeekableReadStream *chunkStream);
 
-	Common::Path imageName;
+	static const uint kNumTabs = 2;
+	static const uint kNumPageSoundsPerSet = 3;
+
+	UIPopupHeader header;
+	UIButtonSlot tabs[kNumTabs];
+	Common::Rect textRect;
+	byte primaryTextColor[3] = {};    // RGB, Nancy 13+
+	byte secondaryTextColor[3] = {};  // RGB, Nancy 13+
+	uint16 primaryFontID = 0;
+	uint16 secondaryFontAttr = 0;
+	uint16 useFilenameTextFlag = 0;
+	Common::Path conditionalTextFilename;
+	Common::Path actionableClickSounds[kNumPageSoundsPerSet];
+	Common::Path noActionClickSounds[kNumPageSoundsPerSet];
+	Common::Array<Common::Rect> tabCaptionSrcRects;             // 2 entries
+	Common::Rect tabCaptionDestRect;                            // on-screen target
+};
+
+// Event flags table. Introduced in Nancy 12, and replaces the event flag names
+// that were hardcoded in the executable. Each record is a name followed by an id.
+struct EVNT : public EngineData {
+	EVNT(Common::SeekableReadStream *chunkStream);
+
+	static const uint kEventRecordSize = 35;
+
+	Common::Array<Common::String> eventFlagNames;
+};
+
+// UI overlay element table. Introduced in Nancy 12. Each record describes one UI
+// element: the shared overlay image it belongs to, its on-screen rect and up to
+// six associated sound cues. Unused slots use the name "NO_UI_ITEM", and slots
+// without a given sound use "NO SOUND".
+struct UIRC : public EngineData {
+	struct ItemRecord {
+		uint16 id = 0;
+		Common::Path overlayName;
+		Common::Rect rect;
+		int16 unknown1 = 0;
+		int16 unknown2 = 0;
+		int16 soundChannel = 0;
+		int16 soundVolume = 0;
+		Common::String soundNames[6];
+	};
+
+	UIRC(Common::SeekableReadStream *chunkStream);
+
+	static const uint kNumSounds = 6;
+	static const uint kItemRecordSize = 257;
+
+	Common::Array<ItemRecord> items;
+};
+
+// Music mix table. Introduced in Nancy 13. Each record maps a short location
+// code (e.g. "BRI", "CAM", "TUT") to the set of music / ambience tracks that
+// may play there ("TacitA"/"TacitB" are the silence variants).
+struct MMIX : public EngineData {
+	struct Record {
+		Common::String name;
+		Common::Array<Common::String> musicNames;
+	};
+
+	MMIX(Common::SeekableReadStream *chunkStream);
+
+	Common::Array<Record> records;
 };
 } // End of namespace Nancy
 

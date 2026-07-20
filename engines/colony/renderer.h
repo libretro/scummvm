@@ -45,7 +45,6 @@ public:
 	virtual void drawRect(const Common::Rect &rect, uint32 color) = 0;
 	virtual void fillRect(const Common::Rect &rect, uint32 color) = 0;
 	virtual void drawString(const Graphics::Font *font, const Common::String &str, int x, int y, uint32 color, Graphics::TextAlign align = Graphics::kTextAlignLeft) = 0;
-	virtual void scroll(int dx, int dy, uint32 background) = 0;
 	virtual void drawEllipse(int x, int y, int rx, int ry, uint32 color) = 0;
 	virtual void fillEllipse(int x, int y, int rx, int ry, uint32 color) = 0;
 	virtual void fillDitherRect(const Common::Rect &rect, uint32 color1, uint32 color2) = 0;
@@ -76,6 +75,7 @@ public:
 	// Overlay a RGBA software surface onto the GL framebuffer (for Mac menu bar).
 	virtual void drawSurface(const Graphics::Surface *surf, int x, int y) {}
 	virtual Graphics::Surface *getScreenshot() { return nullptr; }
+	virtual Graphics::PixelFormat getPixelFormat() = 0;
 
 	// Convenience color accessors
 	uint32 white() const { return 255; }

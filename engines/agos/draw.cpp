@@ -525,7 +525,12 @@ void AGOSEngine::displayBoxStars() {
 
 	if (getGameType() == GType_SIMON2)
 		color = 236;
-	else
+	else if (getGameType() == GType_SIMON1 &&
+		getPlatform() == Common::kPlatformAmiga &&
+		// Original Amiga AGA/CD32 code remaps Simon 1 star color, OCS does not.
+		!(getFeatures() & GF_32COLOR)) {
+			color = 241;
+	} else
 		color = 225;
 
 	uint curHeight = (getGameType() == GType_SIMON2) ? _boxStarHeight : 134;
@@ -950,6 +955,9 @@ void AGOSEngine::displayScreen() {
 			_moveYMin = 0xFFFF;
 			_moveXMax = 0;
 			_moveYMax = 0;
+
+			if (getGameType() == GType_ELVIRA2 && getPlatform() == Common::kPlatformAtariST)
+				remapElvira2AtariSTUIRegions(screen);
 		}
 
 		if (_window6Flag == 2) {

@@ -40,7 +40,7 @@
 namespace Director {
 
 void Lingo::func_goto(Datum &frame, Datum &movie, bool calledfromgo) {
-	_vm->_playbackPaused = false;
+	_vm->getCurrentWindow()->_playbackPaused = false;
 
 	if (!_vm->getCurrentMovie())
 		return;
@@ -62,8 +62,8 @@ void Lingo::func_goto(Datum &frame, Datum &movie, bool calledfromgo) {
 	// freeze this script context. We'll return to it after entering the next frame.
 
 	// Returning from a script with "play done" does not freeze the state. Instead it obliterates it.
-	if (!g_lingo->_playDone)
-		g_lingo->_freezeState = true;
+	if (!_playDone)
+		_freezeState = true;
 
 	if (movie.type != VOID) {
 		Common::String movieFilenameRaw = movie.asString();
@@ -74,9 +74,9 @@ void Lingo::func_goto(Datum &frame, Datum &movie, bool calledfromgo) {
 		// If we reached here from b_go, and the movie is getting swapped out,
 		// reset all of the custom event handlers.
 		if (calledfromgo)
-			g_lingo->resetLingoGo();
+			resetLingoGo();
 
-		if (g_lingo->_updateMovieEnabled) {
+		if (_updateMovieEnabled) {
 			// Save the movie when branching to another movie.
 			LB::b_saveMovie(0);
 		}
@@ -120,6 +120,7 @@ void Lingo::func_gotoloop() {
 	if (!_vm->getCurrentMovie())
 		return;
 	Window *stage = _vm->getCurrentWindow();
+	stage->_playbackPaused = false;
 	Score *score = stage->getCurrentMovie()->getScore();
 	debugC(3, kDebugLingoExec, "Lingo::func_gotoloop(): looping frame %d", score->getCurrentFrameNum());
 
@@ -133,6 +134,7 @@ void Lingo::func_gotonext() {
 		return;
 
 	Window *stage = _vm->getCurrentWindow();
+	stage->_playbackPaused = false;
 	Score *score = stage->getCurrentMovie()->getScore();
 	score->gotoNext();
 	debugC(3, kDebugLingoExec, "Lingo::func_gotonext(): going to next frame %d", score->getNextFrame());
@@ -145,6 +147,7 @@ void Lingo::func_gotoprevious() {
 		return;
 
 	Window *stage = _vm->getCurrentWindow();
+	stage->_playbackPaused = false;
 	Score *score = stage->getCurrentMovie()->getScore();
 	score->gotoPrevious();
 	debugC(3, kDebugLingoExec, "Lingo::func_gotoprevious(): going to previous frame %d", score->getNextFrame());
@@ -204,7 +207,7 @@ void Lingo::func_play(Datum &frame, Datum &movie) {
 	ref.frameI = _vm->getCurrentMovie()->getScore()->getCurrentFrameNum();
 
 	// if we are issuing play command from script channel script. then play done should return to next frame
-	if (g_lingo->_currentChannelId == 0)
+	if (_state->currentChannelId == 0)
 		ref.frameI++;
 
 	stage->_movieStack.push_back(ref);

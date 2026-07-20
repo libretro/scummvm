@@ -132,15 +132,13 @@ void CursorManager::registerAsPermanent(uint16 id) {
 }
 
 void CursorManager::setAsPermanent(uint16 id) {
-	bool cursorAlreadySet = _currentCursorId == id && _permanentCursorId == id;
-	bool cursorIsEmpty = id == 0;
-	if (cursorAlreadySet || cursorIsEmpty) {
-		return;
+	bool cursorAlreadySet = (_currentCursorId == id) && (_permanentCursorId == id);
+	bool cursorIsEmpty = (id == 0);
+	if (!cursorAlreadySet && !cursorIsEmpty) {
+		_permanentCursorId = id;
+		_currentCursorId = id;
+		resetCurrent();
 	}
-
-	_permanentCursorId = id;
-	_currentCursorId = id;
-	resetCurrent();
 }
 
 void CursorManager::setAsTemporary(uint16 id) {
@@ -168,8 +166,13 @@ void CursorManager::unsetTemporary() {
 
 void CursorManager::resetCurrent() {
 	if (_currentCursorId != 0) {
-		Graphics::Cursor *cursor = _cursors.getVal(_currentCursorId);
-		CursorMan.replaceCursor(cursor);
+		Graphics::Cursor *cursor = _cursors.getValOrDefault(_currentCursorId);
+		if (cursor != nullptr) {
+			CursorMan.replaceCursor(cursor);
+		} else {
+			warning("%s: Cursor %d not found", __func__, _currentCursorId);
+		}
+
 	}
 }
 

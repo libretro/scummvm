@@ -82,8 +82,8 @@ void RippedLetterPuzzleData::synchronize(Common::Serializer &ser) {
 	ser.syncArray(serializedRotations.data(), serializedRotations.size(), Common::Serializer::Byte);
 
 	if (ser.isLoading()) {
-		order = serializedOrder;
-		rotations = serializedRotations;
+		Common::move(serializedOrder.begin(), serializedOrder.end(), order.begin());
+		Common::move(serializedRotations.begin(), serializedRotations.end(), rotations.begin());
 	}
 }
 
@@ -149,6 +149,16 @@ void JournalData::synchronize(Common::Serializer &ser) {
 				entry.push_back(Entry());
 				ser.syncString(entry.back().stringID);
 				ser.syncAsUint16LE(entry.back().mark);
+				if (g_nancy->getGameType() >= kGameTypeNancy9) {
+					// NOTE: We did not persist sceneID for journal entries in nancy9
+					// in save versions before 4. Fortunately for us, this field is
+					// only used in scene 2491, when using the search functionality
+					// in the laptop, and it's always initialized by the game scripts,
+					// so we can use the script values instead in that scene. Refer to
+					// the workaround in ModifyListEntry::execute(), which fixes these
+					// values for that scene, in older saved games.
+					ser.syncAsUint16LE(entry.back().sceneID, 4);
+				}
 			}
 		}
 	} else {
@@ -160,6 +170,8 @@ void JournalData::synchronize(Common::Serializer &ser) {
 			for (uint i = 0; i < numStrings; ++i) {
 				ser.syncString(a._value[i].stringID);
 				ser.syncAsUint16LE(a._value[i].mark);
+				if (g_nancy->getGameType() >= kGameTypeNancy9)
+					ser.syncAsUint16LE(a._value[i].sceneID);	// added in save version 4
 			}
 		}
 	}
@@ -199,6 +211,31 @@ void TableData::synchronize(Common::Serializer &ser) {
 	}
 
 	ser.syncArray(comboValues.data(), num, Common::Serializer::FloatLE);
+}
+
+static void syncInt16Array(Common::Serializer &ser, Common::Array<int16> &arr) {
+	uint16 num = (uint16)arr.size();
+	ser.syncAsUint16LE(num);
+	if (ser.isLoading())
+		arr.resize(num);
+	ser.syncArray(arr.data(), num, Common::Serializer::Sint16LE);
+}
+
+void BeadPuzzleData::synchronize(Common::Serializer &ser) {
+	syncInt16Array(ser, placedBeads);
+}
+
+void SortPuzzleData::synchronize(Common::Serializer &ser) {
+	syncInt16Array(ser, currentState);
+	syncInt16Array(ser, solvedState);
+}
+
+void MagnetMazePuzzleData::synchronize(Common::Serializer &ser) {
+	syncInt16Array(ser, magnetState);
+}
+
+void GridMapPuzzleData::synchronize(Common::Serializer &ser) {
+	syncInt16Array(ser, itemState);
 }
 
 void QuizPuzzleData::synchronize(Common::Serializer &ser) {
@@ -254,7 +291,7 @@ int16 TableData::getSingleValue(uint16 index) const {
 }
 
 void TableData::setComboValue(uint16 index, float value) {
-	if (comboValues.size() < index) {
+	if (comboValues.size() <= index) {
 		comboValues.resize(index + 1, kNoTableValue);
 	}
 
@@ -265,8 +302,121 @@ float TableData::getComboValue(uint16 index) const {
 	return index < comboValues.size() ? comboValues[index] : kNoTableValue;
 }
 
+void CellPhoneData::synchronize(Common::Serializer &ser) {
+	ser.syncAsByte(noSignal);
+	ser.syncAsByte(batteryLow);
+	ser.syncAsByte(seeded);
+
+	uint16 numContacts = (uint16)contacts.size();
+	ser.syncAsUint16LE(numContacts);
+
+	if (ser.isLoading()) {
+		contacts.resize(numContacts);
+	}
+
+	char nameBuf[21];
+	for (uint16 i = 0; i < numContacts; ++i) {
+		UICL::Contact &c = contacts[i];
+		ser.syncBytes(c.unknownPrefix, sizeof(c.unknownPrefix));
+
+		if (ser.isSaving()) {
+			memset(nameBuf, 0, sizeof(nameBuf));
+			Common::strlcpy(nameBuf, c.name.c_str(), sizeof(nameBuf));
+		}
+		ser.syncBytes((byte *)nameBuf, 20);
+		if (ser.isLoading()) {
+			nameBuf[20] = '\0';
+			c.name = nameBuf;
+		}
+
+		ser.syncBytes(c.unknownSuffix, sizeof(c.unknownSuffix));
+	}
+
+	syncLinkArray(ser, emailMessages);
+	syncLinkArray(ser, searchLinks);
+}
+
+void CellPhoneData::syncLinkArray(Common::Serializer &ser, Common::Array<SearchLink> &arr) {
+	uint16 n = (uint16)arr.size();
+	ser.syncAsUint16LE(n);
+	if (ser.isLoading()) {
+		arr.resize(n);
+	}
+	for (uint16 i = 0; i < n; ++i) {
+		ser.syncString(arr[i].key);
+		ser.syncString(arr[i].value);
+		ser.syncAsSint16LE(arr[i].extra);
+		ser.syncAsSint16LE(arr[i].flag);
+		ser.syncAsSint16LE(arr[i].eventFlag);
+		ser.syncAsByte(arr[i].read);
+	}
+}
+
+void TimerData::synchronize(Common::Serializer &ser) {
+	for (uint i = 0; i < kNumTimers; ++i) {
+		Timer &t = timers[i];
+		ser.syncAsSint32LE(t.state);
+		ser.syncAsUint32LE(t.currentTimeMs);
+		ser.syncAsUint32LE(t.durationMs);
+		ser.syncAsByte(t.hasFired);
+
+		ser.syncString(t.sound.name);
+		ser.syncAsUint16LE(t.sound.channelID);
+		ser.syncAsUint16LE(t.sound.playCommands);
+		ser.syncAsUint16LE(t.sound.numLoops);
+		ser.syncAsUint16LE(t.sound.volume);
+
+		ser.syncString(t.autotextKey);
+		ser.syncString(t.caption);
+
+		for (uint j = 0; j < ARRAYSIZE(t.flags); ++j) {
+			ser.syncAsSint16LE(t.flags[j].label);
+			ser.syncAsByte(t.flags[j].flag);
+		}
+	}
+}
+
+void UIResourceData::synchronize(Common::Serializer &ser) {
+	ser.syncAsByte(seeded);
+
+	uint16 numValues = (uint16)values.size();
+	ser.syncAsUint16LE(numValues);
+	if (ser.isLoading()) {
+		values.resize(numValues);
+	}
+
+	for (uint16 i = 0; i < numValues; ++i) {
+		ser.syncAsSint32LE(values[i]);
+	}
+}
+
+void TaskbarData::synchronize(Common::Serializer &ser) {
+	for (uint i = 0; i < kNumButtons; ++i) {
+		ser.syncAsByte(overrides[i].active);
+		ser.syncAsSint16LE(overrides[i].startScene);
+		ser.syncAsSint16LE(overrides[i].endScene);
+		ser.syncAsUint16LE(overrides[i].clickSoundMode);
+	}
+
+	// Notification badges were added in savegame version 5. Older saves don't
+	// have these bytes; the flags stay at their default (cleared) state.
+	if (ser.getVersion() >= 5) {
+		for (uint i = 0; i < kNumButtons; ++i) {
+			for (uint s = 0; s < kNumNotificationSubCategories; ++s) {
+				ser.syncAsByte(notifications[i][s]);
+			}
+		}
+	}
+}
+
+void WordFindPuzzleData::synchronize(Common::Serializer &ser) {
+	ser.syncAsSint16LE(currentWord);
+}
+
 PuzzleData *makePuzzleData(const uint32 tag) {
 	switch(tag) {
+	case WordFindPuzzleData::getTag():
+		return new WordFindPuzzleData();
 	case SliderPuzzleData::getTag():
 		return new SliderPuzzleData();
 	case RippedLetterPuzzleData::getTag():
@@ -281,10 +431,26 @@ PuzzleData *makePuzzleData(const uint32 tag) {
 		return new AssemblyPuzzleData();
 	case QuizPuzzleData::getTag():
 		return new QuizPuzzleData();
+	case BeadPuzzleData::getTag():
+		return new BeadPuzzleData();
+	case SortPuzzleData::getTag():
+		return new SortPuzzleData();
+	case MagnetMazePuzzleData::getTag():
+		return new MagnetMazePuzzleData();
+	case GridMapPuzzleData::getTag():
+		return new GridMapPuzzleData();
 	case JournalData::getTag():
 		return new JournalData();
 	case TableData::getTag():
 		return new TableData();
+	case CellPhoneData::getTag():
+		return new CellPhoneData();
+	case TimerData::getTag():
+		return new TimerData();
+	case UIResourceData::getTag():
+		return new UIResourceData();
+	case TaskbarData::getTag():
+		return new TaskbarData();
 	default:
 		return nullptr;
 	}

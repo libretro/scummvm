@@ -1,8 +1,31 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.scummvm.scummvm.net;
 
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
+
+import androidx.annotation.Keep;
 
 import org.scummvm.scummvm.SAFFSTree;
 
@@ -50,6 +73,7 @@ public class HTTPRequest implements Runnable {
 	/** @noinspection unused
 	 * Called from JNI
 	 */
+	@Keep
 	public HTTPRequest(long nativePointer, String url, String[] requestHeaders, byte[] uploadBuffer, boolean uploading, boolean usingPatch, boolean post) {
 		init(nativePointer, url);
 		setupUploadBuffer(uploadBuffer, uploading, usingPatch, post);
@@ -59,6 +83,7 @@ public class HTTPRequest implements Runnable {
 	/** @noinspection unused
 	 * Called from JNI
 	 */
+	@Keep
 	public HTTPRequest(long nativePointer, String url, String[] requestHeaders, String[] formFields, String[] formFiles) {
 		init(nativePointer, url);
 		setupMultipartForm(formFields, formFiles);
@@ -181,6 +206,9 @@ public class HTTPRequest implements Runnable {
 	}
 
 	private void setupHeaders(String[] requestHeaders) {
+		if (requestHeaders == null) {
+			return;
+		}
 		if ((requestHeaders.length & 1) != 0) {
 			throw new IllegalArgumentException("requestHeaders has odd length");
 		}
@@ -197,12 +225,17 @@ public class HTTPRequest implements Runnable {
 	/** @noinspection unused
 	 * Called from JNI
 	 */
+	@Keep
 	public void cancel() {
 		_cancelled.set(true);
 		// Don't notify the native object if we got cancelled: it may have been reused
 		_nativePointer = 0;
 	}
 
+	/** @noinspection unused
+	 * Called from JNI
+	 */
+	@Keep
 	public String getURL() {
 		return _url.get();
 	}
@@ -304,7 +337,19 @@ public class HTTPRequest implements Runnable {
 
 			int contentLength = urlConnection.getContentLength();
 
-			InputStream in = urlConnection.getInputStream();
+			InputStream in;
+			try {
+				in = urlConnection.getInputStream();
+			} catch (IOException e) {
+				// If getInputStream fails, the server may have returned an error code
+				// We can get the data from the error stream.
+				// If the error stream is null, it means a real error: rethrow the exception.
+				in = urlConnection.getErrorStream();
+				if (in == null) {
+					throw e;
+				}
+			}
+
 			if (_cancelled.get()) {
 				cleanup();
 				return;
@@ -337,7 +382,8 @@ public class HTTPRequest implements Runnable {
 			final int responseCode = urlConnection.getResponseCode();
 			_manager.enqueue(() -> finished(_nativePointer, responseCode, null));
 		} catch (FileNotFoundException e) {
-			// The server returned an error, return the error code and no data
+			// The server returned an error, and we didn't manage to get the error stream:
+			// return the error code and no data
 			int responseCode = -1;
 			try {
 				responseCode = urlConnection.getResponseCode();

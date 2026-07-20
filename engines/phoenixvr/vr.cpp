@@ -23,8 +23,6 @@
 #include "common/array.h"
 #include "common/bitstream.h"
 #include "common/debug.h"
-#include "common/file.h"
-#include "common/memstream.h"
 #include "common/system.h"
 #include "common/textconsole.h"
 #include "graphics/screen.h"
@@ -46,7 +44,29 @@ namespace PhoenixVR {
 #define CHUNK_ANIMATION_BLOCK (0xa0b1c211)
 #define CHUNK_ANIMATION_RESTART (0xa0b1c221)
 
+/* HEAD */
+#define V2_CHUNK_VR (0x44414548)
+/* STPC */
+#define V2_CHUNK_STATIC_2D (0x43505453)
+/* STWP */
+#define V2_CHUNK_STATIC_3D (0x50575453)
+/* ANWP */
+#define V2_CHUNK_ANIMATION (0x50574e41)
+/* FRAM */
+#define V2_CHUNK_ANIMATION_BLOCK (0x4d415246)
+/* JUMP */
+#define V2_CHUNK_ANIMATION_RESTART (0x504d554a)
+
 namespace {
+
+constexpr int kStaticImageWidth = 640;
+constexpr int kStaticImageHeight = 480;
+constexpr int kVRTileSize = 256;
+constexpr int kVRTilesPerFace = 4;
+constexpr int kVRCubeFaceCount = 6;
+constexpr int kVRFaceSize = kVRTileSize * 2;
+constexpr int kVRImageWidth = kVRTileSize;
+constexpr int kVRImageHeight = kVRTileSize * kVRTilesPerFace * kVRCubeFaceCount;
 
 template<typename T>
 T clip(T a) {
@@ -65,11 +85,93 @@ unsigned reverseBits(unsigned value, unsigned n) {
 }
 
 uint32 YCbCr2RGB(const Graphics::PixelFormat &format, int16 y, int16 cb, int16 cr) {
-	int r = clip(y + ((cr * 91881 + 32768) >> 16));
-	int g = clip(y - ((cb * 22553 + cr * 46801 + 32768) >> 16));
-	int b = clip(y + ((cb * 116129 + 32768) >> 16));
+	int r = clip(y + (cr << 4) / 10);
+	int g = clip(y - cb / 3 - (cr * 8) / 10);
+	int b = clip(y + cb * 2);
 
 	return format.RGBToColor(r, g, b);
+}
+
+void putRGB565DitheredBlock(Graphics::Surface &pic, int dstX, int dstY, int16 block[3][64]) {
+	int64 r[64], g[64], b[64];
+	for (int i = 0; i < 64; ++i) {
+		const int64 yFixed = static_cast<int64>(block[0][i] + 128) << 16;
+		r[i] = yFixed + ((block[2][i] << 4) / 10 << 16);
+		g[i] = yFixed + ((-block[1][i] / 3 - (block[2][i] * 8) / 10) << 16);
+		b[i] = yFixed + (block[1][i] * 2 << 16);
+	}
+
+	const int dstPitch = pic.pitch / pic.format.bytesPerPixel;
+	uint16 *dstPixels = static_cast<uint16 *>(pic.getBasePtr(dstX, dstY));
+
+	for (int y = 0; y < 8; ++y) {
+		const bool reverse = (y & 1) != 0;
+		for (int x = reverse ? 7 : 0; reverse ? x >= 0 : x < 8; reverse ? --x : ++x) {
+			const int index = y * 8 + x;
+			r[index] = CLIP<int64>(r[index], 0, 0xff0000);
+			g[index] = CLIP<int64>(g[index], 0, 0xff0000);
+			b[index] = CLIP<int64>(b[index], 0, 0xff0000);
+
+			dstPixels[y * dstPitch + x] = ((r[index] >> 8) & 0xf800) | ((g[index] >> 13) & 0x07e0) | ((b[index] >> 19) & 0x001f);
+
+			const int64 redError = r[index] - (r[index] & 0xfff80000);
+			const int64 greenError = g[index] - (g[index] & 0xfffc0000);
+			const int64 blueError = b[index] - (b[index] & 0xfff80000);
+
+			auto spread = [&](int dstIndex, int weight) {
+				r[dstIndex] += (redError * weight) >> 4;
+				g[dstIndex] += (greenError * weight) >> 4;
+				b[dstIndex] += (blueError * weight) >> 4;
+			};
+
+			if (!reverse) {
+				if (x < 7)
+					spread(index + 1, 7);
+				if (y < 7) {
+					if (x > 0)
+						spread(index + 7, 3);
+					spread(index + 8, 5);
+					if (x < 7)
+						spread(index + 9, 1);
+				}
+			} else {
+				if (x > 0)
+					spread(index - 1, 7);
+				if (y < 7) {
+					if (x < 7)
+						spread(index + 9, 3);
+					spread(index + 8, 5);
+					if (x > 0)
+						spread(index + 7, 1);
+				}
+			}
+		}
+	}
+}
+
+uint32 debugRegionColor(const Graphics::PixelFormat &format, float phase) {
+	phase = fmodf(phase, 6.0f);
+	if (phase < 0.0f)
+		phase += 6.0f;
+
+	const int sector = static_cast<int>(phase);
+	const byte up = static_cast<byte>((phase - sector) * 255.0f);
+	const byte down = 255 - up;
+
+	switch (sector) {
+	case 0:
+		return format.RGBToColor(255, up, 0);
+	case 1:
+		return format.RGBToColor(down, 255, 0);
+	case 2:
+		return format.RGBToColor(0, 255, up);
+	case 3:
+		return format.RGBToColor(0, down, 255);
+	case 4:
+		return format.RGBToColor(up, 0, 255);
+	default:
+		return format.RGBToColor(255, 0, down);
+	}
 }
 
 struct Quantisation {
@@ -126,10 +228,8 @@ void unpack(Graphics::Surface &pic, const byte *huff, uint huffSize, const byte 
 	Common::BitStreamMemoryStream dcMs(dcPtr, dcSize);
 	Common::BitStreamMemory8MSB acBs(&acMs), dcBs(&dcMs);
 
-	const auto dstPitch = pic.pitch / pic.format.bytesPerPixel - 8;
-	unsigned numBlocks = prefix ? prefix->size() : ((pic.w + 7) / 8) * ((pic.h + 7) / 8);
-	for (uint blockIdx = 0; blockIdx < numBlocks; ++blockIdx) {
-		int16 block[3][64] = {};
+	auto decodeBlock = [&](int16 block[3][64]) {
+		Common::fill(&block[0][0], &block[0][0] + 3 * 64, 0);
 		for (unsigned channel = 0; channel != 3; ++channel) {
 			int16 *ac = block[channel];
 			int8 dc8 = static_cast<int8>(reverseBits(dcBs.getBits<8>(), 8));
@@ -157,6 +257,81 @@ void unpack(Graphics::Surface &pic, const byte *huff, uint huffSize, const byte 
 
 			Video::FourXM::idct(ac, 4);
 		}
+	};
+
+	if (!prefix && pic.format.bytesPerPixel == 2 &&
+		((pic.w == kVRImageWidth && pic.h == kVRImageHeight) || (pic.w == kStaticImageWidth && pic.h == kStaticImageHeight))) {
+		const int bandSize = pic.w * 8;
+		Common::Array<int64> red, green, blue, nextRed, nextGreen, nextBlue;
+		red.resize(bandSize);
+		green.resize(bandSize);
+		blue.resize(bandSize);
+		nextRed.resize(bandSize);
+		nextGreen.resize(bandSize);
+		nextBlue.resize(bandSize);
+
+		for (int dstY = 0; dstY < pic.h; dstY += 8) {
+			for (int dstX = 0; dstX < pic.w; dstX += 8) {
+				int16 block[3][64];
+				decodeBlock(block);
+				for (int y = 0; y < 8; ++y) {
+					for (int x = 0; x < 8; ++x) {
+						const int src = y * 8 + x;
+						const int dst = y * pic.w + dstX + x;
+						const int64 yFixed = static_cast<int64>(block[0][src] + 128) << 16;
+						red[dst] += yFixed + ((block[2][src] << 4) / 10 << 16);
+						green[dst] += yFixed + ((-block[1][src] / 3 - (block[2][src] * 8) / 10) << 16);
+						blue[dst] += yFixed + (block[1][src] * 2 << 16);
+					}
+				}
+			}
+
+			for (int y = 0; y < 8; ++y) {
+				uint16 *dstPixels = static_cast<uint16 *>(pic.getBasePtr(0, dstY + y));
+				for (int x = 0; x < pic.w; ++x) {
+					const int index = y * pic.w + x;
+					red[index] = CLIP<int64>(red[index], 0, 0xff0000);
+					green[index] = CLIP<int64>(green[index], 0, 0xff0000);
+					blue[index] = CLIP<int64>(blue[index], 0, 0xff0000);
+
+					dstPixels[x] = ((red[index] >> 8) & 0xf800) | ((green[index] >> 13) & 0x07e0) | ((blue[index] >> 19) & 0x001f);
+					if (x == pic.w - 1)
+						continue;
+
+					const int64 redError = (red[index] - (red[index] & 0xf80000)) >> 1;
+					const int64 greenError = (green[index] - (green[index] & 0xfc0000)) >> 1;
+					const int64 blueError = (blue[index] - (blue[index] & 0xf80000)) >> 1;
+					red[index + 1] += redError;
+					green[index + 1] += greenError;
+					blue[index + 1] += blueError;
+
+					if (y == 7) {
+						nextRed[x] += redError;
+						nextGreen[x] += greenError;
+						nextBlue[x] += blueError;
+					} else {
+						red[index + pic.w] += redError;
+						green[index + pic.w] += greenError;
+						blue[index + pic.w] += blueError;
+					}
+				}
+			}
+
+			red.swap(nextRed);
+			green.swap(nextGreen);
+			blue.swap(nextBlue);
+			Common::fill(nextRed.begin(), nextRed.end(), 0);
+			Common::fill(nextGreen.begin(), nextGreen.end(), 0);
+			Common::fill(nextBlue.begin(), nextBlue.end(), 0);
+		}
+		return;
+	}
+
+	const auto dstPitch = pic.pitch / pic.format.bytesPerPixel - 8;
+	unsigned numBlocks = prefix ? prefix->size() : ((pic.w + 7) / 8) * ((pic.h + 7) / 8);
+	for (uint blockIdx = 0; blockIdx < numBlocks; ++blockIdx) {
+		int16 block[3][64];
+		decodeBlock(block);
 		int dstY;
 		int dstX;
 		if (prefix) {
@@ -184,17 +359,7 @@ void unpack(Graphics::Surface &pic, const byte *huff, uint huffSize, const byte 
 			}
 		} break;
 		case 2: {
-			auto *dstPixel = static_cast<uint16 *>(pic.getBasePtr(dstX, dstY));
-			uint srcIdx = 0;
-			for (uint by = 0; by < 8; ++by, dstPixel += dstPitch) {
-				for (uint bx = 0; bx < 8; ++bx, ++srcIdx) {
-					int16 y = block[0][srcIdx];
-					int16 cb = block[1][srcIdx];
-					int16 cr = block[2][srcIdx];
-
-					*dstPixel++ = YCbCr2RGB(pic.format, y + 128, cb, cr);
-				}
-			}
+			putRGB565DitheredBlock(pic, dstX, dstY, block);
 		} break;
 		}
 	}
@@ -204,16 +369,20 @@ void unpack(Graphics::Surface &pic, const byte *huff, uint huffSize, const byte 
 VR VR::loadStatic(const Graphics::PixelFormat &format, Common::SeekableReadStream &s) {
 	VR vr;
 	auto magic = s.readUint32LE();
-	if (magic != CHUNK_VR) {
+	if (magic == CHUNK_VR) {
+		vr._v2 = false;
+	} else if (magic == V2_CHUNK_VR) {
+		vr._v2 = true;
+	} else
 		error("wrong VR magic");
-	}
+
 	auto fsize = s.readUint32LE();
 	while (s.pos() < fsize) {
 		auto chunkPos = s.pos();
 		auto chunkId = s.readUint32LE();
 		auto chunkSize = s.readUint32LE();
-		bool pic2d = chunkId == CHUNK_STATIC_2D;
-		bool pic3d = chunkId == CHUNK_STATIC_3D;
+		bool pic2d = chunkId == CHUNK_STATIC_2D || chunkId == V2_CHUNK_STATIC_2D;
+		bool pic3d = chunkId == CHUNK_STATIC_3D || chunkId == V2_CHUNK_STATIC_3D;
 		if (pic2d || pic3d) {
 			auto quality = s.readUint32LE();
 			auto dataSize = s.readUint32LE();
@@ -228,9 +397,20 @@ VR VR::loadStatic(const Graphics::PixelFormat &format, Common::SeekableReadStrea
 			auto *pic = vr._pic.get();
 			if (pic3d) {
 				vr._vr = true;
-				pic->create(256, 6144, format);
+
+				if (g_engine->gameIdMatches("dracula2") || g_engine->gameIdMatches("amerzone")) {
+					// Original engine seems to skip 1 pixel per tile.
+					// dct.dll uses while(x < 255) loop condition when unpacking pixels to color planes.
+					// However, game tiles for all games are matching perfectly with each other.
+					// Those bad pixels are present on right hand side of the right hand tiles
+					// only found in Dracula 2.
+					// Minimizing rendering artifacts, reducing face size
+					vr._ignoreRightPixel = true;
+				}
+
+				pic->create(kVRImageWidth, kVRImageHeight, format);
 			} else
-				pic->create(640, 480, format);
+				pic->create(kStaticImageWidth, kStaticImageHeight, format);
 			auto *huff = vrData.data() + 8;
 			uint acOffset = huffSize + 12;
 			auto *acPtr = vrData.data() + acOffset;
@@ -238,7 +418,7 @@ VR VR::loadStatic(const Graphics::PixelFormat &format, Common::SeekableReadStrea
 			auto *dcPtr = acPtr + 4 + dcOffset;
 			auto *dcEnd = vrData.data() + vrData.size();
 			unpack(*pic->surfacePtr(), huff, huffSize, acPtr, dcPtr - acPtr, dcPtr, dcEnd - dcPtr, quality);
-		} else if (chunkId == CHUNK_ANIMATION) {
+		} else if (chunkId == CHUNK_ANIMATION || chunkId == V2_CHUNK_ANIMATION) {
 			Animation animation;
 			animation.name = s.readString(0, 32);
 			auto numFrames = s.readUint32LE();
@@ -251,10 +431,10 @@ VR VR::loadStatic(const Graphics::PixelFormat &format, Common::SeekableReadStrea
 				debug("animation frame at %08x: %08x %u", (uint32)animChunkPos, animChunkId, animChunkSize);
 				assert(animChunkSize >= 8);
 				Animation::Frame frame;
-				if (animChunkId == CHUNK_ANIMATION_BLOCK) {
+				if (animChunkId == CHUNK_ANIMATION_BLOCK || animChunkId == V2_CHUNK_ANIMATION_BLOCK) {
 					frame.blockData.resize(animChunkSize - 8);
 					s.read(frame.blockData.data(), frame.blockData.size());
-				} else if (animChunkId == CHUNK_ANIMATION_RESTART) {
+				} else if (animChunkId == CHUNK_ANIMATION_RESTART || animChunkId == V2_CHUNK_ANIMATION_RESTART) {
 					assert(animChunkSize - 8 == 4);
 					byte buf[4] = {};
 					s.read(buf, sizeof(buf));
@@ -263,7 +443,7 @@ VR VR::loadStatic(const Graphics::PixelFormat &format, Common::SeekableReadStrea
 				} else {
 					Common::Array<byte> buf(animChunkSize - 8);
 					s.read(buf.data(), buf.size());
-					warning("unknown frame type");
+					warning("unknown frame type %08x", animChunkId);
 				}
 				animation.frames.push_back(Common::move(frame));
 				s.seek(animChunkPos + animChunkSize);
@@ -283,7 +463,7 @@ struct Cube {
 	int faceIdx;
 };
 
-Cube toCube(float x, float y, float z) {
+Cube toCube(float x, float y, float z, bool v2) {
 	Cube cube = {};
 
 	float absX = ABS(x);
@@ -300,37 +480,37 @@ Cube toCube(float x, float y, float z) {
 		maxAxis = absX;
 		cx = y;
 		cy = z;
-		cube.faceIdx = 4;
+		cube.faceIdx = v2 ? 0 : 4;
 	}
 	if (!isXPositive && absX >= absY && absX >= absZ) {
 		maxAxis = absX;
 		cx = -y;
 		cy = z;
-		cube.faceIdx = 5;
+		cube.faceIdx = v2 ? 3 : 5;
 	}
 	if (isYPositive && absY >= absX && absY >= absZ) {
 		maxAxis = absY;
 		cx = -x;
 		cy = z;
-		cube.faceIdx = 3;
+		cube.faceIdx = v2 ? 1 : 3;
 	}
 	if (!isYPositive && absY >= absX && absY >= absZ) {
 		maxAxis = absY;
 		cx = x;
 		cy = z;
-		cube.faceIdx = 1;
+		cube.faceIdx = v2 ? 2 : 1;
 	}
 	if (isZPositive && absZ >= absX && absZ >= absY) {
 		maxAxis = absZ;
 		cx = y;
 		cy = -x;
-		cube.faceIdx = 0;
+		cube.faceIdx = v2 ? 5 : 0;
 	}
 	if (!isZPositive && absZ >= absX && absZ >= absY) {
 		maxAxis = absZ;
 		cx = y;
 		cy = x;
-		cube.faceIdx = 2;
+		cube.faceIdx = v2 ? 4 : 2;
 	}
 
 	// Convert range from −1 to 1 to 0 to 1
@@ -392,6 +572,7 @@ void VR::stopAnimation(const Common::String &name) {
 	}
 	auto &animation = *it;
 	animation.active = false;
+	g_engine->setVariable(animation.variable, animation.variableValue);
 }
 
 void VR::Animation::renderNextFrame(Graphics::Surface &pic) {
@@ -459,6 +640,10 @@ void VR::renderVR(Graphics::Screen *screen, float ax, float ay, float fov, float
 	if (_showWaves)
 		_wavesT += dt * 20;
 
+	int faceSize = kVRFaceSize;
+	if (_ignoreRightPixel)
+		--faceSize;
+
 	ColorType *dstPixels = static_cast<ColorType *>(screen->getPixels());
 	const auto dstPixelsPitchIncrement = screen->pitch / sizeof(ColorType);
 	for (int dstY = 0; dstY != h; ++dstY, line += incrementY, dstPixels += dstPixelsPitchIncrement) {
@@ -479,33 +664,33 @@ void VR::renderVR(Graphics::Screen *screen, float ax, float ay, float fov, float
 			dst += y * dstPixelsPitchIncrement;
 		}
 		Vector3d ray = line;
-		int dx = regSet ? static_cast<int>(5 * cosf(hint + 100.0f * dstY / h)) : 0;
 
 		for (int dstX = 0; dstX != w; ++dstX, ray += incrementX, ++dst) {
-			auto cube = toCube(ray.x(), ray.y(), ray.z());
-			int srcX = static_cast<int>(512 * cube.x);
-			int srcY = static_cast<int>(512 * cube.y);
+			auto cube = toCube(ray.x(), ray.y(), ray.z(), _v2);
+			int srcX = static_cast<int>(faceSize * cube.x);
+			int srcY = static_cast<int>(kVRFaceSize * cube.y);
 			int tileId = cube.faceIdx << 2;
-			tileId += (srcY < 256) ? (srcX < 256 ? 0 : 1) : (srcX < 256 ? 3 : 2);
-			srcX &= 0xff;
-			srcY &= 0xff;
+			tileId += (srcY < kVRTileSize) ? (srcX < kVRTileSize ? 0 : 1) : (srcX < kVRTileSize ? 3 : 2);
+			srcX &= kVRTileSize - 1;
+			srcY &= kVRTileSize - 1;
 			srcY += (tileId << 8);
 			auto color = _pic->getPixel(srcX, srcY);
 			if (regSet) {
-				int x = 0;
 				regX += regDX;
 				if (regX >= kTau)
 					regX -= kTau;
+				const float regionY = kTau - regY;
 				for (auto &reg : regSet->getRegions()) {
-					if (reg.contains3D(regX, kTau - regY)) {
-						x += dx;
+					if (reg.contains3D(regX, regionY) &&
+						(!reg.contains3D(regX - regDX, regionY) ||
+						 !reg.contains3D(regX + regDX, regionY) ||
+						 !reg.contains3D(regX, regionY - regDY) ||
+						 !reg.contains3D(regX, regionY + regDY))) {
+						color = debugRegionColor(screen->format, hint + dstX * 0.015f + dstY * 0.025f);
+						break;
 					}
 				}
-				if (dstX + x < 0)
-					x = 0;
-				else if (dstX + x >= screen->w)
-					x = screen->w - 1 - dstX;
-				dst[x] = color;
+				*dst = color;
 			} else
 				*dst = color;
 		}
@@ -547,6 +732,8 @@ void VR::render(Graphics::Screen *screen, float ax, float ay, float fov, float d
 		case 4:
 			renderVR<uint32>(screen, ax, ay, fov, dt, regSet);
 			break;
+		default:
+			error("Unsupported screen format for VR rendering");
 		}
 	}
 }

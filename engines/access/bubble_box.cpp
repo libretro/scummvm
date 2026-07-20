@@ -57,12 +57,38 @@ void BubbleBox::load(Common::SeekableReadStream *stream) {
 
 void BubbleBox::clearBubbles() {
 	// Loop through the bubble list to restore the screen areas
-	for (Common::Rect r: _bubbles) {
-		_vm->_screen->_screenYOff = 0;
-		r.left -= 2;
-		r.right = MIN(r.right, (int16)_vm->_screen->w);
+	if (_vm->getGameID() == kGameNoctropolis) {
+		for (Common::Rect r: _bubbles) {
 
-		_vm->_screen->copyBlock(&_vm->_buffer1, r);
+			// clear the areas outside the background if the bubble went outside it
+			if (r.left < _vm->_screen->_windowXAdd || r.top < _vm->_screen->_windowYAdd) {
+				_vm->_screen->fillRect(Common::Rect(0, 0, _vm->_screen->w, _vm->_screen->_windowYAdd), 0);
+				_vm->_screen->fillRect(Common::Rect(0, 0, _vm->_screen->_windowXAdd, _vm->_screen->h), 0);
+			}
+			if (r.right > _vm->_screen->w - _vm->_screen->_windowXAdd || r.bottom > _vm->_screen->h - _vm->_screen->_windowYAdd) {
+				_vm->_screen->fillRect(Common::Rect(_vm->_screen->w - _vm->_screen->_windowXAdd, 0, _vm->_screen->w, _vm->_screen->h), 0);
+				_vm->_screen->fillRect(Common::Rect(0, _vm->_screen->h - _vm->_screen->_windowYAdd, _vm->_screen->w, _vm->_screen->h), 0);
+			}
+
+			_vm->_screen->_screenYOff = 0;
+			r.left -= (MIN((int)r.left, 2) + _vm->_screen->_windowXAdd);
+			r.right = MIN(r.right, (int16)(_vm->_screen->w - _vm->_screen->_windowXAdd));
+			r.top -= _vm->_screen->_windowYAdd;
+			r.bottom -= _vm->_screen->_windowYAdd;
+
+			r.clip(Common::Rect(_vm->_screen->w, _vm->_screen->h));
+
+			// then copy in the bit we need from the draw buffer.
+			_vm->_screen->copyBlock(&_vm->_buffer2, r);
+		}
+	} else {
+		for (Common::Rect r: _bubbles) {
+			_vm->_screen->_screenYOff = 0;
+			r.left -= 2;
+			r.right = MIN(r.right, (int16)_vm->_screen->w);
+
+			_vm->_screen->copyBlock(&_vm->_buffer1, r);
+		}
 	}
 
 	// Clear the list
@@ -70,7 +96,14 @@ void BubbleBox::clearBubbles() {
 }
 
 void BubbleBox::placeBubble(const Common::String &msg) {
-	_vm->_screen->_maxChars = (_vm->getGameID() == kGameMartianMemorandum) ? 30 : 27;
+	switch (_vm->getGameID()) {
+		case kGameMartianMemorandum: 	_vm->_screen->_maxChars = 30; break;
+		case kGameCountdown:			_vm->_screen->_maxChars = 40; break;
+		case kGameAmazon: 				_vm->_screen->_maxChars = 27; break;
+		// All Noctropolis messages are pre-wrapped.
+		case kGameNoctropolis: 			_vm->_screen->_maxChars = 200; break;
+		default: error("Unsupported game type in BubbleBox::placeBubble()");
+	}
 	placeBubble1(msg);
 }
 
@@ -83,9 +116,13 @@ void BubbleBox::placeBubble1(const Common::String &msg) {
 
 	calcBubble(msg);
 
-	Common::Rect r = _bubbles[0];
-	r.translate(-2, 0);
-	_vm->_screen->saveBlock(r);
+	if (_vm->getGameID() != kGameNoctropolis) {
+		// Noctropolis bounds are different and might have the extra box
+		// decoration, so we save them during the render step (in doBox_v3)
+		Common::Rect r = _bubbles[0];
+		r.translate(-2, 0);
+		_vm->_screen->saveBlock(r);
+	}
 	printBubble(msg);
 }
 
@@ -94,6 +131,7 @@ void BubbleBox::calcBubble(const Common::String &msg) {
 	Screen &screen = *_vm->_screen;
 	Common::Point printOrg = screen._printOrg;
 	Common::Point printStart = screen._printStart;
+	AccessGameType gameType = _vm->getGameID();
 
 	// Figure out maximum width allowed
 	if (_type == kBoxTypeFileDialog) {
@@ -111,11 +149,15 @@ void BubbleBox::calcBubble(const Common::String &msg) {
 	int width = 0;
 	bool lastLine;
 	do {
-		if (_vm->getGameID() == kGameMartianMemorandum) {
+		if (gameType == kGameMartianMemorandum) {
 			lastLine = _vm->_fonts._font1->getLine(s, screen._maxChars, line, width, Font::kWidthInChars);
 			width = _vm->_fonts._font1->stringWidth(line);
-		} else {
+		} else if (gameType == kGameAmazon){
 			lastLine = _vm->_fonts._font2->getLine(s, screen._maxChars * 6, line, width);
+		} else {
+			assert(gameType == kGameNoctropolis);
+			lastLine = _vm->_fonts.getFont(4)->getLine(s, 200, line, width, Font::kWidthInChars);
+			width = _vm->_fonts.getFont(4)->stringWidth(line);
 		}
 
 		_vm->_fonts._printMaxX = MAX(width, _vm->_fonts._printMaxX);
@@ -124,10 +166,10 @@ void BubbleBox::calcBubble(const Common::String &msg) {
 		screen._printOrg.x = screen._printStart.x;
 	} while (!lastLine);
 
-	if (_vm->getGameID() == kGameMartianMemorandum) {
+	if (gameType == kGameMartianMemorandum) {
 		bounds.setWidth((_vm->_fonts._printMaxX / 16 + 2) * 16 + 2 + 1);
 		bounds.bottom = screen._printOrg.y + 4 + 1;
-	} else {
+	} else if (gameType == kGameAmazon) {
 		// TODO: Check this maths if we implement original file boxes.
 		if (_type == kBoxTypeFileDialog)
 			screen._printOrg.y += 6;
@@ -148,6 +190,32 @@ void BubbleBox::calcBubble(const Common::String &msg) {
 		height -= (_type == kBoxTypeFileDialog) ? 30 : 24;
 		if (height >= 0)
 			bounds.setHeight(bounds.height() + 13 - (height % 13));
+	} else {
+		assert(gameType == kGameNoctropolis);
+		// Don't do the same bounds offset as the other games
+		bounds = Common::Rect(printOrg.x, printOrg.y, printOrg.x, printOrg.y);
+
+		int textHeight = _vm->_fonts.getFont(4)->stringHeight(msg);
+		int textWidth = _vm->_fonts.getFont(4)->stringWidth(msg);
+
+		if (_type & kTextBoxNoctCaption)
+			textHeight += _vm->_fonts.getFont(4)->stringHeight(_bubbleDisplStr) - 4;
+
+		if (_type & kTextBoxNoctCenter) {
+			// Center the box
+			bounds.left -= (textWidth + 27) / 2;
+			bounds.top -= (textHeight + 23) / 2;
+		}
+
+		bounds.setWidth((textWidth + 13) / 16);
+		bounds.setHeight((textHeight + 13) / 16);
+
+		if (!(_type & kTextBoxNoctPlain)) {
+			if (bounds.width() < 3)
+				bounds.setWidth(3);
+			if (bounds.height() < 3)
+				bounds.setHeight(3);
+		}
 	}
 
 	if (bounds.bottom > screen.h)
@@ -162,10 +230,19 @@ void BubbleBox::calcBubble(const Common::String &msg) {
 }
 
 void BubbleBox::printBubble(const Common::String &msg) {
-	if (_vm->getGameID() == kGameMartianMemorandum)
+	switch (_vm->getGameID()) {
+	case kGameMartianMemorandum:
 		printBubble_v1(msg);
-	else
+		break;
+	case kGameAmazon:
 		printBubble_v2(msg);
+		break;
+	case kGameNoctropolis:
+		printBubble_v3(msg);
+		break;
+	default:
+		error("BubbleBox::printBubble: Unsupported game");
+	}
 }
 
 void BubbleBox::printBubble_v1(const Common::String &msg) {
@@ -182,7 +259,7 @@ void BubbleBox::printBubble_v1(const Common::String &msg) {
 	bool lastLine;
 	do {
 		// Get next line
-		Font &font1 = *_vm->_fonts._font1;
+		const Font &font1 = *_vm->_fonts._font1;
 		lastLine = font1.getLine(s, _vm->_screen->_maxChars, line, width, Font::kWidthInChars);
 		// Draw the text
 		printString(line);
@@ -204,7 +281,7 @@ void BubbleBox::printBubble_v2(const Common::String &msg) {
 	bool lastLine;
 	do {
 		// Get next line
-		Font &font2 = *_vm->_fonts._font2;
+		const Font &font2 = *_vm->_fonts._font2;
 		lastLine = font2.getLine(s, _vm->_screen->_maxChars * 6, line, width);
 
 		// Set font colors
@@ -226,16 +303,151 @@ void BubbleBox::printBubble_v2(const Common::String &msg) {
 	} while (!lastLine);
 }
 
-void BubbleBox::drawBubble(int index) {
-	_bounds = _bubbles[index];
-	if (_vm->getGameID() == kGameMartianMemorandum) {
-		int btnSelected = 0;
-		doBox_v1(0, 0, btnSelected);
-	} else
-		doBox(0, 0);
+void BubbleBox::printBubble_v3(const Common::String &msg) {
+	drawBubble(_bubbles.size() - 1);
+
+	Font::_fontColors[1] = 255;
+	Font::_fontColors[0] = 0;
+
+	// Loop through drawing the lines
+	Common::String s = msg;
+	Common::String line;
+	int width = 0;
+	bool lastLine;
+	int startx = _vm->_screen->_printOrg.x;
+	do {
+		// Get next line
+		const Font *font = _vm->_fonts.getFont(4);
+		_vm->_fonts._font1 = font;
+		// Note: don't use _vm->_screen->maxchars, never set in Noct.
+		lastLine = font->getLine(s, 200, line, width, Font::kWidthInChars);
+		// Draw the text
+		printString(line);
+
+		// Move print position
+		_vm->_screen->_printOrg.y += font->stringHeight(line);
+		_vm->_screen->_printOrg.x = startx;
+	} while (!lastLine);
 }
 
-void BubbleBox::doBox(int item, int box) {
+
+void BubbleBox::drawBubble(int index) {
+	_bounds = _bubbles[index];
+	int btnSelected = 0;
+
+	switch (_vm->getGameID()) {
+	case kGameMartianMemorandum:
+		doBox_v1(0, 0, btnSelected);
+		break;
+	case kGameAmazon:
+		doBox_v2(0, 0);
+		break;
+	case kGameNoctropolis:
+		doBox_v3(0, 0);
+		break;
+	default:
+		error("BubbleBox::drawBubble: Unsupported game");
+	}
+}
+
+
+void BubbleBox::doBox_v3(int item, int box) {
+	// In practice this is the second half of Noctropolis' DoBox - the first half
+	// was in the noctropolis case part of calcBubble
+	const Font *font = _vm->_fonts.getFont(4);
+	const SpriteResource *icons = _vm->getIcons();
+	Screen &screen = *_vm->_screen;
+
+	screen.saveScreen();
+	screen.setDisplayScan();
+	//bool saveRect = true; // TODO: decide about this?
+
+	int boxX = _bounds.left;
+	int boxY = _bounds.top;
+	int boxHeight = _bounds.height();
+	int boxWidth = _bounds.width();
+	int fontHeight = font->stringHeight(_bubbleDisplStr);
+
+	// Convert the "draw" size (rows and cols of sprites) to actual pixel size
+	if (_type & kTextBoxNoctPlain)
+		_bounds = Common::Rect(Common::Point(boxX, boxY), boxWidth * 16 + 27, boxHeight * 16 + 20);
+	else
+		_bounds = Common::Rect(Common::Point(boxX - 34, boxY - 43), boxWidth * 16 + 27 + 34, boxHeight * 16 + 20 + 43);
+
+	_vm->_screen->saveBlock(_bounds);
+
+	screen.fillRect(Common::Rect(boxX + 5, boxY + 5, boxX + 5 + boxWidth * 16 + 16, boxY + 5 + boxHeight * 16 + 9), 246);
+
+	if (_type & kTextBoxNoctCaption) {
+		screen.fillRect(Common::Rect(boxX + 5, boxY + 5, boxX + 5 + boxWidth * 16 + 16, boxY + 6 + fontHeight), 236);
+		screen.hLine(boxX + 5, boxY + 5 + fontHeight, boxX + 5 + boxWidth * 16 + 15, 237);
+	}
+
+	int16 drawX = boxX, drawWidth = boxWidth;
+	int16 drawY = boxY, drawHeight = boxHeight;
+
+	if (!(_type & kTextBoxNoctPlain)) {
+		// Draw the Gargoyle
+		screen.plotImage(icons, 1, Common::Point(boxX - 34, boxY - 43));
+		drawX += 61;
+		drawWidth -= 3;
+		drawHeight -= 3;
+	} else {
+		screen.plotImage(icons, 7, Common::Point(boxX, boxY));
+		drawX += 13;
+	}
+
+	for (int i = 0; i < drawWidth; i++) {
+		screen.plotImage(icons, 2, Common::Point(drawX, drawY));
+		drawX += 16;
+	}
+
+	screen.plotImage(icons, 4, Common::Point(drawX, drawY));
+
+	drawY += 10;
+
+	for (int i = 0; i < boxHeight; i++) {
+		screen.plotImage(icons, 3, Common::Point(drawX + 8, drawY));
+		drawY += 16;
+	}
+
+	screen.plotImage(icons, 5, Common::Point(drawX, drawY));
+
+	for (int i = 0; i < boxWidth; i++) {
+		drawX -= 16;
+		screen.plotImage(icons, 2, Common::Point(drawX, drawY + 4));
+	}
+
+	drawX -= 13;
+
+	screen.plotImage(icons, 6, Common::Point(drawX, drawY));
+
+	for (int i = 0; i < drawHeight; i++) {
+		drawY -= 16;
+		screen.plotImage(icons, 3, Common::Point(drawX, drawY));
+	}
+
+	font->_fontColors[0] = 0;
+	if (_type & kTextBoxNoctCaption) {
+		int captionWidth = font->stringWidth(_bubbleDisplStr);
+		font->_fontColors[1] = 238;
+		font->drawString(&screen, _bubbleDisplStr, Common::Point(boxX + 14 + (boxWidth * 8) - (captionWidth / 2), boxY + 6));
+		_vm->_screen->_printOrg.x = boxX + 14;
+		_vm->_screen->_printOrg.y = boxY + 6 + fontHeight;
+		//font->_fontColors[1] = 255;
+		//font->drawString(&screen, _bubbleDisplStr, Common::Point(boxX + 14, boxY + 6 + fontHeight));
+	} else {
+		font->_fontColors[1] = 255;
+		font->drawString(&screen, _bubbleDisplStr, Common::Point(boxX + 14, boxY + 10));
+	}
+
+	// Update the bounds now they are fully calculated.
+	_bubbles.back() = _bounds;
+
+	_vm->_screen->restoreScreen();
+}
+
+void BubbleBox::doBox_v2(int item, int box) {
 	FontManager &fonts = _vm->_fonts;
 	Screen &screen = *_vm->_screen;
 
@@ -245,8 +457,8 @@ void BubbleBox::doBox(int item, int box) {
 	// Save state information
 	FontVal charSet = fonts._charSet;
 	FontVal charFor = fonts._charFor;
-	Common::Point printOrg = screen._printOrg;
-	Common::Point printStart = screen._printStart;
+	const Common::Point printOrg = screen._printOrg;
+	const Common::Point printStart = screen._printStart;
 	int charCol = _charCol;
 	int rowOff = _rowOff;
 
@@ -316,7 +528,7 @@ void BubbleBox::doBox(int item, int box) {
 
 	// Handle drawing title
 	int titleWidth = _vm->_fonts._font2->stringWidth(_bubbleDisplStr);
-	Font &font2 = *_vm->_fonts._font2;
+	const Font &font2 = *_vm->_fonts._font2;
 	font2._fontColors[0] = 0;
 	font2._fontColors[1] = 3;
 	font2._fontColors[2] = 2;
@@ -340,7 +552,6 @@ void BubbleBox::setCursorPos(int posX, int posY) {
 }
 
 void BubbleBox::printString(Common::String msg) {
-
 	if (_vm->_fonts._charSet._hi & 2) {
 		// Draw a shadow for the text
 		Common::Point shadowPt = _vm->_screen->_printOrg + Common::Point(1, 1);
@@ -447,7 +658,7 @@ void BubbleBox::drawSelectBox() {
 }
 
 int BubbleBox::doBox_v1(int item, int box, int &btnSelected) {
-	static const int ICONW[] = { 0, 11, 28, 19, 19, 15 };
+	static constexpr int ICONW[] = { 0, 11, 28, 19, 19, 15 };
 
 	FontManager &fonts = _vm->_fonts;
 	int retval_ = -1;
@@ -455,8 +666,8 @@ int BubbleBox::doBox_v1(int item, int box, int &btnSelected) {
 	_startItem = item;
 	_startBox = box;
 
-	Common::Point origPrintStart = _vm->_screen->_printStart;
-	Common::Point origPrintOrg = _vm->_screen->_printOrg;
+	const Common::Point origPrintStart = _vm->_screen->_printStart;
+	const Common::Point origPrintOrg = _vm->_screen->_printOrg;
 
 	_vm->_events->hideCursor();
 

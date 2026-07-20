@@ -77,21 +77,61 @@ void SoundActor::readParameter(Chunk &chunk, ActorHeaderSectionType paramType) {
 	}
 }
 
-void SoundActor::process() {
-	if (_playState != kSoundPlaying) {
-		return;
-	}
-
-	processTimeScriptResponses();
-	if (!_sequence.isActive()) {
-		_playState = kSoundStopped;
-		_sequence.stop();
-		runScriptResponseIfExists(kSoundEndEvent);
-	}
-}
 void SoundActor::readChunk(Chunk &chunk) {
 	_isLoadedFromChunk = true;
 	_sequence.readChunk(chunk);
+}
+
+void SoundActor::soundPlayStateChanged(SoundPlayState state, SoundStopReason stopReason) {
+	switch (state) {
+	case kSoundPlayStateStopped: {
+		_playState = kSoundPlayStateStopped;
+		g_engine->getTimerService()->stopTimer(_timer);
+
+		EventType eventType = kEventTypeInvalid;
+		switch (stopReason) {
+		case kSoundStopForFailure:
+			eventType = kSoundFailureEvent;
+			break;
+
+		case kSoundStopForEnd:
+			eventType = kSoundEndEvent;
+			break;
+
+		case kSoundStopForScriptStop:
+			eventType = kSoundStoppedEvent;
+			break;
+
+		case kSoundStopForAbort:
+			eventType = kSoundAbortEvent;
+			break;
+
+		case kSoundStopForNone:
+		default:
+			break;
+		}
+
+		ActorEvent event(_id, eventType);
+		g_engine->getEventLoop()->queueEvent(event);
+		break;
+	}
+
+	case kSoundPlayStatePlaying:
+		if (_playState == kSoundPlayStateStopped) {
+			ActorEvent event(_id, kSoundBeginEvent);
+			g_engine->getEventLoop()->queueEvent(event);
+		}
+		_playState = kSoundPlayStatePlaying;
+		break;
+
+	case kSoundPlayStateSleep:
+		_playState = kSoundPlayStatePaused;
+		break;
+
+	default:
+		// Other cases are explicitly not handled.
+		break;
+	}
 }
 
 ScriptValue SoundActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) {
@@ -116,12 +156,12 @@ ScriptValue SoundActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptV
 		stop();
 		break;
 
-	case kPauseMethod:
+	case kTimePauseMethod:
 		ARGCOUNTCHECK(0);
 		pause();
 		break;
 
-	case kResumeMethod: {
+	case kTimeResumeMethod: {
 		ARGCOUNTRANGE(0, 1);
 		bool shouldRestart = false;
 		if (args.size() == 1) {
@@ -132,11 +172,11 @@ ScriptValue SoundActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptV
 	}
 
 	case kIsPlayingMethod:
-		returnValue.setToBool(_playState == kSoundPlaying || _playState == kSoundPaused);
+		returnValue.setToBool(_playState == kSoundPlayStatePlaying || _playState == kSoundPlayStatePaused);
 		break;
 
 	case kIsPausedMethod:
-		returnValue.setToBool(_playState == kSoundPaused);
+		returnValue.setToBool(_playState == kSoundPlayStatePaused);
 		break;
 
 	default:
@@ -145,41 +185,81 @@ ScriptValue SoundActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptV
 	return returnValue;
 }
 
+void SoundActor::onEvent(const ActorEvent &event) {
+	switch (event.type) {
+	case kSoundEndEvent:
+		triggerRemainingTimerEvents();
+		break;
+
+	case kCachingStartedEvent:
+	case kCachingEndedEvent:
+	case kCachingFailureEvent:
+		// Caching-related events are not implemented, but they can be implemented
+		// if the original CD-ROM streaming/caching logic is reimplemented.
+		Actor::onEvent(event);
+		break;
+
+	case kSoundStoppedEvent:
+	case kSoundAbortEvent:
+	case kSoundFailureEvent:
+		// Currently, these aren't reimplemented. But if original CD-ROM streaming
+		// logic is implemented later on, some stream cleanup is needed here.
+		break;
+
+	default:
+		break;
+	}
+
+	runScriptResponseIfExists(event.type);
+}
+
+void SoundActor::timerEvent(const TimerEvent &event) {
+	Actor::processTimeScriptResponses();
+
+	// Set up the next timer wakeup.
+	g_engine->getTimerService()->stopTimer(_timer);
+	setupNextScriptResponseTimer();
+}
+
 void SoundActor::start() {
 	if (_loadIsComplete) {
-		if (_playState == kSoundPlaying || _playState == kSoundPaused) {
+		if (_playState == kSoundPlayStatePlaying || _playState == kSoundPlayStatePaused) {
 			stop();
 		}
 
 		openStream();
-		_playState = kSoundPlaying;
-		_startTime = g_system->getMillis();
+		_playState = kSoundPlayStatePlaying;
+		_startTime = g_engine->getTotalPlayTime();
 		_lastProcessedTime = 0;
-		_sequence.play();
-		runScriptResponseIfExists(kSoundBeginEvent);
+		setupNextScriptResponseTimer();
+		_sequence.start();
+
+		ActorEvent actorEvent(_id, kSoundBeginEvent);
+		g_engine->getEventLoop()->queueEvent(actorEvent);
 	} else {
 		warning("[%s] %s: Attempted to play sound before it was loaded", debugName(), __func__);
 	}
 }
 
 void SoundActor::stop() {
-	if (_playState == kSoundPlaying || _playState == kSoundPaused) {
-		_playState = kSoundStopped;
+	if (_playState == kSoundPlayStatePlaying || _playState == kSoundPlayStatePaused) {
+		_playState = kSoundPlayStateStopped;
 		_sequence.stop();
-		runScriptResponseIfExists(kSoundStoppedEvent);
+		g_engine->getTimerService()->stopTimer(_timer);
 	}
 }
 
 void SoundActor::pause() {
-	if (_playState == kSoundPlaying) {
+	if (_playState == kSoundPlayStatePlaying) {
 		_sequence.pause();
-		_playState = kSoundPaused;
+		_sequence.sleep();
 		// There don't seem to be script events to trigger in this instance.
 	}
 }
 
 void SoundActor::resume(bool restart) {
-	if (_playState == kSoundPaused) {
+	if (_playState == kSoundPlayStatePaused) {
+		_sequence.awake();
 		_sequence.resume();
 	} else if (restart) {
 		start();

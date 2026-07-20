@@ -183,6 +183,10 @@ public:
 		return Point(g_system->getWidth() / 2, 150);
 	}
 
+	Point getObjectNameOffset() override {
+		return Point(0, -50);
+	}
+
 	const char *getMenuRoom() override {
 		return "MENU";
 	}
@@ -381,7 +385,7 @@ public:
 	}
 
 	String getMusicPath(int32 trackId) override {
-		const Room *room = g_engine->player().currentRoom();
+		const Room *room = g_engine->player().lastGameRoom();
 		const int diskId = room != nullptr && room->mapIndex() == 1 ? 2 : 1;
 		return String::format("disk%d/track%02d", diskId, trackId);
 	}

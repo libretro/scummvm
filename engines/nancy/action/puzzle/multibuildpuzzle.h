@@ -23,6 +23,7 @@
 #define NANCY_ACTION_MULTIBUILDPUZZLE_H
 
 #include "engines/nancy/action/actionrecord.h"
+#include "engines/nancy/cursor.h"
 #include "engines/nancy/renderobject.h"
 
 namespace Nancy {
@@ -47,9 +48,11 @@ public:
 	void execute() override;
 	void handleInput(NancyInput &input) override;
 
+	bool isViewportRelative() const override { return true; }
+
 protected:
 	Common::String getRecordTypeName() const override { return "MultiBuildPuzzle"; }
-	bool isViewportRelative() const override { return true; }
+	bool isValidDrop() const;
 
 	// A single puzzle piece. Each piece is its own RenderObject.
 	// Unplaced: _drawSurface shows srcRect from primary image.
@@ -57,86 +60,132 @@ protected:
 	struct Piece : RenderObject {
 		Piece() : RenderObject(0) {}
 
-		// --- File data ---
-		Common::Rect srcRect;     // Source rect in primary image (unplaced visual)
-		Common::Rect homeRect;    // Screen position in viewport coords (= the slot)
-		Common::Rect altSrcRect;  // If non-zero area: used as source for sprite creation
-		Common::Rect cuSrcRect;   // Source rect in secondary image (overlay when placed)
-		uint8 counterByte = 0;    // If 0, piece counts toward requiredPieces tally
-		uint8 mustPlace = 0;      // If 1, piece MUST be placed for solution
-		uint8 mustNotPlace = 0;   // If 1, placing this piece fails the solution check
+		Common::Rect srcRect;     // Source in primary image (unplaced visual)
+		Common::Rect homeRect;    // Slot position in viewport coords
+		Common::Rect altSrcRect;  // If non-empty: used as source for sprite creation
+		Common::Rect cuSrcRect;   // Source in closeup image
+		Common::Rect placedDstRect; // Nancy 10: placement destination on screen
+		uint8 counterByte = 0;    // Non-zero: respawns on placement; doesn't count toward solve
+		uint8 mustPlace = 0;      // Exact required placement count, checked only when non-zero (0 = no count requirement). 0/1 in Nancy 9; recipe quantities in cake mixing; 0 for all pieces in cake cooking
+		uint8 mustNotPlace = 0;   // Non-zero: placing this fails the solution check
+		uint8 placeCount = 0;     // Runtime: number of times this piece (or any clone of it) has been placed
 
-		// --- Runtime ---
-		Common::Rect gameRect;    // Current viewport-space rect (homeRect or cursor-following)
+		Common::Rect gameRect;    // Current viewport-space rect
 		int curRotation = 0;
 		bool isPlaced = false;
+		int  typeIdx = -1;        // -1 for original pieces; source piece index for counter clones
 
-		// Up to 4 rotation surfaces (rotation 1-3 only if canRotateAll or altSrcRect non-zero)
 		Graphics::ManagedSurface rotateSurfaces[4];
 		bool hasSurface[4] = {};
 
 		void setZ(uint16 z) { _z = z; _needsRedraw = true; }
 
-	protected:
 		bool isViewportRelative() const override { return true; }
 	};
-
-	// --- File data ---
 
 	Common::Path _primaryImageName;
 	Common::Path _closeupImageName;
 	bool _hasCloseupImage = false;
 
+	// Nancy 10 additions
+	bool _retainState = false;      // TODO: state-persistence not yet wired up
+	Common::Path _animImageName;    // Completion animation sprite sheet
+	bool _hasAnimImage = false;
+	Common::Rect _animRect;
+	int16 _animLayout[4] = {};      // cols / framesPerStep / spacing / totalRows
+	SoundDescription _animSound;    // Sound played during the animation
+
 	uint16 _numPieces = 0;
-	uint16 _requiredPieces = 0;  // Minimum placed pieces (with counterByte==0) needed to trigger solve check
+	uint16 _requiredPieces = 0;        // Minimum placed pieces (counterByte==0) for solve check
+	bool _autoSolveOnDrop = false;     // If true, solve check fires after each drop
 	bool _canRotateAll = false;
+	bool _useRotationHotspot = false;  // Rotation triggered only by clicking a hotspot rect
+	int16 _rotHotspotHeight = 0;
+	int16 _rotHotspotWidth = 0;
+	bool _allowAltZoneSnap = false;    // Allow drop outside target zone if stacking on a moved piece
+	bool _checkOverlapOnDrop = false;  // Reject drop if it overlaps an already-placed piece
 
 	Common::Array<Piece> _pieces;
-	// For closeup puzzles (e.g. sandwich): permanent shelf visuals that stay at homeRect
-	// so the shelf always shows the source ingredient regardless of where the active piece is.
-	Common::Array<Piece> _shelfSlots;
 
-	SoundDescription _sounds[3];  // [0]=pickup/move, [1]=placement, [2]=extra
+	SoundDescription _rotationSound;
+	SoundDescription _pickupSound;
+	SoundDescription _dropSound;
+
+	int16 _dragCursorID  = 16;  // Cursor for hover/drag/drop (kCustom1 by default)
+	int16 _exitCursorID1 = -1;  // -1: use _puzzleExitCursor
+	int16 _exitCursorID2 = -1;
 
 	SceneChangeWithFlag _solveScene;
 	SoundDescription _solveSound;
-	Common::String _solveText;
+	Common::String _solveTextKey;  // Looked up in CONVO chunk first
+	Common::String _solveText;     // Raw fallback used if key missing
 
 	SceneChangeWithFlag _cancelScene;
 	Common::Rect _exitHotspot;
-	Common::Rect _targetZone;  // Valid drop area (drawer/plate/etc.); pieces must be within this to solve
-
-	// --- Runtime state ---
+	Common::Rect _exitHotspot2;
+	Common::Rect _targetZone;      // Valid drop area (drawer/plate/...)
 
 	Graphics::ManagedSurface _primaryImage;
 	Graphics::ManagedSurface _closeupImage;
 
-	int16 _selectedPiece = -1;  // Index of selected piece (CU view shown, not yet dragging), -1 if none
-	int16 _pickedUpPiece = -1;  // Index of piece being dragged, -1 if none
+	int16 _selectedPiece = -1;  // Piece shown in closeup view, -1 if none
+	int16 _pickedUpPiece = -1;  // Piece being dragged, -1 if none
 	bool _isDragging = false;
 	bool _isSolved = false;
 	bool _isCancelled = false;
 
 	enum SolveState {
-		kIdle          = 0,
-		kWaitTimer     = 1,
-		kWaitSolveSound = 4,  // Waiting for solve sound to stop playing
-		kPlaySolveSound = 5   // Trigger solve sound + text, then wait
+		kIdle           = 0,
+		kWaitTimer      = 1,
+		kWaitSolveSound = 4,
+		kPlaySolveSound = 5,
+		kAnimStep       = 6, // Blit current frame, advance counters
+		kAnimWaitFrame  = 7  // ~100 ms hold between frames
 	};
 	SolveState _solveState = kIdle;
 	uint32 _timerEnd = 0;
 
+	// Nancy 10 mixing animation
+	struct AnimRender : RenderObject {
+		AnimRender() : RenderObject(0) {}
+		bool isViewportRelative() const override { return true; }
+	};
+
+	Graphics::ManagedSurface _animImage;
+	AnimRender _animRender;
+	uint16 _animFrameCounter = 0;
+	uint16 _animRowCounter = 0;
+	uint32 _animFrameWaitEnd = 0;
+	Common::Rect _animSrcRect;
+	bool _animActive = false;
+	bool _animEnded = false;
+	bool _animSurfaceReady = false;
+	void renderAnimFrame();
+	void clearAnimFrame();
+
 	int16 _pickedUpWidth = 0;
 	int16 _pickedUpHeight = 0;
 
-	// --- Internal methods ---
+	bool _isInitialized = false;
 
-	void checkIfSolved();	// FUN_0046da47
+	void checkIfSolved();
 	void checkIfSolvedOnExit();
-	// Update a piece's _drawSurface and position to match its current state
+	// Updates the global cancel/solve event flags from the current placement
+	// state. Returns true on exact match (all placeCounts == mustPlace, no
+	// mustNotPlace pieces placed).
+	bool updateSolveFlags();
 	void updatePieceRender(int pieceIdx);
-	// Rotate a surface 90 degrees clockwise into dst (dst is allocated here)
 	static void rotateSurface90CW(const Graphics::ManagedSurface &src, Graphics::ManagedSurface &dst);
+	// Clone an existing piece at the end of _pieces (counter-piece respawn).
+	void spawnCounterPiece(int srcIdx);
+	// Drop is valid if it overhangs the top of a moved piece (sand-castle stacking).
+	bool altZoneSnapValid() const;
+	// Map data cursor id (0..21) to CursorManager::CursorType; out-of-range falls back.
+	CursorManager::CursorType cursorFromDataID(int16 id, CursorManager::CursorType fallback) const;
+	// Tests one exit hotspot and (if hovered) sets its cursor / handles the click.
+	// Returns true when the cursor is inside `hot`, so the caller can skip the
+	// other hotspot.
+	bool checkExitHotspot(const Common::Rect &hot, int16 cursorID, const NancyInput &input);
 };
 
 } // End of namespace Action

@@ -30,23 +30,35 @@ ScriptValue TimerActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptV
 	ScriptValue returnValue;
 
 	switch (methodId) {
-	case kTimePlayMethod: {
+	case kTimePlayMethod:
 		ARGCOUNTCHECK(0);
-		timePlay();
+		start();
+		break;
+
+	case kTimeStopMethod:
+		ARGCOUNTCHECK(0);
+		stop();
+		break;
+
+	case kTimePauseMethod:
+		ARGCOUNTCHECK(0);
+		pause();
+		break;
+
+	case kTimeResumeMethod: {
+		ARGCOUNTRANGE(0, 1);
+		bool shouldRestart = false;
+		if (args.size() == 1) {
+			shouldRestart = args[0].asBool();
+		}
+		resume(shouldRestart);
 		break;
 	}
 
-	case kTimeStopMethod: {
+	case kIsPlayingMethod:
 		ARGCOUNTCHECK(0);
-		timeStop();
+		returnValue.setToBool(_startTime > 0);
 		break;
-	}
-
-	case kIsPlayingMethod: {
-		ARGCOUNTCHECK(0);
-		returnValue.setToBool(_isPlaying);
-		break;
-	}
 
 	default:
 		returnValue = Actor::callMethod(methodId, args);
@@ -54,42 +66,67 @@ ScriptValue TimerActor::callMethod(BuiltInMethod methodId, Common::Array<ScriptV
 	return returnValue;
 }
 
-void TimerActor::timePlay() {
-	_isPlaying = true;
-	_startTime = g_system->getMillis();
+void TimerActor::start() {
+	stop();
+	_startTime = g_engine->getTotalPlayTime();
 	_lastProcessedTime = 0;
-
-	// Get the duration of the timer.
-	// TODO: Is there a better way to find out what the max time is? Do we have to look
-	// through each of the timer script responses to figure it out?
-	_duration = 0;
-	const Common::Array<ScriptResponse *> &timeResponses = _scriptResponses.getValOrDefault(kTimerEvent);
-	for (ScriptResponse *timeEvent : timeResponses) {
-		// Indeed float, not time.
-		double timeEventInFractionalSeconds = timeEvent->_argumentValue.asFloat();
-		uint timeEventInMilliseconds = timeEventInFractionalSeconds * 1000;
-		if (timeEventInMilliseconds > _duration) {
-			_duration = timeEventInMilliseconds;
-		}
-	}
-
-	debugC(5, kDebugScript, "[%s] %s: Now playing for %d ms", debugName(), __func__, _duration);
+	setupNextScriptResponseTimer();
 }
 
-void TimerActor::timeStop() {
-	if (!_isPlaying) {
+void TimerActor::stop() {
+	g_engine->getTimerService()->stopTimer(_timer);
+	_pauseStartTime = 0;
+	_startTime = 0;
+}
+
+void TimerActor::pause() {
+	bool timerIsRunningAndNotPaused = _startTime > 0 && _pauseStartTime == 0;
+	if (timerIsRunningAndNotPaused) {
+		_pauseStartTime = g_engine->getTotalPlayTime();
+		g_engine->getTimerService()->stopTimer(_timer);
+	}
+}
+
+void TimerActor::resume(bool shouldRestart) {
+	// Resume a paused timer by compensating for the pause duration.
+	bool isTimerRunningAndPaused = (_startTime > 0 && _pauseStartTime > 0);
+	if (isTimerRunningAndPaused) {
+		uint32 currentTime = g_engine->getTotalPlayTime();
+		uint32 pauseDuration = currentTime - _pauseStartTime;
+		_startTime += pauseDuration;
+		_pauseStartTime = 0;
+		setupNextScriptResponseTimer();
 		return;
 	}
 
-	_isPlaying = false;
-	_startTime = 0;
-	_lastProcessedTime = 0;
+	// Restart a timer that was stopped while paused.
+	bool shouldRestartStoppedTimer = (shouldRestart && _startTime == 0 && _pauseStartTime > 0);
+	if (shouldRestartStoppedTimer) {
+		start();
+	}
 }
 
-void TimerActor::process() {
-	if (_isPlaying) {
-		processTimeScriptResponses();
+void TimerActor::timerEvent(const TimerEvent &event) {
+	// The timer actor is subtly different from other actors that can have timer events called on them,
+	// which is why the default call to process timer events doesn't work here.
+	ScriptResponse *nextTimeScriptResponse = findNextTimeScriptResponseAfter(_lastProcessedTime);
+	double eventTimeInSeconds = nextTimeScriptResponse->_argumentValue.asFloat();
+	uint32 eventTimeInMilliseconds = eventTimeInSeconds * 1000;
+	// Increment by 1 to prevent re-triggering the same event. This works because in the original,
+	// timer events are at least 10 ms apart anyway.
+	_lastProcessedTime = eventTimeInMilliseconds + 1;
+
+	// Unlike the other timer handlers, schedule the next script response FIRST,
+	// before executing the current one. This seems to be because any time event
+	// can re-start the timer.
+	g_engine->getTimerService()->stopTimer(_timer);
+	if (!setupNextScriptResponseTimer()) {
+		// No more events, stop the timer.
+		stop();
 	}
+
+	// Actually execute the script response we found.
+	nextTimeScriptResponse->execute(_id);
 }
 
 } // End of namespace MediaStation

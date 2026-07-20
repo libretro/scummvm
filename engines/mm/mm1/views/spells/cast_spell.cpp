@@ -183,7 +183,8 @@ bool CastSpell::msgAction(const ActionMessage &msg) {
 
 	} else if (msg._action == KEYBIND_SELECT) {
 		// Time to execute the spell
-		performSpell();
+		if (_state == PRESS_ENTER)
+			performSpell();
 
 	} else if (_state == SELECT_CHAR &&
 		msg._action >= KEYBIND_VIEW_PARTY1 &&
@@ -241,16 +242,20 @@ void CastSpell::spellDone() {
 }
 
 void CastSpell::spellDone(const Common::String &msg, int xp) {
+	Common::String result = msg.hasPrefix("*** ") ? msg :
+		spellResultMessage(msg);
+	xp = 20 - (result.size() / 2);
+
 	if (isInCombat()) {
 		close();
 
-		GameMessage gameMsg("SPELL_RESULT", msg);
+		GameMessage gameMsg("SPELL_RESULT", result);
 		gameMsg._value = xp;
 		g_events->focusedView()->send(gameMsg);
 
 	} else {
 		Sound::sound(SOUND_2);
-		_spellResult = msg;
+		_spellResult = result;
 		_spellResultX = xp;
 		setState(ENDING);
 	}

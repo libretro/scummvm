@@ -73,6 +73,26 @@ void Overlay::handleInput(NancyInput &input) {
 	}
 }
 
+void Overlay::updateGraphics() {
+	// Update inactive animated overlays
+	if (!_isActive && _state == kRun && !_blitDescriptions.empty() && _overlayType == kPlayOverlayAnimated) {
+		uint16 newFrame = NancySceneState.getSceneInfo().frameID;
+		if (_currentViewportFrame == newFrame)
+			return;
+
+		_currentViewportFrame = (int16)newFrame;
+		setVisible(false);
+
+		for (auto &blit : _blitDescriptions) {
+			if (_currentViewportFrame == blit.frameID) {
+				moveTo(blit.dest);
+				setVisible(true);
+				break;
+			}
+		}
+	}
+}
+
 void Overlay::readData(Common::SeekableReadStream &stream) {
 	Common::Serializer ser(&stream, nullptr);
 	ser.setVersion(g_nancy->getGameType());
@@ -157,9 +177,9 @@ void Overlay::execute() {
 			// Wait until sound stops (if present)
 			if (!g_nancy->_sound->isSoundPlaying(_sound)) {
 				// Check if we're at the last frame
-				if ((_currentFrame == _loopLastFrame) && (_playDirection == kPlayOverlayForward) && (_loop == kPlayOverlayOnce)) {
+				if (_currentFrame == _loopLastFrame && _playDirection == kPlayOverlayForward && _loop == kPlayOverlayOnce) {
 					shouldTrigger = true;
-				} else if ((_currentFrame == _loopFirstFrame) && (_playDirection == kPlayOverlayReverse) && (_loop == kPlayOverlayOnce)) {
+				} else if (_currentFrame == _loopFirstFrame && _playDirection == kPlayOverlayReverse && _loop == kPlayOverlayOnce) {
 					shouldTrigger = true;
 				}
 			}
@@ -327,7 +347,7 @@ void Overlay::execute() {
 						} else {
 							// nancy3 added a per-frame flag for hotspots. This allows the overlay to be clickable
 							// even without a scene change (useful for setting flags).
-							if (_blitDescriptions[i].hasHotspot == kPlayOverlayWithHotspot) {
+							if (_blitDescriptions[blitsForThisFrame[i]].hasHotspot == kPlayOverlayWithHotspot) {
 								_hotspot = _screenPosition;
 								_hasHotspot = true;
 							}
@@ -340,7 +360,14 @@ void Overlay::execute() {
 		break;
 	}
 	case kActionTrigger:
-		setVisible(false);
+		if (g_nancy->getGameType() <= kGameTypeNancy9) {
+			// This isn't done by the original engine, but it's here
+			// to fix Nancy1's safe lock light not turning off. Removing
+			// it for Nancy 10, to fix the animated label showing correctly,
+			// when using the ring at the slot machine.
+			setVisible(false);
+		}
+
 		g_nancy->_sound->stopSound(_sound);
 
 		_flagsOnTrigger.execute();

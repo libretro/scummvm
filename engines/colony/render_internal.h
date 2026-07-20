@@ -100,11 +100,6 @@ static const byte *kMacStippleData[] = {
 	nullptr         // kPatternClear  - outline only
 };
 
-// Pack Mac 16-bit RGB into 32-bit ARGB with 0xFF000000 marker for direct RGB.
-inline uint32 packMacColor(const uint16 rgb[3]) {
-	return 0xFF000000 | ((rgb[0] >> 8) << 16) | ((rgb[1] >> 8) << 8) | (rgb[2] >> 8);
-}
-
 // Helper: set up Mac color stipple rendering for a given cColor[] pattern.
 // Configures setMacColors/setStippleData/setWireframe for the pattern type.
 // Returns the stipple pointer (null for solid patterns)  caller must clear with setStippleData(nullptr).

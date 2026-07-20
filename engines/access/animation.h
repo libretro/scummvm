@@ -42,7 +42,6 @@ private:
 public:
 	Animation *_animStart;
 	Common::Point _base;
-	int _frameScale;
 public:
 	AnimationManager(AccessEngine *vm);
 	~AnimationManager();
@@ -72,7 +71,12 @@ public:
 	/**
 	 * Remove the last animation timer
 	 */
-	void popBackTimer() { _animationTimers.pop_back(); }
+	void popBackTimer() { if (_animationTimers.size()) _animationTimers.pop_back(); }
+
+	/**
+	 * True if there is an anim running
+	 */
+	bool hasTimer() const { return !_animationTimers.empty(); };
 };
 
 class AnimationResource {
@@ -97,11 +101,16 @@ private:
 	void anim4();
 	void animNone();
 	void anim7();
+	void anim8();
+	void anim9();
+	void anim10();
+	void anim11();
+	void anim12();
 
 	const AnimationFrame *calcFrame();
 	const AnimationFrame *calcFrame1();
 	void setFrame(const AnimationFrame *frame);
-	void setFrame1(const AnimationFrame *frame);
+	void setFrame1(const AnimationFrame *frame, int16 xoff = 0, int16 yoff = 0);
 public:
 	int _type;
 	int _scaling;

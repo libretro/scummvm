@@ -32,6 +32,11 @@
 #include "common/stream.h"
 #include "common/system.h"
 #include "graphics/cursorman.h"
+#include "graphics/fontman.h"
+#include "graphics/macgui/macfontmanager.h"
+#include "graphics/macgui/macwindowmanager.h"
+#include "graphics/managed_surface.h"
+#include "graphics/surface.h"
 
 #include "colony/colony.h"
 #include "colony/renderer.h"
@@ -242,11 +247,6 @@ uint32 macSysColorToARGB(int sysColor) {
 	}
 }
 
-uint32 packMacColorBG(const uint16 rgb[3]) {
-	return 0xFF000000 | ((uint32)(rgb[0] >> 8) << 16) |
-		((uint32)(rgb[1] >> 8) << 8) | (uint32)(rgb[2] >> 8);
-}
-
 int getAnimationStateCount(const Common::Array<ComplexSprite *> &sprites, int num) {
 	num--;
 	if (num >= 0 && num < (int)sprites.size()) {
@@ -375,6 +375,12 @@ void ColonyEngine::deleteAnimation() {
 	_backgroundMask = nullptr;
 	delete _backgroundFG;
 	_backgroundFG = nullptr;
+	if (_backgroundBaked) {
+		_backgroundBaked->free();
+		delete _backgroundBaked;
+		_backgroundBaked = nullptr;
+	}
+	_backgroundBakedKey = 0;
 	for (uint i = 0; i < _cSprites.size(); i++)
 		delete _cSprites[i];
 	_cSprites.clear();
@@ -393,11 +399,18 @@ void ColonyEngine::playAnimation() {
 	_rotateRight = false;
 
 	_animationRunning = true;
+	_animExitPressed = _animExitInside = false;
+	_animExitStrip = _animExitButton = Common::Rect();
+	_coderCursor = 0;
+	for (int i = 0; i < 4; i++)
+		_coderPick[i] = 0;
+	_coderWin = Common::Rect();
+	_coderPressed = -1;
+	_coderPressInside = false;
 	_system->lockMouse(false);
-	_system->showMouse(true);
-	_system->warpMouse(_centerX, _centerY);
+	warpMouseLogical(_centerX, _centerY);
 	const char *cursorName = "default arrow cursor";
-	if (_renderMode == Common::kRenderMacintosh && _macArrowCursor) {
+	if (isMacRenderMode() && _macArrowCursor) {
 		cursorName = "Mac arrow cursor";
 		CursorMan.replaceCursor(_macArrowCursor);
 	} else {
@@ -573,6 +586,12 @@ void ColonyEngine::playAnimation() {
 		_gfx->copyToScreen();
 	}
 
+	// drawAnimation is heavy (per-pixel setPixel calls for the 416x264 pattern)
+	// so cap it to the animation update cadence (50ms = 20fps). Between draws,
+	// only call updateScreen so the OpenGL backend re-composites with the
+	// current cursor position — keeps the pointer smooth without re-rendering.
+	uint32 lastDrawTime = 0;
+	bool needsDraw = true;
 	while (_animationRunning && !shouldQuit()) {
 		Common::Event event;
 		while (_system->getEventManager()->pollEvent(event)) {
@@ -581,29 +600,90 @@ void ColonyEngine::playAnimation() {
 				return;
 			} else if (event.type == Common::EVENT_SCREEN_CHANGED) {
 				_gfx->computeScreenViewport();
+				needsDraw = true;
 			} else if (event.type == Common::EVENT_LBUTTONDOWN) {
-				int item = whichSprite(event.mouse);
-				if (item > 0) {
-					handleAnimationClick(item);
+				const Common::Point pt = eventMouseToLogical(event.mouse);
+				if (handleColonyCoderClick(pt)) {
+					needsDraw = true;
+				} else if (!_animExitStrip.isEmpty() && _animExitStrip.contains(pt)) {
+					// gamesprt.c TestButton(): strip clicks never reach sprites
+					if (_animExitButton.contains(pt)) {
+						_animExitPressed = _animExitInside = true;
+						needsDraw = true;
+					}
+				} else {
+					int item = whichSprite(pt);
+					if (item > 0) {
+						handleAnimationClick(item);
+						needsDraw = true;
+					}
+				}
+			} else if (event.type == Common::EVENT_LBUTTONUP) {
+				if (_coderPressed >= 0) {
+					if (_coderPressInside) {
+						if (_coderCursor >= 4) {
+							for (int j = 0; j < 4; j++)
+								_coderPick[j] = 0;
+							_coderCursor = 0;
+						}
+						_coderPick[_coderCursor++] = _coderPressed + 1;
+						_sound->play(Sound::kDit);
+					}
+					_coderPressed = -1;
+					_coderPressInside = false;
+					needsDraw = true;
+				}
+				if (_animExitPressed) {
+					if (_animExitInside) {
+						debugC(1, kColonyDebugAnimation, "Animation: EXIT button");
+						_animationRunning = false;
+					}
+					_animExitPressed = _animExitInside = false;
+					needsDraw = true;
 				}
 			} else if (event.type == Common::EVENT_RBUTTONDOWN) {
 				// DOS: right-click exits animation (AnimControl returns FALSE on button-up)
-				debugC(1, kColonyDebugAnimation, "Animation: RBUTTONDOWN exit at pos=%d,%d", event.mouse.x, event.mouse.y);
+				const Common::Point logical = eventMouseToLogical(event.mouse);
+				debugC(1, kColonyDebugAnimation, "Animation: RBUTTONDOWN exit at pos=%d,%d", logical.x, logical.y);
 				_animationRunning = false;
 			} else if (event.type == Common::EVENT_MOUSEMOVE) {
-				debugC(5, kColonyDebugAnimation, "Animation Mouse: %d, %d", event.mouse.x, event.mouse.y);
+				const Common::Point logical = eventMouseToLogical(event.mouse);
+				if (_coderPressed >= 0) {
+					const bool inside = _coderIconRects[_coderPressed].contains(logical);
+					if (inside != _coderPressInside) {
+						_coderPressInside = inside;
+						needsDraw = true;
+					}
+				}
+				if (_animExitPressed) {
+					const bool inside = _animExitButton.contains(logical);
+					if (inside != _animExitInside) {
+						_animExitInside = inside;
+						needsDraw = true;
+					}
+				}
+				debugC(5, kColonyDebugAnimation, "Animation Mouse: %d, %d", logical.x, logical.y);
 			} else if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
 				if (event.customType == kActionEscape) {
-					openMainMenuDialog();
-					_gfx->computeScreenViewport();
+					// Exit the animation like right-click/Return. Opening the
+					// main menu here instead would be a dead end: save/load
+					// are disabled while _animationRunning is set.
+					debugC(1, kColonyDebugAnimation, "Animation: ESC exit");
+					_animationRunning = false;
 				}
 			} else if (event.type == Common::EVENT_KEYDOWN) {
+				if (event.kbd.keycode == Common::KEYCODE_RETURN) {
+					// Original Mac AnimControl(): Return closes the animation window.
+					_animationRunning = false;
+					continue;
+				}
+
 				int item = 0;
 				if (event.kbd.keycode >= Common::KEYCODE_0 && event.kbd.keycode <= Common::KEYCODE_9) {
 					item = 1 + (event.kbd.keycode - Common::KEYCODE_0);
 				} else if (event.kbd.keycode >= Common::KEYCODE_KP0 && event.kbd.keycode <= Common::KEYCODE_KP9) {
 					item = 1 + (event.kbd.keycode - Common::KEYCODE_KP0);
-				} else if (event.kbd.keycode == Common::KEYCODE_RETURN || event.kbd.keycode == Common::KEYCODE_KP_ENTER) {
+				} else if (event.kbd.keycode == Common::KEYCODE_KP_ENTER) {
 					item = 12; // Enter
 				} else if (event.kbd.keycode == Common::KEYCODE_BACKSPACE || event.kbd.keycode == Common::KEYCODE_DELETE) {
 					item = 11; // Clear
@@ -611,18 +691,31 @@ void ColonyEngine::playAnimation() {
 
 				if (item > 0) {
 					handleAnimationClick(item);
+					needsDraw = true;
 				}
 			}
 		}
 
+		// updateAnimation has its own 50ms throttle; only redraw when we know
+		// the visible state changed (click feedback) or the cadence is due.
+		const uint32 prevAnimUpdate = _lastAnimUpdate;
 		updateAnimation();
-		drawAnimation();
-		_gfx->copyToScreen();
-		responsiveAnimationDelay(_system, 4);
+		if (_lastAnimUpdate != prevAnimUpdate)
+			needsDraw = true;
+
+		const uint32 now = _system->getMillis();
+		if (needsDraw || now - lastDrawTime >= 50) {
+			drawAnimation();
+			_gfx->copyToScreen();
+			lastDrawTime = now;
+			needsDraw = false;
+		} else {
+			_system->updateScreen();
+		}
+		_system->delayMillis(2);
 	}
 
 	_system->lockMouse(true);
-	_system->showMouse(false);
 	CursorMan.showMouse(false);
 	CursorMan.popAllCursors();
 
@@ -632,10 +725,9 @@ void ColonyEngine::playAnimation() {
 	_system->getEventManager()->purgeMouseEvents();
 	_system->getEventManager()->purgeKeyboardEvents();
 
-	// Suppress collision sound on the first few wall hits after animation exit.
+	// Suppress collision sound on the first wall hit after animation exit.
 	// The player is at a door/wall boundary and held movement keys will
-	// immediately trigger checkwall collisions that play kBang — which sounds
-	// like a spurious gunshot. The flag auto-clears on the first successful move.
+	// immediately trigger a collision sound. The flag auto-clears in cCommand().
 	_suppressCollisionSound = true;
 
 	deleteAnimation();
@@ -668,15 +760,15 @@ uint32 ColonyEngine::resolveAnimColor(int16 bmEntry) const {
 		return macSysColorToARGB(-bmEntry);
 	} else if (bmEntry > 0) {
 		if (bmEntry < 145)
-			return packMacColorBG(_macColors[bmEntry].bg);
+			return packMacColor(_macColors[bmEntry].bg);
 		return 0xFFFFFFFF;
 	} else {
 		// Zero = level-based (original gamesprt.c DrawlSprite/DrawBackGround):
 		//   if(corepower[coreindex]) RGBBackColor(&cColor[c_char0+level-1].f);
 		//   else RGBBackColor(&cColor[c_dwall].b);
 		if (_corePower[_coreIndex] > 0 && _level >= 1 && _level <= 7)
-			return packMacColorBG(_macColors[kMcChar0 + _level - 1].fg);
-		return packMacColorBG(_macColors[kMcDwall].bg);
+			return packMacColor(_macColors[kMcChar0 + _level - 1].fg);
+		return packMacColor(_macColors[kMcDwall].bg);
 	}
 }
 
@@ -689,7 +781,7 @@ void ColonyEngine::drawAnimation() {
 	ox = (ox / 8) * 8;
 	int oy = _screenR.top + (_screenR.height() - 264) / 2;
 
-	const bool useColor = (_hasMacColors && _renderMode == Common::kRenderMacintosh
+	const bool useColor = (isMacColorMode()
 		&& !_animBMColors.empty());
 
 	// Fill background patterns (416x264 area).
@@ -698,43 +790,75 @@ void ColonyEngine::drawAnimation() {
 	//   Top: BMColor[0]<0 -> system color; ==0 -> powered:c_char0+level-1.f, else:c_dwall.b
 	//   Bottom: powered -> c_lwall.f; unpowered -> inherits top BackColor
 	// B&W/DOS: preserve existing palette-index behavior (bit 1 -> 15, bit 0 -> 0).
+	//
+	// We render the pattern into a cached RGBA surface and blit it via
+	// drawSurface (one texture upload per change). The previous implementation
+	// did 416*264 = 109,824 individual setPixel calls per drawAnimation, each
+	// issuing its own glBegin/glEnd; on the OpenGL backend that took tens of
+	// milliseconds per frame and starved the cursor of refreshes.
+	const int patternMode = useColor ? 2 : (isMacRenderMode() ? 1 : 0);
+	uint32 topColor = 0, botColor = 0;
 	if (useColor) {
 		const bool powered = (_corePower[_coreIndex] > 0);
-		uint32 topBG = resolveAnimColor(_animBMColors[0]);
-		// Bottom: only uses c_lwall.f when powered; unpowered inherits top color
-		uint32 botBG = powered ? packMacColorBG(_macColors[kMcLwall].fg) : topBG;
-		for (int y = 0; y < 264; y++) {
-			byte *pat = (y < _divideBG) ? _topBG : _bottomBG;
-			byte row = pat[y % 8];
-			uint32 bg = (y < _divideBG) ? topBG : botBG;
-			for (int x = 0; x < 416; x++) {
-				bool set = (row & (0x80 >> (x % 8))) != 0;
-				_gfx->setPixel(ox + x, oy + y, set ? (uint32)0xFF000000 : bg);
-			}
-		}
-	} else if (_renderMode == Common::kRenderMacintosh) {
-		// Mac QuickDraw FillRect: pattern bit=1 → ForeColor (black=0),
-		// bit=0 → BackColor (white=15).
-		for (int y = 0; y < 264; y++) {
-			byte *pat = (y < _divideBG) ? _topBG : _bottomBG;
-			byte row = pat[y % 8];
-			for (int x = 0; x < 416; x++) {
-				bool set = (row & (0x80 >> (x % 8))) != 0;
-				_gfx->setPixel(ox + x, oy + y, set ? 0 : 15);
-			}
-		}
-	} else {
-		// DOS MetaWINDOW: pattern bit=1 → pen color (white=15),
-		// bit=0 → background (black=0). Opposite of Mac QuickDraw.
-		for (int y = 0; y < 264; y++) {
-			byte *pat = (y < _divideBG) ? _topBG : _bottomBG;
-			byte row = pat[y % 8];
-			for (int x = 0; x < 416; x++) {
-				bool set = (row & (0x80 >> (x % 8))) != 0;
-				_gfx->setPixel(ox + x, oy + y, set ? 15 : 0);
-			}
-		}
+		topColor = resolveAnimColor(_animBMColors[0]);
+		botColor = powered ? packMacColor(_macColors[kMcLwall].fg) : topColor;
 	}
+
+	const bool keyChanged = !_animPatternValid
+		|| _animPatternKeyMode != patternMode
+		|| _animPatternKeyDivide != _divideBG
+		|| _animPatternKeyTopColor != topColor
+		|| _animPatternKeyBotColor != botColor
+		|| memcmp(_animPatternKeyTopBG, _topBG, 8) != 0
+		|| memcmp(_animPatternKeyBottomBG, _bottomBG, 8) != 0;
+
+	if (!_animPatternSurface) {
+		_animPatternSurface = new Graphics::Surface();
+		_animPatternSurface->create(416, 264, _gfx->getPixelFormat());
+	}
+
+	if (keyChanged) {
+		const Graphics::PixelFormat &fmt = _animPatternSurface->format;
+		uint32 fgPixel, topBgPixel, botBgPixel;
+		switch (patternMode) {
+		case 2: // Mac color: bit=1 → black, bit=0 → topColor/botColor
+			fgPixel = fmt.ARGBToColor(255, 0, 0, 0);
+			topBgPixel = fmt.ARGBToColor(255,
+				(topColor >> 16) & 0xFF, (topColor >> 8) & 0xFF, topColor & 0xFF);
+			botBgPixel = fmt.ARGBToColor(255,
+				(botColor >> 16) & 0xFF, (botColor >> 8) & 0xFF, botColor & 0xFF);
+			break;
+		case 1: // Mac B&W: bit=1 → black, bit=0 → white
+			fgPixel = fmt.ARGBToColor(255, 0, 0, 0);
+			topBgPixel = botBgPixel = fmt.ARGBToColor(255, 255, 255, 255);
+			break;
+		default: // DOS: bit=1 → white, bit=0 → black
+			fgPixel = fmt.ARGBToColor(255, 255, 255, 255);
+			topBgPixel = botBgPixel = fmt.ARGBToColor(255, 0, 0, 0);
+			break;
+		}
+
+		uint32 *pixels = (uint32 *)_animPatternSurface->getPixels();
+		for (int y = 0; y < 264; y++) {
+			const byte row = ((y < _divideBG) ? _topBG : _bottomBG)[y % 8];
+			const uint32 bgPixel = (y < _divideBG) ? topBgPixel : botBgPixel;
+			uint32 *dst = pixels + y * 416;
+			for (int x = 0; x < 416; x++) {
+				const bool set = (row & (0x80 >> (x % 8))) != 0;
+				dst[x] = set ? fgPixel : bgPixel;
+			}
+		}
+
+		memcpy(_animPatternKeyTopBG, _topBG, 8);
+		memcpy(_animPatternKeyBottomBG, _bottomBG, 8);
+		_animPatternKeyDivide = _divideBG;
+		_animPatternKeyTopColor = topColor;
+		_animPatternKeyBotColor = botColor;
+		_animPatternKeyMode = patternMode;
+		_animPatternValid = true;
+	}
+
+	_gfx->drawSurface(_animPatternSurface, ox, oy);
 
 	// Draw background image if active.
 	// Original: BMColor[1] only applied when corepower[coreindex] > 0.
@@ -748,7 +872,7 @@ void ColonyEngine::drawAnimation() {
 		}
 		drawAnimationImage(_backgroundFG, _backgroundMask,
 			ox + _backgroundLocate.left, oy + _backgroundLocate.top,
-			bgFill);
+			bgFill, _backgroundBaked, _backgroundBakedKey);
 	}
 
 	// Draw complex sprites
@@ -756,6 +880,270 @@ void ColonyEngine::drawAnimation() {
 		if (_lSprites[i]->onoff)
 			drawComplexSprite(i, ox, oy);
 	}
+
+	drawAnimationExitButton(ox, oy);
+	drawColonyCoder(ox, oy);
+}
+
+// gamesprt.c DrawButton(): 30px strip below the 416x264 scene with a framed
+// "EXIT" default button; TestButton() inverts it while pressed inside.
+void ColonyEngine::drawAnimationExitButton(int ox, int oy) {
+	if (!isMacRenderMode())
+		return;
+
+	Graphics::MacFont systemFont(Graphics::kMacFontSystem, 12);
+	const Graphics::Font *font = (_wm && _wm->_fontMan) ? _wm->_fontMan->getFont(systemFont) : nullptr;
+	if (!font)
+		font = FontMan.getFontByUsage(Graphics::FontManager::kGUIFont);
+	if (!font)
+		return;
+
+	Graphics::ManagedSurface strip;
+	strip.create(416, 30, _gfx->getPixelFormat());
+	const uint32 white = strip.format.ARGBToColor(255, 255, 255, 255);
+	const uint32 black = strip.format.ARGBToColor(255, 0, 0, 0);
+	strip.fillRect(Common::Rect(0, 0, 416, 30), white);
+	strip.hLine(0, 0, 415, black);
+
+	const int wd = font->getStringWidth("EXIT") / 2;
+	const Common::Rect button(208 - (wd + 15), 6, 208 + (wd + 15), 24);
+	const bool invert = _animExitPressed && _animExitInside;
+	strip.drawRoundRect(button, 8, black, invert);
+	Common::Rect ring(button.left - 3, button.top - 3, button.right + 3, button.bottom + 3);
+	strip.drawRoundRect(ring, 11, black, false);
+	ring.grow(-1);
+	strip.drawRoundRect(ring, 10, black, false);
+
+	const int textY = button.top + (button.height() - font->getFontHeight()) / 2 + 1;
+	font->drawString(&strip, "EXIT", button.left, textY, button.width(),
+		invert ? white : black, Graphics::kTextAlignCenter);
+
+	_gfx->drawSurface(&strip.rawSurface(), ox, oy + 264);
+	strip.free();
+
+	_animExitStrip = Common::Rect(ox, oy + 264, ox + 416, oy + 294);
+	_animExitButton = button;
+	_animExitButton.translate(ox, oy + 264);
+}
+
+void ColonyEngine::loadCoderTiles() {
+	_coderTilesLoaded = true;
+
+	Common::SeekableReadStream *file = Common::MacResManager::openFileOrDataFork(Common::Path("security"));
+	if (!file)
+		return;
+	Common::SeekableReadStreamEndianWrapper stream(file, true, DisposeAfterUse::YES);
+
+	byte bg[8];
+	stream.read(bg, 8);
+	stream.read(bg, 8);
+	stream.readSint16();
+	if (stream.readSint16() != 0) {
+		readRect(stream);
+		readRect(stream);
+		delete loadImage(stream);
+		delete loadImage(stream);
+	}
+
+	Common::Array<Image *> imgs;
+	const int16 maxsprite = stream.readSint16();
+	stream.readSint16();
+	for (int i = 0; i < maxsprite && !stream.err(); i++) {
+		imgs.push_back(loadImage(stream));
+		delete loadImage(stream); // mask
+		stream.readSint16();
+		readRect(stream);
+		readRect(stream);
+	}
+
+	// Object 2 (a digit key) provides the button faces (states 1..2),
+	// object 27 the four symbol tiles (states 2..5).
+	const int16 maxl = stream.readSint16();
+	stream.readSint16();
+	for (int i = 0; i < maxl && !stream.err(); i++) {
+		const int16 size = stream.readSint16();
+		for (int j = 0; j < size; j++) {
+			const int16 spritenum = stream.readSint16();
+			stream.readSint16();
+			stream.readSint16();
+			if (stream.err() || spritenum < 0 || spritenum >= (int16)imgs.size())
+				continue;
+			if (i == 1 && j == 0 && !_coderBtnUp) {
+				_coderBtnUp = imgs[spritenum];
+				imgs[spritenum] = nullptr;
+			} else if (i == 1 && j == 1 && !_coderBtnDown) {
+				_coderBtnDown = imgs[spritenum];
+				imgs[spritenum] = nullptr;
+			} else if (i == 26 && j >= 1 && j <= 4 && !_coderTiles[j - 1]) {
+				_coderTiles[j - 1] = imgs[spritenum];
+				imgs[spritenum] = nullptr;
+			}
+		}
+		readRect(stream);
+		for (int k = 0; k < 7; k++)
+			stream.readSint16();
+		stream.readByte();
+		stream.readByte();
+		stream.readByte();
+		stream.readSint16();
+		stream.readSint16();
+		stream.readSint16();
+	}
+
+	for (uint i = 0; i < imgs.size(); i++)
+		delete imgs[i];
+}
+
+static void drawCoderTile(Graphics::ManagedSurface &s, const Image *img, int x, int y, uint32 fg, uint32 bg) {
+	if (!img || !img->data)
+		return;
+	for (int r = 0; r < img->height; r++) {
+		for (int c = 0; c < img->width; c++) {
+			const bool on = (img->data[r * img->rowBytes + (c >> 3)] >> (7 - (c & 7))) & 1;
+			s.setPixel(x + c, y + r, on ? fg : bg);
+		}
+	}
+}
+
+void ColonyEngine::drawColonyCoder(int animOx, int animOy) {
+	if (!isMacRenderMode())
+		return;
+	if (_animationName != "security" && _animationName != "reactor")
+		return;
+
+	if (!_coderTilesLoaded)
+		loadCoderTiles();
+	if (!_coderTiles[0] || !_coderTiles[1] || !_coderTiles[2] || !_coderTiles[3] ||
+			!_coderBtnUp || !_coderBtnDown)
+		return;
+
+	Graphics::MacFont systemFont(Graphics::kMacFontSystem, 12);
+	const Graphics::Font *font = (_wm && _wm->_fontMan) ? _wm->_fontMan->getFont(systemFont) : nullptr;
+	if (!font)
+		font = FontMan.getFontByUsage(Graphics::FontManager::kGUIFont);
+	if (!font)
+		return;
+	Graphics::MacFont genevaFont(Graphics::kMacFontGeneva, 9);
+	const Graphics::Font *instrFont = (_wm && _wm->_fontMan) ? _wm->_fontMan->getFont(genevaFont) : nullptr;
+	if (!instrFont)
+		instrFont = font;
+
+	const int contentW = 172;
+	const char *instrText = (_animationName == "security")
+		? "Press the symbols as shown on the display to determine the correct value."
+		: "Press the symbols from the desk in reverse order to determine the correct value.";
+	Common::Array<Common::U32String> instrLines;
+	instrFont->wordWrapText(Common::U32String(instrText), contentW - 16, instrLines);
+	const int instrLineH = instrFont->getFontHeight() + 1;
+
+	const int btnSize = _coderBtnUp->width;
+	const int tile = _coderTiles[0]->width;
+	const int pitch = btnSize + 4;
+	const int x0 = (contentW - (3 * pitch + btnSize)) / 2;
+	const int btnY = 8;
+	const int slotY = btnY + btnSize + 9;
+	const int codeY = slotY + tile + 16;
+	const int instrY = codeY + font->getFontHeight() + 8;
+	const int contentH = instrY + (int)instrLines.size() * instrLineH + 8;
+
+	Graphics::MacWindowBorder border;
+	Graphics::BorderOffsets offsets = {};
+	bool hasBorder = false;
+	if (_wm) {
+		border.setWindowManager(_wm);
+		border.setBorderType(Graphics::kWindowWindow);
+		if (border.hasBorder(Graphics::kWindowBorderActive) && border.hasOffsets()) {
+			hasBorder = true;
+			offsets = border.getOffset();
+		}
+	}
+	const int offL = hasBorder ? offsets.left : 2;
+	const int offR = hasBorder ? offsets.right : 2;
+	const int offT = hasBorder ? offsets.top : 2;
+	const int offB = hasBorder ? offsets.bottom : 2;
+	const int winW = contentW + offL + offR;
+	const int winH = contentH + offT + offB;
+
+	// Right of the scene, vertically centered on the 416x294 animation window
+	int wx = animOx + 416 + 4;
+	if (wx + winW > _screenR.right)
+		wx = MAX<int>(_screenR.left, _screenR.right - winW - 2);
+	int wy = animOy + (294 - winH) / 2;
+	wy = MAX<int>(_screenR.top, wy);
+
+	Graphics::ManagedSurface win;
+	win.create(winW, winH, _gfx->getPixelFormat());
+	const uint32 white = win.format.ARGBToColor(255, 255, 255, 255);
+	const uint32 black = win.format.ARGBToColor(255, 0, 0, 0);
+	win.fillRect(Common::Rect(0, 0, winW, winH), white);
+	if (hasBorder) {
+		border.setTitle("Colony Coder", winW);
+		border.blitBorderInto(win, Graphics::kWindowBorderActive);
+	} else {
+		win.frameRect(Common::Rect(0, 0, winW, winH), black);
+		win.frameRect(Common::Rect(1, 1, winW - 1, winH - 1), black);
+	}
+
+	// Keypad buttons with the symbol tile covering the digit
+	const int inset = (btnSize - tile) / 2;
+	for (int i = 0; i < 4; i++) {
+		const int bx = offL + x0 + i * pitch;
+		const bool pressed = (_coderPressed == i && _coderPressInside);
+		drawCoderTile(win, pressed ? _coderBtnDown : _coderBtnUp, bx, offT + btnY, black, white);
+		drawCoderTile(win, _coderTiles[i], bx + inset, offT + btnY + inset,
+			pressed ? white : black, pressed ? black : white);
+		_coderIconRects[i] = Common::Rect(wx + bx, wy + offT + btnY, wx + bx + btnSize, wy + offT + btnY + btnSize);
+
+		const int sx = bx + inset;
+		const Common::Rect slot(sx - 2, offT + slotY - 2, sx + tile + 2, offT + slotY + tile + 2);
+		win.frameRect(slot, black);
+		if (_coderPick[i] > 0)
+			drawCoderTile(win, _coderTiles[_coderPick[i] - 1], sx, offT + slotY, black, white);
+	}
+
+	if (_coderCursor < 4) {
+		const int cx = offL + x0 + _coderCursor * pitch + inset;
+		win.fillRect(Common::Rect(cx, offT + slotY + tile + 6, cx + tile, offT + slotY + tile + 8), black);
+	}
+
+	bool complete = true;
+	for (int i = 0; i < 4; i++) {
+		if (_coderPick[i] == 0)
+			complete = false;
+	}
+	Common::String text;
+	if (complete) {
+		uint8 code[6];
+		cryptArray(code, _coderPick[0] - 1, _coderPick[1] - 1, _coderPick[2] - 1, _coderPick[3] - 1);
+		for (int i = 0; i < 6; i++)
+			text += (char)('0' + code[i] - 2);
+	} else {
+		text = "- - - - - -";
+	}
+	font->drawString(&win, text, offL, offT + codeY, contentW, black, Graphics::kTextAlignCenter);
+
+	for (uint i = 0; i < instrLines.size(); i++)
+		instrFont->drawString(&win, instrLines[i], offL + 8, offT + instrY + (int)i * instrLineH,
+			contentW - 16, black, Graphics::kTextAlignCenter);
+
+	_gfx->drawSurface(&win.rawSurface(), wx, wy);
+	win.free();
+
+	_coderWin = Common::Rect(wx, wy, wx + winW, wy + winH);
+}
+
+// Mouse-down half of the button tracking; commit happens on mouse-up.
+bool ColonyEngine::handleColonyCoderClick(const Common::Point &pt) {
+	if (_coderWin.isEmpty() || !_coderWin.contains(pt))
+		return false;
+	for (int i = 0; i < 4; i++) {
+		if (_coderIconRects[i].contains(pt)) {
+			_coderPressed = i;
+			_coderPressInside = true;
+			break;
+		}
+	}
+	return true;
 }
 
 void ColonyEngine::drawComplexSprite(int index, int ox, int oy) {
@@ -777,7 +1165,7 @@ void ColonyEngine::drawComplexSprite(int index, int ox, int oy) {
 
 	// Resolve fill color from BMColor[index+2] (ganimate.c DrawlSprite).
 	uint32 fillColor = 0xFFFFFFFF; // B&W default: white
-	const bool useColor = (_hasMacColors && _renderMode == Common::kRenderMacintosh
+	const bool useColor = (isMacColorMode()
 		&& !_animBMColors.empty());
 	if (useColor) {
 		int bmIdx = index + 2;
@@ -787,54 +1175,73 @@ void ColonyEngine::drawComplexSprite(int index, int ox, int oy) {
 			fillColor = resolveAnimColor(0); // fallback to level-based
 	}
 
-	drawAnimationImage(s->fg, s->mask, x, y, fillColor);
+	drawAnimationImage(s->fg, s->mask, x, y, fillColor, s->baked, s->bakedKey);
 }
 
-void ColonyEngine::drawAnimationImage(Image *img, Image *mask, int x, int y, uint32 fillColor) {
+void ColonyEngine::drawAnimationImage(Image *img, Image *mask, int x, int y, uint32 fillColor,
+		Graphics::Surface *&bakedCache, uint64 &bakedCacheKey) {
 	if (!img || !img->data)
 		return;
 
-	const bool useColor = (_hasMacColors && _renderMode == Common::kRenderMacintosh);
 	// Mac QuickDraw srcBic+srcOr rendering:
 	//   mask bit=1 -> opaque (part of sprite)
 	//   fg bit=1   -> ForeColor (black)
 	//   fg bit=0   -> BackColor (fillColor from BMColor)
 	// Mac B&W: same — fg bit=1 is black (0), fg bit=0 is white (15).
 	// DOS MetaWINDOW: OPPOSITE — fg bit=1 is white (15), fg bit=0 is black (0).
-	const bool isMacMode = (_renderMode == Common::kRenderMacintosh);
-	uint32 fgColor, bgColor;
+	const bool useColor = isMacColorMode();
+	const bool isMacMode = isMacRenderMode();
+
+	// Pixels written into the alpha-keyed RGBA cache. mask=0 → alpha 0
+	// (transparent), so drawSurface's alpha-blend skips them naturally.
+	const Graphics::PixelFormat fmt = _gfx->getPixelFormat();
+	const uint32 black = fmt.ARGBToColor(255, 0, 0, 0);
+	const uint32 white = fmt.ARGBToColor(255, 255, 255, 255);
+	const uint32 transparent = 0;
+
+	uint32 fgPixel, bgPixel;
 	if (useColor) {
-		fgColor = (uint32)0xFF000000;
-		bgColor = fillColor;
+		fgPixel = black;
+		bgPixel = fmt.ARGBToColor(255,
+			(fillColor >> 16) & 0xFF, (fillColor >> 8) & 0xFF, fillColor & 0xFF);
 	} else if (isMacMode) {
-		fgColor = 0;
-		bgColor = 15;
+		fgPixel = black;
+		bgPixel = white;
 	} else {
-		fgColor = 15;
-		bgColor = 0;
+		fgPixel = white;
+		bgPixel = black;
 	}
 
-	for (int iy = 0; iy < img->height; iy++) {
-		for (int ix = 0; ix < img->width; ix++) {
-			int byteIdx = iy * img->rowBytes + (ix / 8);
-			int bitIdx = 7 - (ix % 8);
-
-			bool maskSet = true;
-			if (mask && mask->data) {
-				int mByteIdx = iy * mask->rowBytes + (ix / 8);
-				int mBitIdx = 7 - (ix % 8);
-				maskSet = (mask->data[mByteIdx] & (1 << mBitIdx)) != 0;
-			}
-
-			if (!maskSet)
-				continue;
-
-			bool fgSet = (img->data[byteIdx] & (1 << bitIdx)) != 0;
-			uint32 color = fgSet ? fgColor : bgColor;
-
-			_gfx->setPixel(x + ix, y + iy, color);
+	const uint64 key = ((uint64)fgPixel << 32) | bgPixel;
+	if (!bakedCache || bakedCacheKey != key
+			|| bakedCache->w != img->width || bakedCache->h != img->height) {
+		if (bakedCache) {
+			bakedCache->free();
+			delete bakedCache;
 		}
+		bakedCache = new Graphics::Surface();
+		bakedCache->create(img->width, img->height, fmt);
+
+		uint32 *pixels = (uint32 *)bakedCache->getPixels();
+		for (int iy = 0; iy < img->height; iy++) {
+			const byte *fgRow = img->data + iy * img->rowBytes;
+			const byte *maskRow = (mask && mask->data) ? mask->data + iy * mask->rowBytes : nullptr;
+			uint32 *dst = pixels + iy * img->width;
+			for (int ix = 0; ix < img->width; ix++) {
+				const int bitIdx = 7 - (ix & 7);
+				const bool maskSet = !maskRow || ((maskRow[ix >> 3] & (1 << bitIdx)) != 0);
+				if (!maskSet) {
+					dst[ix] = transparent;
+					continue;
+				}
+				const bool fgSet = (fgRow[ix >> 3] & (1 << bitIdx)) != 0;
+				dst[ix] = fgSet ? fgPixel : bgPixel;
+			}
+		}
+		bakedCacheKey = key;
 	}
+
+	_gfx->drawSurface(bakedCache, x, y);
 }
 
 Image *ColonyEngine::loadImage(Common::SeekableReadStreamEndian &file) {
@@ -1178,6 +1585,9 @@ void ColonyEngine::handleTeleshowClick(int item) {
 }
 
 void ColonyEngine::handleKeypadClick(int item) {
+	if (item > 0 && item <= 12)
+		_sound->play(Sound::kDit);
+
 	if (item >= 1 && item <= 10) {
 		for (int i = 5; i >= 1; i--)
 			_animDisplay[i] = _animDisplay[i - 1];
@@ -1703,8 +2113,11 @@ void ColonyEngine::moveObject(int index) {
 		linked.push_back(index);
 	}
 
-	// Get initial mouse position and animation origin
-	Common::Point old = _system->getEventManager()->getMousePos();
+	// Get initial mouse position and animation origin. getMousePos() returns
+	// virtual-screen coords; with kSupportsArbitraryResolutions that's
+	// window pixels, but sprite xloc/yloc and _screenR are in engine-logical
+	// coords. Convert so drag deltas are in the same units as the sprites.
+	Common::Point old = eventMouseToLogical(_system->getEventManager()->getMousePos());
 	int ox = _screenR.left + (_screenR.width() - 416) / 2;
 	ox = (ox / 8) * 8;
 	int oy = _screenR.top + (_screenR.height() - 264) / 2;
@@ -1781,7 +2194,7 @@ void ColonyEngine::moveObject(int index) {
 		if (!buttonDown)
 			break;
 
-		Common::Point cur = _system->getEventManager()->getMousePos();
+		Common::Point cur = eventMouseToLogical(_system->getEventManager()->getMousePos());
 		int dx = cur.x - old.x;
 		int dy = cur.y - old.y;
 

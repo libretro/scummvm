@@ -29,8 +29,6 @@
 
 namespace Freescape {
 
-namespace {
-
 const int kAmigaGemdosHeaderSize = 0x1C;
 
 int amigaProgToFile(int address) {
@@ -109,8 +107,6 @@ void decodeMaskedAmigaSprite(Common::SeekableReadStream *file, Graphics::Managed
 	}
 }
 
-} // namespace
-
 void DarkEngine::loadAssetsAmigaFullGame() {
 	Common::File file;
 	file.open("0.drk");
@@ -174,7 +170,7 @@ void DarkEngine::loadAssetsAmigaFullGame() {
 	loadPalettes(stream, 0x2e528);
 	loadGlobalObjects(stream, 0x30f0 - 50, 24);
 	loadMessagesVariableSize(stream, 0x3d37, 66);
-	loadSoundsFx(stream, 0x34738 + 2, 11);
+	_sound = loadSoundsFx(stream, 0x34738 + 2, 11);
 
 	// Load HDSMUSIC.AM music data (Wally Beben custom engine)
 	// HDSMUSIC.AM is an embedded GEMDOS executable at stream offset $BA64

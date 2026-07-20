@@ -56,6 +56,7 @@ Hotspot::Hotspot(HotspotData *res): _pathFinder(this) {
 	_destX = res->startX;
 	_destY = res->startY;
 	_destHotspotId = 0;
+	_walkToHotspotId = 0;
 	_frameWidth = res->width;
 	_frameStartsUsed = false;
 	_height = res->height;
@@ -101,6 +102,7 @@ Hotspot::Hotspot(Hotspot *character, uint16 objType): _pathFinder(this) {
 	_override = nullptr;
 	_colorOffset = 0;
 	_destHotspotId = character->hotspotId();
+	_walkToHotspotId = 0;
 	_blockedOffset = 0;
 	_exitCtr = 0;
 	_voiceCtr = 0;
@@ -172,6 +174,7 @@ Hotspot::Hotspot(): _pathFinder(nullptr) {
 	_override = nullptr;
 	_colorOffset = 0;
 	_destHotspotId = 0;
+	_walkToHotspotId = 0;
 	_blockedOffset = 0;
 	_exitCtr = 0;
 	_voiceCtr = 0;
@@ -492,6 +495,7 @@ void Hotspot::walkTo(int16 endPosX, int16 endPosY, uint16 destHotspot) {
 	_destX = endPosX;
 	_destY = endPosY;
 	_destHotspotId = destHotspot;
+	_walkToHotspotId = 0;
 	currentActions().addFront(START_WALKING, _roomNumber);
 }
 
@@ -606,6 +610,7 @@ void Hotspot::setRandomDest() {
 	else
 		currentActions().top().setAction(START_WALKING);
 	_walkFlag = true;
+	setWalkToHotspot(0);
 
 	// Try up to 20 times to find an unoccupied destination
 	for (int tryCtr = 0; tryCtr < 20; ++tryCtr) {
@@ -1100,6 +1105,7 @@ bool Hotspot::characterWalkingCheck(uint16 id) {
 	int16 xp, yp;
 	bool altFlag;
 	HotspotData *hotspot;
+	uint16 walkToHotspotId = 0;
 
 	// Note that several invalid hotspot Ids are used to identify special walk to
 	// coordinates used throughout the game
@@ -1137,6 +1143,7 @@ bool Hotspot::characterWalkingCheck(uint16 id) {
 			yp = hotspot->walkY & 0x7fff;
 			altFlag = (hotspot->walkY & 0x8000) != 0;
 		}
+		walkToHotspotId = id;
 		break;
 	}
 
@@ -1146,6 +1153,7 @@ bool Hotspot::characterWalkingCheck(uint16 id) {
 			((((y() + heightCopy()) >> 3) - 1) != (yp >> 3))) {
 			// Walk to the specified destination
 			walkTo(xp, yp);
+			setWalkToHotspot(walkToHotspotId);
 			return true;
 		} else {
 			return false;
@@ -1156,6 +1164,7 @@ bool Hotspot::characterWalkingCheck(uint16 id) {
 	if ((ABS(x() - xp) >= 8) ||
 		(ABS(y() + heightCopy() - yp - 1) >= 19)) {
 		walkTo(xp, yp);
+		setWalkToHotspot(walkToHotspotId);
 		return true;
 	}
 
@@ -1712,8 +1721,14 @@ void Hotspot::doTalkTo(HotspotData *hotspot) {
 		}
 	}
 
+	// Only start a conversation if the character actually has one defined for the
+	// current talk index.
+	uint16 talkId = getTalkId(hotspot);
+	if (talkId == 0)
+		return;
+
 	// Start talking with character
-	startTalk(hotspot, getTalkId(hotspot));
+	startTalk(hotspot, talkId);
 }
 
 void Hotspot::doTell(HotspotData *hotspot) {
@@ -3636,13 +3651,6 @@ void HotspotTickHandlers::talkAnimHandler(Hotspot &h) {
 			responseNumber = Script::execute(_talkResponse->preSequenceId);
 			debugC(ERROR_DETAILED, kLureDebugAnimations, "Character response new response = %d",
 				responseNumber);
-
-			// FIXME: Fix for resetting the character being talked to
-			// after talking to Goewin whilst transformed
-			if (_talkResponse->preSequenceId == 10902) {
-				HotspotData *character = res.getHotspot(PLAYER_ID);
-				character->talkDestCharacterId = 0;
-			}
 		} while (responseNumber != TALK_RESPONSE_MAGIC_ID);
 
 		descId = _talkResponse->descId;
@@ -3706,7 +3714,12 @@ void HotspotTickHandlers::talkEndConversation() {
 	Hotspot *charHotspot = res.getActiveHotspot(talkDestCharacter);
 	assert(charHotspot);
 
-	res.getActiveHotspot(PLAYER_ID)->setTickProc(PLAYER_TICK_PROC_ID);
+	Hotspot *player = res.getActiveHotspot(PLAYER_ID);
+	player->setTickProc(PLAYER_TICK_PROC_ID);
+
+	// Clear the player's talk destination now that the conversation is over.
+	player->resource()->talkDestCharacterId = 0;
+
 	charHotspot->setUseHotspotId(0);
 	charHotspot->resource()->talkerId = 0;
 	charHotspot->setDelayCtr(24);
@@ -4130,6 +4143,21 @@ void HotspotTickHandlers::npcRoomChange(Hotspot &h) {
 		destRoom = h.currentActions().top().roomNumber();
 	RoomExitCoordinates &coords = res.coordinateList().getEntry(srcRoom);
 	RoomExitCoordinateData &exitData = coords.getData(destRoom);
+
+	// If the routing to an intermediate next-hop room leads straight back to srcRoom,
+	// the target is unreachable (routing cycle); give up and stay put in the current room.
+	uint16 nextHop = exitData.roomNumber & 0xff;
+	if ((nextHop != 0) && (nextHop != destRoom)) {
+		RoomExitCoordinates &nextHopCoords = res.coordinateList().getEntry(nextHop);
+		RoomExitCoordinateData &nextHopExitData = nextHopCoords.getData(destRoom);
+		uint16 backHop = nextHopExitData.roomNumber & 0xff;
+
+		if (backHop == srcRoom) {
+			h.currentActions().top().setRoomNumber(h.roomNumber());
+			h.setExitCtr(0);
+			return;
+		}
+	}
 
 	if (h.hotspotId() != RATPOUCH_ID) {
 		// Count up the number of characters in the room

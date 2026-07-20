@@ -1,3 +1,24 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.scummvm.scummvm;
 
 import android.content.Context;
@@ -26,6 +47,7 @@ public class LedView extends View {
 		this(context, true, DEFAULT_LED_COLOR);
 	}
 
+	@SuppressWarnings("unused")
 	public LedView(Context context, boolean state) {
 			this(context, state, DEFAULT_LED_COLOR);
 	}
@@ -45,6 +67,7 @@ public class LedView extends View {
 		init(context, attrs, defStyleAttr, 0);
 	}
 
+	@SuppressWarnings("unused")
 	@RequiresApi(android.os.Build.VERSION_CODES.LOLLIPOP)
 	public LedView(
 		Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
@@ -53,17 +76,13 @@ public class LedView extends View {
 	}
 
 	private void init(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
-		TypedArray a = context.getTheme().obtainStyledAttributes(
+		try (TypedArray a = context.getTheme().obtainStyledAttributes(
 			attrs,
 			R.styleable.LedView,
-			defStyleAttr, defStyleRes);
-
-		try {
+			defStyleAttr, defStyleRes)) {
 			_state = a.getBoolean(R.styleable.LedView_state, true);
 			int color = a.getColor(R.styleable.LedView_color, DEFAULT_LED_COLOR);
 			init(color);
-		} finally {
-			a.recycle();
 		}
 	}
 

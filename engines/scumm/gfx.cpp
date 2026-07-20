@@ -33,7 +33,7 @@
 #include "scumm/he/wiz_he.h"
 #include "scumm/util.h"
 
-#ifdef USE_ARM_GFX_ASM
+#if defined(USE_ARM_GFX_ASM)
 
 #ifndef IPHONE
 #define asmDrawStripToScreen _asmDrawStripToScreen
@@ -43,6 +43,12 @@
 extern "C" void asmDrawStripToScreen(int height, int width, void const* text, void const* src, byte* dst,
 	int vsPitch, int vmScreenWidth, int textSurfacePitch);
 extern "C" void asmCopy8Col(byte* dst, int dstPitch, const byte* src, int height, uint8 bitDepth);
+
+#elif defined(USE_M68K_GFX_ASM)
+
+extern "C" void asmDrawStripToScreen(int height, int width, const uint32 *src32, uint32 *dst32, int vsPitch,
+		const uint32 *text32, const int textPitch);
+
 #endif /* USE_ARM_GFX_ASM */
 
 namespace Scumm {
@@ -732,6 +738,9 @@ void ScummEngine::drawStripToScreen(VirtScreen *vs, int x, int width, int top, i
 
 			const uint32 *text32 = (const uint32 *)text;
 			const int textPitch = (_textSurface.pitch - width * m) >> 2;
+#ifdef USE_M68K_GFX_ASM
+			asmDrawStripToScreen(height * m, width * m, src32, dst32, vsPitch, text32, textPitch);
+#else
 			for (int h = height * m; h > 0; --h) {
 				for (int w = width * m; w > 0; w -= 4) {
 					uint32 temp = *text32++;
@@ -754,7 +763,8 @@ void ScummEngine::drawStripToScreen(VirtScreen *vs, int x, int width, int top, i
 				src32 += vsPitch;
 				text32 += textPitch;
 			}
-#endif
+#endif // USE_M68K_GFX_ASM
+#endif // USE_ARM_GFX_ASM
 		}
 		src = _compositeBuf;
 		pitch = width * vs->format.bytesPerPixel;
@@ -1390,18 +1400,8 @@ static void fill(byte *dst, int dstPitch, uint16 color, int w, int h, uint8 bitD
 #else
 
 static void copy8Col(byte *dst, int dstPitch, const byte *src, int height, uint8 bitDepth) {
-
 	do {
-#if defined(SCUMM_NEED_ALIGNMENT)
 		memcpy(dst, src, 8 * bitDepth);
-#else
-		((uint32 *)dst)[0] = ((const uint32 *)src)[0];
-		((uint32 *)dst)[1] = ((const uint32 *)src)[1];
-		if (bitDepth == 2) {
-			((uint32 *)dst)[2] = ((const uint32 *)src)[2];
-			((uint32 *)dst)[3] = ((const uint32 *)src)[3];
-		}
-#endif
 		dst += dstPitch;
 		src += dstPitch;
 	} while (--height);
@@ -1411,23 +1411,10 @@ static void copy8Col(byte *dst, int dstPitch, const byte *src, int height, uint8
 
 static void clear8Col(byte *dst, int dstPitch, int height, uint8 bitDepth) {
 	do {
-#if defined(SCUMM_NEED_ALIGNMENT)
 		if (g_scumm->_game.platform == Common::kPlatformNES)
 			memset(dst, 0x1d, 8 * bitDepth);
 		else
 			memset(dst, 0, 8 * bitDepth);
-#else
-		if (g_scumm->_game.platform == Common::kPlatformNES) {
-			memset(dst, 0x1d, 8 * bitDepth);
-		} else {
-			((uint32*)dst)[0] = 0;
-			((uint32*)dst)[1] = 0;
-			if (bitDepth == 2) {
-				((uint32*)dst)[2] = 0;
-				((uint32*)dst)[3] = 0;
-			}
-		}
-#endif
 		dst += dstPitch;
 	} while (--height);
 }
@@ -1754,6 +1741,11 @@ void ScummEngine::moveScreen(int dx, int dy, int height) {
 		screen->fillRect(Common::Rect(0, 0, screen->pitch, _macScreenDrawOffset * 2), 0);
 		screen->fillRect(Common::Rect(0, screen->h - _macScreenDrawOffset * 2, screen->pitch, screen->h), 0);
 	} else {
+		if (_enableEGADithering) {
+			dx <<= 1;
+			dy <<= 1;
+			height <<= 1;
+		}
 		screen->move(dx, dy, height);
 	}
 
@@ -4815,13 +4807,11 @@ void ScummEngine::scrollEffect(int dir) {
 		delay *= 10;
 	}
 
-	byte *src;
+	const byte *src;
 	int m = _textSurfaceMultiplier;
 
 	if (m == 1 && _game.platform == Common::kPlatformMacintosh && _macScreen)
 		m = 2;
-
-	int vsPitch = vs->pitch;
 
 	switch (dir) {
 	case 0:
@@ -4836,13 +4826,21 @@ void ScummEngine::scrollEffect(int dir) {
 #endif
 			{
 				src = vs->getPixels(0, y - step);
+				int vsPitch = vs->pitch;
 				if (_macScreen) {
 					mac_drawBufferToScreen(src, vsPitch, 0, (vs->h - step), vs->w, step, false);
 				} else {
-					_system->copyRectToScreen(src,
-											  vsPitch * m,
-											  0, (vs->h - step) * m,
-											  vs->w * m, step * m);
+					int wd = vs->w;
+					int ht = step;
+					int tx = 0;
+					int ty = vs->h - step;
+
+					if (_enableEGADithering) {
+						memcpy(_compositeBuf, src, ht * vsPitch);
+						src = ditherVGAtoEGA(vsPitch, tx, ty, wd, ht);
+					}
+
+					_system->copyRectToScreen(src, vsPitch * m, tx, ty * m, wd, ht * m);
 				}
 			}
 
@@ -4862,14 +4860,21 @@ void ScummEngine::scrollEffect(int dir) {
 #endif
 			{
 				src = vs->getPixels(0, vs->h - y);
-
+				int vsPitch = vs->pitch;
 				if (_macScreen) {
 					mac_drawBufferToScreen(src, vsPitch, 0, 0, vs->w, step, false);
 				} else {
-					_system->copyRectToScreen(src,
-											  vsPitch * m,
-											  0, 0,
-											  vs->w * m, step * m);
+					int wd = vs->w;
+					int ht = step;
+					int tx = 0;
+					int ty = 0;
+
+					if (_enableEGADithering) {
+						memcpy(_compositeBuf, src, ht * vsPitch);	
+						src = ditherVGAtoEGA(vsPitch, tx, ty, wd, ht);
+					}
+
+					_system->copyRectToScreen(src, vsPitch * m, 0, 0, wd * m, ht * m);
 				}
 			}
 
@@ -4889,10 +4894,24 @@ void ScummEngine::scrollEffect(int dir) {
 #endif
 			{
 				src = vs->getPixels(x - step, 0);
+				int vsPitch = vs->pitch;
 				if (_macScreen) {
 					mac_drawBufferToScreen(src, vsPitch, (vs->w - step), 0, step, vs->h, false);
 				} else {
-					_system->copyRectToScreen(src, vsPitch * m, (vs->w - step) * m, 0, step * m, vs->h * m);
+					int wd = step;
+					int ht = vs->h;
+					int tx = vs->w - step;
+					int ty = 0;
+
+					if (_enableEGADithering) {
+						for (int ii = 0; ii < ht; ++ii) {
+							memcpy(_compositeBuf + ii * wd, src, wd);
+							src += vsPitch;
+						}
+						src = ditherVGAtoEGA(vsPitch, tx, ty, wd, ht);
+					}
+
+					_system->copyRectToScreen(src, vsPitch * m, tx * m, 0, wd * m, ht * m);
 				}
 			}
 			waitForTimer(delay, true);
@@ -4911,10 +4930,24 @@ void ScummEngine::scrollEffect(int dir) {
 #endif
 			{
 				src = vs->getPixels(vs->w - x, 0);
+				int vsPitch = vs->pitch;
 				if (_macScreen) {
 					mac_drawBufferToScreen(src, vsPitch, 0, 0, step, vs->h, false);
 				} else {
-					_system->copyRectToScreen(src, vsPitch * m, 0, 0, step * m, vs->h * m);
+					int wd = step;
+					int ht = vs->h;
+					int tx = 0;
+					int ty = 0;
+
+					if (_enableEGADithering) {
+						for (int ii = 0; ii < ht; ++ii) {
+							memcpy(_compositeBuf + ii * wd, src, wd);
+							src += vsPitch;
+						}
+						src = ditherVGAtoEGA(vsPitch, tx, ty, wd, ht);
+					}
+
+					_system->copyRectToScreen(src, vsPitch * m, 0, 0, wd * m, ht * m);
 				}
 			}
 
@@ -4958,9 +4991,11 @@ void ScummEngine::updateScreenShakeEffect() {
 	if (!_shakeNextTick)
 		_shakeNextTick = now;
 
+	int multiplier = (_enableEGADithering ? 2 : 1) * _textSurfaceMultiplier;
+
 	while (now >= _shakeNextTick) {
 		_shakeFrame = (_shakeFrame + 1) % NUM_SHAKE_POSITIONS;
-		_system->setShakePos(0, -shake_positions[_shakeFrame] * _textSurfaceMultiplier);
+		_system->setShakePos(0, -shake_positions[_shakeFrame] * multiplier);
 		// In DOTT (and probably all other imuse games) this runs on the imuse timer which is a PIT 0 Timer at 291.304 Hz.
 		// Apparently it is the same timer setting for all sound drivers although it is set up not in the main executable
 		// but inside each respective ims driver during the driver load/init process. The screen shakes update every 8 ticks.

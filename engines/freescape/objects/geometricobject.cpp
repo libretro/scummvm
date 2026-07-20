@@ -268,6 +268,7 @@ Object *GeometricObject::duplicate() {
 	);
 
 	copy->_cyclingColors = _cyclingColors;
+	copy->_loadIndex = _loadIndex;
 	return copy;
 }
 
@@ -488,6 +489,21 @@ void GeometricObject::setColor(uint idx, int color) {
 	assert(_colours);
 	assert(idx < _colours->size());
 	(*_colours)[idx] = color;
+}
+
+bool GeometricObject::isFullyTransparent() const {
+	if (!_colours || _colours->size() == 0)
+		return false;
+
+	for (uint i = 0; i < _colours->size(); i++) {
+		if ((*_colours)[i] != 0)
+			return false;
+
+		if (_ecolours && i < _ecolours->size() && (*_ecolours)[i] != 0)
+			return false;
+	}
+
+	return true;
 }
 
 } // End of namespace Freescape

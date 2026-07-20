@@ -26,6 +26,7 @@
 #include "access/resources.h"
 #include "access/amazon/amazon_player.h"
 #include "access/martian/martian_player.h"
+#include "access/noctropolis/noctropolis_player.h"
 
 namespace Access {
 
@@ -37,6 +38,9 @@ Player *Player::init(AccessEngine *vm) {
 	case kGameMartianMemorandum:
 		vm->_playerDataCount = 10;
 		return new Martian::MartianPlayer(vm);
+	case kGameNoctropolis:
+		vm->_playerDataCount = 0;
+		return new Noctropolis::NoctropolisPlayer(vm);
 	default:
 		vm->_playerDataCount = 8;
 		return new Player(vm);
@@ -110,7 +114,7 @@ void Player::load() {
 	_walkOffDL = new Common::Point[dataCount];
 
 	// NOTE: Although the values get set here to Amazon defaults, they are overridden
-	// in both AmazonPlayer and MartianPlayer load() functions.
+	// in all the sub-class load() functions.
 	_playerOffset.x = _vm->_screen->_scaleTable1[25];
 	_playerOffset.y = _vm->_screen->_scaleTable1[67];
 	_leftDelta = -3;
@@ -132,25 +136,41 @@ void Player::load() {
 
 	_playerSprites = _playerSprites1;
 	if (_manPal1) {
-		// Those values are from MM as Amazon doesn't use it
-		Common::copy(_manPal1 + 0x2A0, _manPal1 + 0x2A0 + 0x42, _vm->_screen->_manPal);
+		if (_vm->getGameID() == kGameNoctropolis) {
+			//if (_vm->_room->_roomFlag & kRoomFlagStiletto) {
+			//	Common::copy(_manPal1 + 0x1e0, _manPal1 + 0x1e0 + 99, _vm->_screen->_stilPal);
+			//}
+			Common::copy(_manPal1 + 0x240, _manPal1 + 0x240 + 0x84, _vm->_screen->_manPal);
+		} else {
+			// Those values are from MM as Amazon doesn't use it
+			Common::copy(_manPal1 + 0x2A0, _manPal1 + 0x2A0 + 0x42, _vm->_screen->_manPal);
+		}
 	} else {
-		Common::fill(_vm->_screen->_manPal, _vm->_screen->_manPal + 0x60, 0);
+		Common::fill(_vm->_screen->_manPal, _vm->_screen->_manPal + 0x84, 0);
 	}
 }
 
-void Player::loadTexPalette() {
-	Resource *texPal = _vm->_files->loadFile("TEXPAL.COL");
-	int size = texPal->_size;
+void Player::loadPalResource(Resource *pal) {
+	int size = pal->_size;
 	assert(size == 768);
 	_manPal1 = new byte[size];
-	memcpy(_manPal1, texPal->data(), size);
+	memcpy(_manPal1, pal->data(), size);
+}
+
+void Player::loadTexPalette() {
+	Resource *pal = _vm->_files->loadRawFile("TEXPAL.COL");
+	loadPalResource(pal);
+	delete pal;
+}
+
+void Player::loadNoctPalette(int fileNum, int subFile) {
+	Resource *pal = _vm->_files->loadFile(fileNum, subFile);
+	loadPalResource(pal);
+	delete pal;
 }
 
 void Player::loadSprites(const Common::Path &name) {
-	freeSprites();
-
-	Resource *data = _vm->_files->loadFile(name);
+	Resource *data = _vm->_files->loadRawFile(name);
 
 #if 0
 	Common::DumpFile *outFile = new Common::DumpFile();
@@ -738,7 +758,10 @@ void Player::plotCom1() {
 
 void Player::plotCom2() {
 	// WORKAROUND: Amazon has at least one cutscene with the player not properly turned off
-	if (!_playerOff && _spritesPtr != nullptr) {
+	if (_playerOff)
+		return;
+
+	if (_spritesPtr != nullptr) {
 		ImageEntry ie = *this;
 		if (!isMMHover()) {
 			_vm->_images.addToList(ie);

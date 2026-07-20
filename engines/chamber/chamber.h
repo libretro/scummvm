@@ -26,15 +26,16 @@
 #include "common/random.h"
 #include "common/serializer.h"
 #include "common/rendermode.h"
+#include "common/platform.h"
 #include "engines/engine.h"
-#include "gui/debugger.h"
+#include "chamber/renderer.h"
+
+struct ADGameDescription;
 
 namespace Audio {
 class SoundHandle;
 class PCSpeaker;
 }
-
-struct ADGameDescription;
 
 namespace Chamber {
 
@@ -47,15 +48,15 @@ enum CHAMBERActions {
 };
 
 class ChamberEngine : public Engine {
-private:
+public:
 	// We need random numbers
 	Common::RandomSource *_rnd;
 
-public:
 	ChamberEngine(OSystem *syst, const ADGameDescription *desc);
 	~ChamberEngine();
 
 	Common::Language getLanguage() const;
+	Common::Platform getPlatform() const;
 
 	Common::Error run() override;
 	Common::Error init();
@@ -82,6 +83,7 @@ public:
 	bool _prioritycommand_2;
 
 	Common::RenderMode _videoMode;
+	Common::RenderMode _renderMode;
 
 	byte *_pxiData;
 
@@ -98,6 +100,8 @@ public:
 
 	Audio::PCSpeaker *_speaker;
 
+	Renderer *_renderer = nullptr;
+
 private:
 	const ADGameDescription *_gameDescription;
 };
@@ -105,6 +109,12 @@ private:
 void init(void);
 
 extern ChamberEngine *g_vm;
+
+// Amiga shares the EGA planar 16-colour pipeline; graphics code branches on this
+inline bool isEgaLikeRenderer() {
+	return g_vm->_videoMode == Common::kRenderEGA ||
+	       g_vm->_videoMode == Common::kRenderAmiga;
+}
 
 } // End of namespace Chamber
 

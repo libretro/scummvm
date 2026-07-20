@@ -64,7 +64,8 @@ bool RIFXArchive::writeToFile(Common::String filename, Movie *movie) {
 	_size = getArchiveSize(builtResources);
 	saveFile->writeUint32LE(_metaTag); // The _metaTag is "RIFX" or "XFIR"
 
-	saveFile->writeUint32LE(getResourceSize(_metaTag, 0) - 8); // The size of the RIFX archive, except header and size
+	// We need to recompute the chunk size here, to accommodate any resournce changes
+	saveFile->writeUint32LE(getArchiveSize(builtResources) + 4);
 	saveFile->writeUint32LE(_rifxType);	// e.g. "MV93", "MV95"
 
 	switch (_rifxType) {
@@ -155,8 +156,8 @@ bool RIFXArchive::writeToFile(Common::String filename, Movie *movie) {
 			break;
 
 		case MKTAG('S', 'C', 'V', 'W'):
-			{
 
+			{
 				uint32 parentIndex = findParentIndex(it->tag, it->index);
 				Resource parent = castResMap[parentIndex];
 
@@ -189,6 +190,8 @@ bool RIFXArchive::writeToFile(Common::String filename, Movie *movie) {
 	} else {
 		warning("RIFXArchive::writeStream: Error saving the file %s", saveFileName.c_str());
 	}
+	// Add to search index
+	((SavedArchive *)SearchMan.getArchive(kSavedFilesArchive))->_addFile(saveFileName);
 
 	delete saveFile;
 	for (auto it : builtResources) {
@@ -276,13 +279,15 @@ bool RIFXArchive::writeAfterBurnerMap(Common::SeekableWriteStream *writeStream) 
 bool RIFXArchive::writeKeyTable(Common::SeekableWriteStream *writeStream, uint32 offset) {
 	writeStream->seek(offset);
 
+	uint32 numEntries = (getKeyTableResourceSize() - 12) / 12;
+
 	writeStream->writeUint32LE(MKTAG('K', 'E', 'Y', '*'));
-	writeStream->writeUint32LE(getResourceSize(MKTAG('K', 'E', 'Y', '*'), getResourceIDList(MKTAG('K', 'E', 'Y', '*'))[0]));
+	writeStream->writeUint32LE(getKeyTableResourceSize());
 
 	writeStream->writeUint16LE(_keyTableEntrySize);
 	writeStream->writeUint16LE(_keyTableEntrySize2);
-	writeStream->writeUint32LE(_keyTableEntryCount);
-	writeStream->writeUint32LE(_keyTableUsedCount);
+	writeStream->writeUint32LE(numEntries);
+	writeStream->writeUint32LE(numEntries);
 
 	debugC(3, kDebugSaving, "RIFXArchive::writeKeyTable: writing key table:");
 
@@ -600,7 +605,7 @@ Common::Array<Resource *> RIFXArchive::rebuildResources(Movie *movie) {
 	// Now that all sizes have been updated, we can safely calculate the overall archive size
 	for (auto &it : builtResources) {
 		if (it->tag == MKTAG('R', 'I', 'F', 'X') || it->tag == MKTAG('X', 'F', 'I', 'R')) {
-			it->size = getArchiveSize(builtResources) + 8;
+			it->size = getArchiveSize(builtResources) + 4;
 		}
 	}
 
@@ -691,17 +696,13 @@ uint32 RIFXArchive::findParentIndex(uint32 tag, uint16 index) {
 	return 0;
 }
 
-SavedArchive::SavedArchive(Common::String target) {
+SavedArchive::SavedArchive(const Common::String &target) {
+	_target = target;
 	Common::StringArray saveFileList = g_engine->getSaveFileManager()->listSavefiles(target + "-*");
 
 	debugC(3, kDebugLoading, "DirectorEngine:: loadSaveFiles: Loading save files");
-	for (auto saveFileName : saveFileList) {
-		// Derive the original file name from the save file name
-		// Save files are named target_name-save_filename
-		Common::String origFileName = saveFileName.substr(target.size() + 1);
-		debugC(3, kDebugLoading, "Found save file: %s -> %s", saveFileName.c_str(), origFileName.c_str());
-
-		_files[origFileName] = saveFileName;
+	for (auto &saveFileName : saveFileList) {
+		_addFile(saveFileName);
 	}
 }
 
@@ -732,7 +733,33 @@ Common::SeekableReadStream *SavedArchive::createReadStreamForMember(const Common
 	if (fDesc == _files.end())
 		return nullptr;
 
-	return g_engine->getSaveFileManager()->openForLoading(fDesc->_value);
+	// Buffer the save file data into memory.
+	// We have to do this because openForLoading will return a stream backed by a
+	// FSNode, and subsequently calling openForSaving on the same file will cause
+	// that stream to become completely empty. RIFXArchive::writeToFile needs to
+	// be able to read from that stream while saving!
+	Common::SeekableReadStream *stream = g_engine->getSaveFileManager()->openForLoading(fDesc->_value);
+	if (!stream)
+		return nullptr;
+
+	byte *data = (byte *)calloc(stream->size(), sizeof(byte));
+	stream->read(data, stream->size());
+	Common::MemoryReadStream *result = new Common::MemoryReadStream(data, stream->size(), DisposeAfterUse::YES);
+	delete stream;
+	return result;
+}
+
+bool SavedArchive::_addFile(const Common::String &fileName) {
+	// Derive the original file name from the save file name
+	// Save files are named target_name-save_filename
+	Common::String origFileName = fileName.substr(_target.size() + 1);
+	if (!_files.contains(origFileName)) {
+		debugC(3, kDebugLoading, "Found save file: %s -> %s", fileName.c_str(), fileName.c_str());
+
+		_files[origFileName] = fileName;
+		return true;
+	}
+	return false;
 }
 
 } // End of namespace Director

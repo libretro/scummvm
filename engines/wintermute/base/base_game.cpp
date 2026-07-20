@@ -1421,6 +1421,13 @@ bool BaseGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack
 
 		uint32 time = stack->pop()->getInt();
 
+		if (BaseEngine::instance().getGameId() == "sotv2") {
+			// script shifting sound position by -2998
+			// which cause issue with our sound stream.
+			// W/A shift forward by 2998
+			time += 2998;
+		}
+
 		if (DID_FAIL(setMusicStartTime(channel, time))) {
 			stack->pushBool(false);
 		} else {
@@ -1445,7 +1452,16 @@ bool BaseGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack
 		if (channel < 0 || channel >= NUM_MUSIC_CHANNELS || !_music[channel]) {
 			stack->pushInt(0);
 		} else {
-			stack->pushInt(_music[channel]->getPositionTime());
+			uint32 pos = _music[channel]->getPositionTime();
+			if (BaseEngine::instance().getGameId() == "sotv2") {
+				// when sound stream end, it's returning position as 0
+				// this confuse game script due position slider is slower
+				// get length of sound instead
+				if (pos == 0) {
+					pos = _music[channel]->getLength();
+				}
+			}
+			stack->pushInt(pos);
 		}
 		return STATUS_OK;
 	}
@@ -1544,6 +1560,16 @@ bool BaseGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack
 		_musicCrossfadeVolume2 = 100;
 
 		stack->pushBool(true);
+		return STATUS_OK;
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// IsMusicCrossfading
+	//////////////////////////////////////////////////////////////////////////
+	else if (strcmp(name, "IsMusicCrossfading") == 0) {
+		stack->correctParams(0);
+
+		stack->pushBool(_musicCrossfadeRunning);
 		return STATUS_OK;
 	}
 
@@ -2360,6 +2386,18 @@ bool BaseGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack
 	}
 
 	//////////////////////////////////////////////////////////////////////////
+	// PrepareScreenshot
+	//////////////////////////////////////////////////////////////////////////
+	else if (strcmp(name, "PrepareScreenshot") == 0) {
+		stack->correctParams(0);
+
+		// ignore method, it's used in 'J.U.L.I.A - Among the Stars'
+
+		stack->pushNULL();
+		return STATUS_OK;
+	}
+
+	//////////////////////////////////////////////////////////////////////////
 	// Screenshot
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "Screenshot") == 0) {
@@ -2669,7 +2707,13 @@ bool BaseGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack
 		stack->correctParams(0);
 		SAFE_DELETE(_cachedThumbnail);
 		_cachedThumbnail = new SaveThumbHelper(this);
-		if (DID_FAIL(_cachedThumbnail->storeThumbnail())) {
+		bool doFlip = false;
+
+		if (BaseEngine::instance().getGameId() == "barrowhilldp") {
+			doFlip = true;
+		}
+
+		if (DID_FAIL(_cachedThumbnail->storeThumbnail(doFlip))) {
 			SAFE_DELETE(_cachedThumbnail);
 			stack->pushBool(false);
 		} else {
@@ -2828,6 +2872,39 @@ bool BaseGame::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack
 		stack->pushNULL();
 
 		return STATUS_OK;
+	}
+	//////////////////////////////////////////////////////////////////////////
+	// SetGamma
+	// This is for game 'Oknytt'
+	//////////////////////////////////////////////////////////////////////////
+	else if (strcmp(name, "SetGamma") == 0) {
+		stack->correctParams(1);
+
+		int32 gamma = stack->pop()->getInt(0);
+
+#ifdef ENABLE_WME3D
+		if (_renderer3D)
+			_renderer3D->setGamma(gamma);
+#endif
+		stack->pushNULL();
+
+		return STATUS_OK;
+	}
+	//////////////////////////////////////////////////////////////////////////
+	// GetGamma
+	// This is for game 'Oknytt'
+	//////////////////////////////////////////////////////////////////////////
+	else if (strcmp(name, "GetGamma") == 0) {
+		stack->correctParams(0);
+
+		int32 gamma = 0;
+#ifdef ENABLE_WME3D
+		if (_renderer3D)
+			gamma = _renderer3D->getGamma();
+#endif
+		stack->pushInt(gamma);
+
+		return STATUS_OK;
 	} else {
 		return BaseObject::scCallMethod(script, stack, thisStack, name);
 	}
@@ -2929,6 +3006,15 @@ ScValue *BaseGame::scGetProperty(const char *name) {
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "ScreenHeight") == 0) {
 		_scValue->setInt(_renderer->getHeight());
+		return _scValue;
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// ScreenshotPrepared (RO)
+	//////////////////////////////////////////////////////////////////////////
+	else if (strcmp(name, "ScreenshotPrepared") == 0) {
+		// always true, it's used in 'J.U.L.I.A - Among the Stars'
+		_scValue->setBool(true);
 		return _scValue;
 	}
 
@@ -3676,7 +3762,11 @@ bool BaseGame::scSetProperty(const char *name, ScValue *value) {
 	// CursorHidden
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "CursorHidden") == 0) {
-		_cursorHidden = value->getBool();
+		// 'Night in the Fog' scripts hide cursor and suppose to unhide,
+		// unhide does not happen, so skip hidding
+		if (BaseEngine::instance().getGameId() != "nightinthefog") {
+			_cursorHidden = value->getBool();
+		}
 		return STATUS_OK;
 	} else {
 		return BaseObject::scSetProperty(name, value);

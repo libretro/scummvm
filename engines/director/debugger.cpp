@@ -273,7 +273,7 @@ bool Debugger::cmdVersion(int argc, const char **argv) {
 bool Debugger::cmdInfo(int argc, const char **argv) {
 	Movie *movie = g_director->getCurrentMovie();
 	Score *score = movie->getScore();
-	Archive *archive = movie->getArchive();
+	Archive *archive = movie->getArchive().get();
 	Cast *cast = movie->getCast();
 	debugPrintf("Movie path: %s\n", archive->getPathName().toString(g_director->_dirSeparator).c_str());
 	debugPrintf("Movie file size: %d\n", archive->getFileSize());
@@ -473,6 +473,7 @@ bool Debugger::cmdFuncs(int argc, const char **argv) {
 	debugPrintf("Shared cast functions:\n");
 	Cast *sharedCast = movie->getSharedCast();
 	if (sharedCast && sharedCast->_lingoArchive) {
+		debugPrintf("Movie: %s\n", sharedCast->getArchive()->getPathName().toString(g_director->_dirSeparator).c_str());
 		debugPrintf("%s", sharedCast->_lingoArchive->formatFunctionList("  ").c_str());
 	} else {
 		debugPrintf("  [empty]\n");
@@ -1054,7 +1055,7 @@ static void forceWindowRedraw(Window *window) {
 		return;
 
 	for (uint16 c = 0; c < score->_channels.size(); c++)
-		score->_channels[c]->_dirty = true;
+		score->_channels[c]->setDirty();
 }
 
 bool Debugger::cmdForceRedraw(int argc, const char **argv) {

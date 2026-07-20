@@ -1,4 +1,4 @@
-ScummVM 2026.2.1git
+ScummVM 2026.3.1git
 ================
 
 This is a port of ScummVM (https://www.scummvm.org), a program which allows you
@@ -13,8 +13,8 @@ New port?
 ---------
 
 Keith Scroggins (aka KeithS) has been providing ScummVM (and many other) builds
-for the Atari community for an unbelievable 17 years. He put quite a lot of time
-into testing each release, updating ScummVM dependencies to their latest
+for the Atari community for an unbelievable 17 years. He put quite a lot of
+time into testing each release, updating ScummVM dependencies to their latest
 versions and even regularly upgrading his compiler toolchain to get the best
 possible performance.
 
@@ -35,13 +35,13 @@ Differences between the versions
 --------------------------------
 
 After talking to Keith we have decided to provide three flavours of ScummVM.
-Please refer to https://docs.scummvm.org/en/v2026.2.1git/other_platforms/atari.html
+Please refer to https://docs.scummvm.org/en/v2026.3.1git/other_platforms/atari.html
 for more details (TBD).
 
 Atari Full package
 ~~~~~~~~~~~~~~~~~~
 
-Minimum hardware requirements: Atari Falcon with 4 + 64 MB RAM, 68040 CPU.
+Minimum hardware requirements: Atari Falcon with 4 + 32 MB RAM and 68040 CPU.
 
 - Because there is limited horsepower available on our platform, features like
   16bpp graphics, software synthesisers, scalers, real-time software
@@ -69,7 +69,9 @@ Minimum hardware requirements: Atari Falcon with 4 + 64 MB RAM, 68040 CPU.
 - Support for PC keys (page up, page down, pause, F11/F12, ...) and mouse wheel
   (Eiffel/Aranym only).
 
-- Native MIDI output (if present).
+- Native MIDI output.
+
+- Native CDDA support.
 
 - Runs also in Hatari and ARAnyM but in case of ARAnyM don't forget to disable
   fVDI to enable Videl output.
@@ -79,11 +81,12 @@ Minimum hardware requirements: Atari Falcon with 4 + 64 MB RAM, 68040 CPU.
 Atari Lite package
 ~~~~~~~~~~~~~~~~~~
 
-Minimum hardware requirements: Atari TT / Falcon with 4 + 32 MB RAM.
+Minimum hardware requirements: Atari TT / Falcon with 16 MB RAM.
 
-As a further optimisation step, a 030-only version of ScummVM is provided, aimed
-at less powerful TT and Falcon machines with the 68030 CPU. It further restricts
-features but also improves performance and reduces executable size.
+As a further optimisation step, a 030-only version of ScummVM is provided,
+aimed at less powerful TT and Falcon machines with the 68030 CPU. It
+further restricts features but also improves performance and reduces
+executable size.
 
 - Compiled with -m68030 => 68030/68882-specific optimisations enabled.
 
@@ -97,10 +100,14 @@ features but also improves performance and reduces executable size.
 
 - Overlay doesn't support alternative themes => faster loading time.
 
-- "null" music driver is automatically enabled (i.e. MIDI/OPL emulation is never
+- "stmidi" driver is automatically enabled (i.e. MIDI emulation is never used
+  but still allows playing speech/sfx samples and/or CD audio and/or native
+  MIDI music).
+
+- "null" music driver is automatically enabled (i.e. OPL emulation is never
   used but still allows playing speech/sfx samples and/or CD audio).
 
-- DOSBox OPL emulator is disabled => smaller executable size.
+- DOSBox and MAME OPL emulator is disabled => smaller executable size.
 
 FireBee package
 ~~~~~~~~~~~~~~~
@@ -154,17 +161,14 @@ the hardware connected:
 The lower the value, the faster the mixing but the worse the quality. The
 default is 22050 Hz in Full and 11025 Hz in Lite (16-bit, stereo), to natively
 support most (DOS/Windows) games that use these frequencies. On TT and Falcon
-systems without an external DSP clock, these frequencies are converted to
-19668 Hz and 9834 Hz, respectively. Note that you do not need to enter the exact
-value; it will be rounded automatically to the nearest suitable value.
+systems without an external DSP clock, these frequencies are adjusted to
+19668 Hz and 9834 Hz, respectively. Note that you do not need to enter
+the exact value; it will be rounded automatically to the nearest suitable
+value.
 
 "output_channels" in scummvm.ini: mono (1) or stereo (2) mixing. Please note
 that Falcon doesn't allow mixing in 16-bit mono, so this will have no effect on
 this machine.
-
-"print_rate" in scummvm.ini: used for optimising sample playback (where
-available). It prints input and output sample format as well as the name of the
-converter used. See below for details.
 
 "audio_buffer_size" in scummvm.ini: number of samples to preload. Default is
 2048 which equals to about 83ms of audio lag and seems to be about right for
@@ -173,6 +177,10 @@ most games on my CT60@66 MHz.
 If you want to play with "audio_buffer_size", the rule of thumb is: (lag in ms)
 = (audio_buffer_size / output_rate) * 1000. But it's totally OK just to double
 the samples value to get rid of stuttering in a heavier game.
+
+"gaudio" debug channel: used for optimising sample playback (where
+available). It prints input and output sample format as well as the name of the
+converter used. See below for details.
 
 
 Graphics modes
@@ -184,8 +192,9 @@ rectangles and this port offers the following options to render them:
 Direct rendering
 ~~~~~~~~~~~~~~~~
 
-This is direct writing of the pixels into the screen buffer. On SuperVidel it is
-done natively, on Videl a chunky to planar conversion takes place beforehand.
+This is direct writing of the pixels into the screen buffer. On
+SuperVidel it is done natively, on Videl a chunky to planar conversion
+takes place beforehand.
 
 Pros:
 
@@ -329,8 +338,8 @@ the same routines as X-SOUND.
 Performance considerations/pitfalls
 -----------------------------------
 
-It's important to understand what affects performance on our limited platform to
-avoid unpleasant gaming experiences.
+It's important to understand what affects performance on our limited
+platform to avoid unpleasant gaming experiences.
 
 Game engines with unexpected performance hit
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -374,9 +383,6 @@ good chunk of CPU time which could be utilised elsewhere. However, there are
 games which are fine with sampled music/speech even on a plain TT (e.g. Lands
 of Lore).
 
-Unfortunately, it is not possible to disable OPL emulation and still use native
-ST MIDI. You have to tweak the setting for each game.
-
 CD music slows everything down
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -402,14 +408,36 @@ music (and therefore avoiding the expensive synthesis emulation) but beware, it
 doesn't affect CD (*.wav) playback at all! Same applies for speech and sfx.
 
 The least amount of cycles is spent when:
-- "No music" as "Preferred device": This prevents MIDI/OPL synthesis of any kind.
+- "No music" as "Preferred device": This prevents MIDI/OPL synthesis of any
+  kind.
 - "output_rate" set to a DOS/Windows compatible value (default). Even if game
   uses 22050 Hz and your Falcon supports 22050 Hz, it is always faster to use
   11025 Hz!
 - "Subtitles" as "Text and speech": This prevents any sampled speech to be
   mixed.
-- All external audio files are deleted (typically *.wav); that way the mixer
-  won't have anything to mix. However beware, this is not allowed in every game!
+- All external audio files are deleted (typically *.wav) or sourced from audio
+  cd; that way the mixer won't have anything to mix. However beware, deleting
+  files is not supported by every game!
+
+CDDA (Audio CD) support
+~~~~~~~~~~~~~~~~~~~~~~~
+
+ScummVM has supported native audio cd playback for a long time. It is even
+enabled in the FireBee (SDL) build. However native support in the Atari builds
+has been added just recently. This feature can be used to free the audio mixer
+from loading, decoding and mixing game music with sound effects, leaving more
+CPU time for the engine itself.
+
+MetaDOS API allows mixing various components:
+
+- extendos.prg / metados.prg / betados.prg
+- hs-cdrom.bos (CD Tools) / spin_sd.bos (Spin!)
+- bd_9660f.dos (BetaDOS) / hs-iso.dos (CD Tools) / iso9660f.dos (MetaDOS) /
+  unidrive.dos (ExtenDOS)
+- cd.bos from ExtenDOS strictly requires unidrive.dos
+
+To speed things up you can copy data files from CD to hard disk and ignore the
+message box with advice about ripping tracks from CD.
 
 Sample rate
 ~~~~~~~~~~~
@@ -440,9 +468,13 @@ frequencies):
 - Any other combination: "interpolateConvert" (slowest).
 
 So how do you know which frequency to set as "output_rate" ? This is where
-"print_rate" comes to rescue. Enabling this option in scummvm.ini will tell you
-for each game which sample converters are being used and for what input/values.
-So you can easily verify whether the given game's demands match your setting.
+"gaudio" debug channel comes to rescue. Executing ScummVM as
+"scummvm.prg --debugflags=gaudio" will tell you for each game which sample
+converters are being used and for what input/values. So you can easily verify
+whether the given game's demands match your setting.
+
+Btw, you can use the same command line parameter for showing what MIDI mode is
+being used (Roland GS, MT-32, General MIDI), sometimes it is not very obvious.
 
 Unfortunately, currently per-game "output_rate" / "output_channels" is not
 possible but this may change in the future.
@@ -460,17 +492,9 @@ distributed with repackaged theme files with compression level zero.
 Changes to upstream
 -------------------
 
-There are a few features that have been disabled or changed and are not possible
-/ plausible to merge into upstream:
-
-- The aforementioned "print_rate" feature, too invasive for other platforms
-
-- This port contains an implementation of much faster tooltips in the overlay.
-  However, there is a minor rendering bug which sometimes corrupts the
-  background. But since its impact is huge, I left it in.
-
-- This port contains an experimental / pending optimisations to the SCUMM
-  engine and audio mixing. I'll try to get them merged in the next release.
+- This port contains experimental / pending optimisations to audio mixing
+  (https://github.com/scummvm/scummvm/pull/7385). I'll try to get them merged
+  in the next release.
 
 
 Known issues
@@ -514,6 +538,13 @@ Known issues
       https://bugs.scummvm.org/ticket/14790
     - This prevents adding the 15 MB ultima.dat to the release archive.
     - https://wiki.scummvm.org/index.php?title=Ultima
+  - Macintosh engines
+    - Director, Pink, WAGE: explicitly disabled
+    - MacVenture, MTropolis, Colony: implicitly disabled (due to unmet
+      dependencies)
+    - classicmacfonts.dat, macgui.dat: explicitly deleted
+    - SCUMM's mac versions: not supported (but compiled in)
+    - SCI's mac font support: not supported (but compiled in)
 
 - When using FreeMiNT, ScummVM requires a recent kernel (>= 2021), otherwise
   keyboard handling won't work properly.
@@ -521,22 +552,15 @@ Known issues
 - When using EmuTOS, ScummVM requires a recent release (>= 1.3), otherwise
   various screen- and sound-related issues may appear.
 
+- When using ExtenDOS for Audio CD, ScummVM requires a recent release (>= 4.11),
+  otherwise playback could freeze the whole program.
+
 Future plans
 ------------
 
 - DSP-based sample mixer (WAV, FLAC, MP2).
 
-- Avoid loading music/speech files (and thus slowing down everything) if muted.
-
-- Cached audio/video streams (i.e. don't load only "audio_buffer_size" number
-  of samples but cache, say, 1 second so disk i/o won't be so stressed).
-
-- Using Thorsten Otto's sharedlibs: https://tho-otto.de/sharedlibs.php for game
-  engine plugins to relieve the huge binary size.
-
-- True audio CD support via MetaDOS API.
-
-- OPL2LPT and Retrowave support (if I manage to purchase it somewhere).
+- Avoid decoding music/speech files (and thus slowing down everything) if muted.
 
 
 Closing words

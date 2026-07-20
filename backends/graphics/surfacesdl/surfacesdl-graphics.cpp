@@ -181,7 +181,8 @@ SurfaceSdlGraphicsManager::SurfaceSdlGraphicsManager(SdlEventSource *sdlEventSou
 	_overlayscreen(nullptr), _tmpscreen2(nullptr),
 	_screenChangeCount(0),
 	_mouseSurface(nullptr), _mouseScaler(nullptr),
-	_mouseOrigSurface(nullptr), _cursorDontScale(false), _cursorPaletteDisabled(true),
+	_mouseOrigSurface(nullptr), _cursorPaletteDisabled(true),
+	_cursorScaleX(0), _cursorScaleY(0),
 	_currentShakeXOffset(0), _currentShakeYOffset(0),
 	_paletteDirtyStart(0), _paletteDirtyEnd(0),
 	_screenIsLocked(false),
@@ -2115,7 +2116,7 @@ void SurfaceSdlGraphicsManager::copyRectToOverlay(const void *buf, int pitch, in
 #pragma mark --- Mouse ---
 #pragma mark -
 
-void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keyColor, bool dontScale, const Graphics::PixelFormat *format, const byte *mask, bool disableKeyColor) {
+void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keyColor, const Graphics::PixelFormat *format, const byte *mask, frac_t scaleX, frac_t scaleY, bool disableKeyColor) {
 
 	if (mask && (!format || format->bytesPerPixel == 1)) {
 		// 8-bit masked cursor, SurfaceSdl has no alpha mask support so we must convert this to color key
@@ -2155,7 +2156,7 @@ void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, 
 				maskedImage[i] = static_cast<byte>(bestKey);
 		}
 
-		setMouseCursor(&maskedImage[0], w, h, hotspotX, hotspotY, bestKey, dontScale, format, nullptr, disableKeyColor);
+		setMouseCursor(&maskedImage[0], w, h, hotspotX, hotspotY, bestKey, format, nullptr, scaleX, scaleY, disableKeyColor);
 		return;
 	}
 
@@ -2163,7 +2164,7 @@ void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, 
 		const uint numPixels = w * h;
 		const uint inBPP = format->bytesPerPixel;
 
-		Graphics::PixelFormat formatWithAlpha = Graphics::createPixelFormat<8888>();
+		Graphics::PixelFormat formatWithAlpha = Graphics::PixelFormat::createFormatRGBA32();
 
 		// Use the existing format if it already has alpha
 		if (format->aBits() > 0)
@@ -2206,7 +2207,7 @@ void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, 
 		}
 
 		// Disable the key color because SDL_SetColorKey ignores the alpha channel, which would make 0xFF000000 transparent
-		setMouseCursor(&maskedImage[0], w, h, hotspotX, hotspotY, 0, dontScale, &formatWithAlpha, nullptr, true);
+		setMouseCursor(&maskedImage[0], w, h, hotspotX, hotspotY, 0, &formatWithAlpha, nullptr, scaleX, scaleY, true);
 		return;
 	}
 
@@ -2241,7 +2242,8 @@ void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, 
 		keycolorChanged = true;
 	}
 
-	_cursorDontScale = dontScale;
+	_cursorScaleX = scaleX;
+	_cursorScaleY = scaleY;
 
 	if (_mouseCurState.w != (int)w || _mouseCurState.h != (int)h || formatChanged || !_mouseOrigSurface) {
 		_mouseCurState.w = w;
@@ -2346,8 +2348,8 @@ void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, 
 	blitCursor();
 }
 
-void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keyColor, bool dontScale, const Graphics::PixelFormat *format, const byte *mask) {
-	setMouseCursor(buf, w, h, hotspotX, hotspotY, keyColor, dontScale, format, mask, false);
+void SurfaceSdlGraphicsManager::setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keyColor, const Graphics::PixelFormat *format, const byte *mask, frac_t scaleX, frac_t scaleY) {
+	setMouseCursor(buf, w, h, hotspotX, hotspotY, keyColor, format, mask, scaleX, scaleY, false);
 }
 
 void SurfaceSdlGraphicsManager::blitCursor() {
@@ -2360,20 +2362,14 @@ void SurfaceSdlGraphicsManager::blitCursor() {
 
 	_cursorNeedsRedraw = true;
 
-	int cursorScale;
-	if (_cursorDontScale) {
-		// Don't scale the cursor at all if the user requests this behavior.
-		cursorScale = 1;
-	} else {
-		// Scale the cursor with the game screen scale factor.
-		cursorScale = _videoMode.scaleFactor;
-	}
+	frac_t cursorScaleX = _cursorScaleX == 0 ? static_cast<frac_t>(FRAC_ONE) : _videoMode.scaleFactor * _cursorScaleX;
+	frac_t cursorScaleY = _cursorScaleY == 0 ? static_cast<frac_t>(FRAC_ONE) : _videoMode.scaleFactor * _cursorScaleY;
 
 	// Adapt the real hotspot according to the scale factor.
-	int rW = w * cursorScale;
-	int rH = h * cursorScale;
-	_mouseCurState.rHotX = _mouseCurState.hotX * cursorScale;
-	_mouseCurState.rHotY = _mouseCurState.hotY * cursorScale;
+	int rW = fracToInt(w * cursorScaleX);
+	int rH = fracToInt(h * cursorScaleY);
+	_mouseCurState.rHotX = fracToInt(_mouseCurState.hotX * cursorScaleX);
+	_mouseCurState.rHotY = fracToInt(_mouseCurState.hotY * cursorScaleY);
 
 	// The virtual dimensions will be the same as the original.
 
@@ -2387,7 +2383,7 @@ void SurfaceSdlGraphicsManager::blitCursor() {
 	const int rH1 = rH;
 #endif
 
-	if (!_cursorDontScale && _videoMode.aspectRatioCorrection) {
+	if (!(_cursorScaleX == 0 && _cursorScaleY == 0) && _videoMode.aspectRatioCorrection) {
 		rH = real2Aspect(rH - 1) + 1;
 		_mouseCurState.rHotY = real2Aspect(_mouseCurState.rHotY);
 	}
@@ -2447,12 +2443,13 @@ void SurfaceSdlGraphicsManager::blitCursor() {
 	// If possible, use the same scaler for the cursor as for the rest of
 	// the game. This only works well with the non-blurring scalers so we
 	// otherwise use the Normal scaler
-	if (!_cursorDontScale) {
+	if (!(_cursorScaleX == 0 && _cursorScaleY == 0)) {
 #ifdef USE_SCALERS
 		// HACK: AdvMame4x requires a height of at least 4 pixels, so we
 		// fall back on the Normal scaler when a smaller cursor is supplied.
-		if (_mouseScaler && _scalerPlugin->canDrawCursor() && (uint)_mouseCurState.h >= _extraPixels) {
-			_mouseScaler->setFactor(_videoMode.scaleFactor);
+		if (_mouseScaler && _scalerPlugin->canDrawCursor() && (uint)_mouseCurState.h >= _extraPixels && cursorScaleX == cursorScaleY &&
+		    !((cursorScaleX | cursorScaleY) & FRAC_HALF) && _scalerPlugins[_videoMode.scalerIndex]->get<ScalerPluginObject>().hasFactor(fracToInt(cursorScaleX))) {
+			_mouseScaler->setFactor(fracToInt(cursorScaleX));
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 			const SDL_PixelFormatDetails *pixelFormatDetails = SDL_GetPixelFormatDetails(_mouseOrigSurface->format);
 			if (pixelFormatDetails == nullptr)
@@ -2476,12 +2473,12 @@ void SurfaceSdlGraphicsManager::blitCursor() {
 				error("getting pixel format details failed");
 			Graphics::scaleBlit((byte *)_mouseSurface->pixels, (const byte *)_mouseOrigSurface->pixels + _mouseOrigSurface->pitch * _maxExtraPixels + _maxExtraPixels * pixelFormatDetails->bytes_per_pixel,
 			                    _mouseSurface->pitch, _mouseOrigSurface->pitch,
-				                _mouseCurState.w * _videoMode.scaleFactor, _mouseCurState.h * _videoMode.scaleFactor,
+			                    _mouseCurState.rW, _mouseCurState.rH,
 			                    _mouseCurState.w, _mouseCurState.h, convertSDLPixelFormat(_mouseSurface->format));
 #else
 			Graphics::scaleBlit((byte *)_mouseSurface->pixels, (const byte *)_mouseOrigSurface->pixels + _mouseOrigSurface->pitch * _maxExtraPixels + _maxExtraPixels * _mouseOrigSurface->format->BytesPerPixel,
 			                    _mouseSurface->pitch, _mouseOrigSurface->pitch,
-				                _mouseCurState.w * _videoMode.scaleFactor, _mouseCurState.h * _videoMode.scaleFactor,
+			                    _mouseCurState.rW, _mouseCurState.rH,
 			                    _mouseCurState.w, _mouseCurState.h, convertSDLPixelFormat(_mouseSurface->format));
 #endif
 
@@ -2505,7 +2502,7 @@ void SurfaceSdlGraphicsManager::blitCursor() {
 	}
 
 #ifdef USE_ASPECT
-	if (!_cursorDontScale && _videoMode.aspectRatioCorrection)
+	if (!(_cursorScaleX == 0 && _cursorScaleY == 0) && _videoMode.aspectRatioCorrection)
 		stretch200To240Nearest((uint8 *)_mouseSurface->pixels, _mouseSurface->pitch, rW, rH1, 0, 0, 0, convertSDLPixelFormat(_mouseSurface->format));
 #endif
 
@@ -2525,6 +2522,8 @@ void SurfaceSdlGraphicsManager::undrawMouse() {
 	_mouseNextRect.y = virtualCursor.y + _gameScreenShakeYOffset;
 
 	if (!_overlayInGUI) {
+		// The game cursor rect is kept in virtual coordinates: drawMouse()
+		// scales and aspect-corrects it, so subtract the virtual hotspot here
 		_mouseNextRect.w = _mouseCurState.vW;
 		_mouseNextRect.h = _mouseCurState.vH;
 		_mouseNextRect.x -= _mouseCurState.vHotX;
@@ -2879,7 +2878,7 @@ void SurfaceSdlGraphicsManager::handleScalerHotkeys(uint mode, int factor) {
 	if (sizeChanged) {
 		// Forcibly resizing the window here since a user switching scaler
 		// size will not normally cause the window to update
-		_window->createOrUpdateWindow(_hwScreen->w, _hwScreen->h, _lastFlags);
+		_window->createOrUpdateWindow(_hwScreen->w, _hwScreen->h, _window->getWindowFlags());
 	}
 #endif
 

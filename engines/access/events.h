@@ -29,9 +29,20 @@
 namespace Access {
 
 enum CursorType {
+	// These names are for Amazon - Noctropolis uses a different order.
 	CURSOR_NONE = -1,
-	CURSOR_ARROW = 0, CURSOR_CROSSHAIRS, CURSOR_2, CURSOR_3, CURSOR_LOOK,
-	CURSOR_USE, CURSOR_TAKE, CURSOR_CLIMB, CURSOR_TALK, CURSOR_HELP,
+	CURSOR_ARROW = 0,
+	CURSOR_CROSSHAIRS = 1,
+	CURSOR_2 = 2,
+	CURSOR_3 = 3,
+	CURSOR_LOOK = 4,
+	CURSOR_USE = 5,
+	CURSOR_TAKE = 6,
+	CURSOR_CLIMB = 7,
+	CURSOR_TALK = 8,
+	CURSOR_HELP = 9,
+	CURSOR_NOCT_EXIT = 9,
+	CURSOR_DARK_ANKH = 10,
 	CURSOR_INVENTORY = 99
 };
 
@@ -57,6 +68,7 @@ private:
 	void nextTimer();
 	void keyControl(Common::KeyCode keycode, bool isKeyDown);
 	void actionControl(Common::CustomEventType action, bool isKeyDown);
+
 public:
 	CursorType _cursorId;
 	CursorType _normalMouse;
@@ -67,6 +79,7 @@ public:
 	int _mouseCol, _mouseRow;
 	bool _cursorExitFlag;
 	int _vbCount;
+	bool _interfaceOff;
 public:
 	/**
 	 * Constructor
@@ -143,6 +156,8 @@ public:
 
 	void debounceLeft();
 
+	void debounceRight();
+
 	void clearEvents();
 
 	void waitKeyActionMouse();
@@ -157,6 +172,13 @@ public:
 
 	void centerMousePos();
 	void restrictMouse();
+
+	static int16 clipMouseCenter(int16 mousePos, int16 length, int16 maxLength, int16 &warpMousePos);
+
+	/* get ms delay before considering something a double-click */
+	uint32 getDoubleClickTime() const;
+
+	uint32 getPriorFrameTime() const { return _priorFrameTime; }
 };
 
 } // End of namespace Access

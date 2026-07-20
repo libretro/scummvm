@@ -26,10 +26,12 @@
 
 namespace MediaStation {
 
+class ScreenActor;
+
 class ParameterClient {
 public:
-	ParameterClient() {};
-	virtual ~ParameterClient() {};
+	ParameterClient();
+	virtual ~ParameterClient();
 
 	virtual bool attemptToReadFromStream(Chunk &chunk, uint sectionType) = 0;
 };
@@ -39,7 +41,7 @@ enum DeviceOwnerSectionType {
 	kDeviceOwnerAllowMultipleStreams = 0x36,
 };
 
-class DeviceOwner : public ParameterClient {
+class ImtDeviceOwner : public ParameterClient {
 public:
 	virtual bool attemptToReadFromStream(Chunk &chunk, uint sectionType) override;
 
@@ -54,17 +56,17 @@ enum DocumentSectionType {
 };
 
 class Document : public ParameterClient {
+friend class Debugger;
+
 public:
 	virtual bool attemptToReadFromStream(Chunk &chunk, uint sectionType) override;
 	void readStartupInformation(Chunk &chunk);
 	void readContextLoadComplete(Chunk &chunk);
 
-	void beginTitle(uint overriddenEntryPointScreenId = 0);
+	void beginTitle();
 	void startContextLoad(uint contextId);
 	bool isContextLoadInProgress(uint contextId);
-	void branchToScreen();
-	void scheduleScreenBranch(uint screenActorId);
-	void scheduleContextRelease(uint contextId);
+	void branchToScreen(uint screenId, bool disableScreenAutoUpdate);
 
 	void streamDidClose(uint streamId);
 	void streamDidFinish(uint streamId);
@@ -73,20 +75,25 @@ public:
 	void streamDidOpen(uint streamId) {};
 	void streamWillRead(uint streamId) {};
 
-	void process();
 	uint contextIdForScreenActorId(uint screenActorId);
+	void addToContextLoadQueue(uint contextId);
+	void removeFromContextLoadQueue(uint contextId);
+	bool isContextLoadQueued(uint contextId);
+	void contextReleaseComplete(uint contextId);
+	void contextAlreadyReleased(uint contextId);
+
+	Common::String getDebugString();
 
 private:
 	uint _currentScreenActorId = 0;
 	StreamFeed *_currentStreamFeed = nullptr;
-	Common::Array<uint> _requestedContextReleaseId;
 	Common::Array<uint> _contextLoadQueue;
-	uint _requestedScreenBranchId = 0;
 	bool _entryPointScreenIdWasOverridden = false;
 	uint _entryPointScreenId = 0;
 	uint _entryPointStreamId = 0;
 	uint _loadingContextId = 0;
 	uint _loadingScreenActorId = 0;
+	uint _disabledScreenAutoUpdateToken = 0;
 
 	void contextLoadDidComplete();
 	void screenLoadDidComplete();
@@ -98,8 +105,6 @@ private:
 	void stopFeed();
 	void blowAwayCurrentScreen();
 	void preloadParentContexts(uint contextId);
-	void addToContextLoadQueue(uint contextId);
-	bool isContextLoadQueued(uint contextId);
 	void checkQueuedContextLoads();
 };
 

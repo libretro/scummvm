@@ -120,8 +120,8 @@ void RippedLetterPuzzle::readData(Common::SeekableReadStream &stream) {
 	stream.skip((maxWidth > width ? (maxHeight - height) * maxWidth : maxWidth * maxHeight - width * height) * elemSize);
 
 	if (g_nancy->getGameType() >= kGameTypeNancy9) {
-		uint16 numDoubledElements = stream.readUint16LE();
-		_doubles.resize(numDoubledElements);
+		uint16 numDoubledElements = stream.readUint16LE();	// 0 in Nancy 12
+		_doubles.resize(numDoubledElements > 0 ? numDoubledElements : 20);
 		uint i = 0;
 		for (uint j = 0; j < 20; ++j) {
 			int16 id = stream.readSint16LE();
@@ -215,6 +215,23 @@ void RippedLetterPuzzle::execute() {
 					hasLoadedProgress = true;
 					break;
 				}
+			}
+
+			// Traverse the order and rotations arrays to check if
+			// they have been initialized. If they haven't, they'll
+			// be full of zeroes, so there's no progress to continue,
+			// thus the arrays will need to be initialized normally.
+			if (hasLoadedProgress) {
+				bool arraysAreInitialized = false;
+				for (uint i = 0; i < loadedStateSize; ++i) {
+					if (_puzzleState->order[i] != 0 || _puzzleState->rotations[i] != 0) {
+						arraysAreInitialized = true;
+						break;
+					}
+				}
+
+				if (!arraysAreInitialized)
+					hasLoadedProgress = false;
 			}
 		}
 
@@ -422,7 +439,10 @@ void RippedLetterPuzzle::handleInput(NancyInput &input) {
 	if (_puzzleState->_pickedUpPieceID == -1) {
 		// No piece picked up, check the exit hotspot
 		if (NancySceneState.getViewport().convertViewportToScreen(_exitHotspot).contains(input.mousePos)) {
-			g_nancy->_cursor->setCursorType(_customCursorID != -1 ? (CursorManager::CursorType)_customCursorID : g_nancy->_cursor->_puzzleExitCursor);
+			if (_customCursorID != -1)
+				g_nancy->_cursor->setCursorType((CursorManager::CursorType)_customCursorID, true);
+			else
+				g_nancy->_cursor->setCursorType(g_nancy->_cursor->_puzzleExitCursor);
 
 			if (input.input & NancyInput::kLeftMouseButtonUp) {
 				// Player has clicked, exit

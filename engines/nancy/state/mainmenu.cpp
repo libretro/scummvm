@@ -84,7 +84,7 @@ void MainMenu::init() {
 	_background.init(_menuData->_imageName);
 	_background.registerGraphics();
 
-	g_nancy->_cursor->setCursorType(CursorManager::kNormalArrow);
+	g_nancy->_cursor->setCursorType(g_nancy->getGameType() >= kGameTypeNancy10 ? CursorManager::kHotspotArrow : CursorManager::kNormalArrow);
 	g_nancy->setMouseEnabled(true);
 
 	if (!g_nancy->_sound->isSoundPlaying("MSND")) {
@@ -104,19 +104,22 @@ void MainMenu::init() {
 
 	registerGraphics();
 
+	bool restoreAfterAd = ConfMan.hasKey("restore_after_ad", Common::ConfigManager::kTransientDomain);
+
 	// Disable continue if game was just started
 	// Perhaps could be enabled always, and just load the latest save?
 	if (!Scene::hasInstance()) {
-		_buttons[3]->setDisabled(true);
+		if (!restoreAfterAd) {
+			// Not returning to running game, disable Continue button
+			_buttons[3]->setDisabled(true);
+		}
 	} else {
 		if (NancySceneState.isRunningAd()) {
+			// We just returned from the ad to the main menu.
 			// Always destroy current state to make sure music starts again
 			NancySceneState.destroy();
 
-			if (ConfMan.hasKey("restore_after_ad", Common::ConfigManager::kTransientDomain)) {
-				// Returning to running game, restore second chance
-				ConfMan.setInt("save_slot", g_nancy->getMetaEngine()->getMaximumSaveSlot(), Common::ConfigManager::kTransientDomain);
-			} else {
+			if (!restoreAfterAd) {
 				// Not returning to running game, disable Continue button
 				_buttons[3]->setDisabled(true);
 			}
@@ -158,7 +161,7 @@ void MainMenu::run() {
 		}
 	}
 
-	g_nancy->_cursor->setCursorType(CursorManager::kNormalArrow);
+	g_nancy->_cursor->setCursorType(g_nancy->getGameType() >= kGameTypeNancy10 ? CursorManager::kHotspotArrow : CursorManager::kNormalArrow);
 }
 
 void MainMenu::stop() {
@@ -167,14 +170,45 @@ void MainMenu::stop() {
 		// Credits
 		g_nancy->setState(NancyState::kCredits);
 		break;
-	case 1:
+	case 1: {
 		// New Game
+		auto *sdlg = GetEngineData(SDLG);
+
+		if (sdlg && sdlg->dialogs.size() > 2 && Scene::hasInstance() && !g_nancy->_hasJustSaved) {
+			// nancy6+ warns before abandoning an in-progress game. Reuse the
+			// "load a new game without saving the current one" dialog.
+			if (!ConfMan.hasKey("sdlg_return", Common::ConfigManager::kTransientDomain)) {
+				// Request the dialog
+				ConfMan.setInt("sdlg_id", 2, Common::ConfigManager::kTransientDomain);
+				_destroyOnExit = false;
+				g_nancy->setState(NancyState::kSaveDialog);
+				break;
+			} else {
+				// Dialog has returned
+				_destroyOnExit = true;
+				g_nancy->_graphics->suppressNextDraw();
+				uint ret = ConfMan.getInt("sdlg_return", Common::ConfigManager::kTransientDomain);
+				ConfMan.removeKey("sdlg_return", Common::ConfigManager::kTransientDomain);
+
+				if (ret != 0) {
+					// "No" or "Cancel" keeps us in the main menu
+					_selected = -1;
+					clearButtonState();
+					_state = kRun;
+					break;
+				}
+
+				// "Yes" falls through to start a new game
+			}
+		}
+
 		if (Scene::hasInstance()) {
 			NancySceneState.destroy(); // Destroy the existing Scene and create a new one
 		}
 
 		g_nancy->setState(NancyState::kScene);
 		break;
+	}
 	case 2:
 		// Load and Save Game, TODO
 		g_nancy->setState(NancyState::kLoadSave);
@@ -198,7 +232,7 @@ void MainMenu::stop() {
 		break;
 	case 6:
 		// Exit Game
-		if (g_nancy->getEngineData("SDLG") && Nancy::State::Scene::hasInstance() && !g_nancy->_hasJustSaved) {
+		if (g_nancy->getEngineData("SDLG") && Scene::hasInstance() && !g_nancy->_hasJustSaved) {
 			if (!ConfMan.hasKey("sdlg_return", Common::ConfigManager::kTransientDomain)) {
 				// Request the "Do you want to save before quitting" dialog
 				ConfMan.setInt("sdlg_id", 0, Common::ConfigManager::kTransientDomain);
@@ -262,6 +296,7 @@ void MainMenu::stop() {
 			// overwrite it when selecting the ad button multiple times in a row.
 			if (!ConfMan.hasKey("restore_after_ad", Common::ConfigManager::kTransientDomain)) {
 				g_nancy->secondChance();
+				ConfMan.setInt("save_slot", g_nancy->getMetaEngine()->getMaximumSaveSlot(), Common::ConfigManager::kTransientDomain);
 			}
 
 			ConfMan.setBool("restore_after_ad", true, Common::ConfigManager::kTransientDomain);

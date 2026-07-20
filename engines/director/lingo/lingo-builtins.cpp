@@ -123,7 +123,7 @@ static const BuiltinProto builtins[] = {
 	// Control
 	{ "abort",			LB::b_abort,		0, 0, 400, CBLTIN },	//			D4 c
 	{ "cancelIdleLoad",	LB::b_cancelIdleLoad,1,1, 500, CBLTIN },	//				D5 c
-	{ "call",			LB::b_call,			-1,0, 600, CBLTIN },	// 					D6 c
+	{ "call",			LB::b_call,			-1,0, 600, HBLTIN },	// 					D6 c (also usable as function)
 	{ "callAncestor",	LB::b_callAncestor,	-1,0, 600, CBLTIN },	// 					D6 c
 	{ "continue",		LB::b_continue,		0, 0, 200, CBLTIN },	// D2 c
 	{ "dontPassEvent",	LB::b_dontPassEvent,0, 0, 200, CBLTIN },	// D2 c
@@ -146,7 +146,7 @@ static const BuiltinProto builtins[] = {
 	{ "quit",			LB::b_quit,			0, 0, 200, CBLTIN },	// D2 c
 	{ "restart",		LB::b_restart,		0, 0, 200, CBLTIN },	// D2 c
 	{ "return",			LB::b_return,		0, 1, 200, CBLTIN },	// D2 f
-	{ "send",			LB::b_call,			-1,0, 400, CBLTIN },	//			D4 c, undocumented
+	{ "send",			LB::b_call,			-1,0, 400, HBLTIN },	//			D4 c, undocumented (also usable as function)
 	{ "sendAncestor",	LB::b_callAncestor,	-1,0, 400, CBLTIN },	//			D4 c, undocumented
 	{ "shutDown",		LB::b_shutDown,		0, 0, 200, CBLTIN },	// D2 c
 	{ "startTimer",		LB::b_startTimer,	0, 0, 200, CBLTIN },	// D2 c
@@ -202,8 +202,8 @@ static const BuiltinProto builtins[] = {
 	{ "puppetTransition",LB::b_puppetTransition,-1,0,200, CBLTIN },	// D2 c
 	{ "ramNeeded",		LB::b_ramNeeded,	2, 2, 300, FBLTIN },	//		D3.1 f
 	{ "rollOver",		LB::b_rollOver,		0, 1, 200, FBLTIN },	// D2 f
-	{ "sendAllSprites",	LB::b_sendAllSprites,-1,0,600, CBLTIN },	// 					D6 c
-	{ "sendSprite",		LB::b_sendSprite,	-1,0, 600, CBLTIN },	// 					D6 c
+	{ "sendAllSprites",	LB::b_sendAllSprites,-1,0,600, HBLTIN },	// 					D6 c (also usable as function)
+	{ "sendSprite",		LB::b_sendSprite,	-1,0, 600, HBLTIN },	// 					D6 c (also usable as function)
 	{ "spriteBox",		LB::b_spriteBox,	5, 5, 200, CBLTIN },	// D2 c
 	{ "unLoad",			LB::b_unLoad,		0, 2, 300, CBLTIN },	//		D3.1 c
 	{ "unLoadCast",		LB::b_unLoadCast,	0, 2, 300, CBLTIN },	//		D3.1 c
@@ -376,7 +376,6 @@ static const BuiltinProto builtins[] = {
    pathName				//	D5
    preloadMode			//				D8
    selectiomn			//	D5
-   soundDevice			//			D7
    version				//	D5
 
    Movie properties:
@@ -633,7 +632,7 @@ void LB::b_integer(int nargs) {
 		//   put i & " = " & integer("12345" & numToChar(i))
 		// end repeat
 		if (endPtr && endPtr != src.c_str() && (
-			(*endPtr >= 0 && *endPtr < 45) ||
+			(*endPtr < 45) ||
 			(*endPtr == 47) ||
 			(*endPtr >= 58 && *endPtr < 65) ||
 			(*endPtr >= 91 && *endPtr < 95) ||
@@ -802,8 +801,8 @@ void LB::b_offset(int nargs) {
 		b_offsetRect(nargs);
 		return;
 	}
-	Common::String source = g_lingo->pop().asString();
-	Common::String target = g_lingo->pop().asString();
+	Common::String source = Common::U32String(g_lingo->pop().asString()).encode(g_director->getPlatformEncoding());
+	Common::String target = Common::U32String(g_lingo->pop().asString()).encode(g_director->getPlatformEncoding());
 
 	const char *str = d_strstr(source.c_str(), target.c_str());
 
@@ -832,11 +831,81 @@ void LB::b_value(int nargs) {
 		g_lingo->push(Datum(0));
 		return;
 	}
+
+	bool maybeExpression = false;
+
+	// First, let's check that it is a number
+	if (expr[0] == '-' || expr[0] == '+' || (expr[0] >= '0' && expr[0] <= '9') ||
+			(expr[0] == '.' && expr.size() > 1 && expr[1] >= '0' && expr[1] <= '9')) {
+		char *endPtr = nullptr;
+		double result = strtof(expr.c_str(), &endPtr);
+
+		// Maybe it is part of an expression?
+		if (endPtr && *endPtr) {
+			while (*endPtr && Common::isSpace(*endPtr))
+				endPtr++;
+
+			if (strchr("-+*/%^:,()><&|", *endPtr) != NULL) {
+				maybeExpression = true;
+			}
+		}
+
+		if (!maybeExpression) {
+			if (result < INT_MAX && floor(result) == result) {
+				g_lingo->push(Datum((int)result));
+			} else {
+				g_lingo->push(Datum(result));
+			}
+			return;
+		}
+	}
+
+	// Or maybe it is a string with quotes around it?
+	if (expr.size() >= 2 && expr[0] == '"') {
+		// scan for the end quote, ignoring escaped quotes
+		bool escaped = false;
+		size_t i;
+		for (i = 1; i < expr.size(); i++) {
+			if (expr[i] == '"' && !escaped) {
+				break;
+			}
+			escaped = (expr[i] == '\\' && !escaped);
+		}
+		if (i == expr.size()) {
+			// No closing quote found, push void
+			g_lingo->pushVoid();
+			return;
+		}
+
+		if (i + 1 < expr.size()) {
+			// There are extra characters after the closing quote, this is not a simple string
+			size_t j = i + 1;
+			while (expr[j] && Common::isSpace(expr[j]))
+				j++;
+
+			if (strchr("&", expr[j]) != NULL) {
+				maybeExpression = true;
+			}
+		}
+
+		if (!maybeExpression) {
+			g_lingo->push(expr.substr(1, i - 1));
+			return;
+		}
+	}
+
+	// There is no simple way, feed it to the Lingo parser
+
 	Common::String code = "return " + expr;
 	// Compile the code to an anonymous function and call it
 	ScriptContext *sc = g_lingo->_compiler->compileAnonymous(code, kLPPTrimGarbage);
 	if (!sc) {
 		warning("b_value(): Failed to parse expression \"%s\", returning void", expr.c_str());
+
+		if (debugChannelSet(-1, kDebugLingoStrict)) {
+			error("Uncaught Lingo error");
+		}
+
 		g_lingo->pushVoid();
 		return;
 	}
@@ -1736,13 +1805,11 @@ void LB::b_openResFile(int nargs) {
  	}
 
 	if (!g_director->_allSeenResFiles.contains(resPath)) {
-		MacArchive *arch = new MacArchive();
+		Common::SharedPtr<Archive> arch(new MacArchive());
 		if (arch->openFile(findPath(resPath))) {
 			g_director->_openResFiles.setVal(resPath, arch);
 			g_director->_allSeenResFiles.setVal(resPath, arch);
 			g_director->addArchiveToOpenList(resPath);
-		} else {
-			delete arch;
 		}
 	}
 }
@@ -1870,9 +1937,57 @@ void LB::b_abort(int nargs) {
 	g_lingo->_abort = true;
 }
 
+// Helper: call a named handler on a single behavior instance with extra args.
+// extraArgs is stored in reverse order (as popped from stack).
+static Datum callBehaviorHandler(Datum &instance, const Common::String &msgName, const Common::Array<Datum> &extraArgs) {
+	Symbol sym = instance.u.obj->getMethod(msgName);
+	if (sym.type == VOIDSYM)
+		return Datum();
+
+	g_lingo->push(instance);
+	for (int j = (int)extraArgs.size() - 1; j >= 0; j--)
+		g_lingo->push(extraArgs[j]);
+
+	int frame = g_lingo->_state->callstack.size();
+	LC::call(sym, 1 + (int)extraArgs.size(), true);
+	g_lingo->execute(frame);
+	return g_lingo->pop();
+}
+
 void LB::b_call(int nargs) {
-	g_lingo->printSTUBWithArglist("b_call", nargs);
-	g_lingo->dropStack(nargs);
+	bool allowRetVal = g_lingo->pop().asInt() != 0;
+	if (nargs < 2) {
+		warning("b_call: expected at least 2 args, got %d", nargs);
+		g_lingo->dropStack(nargs);
+		if (allowRetVal)
+			g_lingo->pushVoid();
+		return;
+	}
+
+	int numExtraArgs = nargs - 2;
+	Common::Array<Datum> extraArgs;
+	for (int i = 0; i < numExtraArgs; i++)
+		extraArgs.push_back(g_lingo->pop());
+
+	Datum script = g_lingo->pop();
+	Datum message = g_lingo->pop();
+	Common::String msgName = message.asString();
+
+	Datum result;
+	if (script.type == OBJECT) {
+		result = callBehaviorHandler(script, msgName, extraArgs);
+	} else if (script.type == ARRAY) {
+		for (uint i = 0; i < script.u.farr->arr.size(); i++) {
+			Datum instance = script.u.farr->arr[i];
+			if (instance.type == OBJECT)
+				result = callBehaviorHandler(instance, msgName, extraArgs);
+		}
+	} else {
+		warning("b_call: expected OBJECT or list for script argument");
+	}
+
+	if (allowRetVal)
+		g_lingo->push(result);
 }
 
 void LB::b_callAncestor(int nargs) {
@@ -1886,7 +2001,7 @@ void LB::b_cancelIdleLoad(int nargs) {
 }
 
 void LB::b_continue(int nargs) {
-	g_director->_playbackPaused = false;
+	g_director->getCurrentWindow()->_playbackPaused = false;
 }
 
 void LB::b_dontPassEvent(int nargs) {
@@ -1908,9 +2023,17 @@ void LB::b_do(int nargs) {
 	if (code.empty())
 		return;
 
-	ScriptContext *sc = g_lingo->_compiler->compileAnonymous(code);
+	uint32 flags = 0;
+	flags |= g_director->getVersion() < 400 ? kLPPTrimGarbage : 0;
+
+	ScriptContext *sc = g_lingo->_compiler->compileAnonymous(code, flags);
 	if (!sc) {
 		warning("b_do(): compilation failed, ignoring");
+
+		if (debugChannelSet(-1, kDebugLingoStrict)) {
+			error("Uncaught Lingo error");
+		}
+
 		return;
 	} else if (!sc->_eventHandlers.contains(kEventGeneric)) {
 		warning("b_do(): compiled code did not return handler, ignoring");
@@ -2014,7 +2137,7 @@ void LB::b_pass(int nargs) {
 }
 
 void LB::b_pause(int nargs) {
-	g_director->_playbackPaused = true;
+	g_director->getCurrentWindow()->_playbackPaused = true;
 }
 
 void LB::b_play(int nargs) {
@@ -2652,12 +2775,12 @@ void LB::b_editableText(int nargs) {
 	} else if (nargs == 0) {
 		g_lingo->dropStack(nargs);
 
-		if (g_lingo->_currentChannelId == -1) {
+		if (g_lingo->_state->currentChannelId == -1) {
 			warning("b_editableText: channel Id is missing");
 			return;
 		}
-		sc->getSpriteById(g_lingo->_currentChannelId)->_editable = true;
-		sc->getOriginalSpriteById(g_lingo->_currentChannelId)->_editable = true;
+		sc->getSpriteById(g_lingo->_state->currentChannelId)->_editable = true;
+		sc->getOriginalSpriteById(g_lingo->_state->currentChannelId)->_editable = true;
 	} else {
 		warning("b_editableText: unexpectedly received %d arguments", nargs);
 		g_lingo->dropStack(nargs);
@@ -2675,7 +2798,7 @@ void LB::b_erase(int nargs) {
 
 		for (uint i = 0; i < channels.size(); i++) {
 			if (channels[i]->_sprite->_castId == d.asMemberID()) {
-				channels[i]->_dirty = true;
+				channels[i]->setDirty();
 			}
 		}
 	}
@@ -2793,12 +2916,11 @@ void LB::b_installMenu(int nargs) {
 	// Menu definitions use the character 0xc5 to denote a code separator.
 	// For Mac D4 and below, this is ≈. For Windows D4 and below, this is Å.
 	char CODE_SEPARATOR_CHAR = '\xC5';
-	char CODE_SEPARATOR_CHAR_2 = '\xC5';
+	// FIXME: For some reason there are games which use º (Mac) or ¼ (Win) and it works too?
+	char CODE_SEPARATOR_CHAR_2 = '\xBC';
 	if (g_director->getVersion() >= 500) {
 		// D5 changed this to be the pipe | character, the same in Windows and Mac.
 		CODE_SEPARATOR_CHAR = '\x7C';
-		// FIXME: For some reason there are games which use º (Mac) or ¼ (Win) and it works too?
-		CODE_SEPARATOR_CHAR_2 = '\xBC';
 	}
 	// Continuation character is 0xac to denote a line running over.
 	// For Mac, this is ¨. For Windows, this is ¬.
@@ -2982,16 +3104,16 @@ void LB::b_moveableSprite(int nargs) {
 	Score *score = movie->getScore();
 	Frame *frame = score->_currentFrame;
 
-	if (g_lingo->_currentChannelId == -1) {
+	if (g_lingo->_state->currentChannelId == -1) {
 		warning("b_moveableSprite: channel Id is missing");
 		assert(0);
 		return;
 	}
 
 	// since we are using value copying, in order to make it taking effect immediately. we modify the sprites in channel
-	if (score->_channels[g_lingo->_currentChannelId])
-		score->_channels[g_lingo->_currentChannelId]->_sprite->_moveable = true;
-	frame->_sprites[g_lingo->_currentChannelId]->_moveable = true;
+	if (score->_channels[g_lingo->_state->currentChannelId])
+		score->_channels[g_lingo->_state->currentChannelId]->_sprite->_moveable = true;
+	frame->_sprites[g_lingo->_state->currentChannelId]->_moveable = true;
 }
 
 void LB::b_pasteClipBoardInto(int nargs) {
@@ -3090,12 +3212,13 @@ void LB::b_puppetPalette(int nargs) {
 	Score *score = movie->getScore();
 	if (!palette.isNull()) {
 		g_director->setPalette(palette);
+		g_director->_lastPuppetPalette = palette;
 		score->_puppetPalette = true;
 	} else {
 		// Setting puppetPalette to 0 disables it (Lingo Dictionary, 226)
 
 		score->_puppetPalette = false;
-
+		g_director->_lastPuppetPalette = CastMemberID();
 		// FIXME: set system palette decided by platform, should be fixed after windows palette is working.
 		// try to set mac system palette if lastPalette is 0.
 		if (g_director->_lastPalette.isNull())
@@ -3201,11 +3324,11 @@ void LB::b_immediateSprite(int nargs) {
 	} else if (nargs == 0 && g_director->getVersion() < 400) {
 		g_lingo->dropStack(nargs);
 
-		if (g_lingo->_currentChannelId == -1) {
+		if (g_lingo->_state->currentChannelId == -1) {
 			warning("b_immediateSprite: channel Id is missing");
 			return;
 		}
-		sc->getSpriteById(g_lingo->_currentChannelId)->_immediate = true;
+		sc->getSpriteById(g_lingo->_state->currentChannelId)->_immediate = true;
 	} else {
 		warning("b_immediateSprite: unexpectedly received %d arguments", nargs);
 		g_lingo->dropStack(nargs);
@@ -3234,10 +3357,8 @@ void LB::b_puppetSprite(int nargs) {
 			if (refresh) {
 				// puppetSprite set to FALSE, copy back sprite data from frame cache
 				Channel *chan = sc->getChannelById(spriteId);
-				movie->getWindow()->addDirtyRect(chan->getBbox());
-				chan->_dirty = true;
 				chan->setClean(sc->_currentFrame->_sprites[spriteId]);
-				chan->_dirty = true;
+				chan->setDirty();
 			}
 		} else {
 			warning("b_puppetSprite: sprite index out of bounds");
@@ -3245,11 +3366,11 @@ void LB::b_puppetSprite(int nargs) {
 	} else if (nargs == 0 && g_director->getVersion() < 400) {
 		g_lingo->dropStack(nargs);
 
-		if (g_lingo->_currentChannelId == -1) {
+		if (g_lingo->_state->currentChannelId == -1) {
 			warning("b_puppetSprite: channel Id is missing");
 			return;
 		}
-		sc->getSpriteById(g_lingo->_currentChannelId)->_puppet = true;
+		sc->getSpriteById(g_lingo->_state->currentChannelId)->_puppet = true;
 	} else {
 		warning("b_puppetSprite: unexpectedly received %d arguments", nargs);
 		g_lingo->dropStack(nargs);
@@ -3371,13 +3492,122 @@ void LB::b_rollOver(int nargs) {
 }
 
 void LB::b_sendAllSprites(int nargs) {
-	g_lingo->printSTUBWithArglist("b_sendAllSprites", nargs);
-	g_lingo->dropStack(nargs);
+	bool allowRetVal = g_lingo->pop().asInt() != 0;
+	if (nargs < 1) {
+		warning("b_sendAllSprites: expected at least 1 arg, got %d", nargs);
+		if (allowRetVal)
+			g_lingo->pushVoid();
+		return;
+	}
+
+	int numExtraArgs = nargs - 1;
+	Common::Array<Datum> extraArgs;
+	for (int i = 0; i < numExtraArgs; i++)
+		extraArgs.push_back(g_lingo->pop());
+
+	Datum message = g_lingo->pop();
+	Common::String msgName = message.asString();
+
+	Datum result;
+	Movie *movie = g_director->getCurrentMovie();
+	Score *score = movie ? movie->getScore() : nullptr;
+	if (score) {
+		score->createScriptInstances(score->getCurrentFrameNum());
+
+		bool anyHandled = false;
+		uint savedSpriteNum = movie->_currentSpriteNum;
+		for (uint ch = 1; ch < score->_channels.size(); ch++) {
+			Channel *channel = score->_channels[ch];
+			if (!channel)
+				continue;
+			for (uint i = 0; i < channel->_scriptInstanceList.size(); i++) {
+				Datum instance = channel->_scriptInstanceList[i];
+				if (instance.type != OBJECT)
+					continue;
+				Symbol sym = instance.u.obj->getMethod(msgName);
+				if (sym.type == VOIDSYM)
+					continue;
+				movie->_currentSpriteNum = ch;
+				result = callBehaviorHandler(instance, msgName, extraArgs);
+				movie->_currentSpriteNum = savedSpriteNum;
+				anyHandled = true;
+			}
+		}
+
+		if (!anyHandled) {
+			Symbol h = g_lingo->getHandler(msgName);
+			if (h.type != VOIDSYM) {
+				for (int j = (int)extraArgs.size() - 1; j >= 0; j--)
+					g_lingo->push(extraArgs[j]);
+				int frame = g_lingo->_state->callstack.size();
+				LC::call(h, numExtraArgs, true);
+				g_lingo->execute(frame);
+				result = g_lingo->pop();
+			}
+		}
+	}
+
+	if (allowRetVal)
+		g_lingo->push(result);
 }
 
 void LB::b_sendSprite(int nargs) {
-	g_lingo->printSTUBWithArglist("b_sendSprite", nargs);
-	g_lingo->dropStack(nargs);
+	bool allowRetVal = g_lingo->pop().asInt() != 0;
+	if (nargs < 2) {
+		warning("b_sendSprite: expected at least 2 args, got %d", nargs);
+		g_lingo->dropStack(nargs);
+		if (allowRetVal)
+			g_lingo->pushVoid();
+		return;
+	}
+
+	int numExtraArgs = nargs - 2;
+	Common::Array<Datum> extraArgs;
+	for (int i = 0; i < numExtraArgs; i++)
+		extraArgs.push_back(g_lingo->pop());
+
+	Datum message = g_lingo->pop();
+	int spriteNum = g_lingo->pop().asInt();
+	Common::String msgName = message.asString();
+
+	Datum result;
+	Movie *movie = g_director->getCurrentMovie();
+	Score *score = movie ? movie->getScore() : nullptr;
+	Channel *channel = score ? score->getChannelById((uint16)spriteNum) : nullptr;
+	if (channel) {
+		if (channel->_scriptInstanceList.empty() && channel->_sprite && !channel->_sprite->_behaviors.empty())
+			score->createScriptInstances(score->getCurrentFrameNum());
+
+		bool handled = false;
+		uint savedSpriteNum = movie->_currentSpriteNum;
+		for (uint i = 0; i < channel->_scriptInstanceList.size(); i++) {
+			Datum instance = channel->_scriptInstanceList[i];
+			if (instance.type != OBJECT)
+				continue;
+			Symbol sym = instance.u.obj->getMethod(msgName);
+			if (sym.type == VOIDSYM)
+				continue;
+			movie->_currentSpriteNum = (uint)spriteNum;
+			result = callBehaviorHandler(instance, msgName, extraArgs);
+			movie->_currentSpriteNum = savedSpriteNum;
+			handled = true;
+		}
+
+		if (!handled) {
+			Symbol h = g_lingo->getHandler(msgName);
+			if (h.type != VOIDSYM) {
+				for (int j = (int)extraArgs.size() - 1; j >= 0; j--)
+					g_lingo->push(extraArgs[j]);
+				int frame = g_lingo->_state->callstack.size();
+				LC::call(h, numExtraArgs, true);
+				g_lingo->execute(frame);
+				result = g_lingo->pop();
+			}
+		}
+	}
+
+	if (allowRetVal)
+		g_lingo->push(result);
 }
 
 void LB::b_spriteBox(int nargs) {
@@ -3394,7 +3624,7 @@ void LB::b_spriteBox(int nargs) {
 	// This automatically sets the stretch mode
 	channel->_sprite->_stretch = true;
 
-	g_director->getCurrentWindow()->addDirtyRect(channel->getBbox());
+	channel->setDirty();
 	channel->setBbox(
 		l < r ? l : r,
 		t < b ? t : b,
@@ -3403,7 +3633,6 @@ void LB::b_spriteBox(int nargs) {
 	);
 	if (channel->_sprite->_cast)
 		channel->_sprite->_cast->setModified(true);
-	channel->_dirty = true;
 }
 
 void LB::b_unLoad(int nargs) {
@@ -3994,9 +4223,9 @@ void LB::b_member(int nargs) {
 	}
 
 	if (res.member > g_lingo->getMembersNum(res.castLib)) {
+		// D6 and up does not error on non-existing cast members
 		if (g_director->getVersion() < 600) {
-			g_lingo->lingoError("b_member: Cast member ID out of range");
-			return;
+			debugC(5, kDebugLingoExec, "b_member: Cast member ID %s out of range! In real D5 this would cause Lingo errors for some use cases", res.asString().c_str());
 		}
 	}
 	g_lingo->push(res);
@@ -4234,6 +4463,9 @@ void LB::b_scummvmassertequal(int nargs) {
 		result = LC::eqData(d1, d2).u.i;
 	} else if (d1.type == PARRAY && d2.type == PARRAY) {
 		result = LC::eqData(d1, d2).u.i;
+	} else if (d1.type == FLOAT && d2.type == FLOAT) {
+		// Use tolerance
+		result = (ABS(d1.asFloat() - d2.asFloat()) < 0.000001) ? 1 : 0;
 	} else {
 		result = (d1 == d2);
 	}

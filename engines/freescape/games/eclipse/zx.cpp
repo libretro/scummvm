@@ -86,34 +86,38 @@ void EclipseEngine::loadHeartFramesZX(Common::SeekableReadStream *file, int rest
 
 void EclipseEngine::loadAssetsZXFullGame() {
 	Common::File file;
+	const char *prefix = isEclipse2() ? "totaleclipse2" : "totaleclipse";
+	Common::Path titleFile(Common::String::format("%s.zx.title", prefix));
+	Common::Path borderFile(Common::String::format("%s.zx.border", prefix));
+	Common::Path dataFile(Common::String::format("%s.zx.data", prefix));
 
-	file.open("totaleclipse.zx.title");
+	file.open(titleFile);
 	if (file.isOpen()) {
 		_title = loadAndConvertScrImage(&file);
 	} else
-		error("Unable to find totaleclipse.zx.title");
+		error("Unable to find %s", titleFile.toString().c_str());
 
 	file.close();
-	file.open("totaleclipse.zx.border");
+	file.open(borderFile);
 	if (file.isOpen()) {
 		_border = loadAndConvertScrImage(&file);
 	} else
-		error("Unable to find totaleclipse.zx.border");
+		error("Unable to find %s", borderFile.toString().c_str());
 	file.close();
 
-	file.open("totaleclipse.zx.data");
+	file.open(dataFile);
 	if (!file.isOpen())
-		error("Failed to open totaleclipse.zx.data");
+		error("Failed to open %s", dataFile.toString().c_str());
 
 	if (isEclipse2()) {
 		loadMessagesFixedSize(&file, 0x2ac, 16, 30);
 		loadFonts(&file, 0x61c3);
-		loadSpeakerFxZX(&file, 0x8c6, 0x91a);
+		_sound = loadSpeakerFxZX(&file, 0x8c6, 0x91a, 25);
 		load8bitBinary(&file, 0x63bb, 4);
 	} else {
 		loadMessagesFixedSize(&file, 0x2ac, 16, 23);
 		loadFonts(&file, 0x6163);
-		loadSpeakerFxZX(&file, 0x816, 0x86a);
+		_sound = loadSpeakerFxZX(&file, 0x816, 0x86a, 25);
 		load8bitBinary(&file, 0x635b, 4);
 		loadHeartFramesZX(&file, 0x0D62, 0x0D7C);
 
@@ -128,7 +132,7 @@ void EclipseEngine::loadAssetsZXFullGame() {
 		it->convertToInPlace(_gfx->_texturePixelFormat);
 
 	if (ConfMan.getBool("ay_music"))
-		_playerAYMusic = new EclipseAYMusicPlayer(_mixer);
+		_playerMusic = new EclipseAYMusicPlayer(_mixer);
 }
 
 void EclipseEngine::loadAssetsZXDemo() {
@@ -153,13 +157,13 @@ void EclipseEngine::loadAssetsZXDemo() {
 		error("Failed to open totaleclipse.zx.data");
 
 	if (_variant & GF_ZX_DEMO_MICROHOBBY) {
-		loadSpeakerFxZX(&file, 0x798, 0x7ec);
+		_sound = loadSpeakerFxZX(&file, 0x798, 0x7ec, 21);
 		loadMessagesFixedSize(&file, 0x2ac, 16, 23);
 		loadMessagesFixedSize(&file, 0x56e6, 264, 1);
 		loadFonts(&file, 0x5f7b);
 		load8bitBinary(&file, 0x6173, 4);
 	} else if (_variant & GF_ZX_DEMO_CRASH) {
-		loadSpeakerFxZX(&file, 0x65c, 0x6b0);
+		_sound = loadSpeakerFxZX(&file, 0x65c, 0x6b0, 25);
 		loadMessagesFixedSize(&file, 0x364, 16, 9);
 		loadMessagesFixedSize(&file, 0x5901, 264, 5);
 		loadFonts(&file, 0x6589);
@@ -173,7 +177,7 @@ void EclipseEngine::loadAssetsZXDemo() {
 		it->convertToInPlace(_gfx->_texturePixelFormat);
 
 	if (ConfMan.getBool("ay_music"))
-		_playerAYMusic = new EclipseAYMusicPlayer(_mixer);
+		_playerMusic = new EclipseAYMusicPlayer(_mixer);
 }
 
 void EclipseEngine::drawZXUI(Graphics::Surface *surface) {

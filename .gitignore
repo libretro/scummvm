@@ -9,6 +9,8 @@
 lib*.a
 .deps
 *_pch.cpp
+*.orig
+*.rej
 
 /config.log
 /scummvm
@@ -178,6 +180,7 @@ project.xcworkspace
 
 /snapshots
 
+*.lnk
 #Ignore thumbnails created by Windows
 Thumbs.db
 #Ignore files build by Visual Studio
@@ -305,6 +308,11 @@ scummvm.prg
 
 #Ignore Python generated files
 __pycache__/
+.pylintrc.toml
 
 #Ignore vcpkg generated files
 /vcpkg_installed/
+
+#Ignore Claude instruction files
+CLAUDE.md
+.claude

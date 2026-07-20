@@ -27,6 +27,7 @@
 #include "common/serializer.h"
 #include "access/asurface.h"
 #include "access/data.h"
+#include "access/animation.h"
 
 namespace Access {
 
@@ -39,7 +40,7 @@ enum Direction {
 	UPRIGHT = 5,
 	DOWNRIGHT = 6,
 	UPLEFT = 7,
-	DOWNLEFT = 8
+	DOWNLEFT = 8,
 };
 
 class AccessEngine;
@@ -78,7 +79,11 @@ protected:
 	bool isMMHover() const;
 	void jetpack();
 
+	void loadPalResource(Resource *pal);
 public:
+	// should be constructed via ::init().
+	Player(AccessEngine *vm);
+
 	Direction _playerDirection;
 	SpriteResource *_playerSprites;
 	// Fields in original Player structure
@@ -118,13 +123,13 @@ public:
 	Common::Point _rawPlayerLow;
 	Common::Point _rawPlayer;
 public:
-	Player(AccessEngine *vm);
 	virtual ~Player();
 	static Player *init(AccessEngine *vm);
 
 	virtual void load();
 
 	void loadTexPalette();
+	void loadNoctPalette(int fileNum, int subFile);
 
 	void loadSprites(const Common::Path &name);
 
@@ -132,11 +137,11 @@ public:
 
 	void removeSprite1();
 
-	void calcManScale();
+	virtual void calcManScale();
 
 	void extracted();
 
-	void walk();
+	virtual void walk();
 
 	void calcPlayer();
 
@@ -148,10 +153,14 @@ public:
 
 	void checkMove();
 
+	virtual void updateTimers() {};
+
 	/**
 	* Synchronize savegame data
 	*/
-	void synchronize(Common::Serializer &s);
+	virtual void synchronize(Common::Serializer &s);
+
+	virtual void setDirFromScript(byte newDir) { _playerDirection = (Direction)newDir; }
 };
 
 } // End of namespace Access

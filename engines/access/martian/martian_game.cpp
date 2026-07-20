@@ -24,6 +24,7 @@
 #include "access/martian/martian_resources.h"
 #include "access/martian/martian_room.h"
 #include "access/martian/martian_scripts.h"
+#include "access/martian/martian_inventory.h"
 #include "access/amazon/amazon_resources.h"
 
 namespace Access {
@@ -39,11 +40,14 @@ _creditsStream(nullptr)
 MartianEngine::~MartianEngine() {
 	_skipStart = false;
 	_creditsStream = nullptr;
-}
+	// _video will be deleted in the parent
+} // -V773
 
 void MartianEngine::initObjects() {
+	_inventory = new MartianInventory(this);
 	_room = new MartianRoom(this);
 	_scripts = new MartianScripts(this);
+	_video = new VideoPlayer_v1(this);
 }
 
 void MartianEngine::configSelect() {
@@ -75,7 +79,6 @@ void MartianEngine::initVariables() {
 	_ask[33] = 1;
 
 	ARRAYCLEAR(_flags);
-
 }
 
 void MartianEngine::setNoteParams() {
@@ -138,12 +141,12 @@ void MartianEngine::doSpecial5(int param1) {
 	_screen->setIconPalette();
 	_screen->forceFadeIn();
 
-	Resource *cellsRes = _files->loadFile("CELLS00.LZ");
+	Resource *cellsRes = _files->loadRawFile("CELLS00.LZ");
 	_objectsTable[0] = new SpriteResource(this, cellsRes);
 	delete cellsRes;
 
 	_timers[20]._timer = _timers[20]._initTm = 30;
-	Resource *notesRes = _files->loadFile("NOTES.DAT");
+	Resource *notesRes = _files->loadRawFile("NOTES.DAT");
 	notesRes->_stream->skip(param1 * 2);
 	int pos = notesRes->_stream->readUint16LE();
 	notesRes->_stream->seek(pos);
@@ -158,11 +161,7 @@ void MartianEngine::doSpecial5(int param1) {
 }
 
 void MartianEngine::playGame() {
-	// Initialize Martian Memorandum game-specific objects
-	initObjects();
-
 	// Setup the game
-	setupGame();
 	configSelect();
 
 	if (_loadSaveSlot == -1) {
@@ -372,7 +371,7 @@ void MartianEngine::establish(int estabIndex, int sub) {
 
 	// TODO: Original has a small delay here.
 
-	Resource *notesRes = _files->loadFile("ETEXT.DAT");
+	Resource *notesRes = _files->loadRawFile("ETEXT.DAT");
 	notesRes->_stream->seek(2 * sub);
 	uint16 msgOffset = notesRes->_stream->readUint16LE();
 	if (msgOffset == 0 || msgOffset >= notesRes->_stream->size()) {
@@ -393,7 +392,7 @@ void MartianEngine::establish(int estabIndex, int sub) {
 	_events->showCursor();
 }
 
-void MartianEngine::synchronize(Common::Serializer &s) {
+Common::Error MartianEngine::synchronize(Common::Serializer &s) {
 	AccessEngine::synchronize(s);
 
 	for (int i = 0; i < ARRAYSIZE(_travel); i++) {
@@ -419,6 +418,8 @@ void MartianEngine::synchronize(Common::Serializer &s) {
 	_boxSelectYOld
 	_numLines
 	*/
+
+	return Common::kNoError;
 }
 
 

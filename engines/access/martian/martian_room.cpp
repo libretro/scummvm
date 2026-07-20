@@ -43,10 +43,6 @@ MartianRoom::MartianRoom(AccessEngine *vm) : Room(vm) {
 MartianRoom::~MartianRoom() {
 }
 
-void MartianRoom::loadRoom(int roomNumber) {
-	loadRoomData(&MMRES.ROOMTBL[roomNumber]._data[0]);
-}
-
 void MartianRoom::reloadRoom() {
 //	_vm->_currentMan = _roomFlag;
 //	_vm->_currentManOld = _roomFlag;
@@ -113,7 +109,7 @@ void MartianRoom::roomMenu() {
 	_vm->_screen->restoreScreen();
 }
 
-void MartianRoom::mainAreaClick() {
+void MartianRoom::mainAreaLClick() {
 	Common::Point &mousePos = _vm->_events->_mousePos;
 	Common::Point pt = _vm->_events->calcRawMouse();
 	Screen &screen = *_vm->_screen;

@@ -26,7 +26,7 @@
 #include "common/singleton.h"
 
 #include "engines/nancy/sound.h"
-#include "engines/nancy/video.h"
+#include "engines/nancy/movieplayer.h"
 
 #include "engines/nancy/state/state.h"
 
@@ -56,7 +56,7 @@ public:
 	const SoundDescription &getSound();
 
 protected:
-	class MapViewport : public Nancy::RenderObject {
+	class MapViewport : public RenderObject {
 	public:
 		MapViewport() : RenderObject(6) {}
 		virtual ~MapViewport() = default;
@@ -68,7 +68,7 @@ protected:
 		void playVideo() { _decoder.start(); }
 		void unloadVideo() { _decoder.close(); }
 
-		AVFDecoder _decoder;
+		MoviePlayer _decoder;
 	private:
 	};
 
@@ -94,14 +94,12 @@ protected:
 };
 
 class TVDMap : public Map {
-	friend class MapGlobe;
-
 public:
 	TVDMap();
 	virtual ~TVDMap() = default;
 
 private:
-	class MapGlobe : public Nancy::UI::AnimatedButton {
+	class MapGlobe : public UI::AnimatedButton {
 	public:
 		MapGlobe(uint zOrder, TVDMap *owner) : AnimatedButton(zOrder), _gargoyleEyes(zOrder), _owner(owner) {}
 		virtual ~MapGlobe() = default;
@@ -139,7 +137,7 @@ private:
 	Common::ScopedPtr<UI::Button> _button;
 };
 
-#define NancyMapState Nancy::State::Map::instance()
+#define NancyMapState State::Map::instance()
 
 } // End of namespace State
 } // End of namespace Nancy

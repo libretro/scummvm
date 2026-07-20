@@ -61,7 +61,8 @@ enum struct DependencyType : int16 {
 	kOpenParenthesis				= 18,
 	kCloseParenthesis				= 19,
 	kRandom							= 20,
-	kDefaultAR						= 21
+	kDefaultAR						= 21,
+	kTimerIsActive					= 22	// Nancy11+ software-timer slot is running/counting
 };
 
 // Describes a condition that needs to be fulfilled before the
@@ -95,9 +96,6 @@ struct DependencyRecord {
 // Does _not_ support drawing to screen, records that need this functionality
 // will have to subclass RenderActionRecord.
 class ActionRecord {
-	friend class ActionManager;
-	friend class Nancy::NancyConsole;
-
 public:
 	enum ExecutionState { kBegin, kRun, kActionTrigger };
 	enum ExecutionType { kOneShot = 1, kRepeating = 2 };
@@ -117,14 +115,21 @@ public:
 	virtual void onPause(bool pause) {}
 
 	virtual CursorManager::CursorType getHoverCursor() const { return CursorManager::kHotspot; }
+	virtual bool cursorSetFromScript() const { return false; }
 	virtual void handleInput(NancyInput &input) {}
-
-protected:
-	void finishExecution();
-	virtual bool canHaveHotspot() const { return false; } // Used for handling kCursorType dependency
 
 	// Used for debugging
 	virtual Common::String getRecordTypeName() const = 0;
+	virtual Common::String getRecordExtraInfo() const { return ""; }
+
+	// Used for handling kCursorType dependency
+	virtual bool canHaveHotspot() const { return false; }
+
+	// Records returning true survive Scene::clearSceneData / ActionManager::clearActionRecords.
+	virtual bool isPersistentAcrossScenes() const { return false; }
+
+protected:
+	void finishExecution();
 
 public:
 	Common::String _description;

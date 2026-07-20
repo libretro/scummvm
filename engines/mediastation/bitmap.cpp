@@ -21,6 +21,7 @@
 
 #include "mediastation/bitmap.h"
 #include "mediastation/debugchannels.h"
+#include "mediastation/mediastation.h"
 
 namespace MediaStation {
 
@@ -33,7 +34,7 @@ ImageInfo::ImageInfo(Chunk &chunk) {
 		__func__, _imageDataStartOffset, static_cast<uint>(_compressionType), _stride);
 }
 
-PixMapImage::PixMapImage(Chunk &chunk, const ImageInfo &imageInfo) : _imageInfo(imageInfo) {
+PixMapImage::PixMapImage(Chunk &chunk, const ImageInfo &imageInfo, bool decompressInPlace) : _imageInfo(imageInfo) {
 	if (stride() < width()) {
 		warning("%s: Got stride less than width", __func__);
 	}
@@ -45,6 +46,9 @@ PixMapImage::PixMapImage(Chunk &chunk, const ImageInfo &imageInfo) : _imageInfo(
 	if (chunk.bytesRemaining() > 0) {
 		if (isCompressed()) {
 			_compressedStream = chunk.readStream(chunk.bytesRemaining());
+			if (decompressInPlace) {
+				decompress();
+			}
 		} else {
 			_image.create(stride(), height(), Graphics::PixelFormat::createFormatCLUT8());
 			if (getCompressionType() == kUncompressedTransparentBitmap)
@@ -60,7 +64,7 @@ PixMapImage::PixMapImage(Chunk &chunk, const ImageInfo &imageInfo) : _imageInfo(
 	}
 }
 
-PixMapImage::PixMapImage(const ImageInfo &imageInfo) : _imageInfo(imageInfo) {
+PixMapImage::PixMapImage(const ImageInfo &imageInfo, bool decompressInPlace) : _imageInfo(imageInfo) {
 	_image.create(stride(), height(), Graphics::PixelFormat::createFormatCLUT8());
 }
 
@@ -72,6 +76,22 @@ PixMapImage::~PixMapImage() {
 bool PixMapImage::isCompressed() const {
 	return (getCompressionType() != kUncompressedBitmap) && \
 		(getCompressionType() != kUncompressedTransparentBitmap);
+}
+
+void PixMapImage::decompress() {
+	if (getCompressionType() != kRle8BitmapCompression) {
+		return;
+	} else if (_compressedStream == nullptr) {
+		warning("%s: No compressed data to decompress", __func__);
+		return;
+	}
+
+	// Decompress the image and then delete the compressed stream.
+	_image = g_engine->getDisplayManager()->decompressRle8Bitmap(this, nullptr, nullptr);
+	delete _compressedStream;
+	_compressedStream = nullptr;
+
+	_imageInfo._compressionType = kUncompressedBitmap;
 }
 
 } // End of namespace MediaStation

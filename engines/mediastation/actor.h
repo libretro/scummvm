@@ -26,6 +26,7 @@
 #include "common/keyboard.h"
 
 #include "mediastation/datafile.h"
+#include "mediastation/events.h"
 #include "mediastation/mediascript/scriptresponse.h"
 #include "mediastation/mediascript/scriptconstants.h"
 #include "mediastation/mediascript/scriptvalue.h"
@@ -46,10 +47,10 @@ enum ActorType {
 	kActorTypeImage = 0x0007, // IMG
 	kActorTypeHotspot = 0x000b, // HSP
 	kActorTypeSprite = 0x000e, // SPR
-	kActorTypeLKZazu = 0x000f,
-	kActorTypeLKConstellations = 0x0010,
+	kActorTypeStalkingZazu = 0x000f,
+	kActorTypeDotGame = 0x0010,
 	kActorTypeDocument = 0x0011,
-	kActorTypeImageSet = 0x001d,
+	kActorTypeDiskImage = 0x001d,
 	kActorTypeCursor = 0x000c, // CSR
 	kActorTypePrinter = 0x0019, // PRT
 	kActorTypeMovie = 0x0016, // MOV
@@ -58,7 +59,6 @@ enum ActorType {
 	kActorTypeText = 0x001a, // TXT
 	kActorTypeFont = 0x001b, // FON
 	kActorTypeCamera = 0x001c, // CAM
-	kActorTypeDiskImageActor = 0x001d,
 	kActorTypeCanvas = 0x001e, // CVS
 	kActorTypeXsnd = 0x001f,
 	kActorTypeXsndMidi = 0x0020,
@@ -100,6 +100,14 @@ enum ActorHeaderSectionType {
 	kActorHeaderActorName = 0x0bb8,
 	kStreamMovieProxyInfo = 0x06ac,
 
+	// DISK IMAGE ACTOR FIELDS.
+	kActorHeaderDiskImageMaxStrips = 0x774,
+	kActorHeaderDiskImageStripWidth = 0x775,
+	kActorHeaderDiskImageUnk1 = 0x776,
+	kActorHeaderDiskImageMaxImages = 0x777,
+	kActorHeaderDiskImageStripInfo = 0x778,
+	kActorHeaderDiskImageUnkRect = 0x779,
+
 	// PATH FIELDS.
 	kActorHeaderStartPoint = 0x060e,
 	kActorHeaderEndPoint = 0x060f,
@@ -131,12 +139,34 @@ enum ActorHeaderSectionType {
 	kActorHeaderTextCursorIsVisible = 0x262,
 	kActorHeaderTextConstrainToWidth = 0x263,
 	kActorHeaderTextOverwriteMode = 0x264,
-	kActorHeaderTextAcceptedCharRange = 0x265,
-	kActorHeaderTextAcceptedCharRangeWithOffset = 0x0266,
+	kActorHeaderTextAcceptedCharRangeWithOffset = 0x265,
+	kActorHeaderTextAcceptedCharRange = 0x0266,
 
 	// SPRITE FIELDS.
 	kActorHeaderSpriteClip = 0x03e9,
-	kActorHeaderDefaultSpriteClip = 0x03ea
+	kActorHeaderDefaultSpriteClip = 0x03ea,
+
+	// DOT GAME FIELDS.
+	kActorHeaderDotGameMaxDots = 0x001d,
+	kActorHeaderDotGameHelperSprite1 = 0x0514,
+	kActorHeaderDotGameHelperSprite2 = 0x0515,
+	kActorHeaderDotGameState = 0x0516,
+	kActorHeaderDotGameSpeed = 0x0517,
+	kActorHeaderDotGameLineThickness = 0x0518,
+	kActorHeaderDotGameColor = 0x0519,
+
+	// STALKING ZAZU FIELDS.
+	kActorHeaderStalkingZazuSpriteId = 0x03ec,
+	kActorHeaderStalkingZazuDirections = 0x03ed,
+	kActorHeaderStalkingZazuField = 0x03ee,
+	kActorHeaderStalkingZazuObstacleActorId = 0x03ef,
+	kActorHeaderStalkingZazuUnkX = 0x03f0,
+	kActorHeaderStalkingZazuUnkY = 0x03f1,
+	kActorHeaderStalkingZazuUnkSound1 = 0x03f2,
+	kActorHeaderStalkingZazuUnkSound2 = 0x03f3,
+	kActorHeaderStalkingZazuAudioEnabled = 0x03f4,
+	kActorHeaderStalkingZazuObstaclesToShow = 0x03f5,
+	kActorHeaderStalkingZazuUnkPoint = 0x03f6,
 };
 
 enum CylindricalWrapMode : int;
@@ -165,6 +195,15 @@ enum MouseEventFlag {
 	// There is no key up event.
 };
 
+class Polygon {
+public:
+	void loadFromParameterStream(Chunk &chunk);
+	bool containsPoint(const Common::Point &pointToCheck) const;
+
+private:
+	Common::Array<Common::Point> _polygon;
+};
+
 // Argument count validation macros for built-in script methods.
 // For exact argument count.
 #define ARGCOUNTCHECK(n) \
@@ -174,7 +213,7 @@ enum MouseEventFlag {
 
 // For a range of valid argument counts (min to max).
 #define ARGCOUNTRANGE(min, max) \
-	if ((int64)(min) > args.size() || args.size() > (int64)(max)) { \
+	if ((int64)(min) > (int64)args.size() || (int64)args.size() > (int64)(max)) { \
 		warning("%s: Expected %d to %d arguments, got %d", builtInMethodToStr(methodId), (min), (max), args.size()); \
 	}
 
@@ -184,24 +223,22 @@ enum MouseEventFlag {
 		warning("%s: Expected at least %d arguments, got %d", builtInMethodToStr(methodId), (min), args.size()); \
 	}
 
-class Actor {
+class Actor : public TimerEventReceiver {
 public:
-	Actor(ActorType type) : _type(type) {};
+	Actor(ActorType type) : _type(type), _timer(this) {};
 	virtual ~Actor();
 
-	// Does any needed frame drawing, audio playing, script responses, etc.
-	virtual void process() { return; }
+	virtual void timerEvent(const TimerEvent &event) { return; }
 
 	// Runs built-in bytecode methods.
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args);
-
-	virtual bool isSpatialActor() const { return false; }
-
 	virtual void initFromParameterStream(Chunk &chunk);
 	virtual void readParameter(Chunk &chunk, ActorHeaderSectionType paramType);
 	virtual void loadIsComplete();
 
-	void processTimeScriptResponses();
+	virtual void onEvent(const ActorEvent &event);
+	ScriptResponse *findNextTimeScriptResponseAfter(uint32 after) const;
+	bool hasScriptResponse(EventType eventType, const ScriptValue &arg) const;
 	void runScriptResponseIfExists(EventType eventType, const ScriptValue &arg);
 	void runScriptResponseIfExists(EventType eventType);
 
@@ -210,8 +247,14 @@ public:
 	uint contextId() const { return _contextId; }
 	void setId(uint id);
 	void setContextId(uint id) { _contextId = id; }
+	virtual bool isSpatialActor() const { return false; }
+
+	// Helper functions for the debugger.
+	virtual bool isActive() const { return true; }
+	virtual Common::String debugString() const { return "<no additional info>"; }
+	const Common::HashMap<uint, Common::Array<ScriptResponse *> > &scriptResponses() const { return _scriptResponses; }
+
 	const char *debugName() const;
-	void updateDebugName();
 
 protected:
 	ActorType _type = kActorTypeEmpty;
@@ -220,10 +263,17 @@ protected:
 	uint _contextId = 0;
 	Common::String _debugName;
 
-	uint _startTime = 0;
-	uint _lastProcessedTime = 0;
 	uint _duration = 0;
 	Common::HashMap<uint, Common::Array<ScriptResponse *> > _scriptResponses;
+
+	// The original had these fields duplicated across several actors, but it made more
+	// sense to consolidate it into the main Actor in the reimplementation.
+	TimerEntry _timer;
+	uint _startTime = 0;
+	uint _lastProcessedTime = 0;
+	bool setupNextScriptResponseTimer();
+	void triggerRemainingTimerEvents();
+	void processTimeScriptResponses();
 };
 
 class SpatialEntity : public Actor {
@@ -235,8 +285,9 @@ public:
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
 	virtual void readParameter(Chunk &chunk, ActorHeaderSectionType paramType) override;
 	virtual void loadIsComplete() override;
-	virtual void preload(const Common::Rect &rect) {};
+	virtual void preload(const Common::Rect &rect, bool fireStepEvent = true) {};
 	virtual bool isRectInMemory(const Common::Rect &rect) { return true; }
+	virtual bool isReadyToDraw(DisplayContext &displayContext) { return true; }
 	virtual bool isLoading() { return false; }
 
 	virtual bool isSpatialActor() const override { return true; }
@@ -244,6 +295,8 @@ public:
 	virtual Common::Rect getBbox() const { return _boundingBox; }
 	int zIndex() const { return _zIndex; }
 	void moveTo(int16 x, int16 y);
+	void moveToCentered(int16 x, int16 y);
+	void setZIndex(int zIndex);
 
 	virtual void currentMousePosition(Common::Point &point);
 	virtual void invalidateMouse();
@@ -253,43 +306,41 @@ public:
 		const Common::Point &point,
 		uint16 eventMask,
 		MouseActorState &state,
-		bool inBounds) { return kNoFlag; }
+		bool clipMouseEvents) { return kNoFlag; }
 	virtual uint16 findActorToAcceptKeyboardEvents(
-		uint16 asciiCode,
+		uint16 charCode,
 		uint16 eventMask,
 		MouseActorState &state) { return kNoFlag; }
 
-	virtual void mouseDownEvent(const Common::Event &event) { return; }
-	virtual void mouseUpEvent(const Common::Event &event) { return; }
-	virtual void mouseEnteredEvent(const Common::Event &event) { return; }
-	virtual void mouseExitedEvent(const Common::Event &event) { return; }
-	virtual void mouseMovedEvent(const Common::Event &event) { return; }
-	virtual void mouseOutOfFocusEvent(const Common::Event &event) { return; }
-	virtual void keyboardEvent(const Common::Event &event) { return; }
+	virtual void mouseDownEvent(const MouseEvent &event) { return; }
+	virtual void mouseUpEvent(const MouseEvent &event) { return; }
+	virtual void mouseEnteredEvent(const MouseEvent &event) { return; }
+	virtual void mouseExitedEvent(const MouseEvent &event) { return; }
+	virtual void mouseMovedEvent(const MouseEvent &event) { return; }
+	virtual void mouseOutOfFocusEvent(const MouseEvent &event) { return; }
+	virtual void keyboardEvent(const KeyboardEvent &event) { return; }
 
 	void setParentStage(StageActor *parentStage) { _parentStage = parentStage; }
 	void setToNoParentStage() { _parentStage = nullptr; }
 	StageActor *getParentStage() const { return _parentStage; }
 
 	virtual void invalidateLocalBounds();
-	virtual void setAdjustedBounds(CylindricalWrapMode alignmentMode);
+	virtual void setAdjustedBounds(CylindricalWrapMode wrapMode);
 
 protected:
 	uint _stageId = 0;
 	int _zIndex = 0;
 	double _dissolveFactor = 1.0;
-	double _scaleX = 0.0;
-	double _scaleY = 0.0;
+
+	double _parallaxFactorX = 0.0;
+	double _parallaxFactorY = 0.0;
 	Common::Rect _boundingBox;
 	Common::Rect _originalBoundingBox;
 	bool _isVisible = false;
 	bool _hasTransparency = false;
-	bool _getOffstageEvents = false;
 	StageActor *_parentStage = nullptr;
 
-	void moveToCentered(int16 x, int16 y);
 	void setBounds(const Common::Rect &bounds);
-	void setZIndex(int zIndex);
 	virtual void setMousePosition(int16 x, int16 y);
 
 	virtual void setDissolveFactor(double dissolveFactor);

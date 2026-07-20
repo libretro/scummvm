@@ -40,6 +40,28 @@ void OneBuildPuzzle::init() {
 	g_nancy->_resource->loadImage(_imageName, _image);
 	_image.setTransparentColor(_drawSurface.getTransparentColor());
 
+	// Post-placement animation atlas (e.g. music-box handle "GHO_SlnMBoxHandle_OVL"
+	// in scene 3637). Loaded only when the puzzle defines _animRectA;
+	// positioning of the overlay is deferred to startFinalAnimation() so the
+	// viewport offset is known.
+	if (_hasFinalAnim && !_extraSoundName.empty() && _extraSoundName != "NO_FILE") {
+		g_nancy->_resource->loadImage(Common::Path(_extraSoundName), _animImage);
+
+		// Use the engine's canonical transparent color so blitFrom and the
+		// renderer agree on which pixels are see-through. (The puzzle's own
+		// _drawSurface is never explicitly made transparent in init().)
+		const uint32 transColor = g_nancy->_graphics->getTransColor();
+		_animImage.setTransparentColor(transColor);
+
+		const int w = _animRectA.width();
+		const int h = _animRectA.height();
+		_finalAnimOverlay._drawSurface.create(w, h, _animImage.format);
+		_finalAnimOverlay._drawSurface.setTransparentColor(transColor);
+		_finalAnimOverlay._drawSurface.clear(transColor);
+		_finalAnimOverlay.setTransparent(true);
+		_finalAnimOverlay.setVisible(false);
+	}
+
 	for (uint i = 0; i < _pieces.size(); ++i) {
 		Piece &p = _pieces[i];
 		int w = p.srcRect.width();
@@ -60,6 +82,16 @@ void OneBuildPuzzle::init() {
 			}
 		}
 
+		p.useAltSurface = false;
+		if (!p.altSrcRect.isEmpty() && !p.isPreRotated) {
+			int aw = p.altSrcRect.width();
+			int ah = p.altSrcRect.height();
+			p.altSurface.create(aw, ah, _image.format);
+			p.altSurface.setTransparentColor(_drawSurface.getTransparentColor());
+			p.altSurface.blitFrom(_image, p.altSrcRect, Common::Point(0, 0));
+			p.useAltSurface = true;
+		}
+
 		// Initial position and rotation
 		if (p.isPreRotated) {
 			// Pre-rotated pieces start at their slot and are already placed
@@ -69,8 +101,16 @@ void OneBuildPuzzle::init() {
 		} else {
 			// Normal pieces start at home with defaultRotation
 			p.curRotation = p.defaultRotation;
-			p.gameRect = p.homeRect;
 			p.placed = false;
+
+			// Nancy12 puzzles may ship pieces with an empty home rect
+			// (top == bottom), which means "start scattered": the original
+			// init picks a random spot inside the home-scatter zone. Without
+			// this, such pieces get a zero-height rect and are invisible.
+			if (g_nancy->getGameType() >= kGameTypeNancy12 && p.homeRect.top == p.homeRect.bottom)
+				scatterPiece(p);
+			else
+				p.gameRect = p.homeRect;
 		}
 
 		updatePieceRender(i);
@@ -78,14 +118,136 @@ void OneBuildPuzzle::init() {
 		p.setTransparent(true);
 		p.setZ(_z + (uint16)i + 1);
 	}
+
+	_isInitialized = true;
 }
 
 void OneBuildPuzzle::registerGraphics() {
+	if (!_isInitialized)
+		return;
+
 	for (uint i = 0; i < _pieces.size(); ++i)
 		_pieces[i].registerGraphics();
+
+	if (_hasFinalAnim)
+		_finalAnimOverlay.registerGraphics();
+}
+
+// Nancy12 (AR 166) reworked OneBuildPuzzle onto the shared PuzzleBase loader:
+// a fixed 513-byte header blob, followed by six variable-length "random sound"
+// blocks, then a variable-count array of the same 66-byte piece records used by
+// the older games. The piece array is no longer a fixed 20-slot block.
+void OneBuildPuzzle::readDataNancy12(Common::SeekableReadStream &stream) {
+	// --- PuzzleBase header blob (513 bytes) ---
+	readFilename(stream, _imageName);       // 0x00
+	_freePlacement = stream.readByte();     // 0x21
+	_canRotateAll = stream.readByte();      // 0x22
+	stream.skip(6);                         // 0x23: rotation/zone config + placement-mode byte
+	_slotTolerance = stream.readSint16LE(); // 0x29
+
+	// 0x2b..0xe9: placement-mode byte, final-animation centering rect and filler
+	// count. None are needed by this port.
+	stream.skip(0xea - 0x2b);
+
+	// 0xea: home-scatter zone. Pieces whose stored home rect is empty are
+	// scattered to a random spot inside this rect at init (see scatterPiece()).
+	readRect(stream, _scatterZone);         // 0xea..0xf9
+
+	// 0xfa..0x11f: misc config, unused by this port.
+	stream.skip(0x120 - 0xfa);
+
+	readFilename(stream, _extraSoundName);  // 0x120: final-animation atlas image
+	readRect(stream, _animRectA);           // 0x141
+	readRect(stream, _animRectB);           // 0x151
+	for (uint i = 0; i < 6; ++i)            // 0x161
+		_animLayout[i] = stream.readSint16LE();
+	_animSound1.readNormal(stream);         // 0x16d
+	_animSound2.readNormal(stream);         // 0x19e
+	_hasFinalAnim = !_animRectA.isEmpty();
+
+	_solveScene.readData(stream);           // 0x1cf
+	_cancelScene.readData(stream);          // 0x1e8 (ends the 513-byte blob)
+
+	// --- Random-sound blocks: pickup, rotate, drop, good, bad, completion ---
+	RandomSoundBlock blocks[kNumSounds];
+	for (uint i = 0; i < kNumSounds; ++i)
+		blocks[i].readData(stream);
+
+	SoundDescription *sounds[kNumSounds] = { &_pickupSound, &_rotateSound, &_dropSound,
+											 &_goodPlacementSound, &_badPlacementSound, &_completionSound };
+	for (uint i = 0; i < kNumSounds; ++i) {
+		SoundDescription &s = *sounds[i];
+		s.name = blocks[i].names.empty() ? "NO SOUND" : blocks[i].names[0];
+		s.channelID = blocks[i].channel;
+		s.numLoops = blocks[i].numLoops;
+		s.volume = blocks[i].volume;
+	}
+
+	// The drop/good/bad sounds pick randomly between their alternatives, which are
+	// now the extra entries of the corresponding block.
+	Common::String *dropAlts[2] = { &_dropAlt1Filename, &_dropAlt2Filename };
+	Common::String *goodAlts[2] = { &_goodAlt1Filename, &_goodAlt2Filename };
+	Common::String *badAlts[2]  = { &_badAlt1Filename,  &_badAlt2Filename };
+	Common::String **altSets[3] = { dropAlts, goodAlts, badAlts };
+	const uint altBlocks[3] = { kDropSound, kGoodSound, kBadSound };
+	for (uint i = 0; i < 3; ++i) {
+		for (uint a = 0; a < 2; ++a) {
+			const RandomSoundBlock &b = blocks[altBlocks[i]];
+			*altSets[i][a] = (b.names.size() > a + 1) ? b.names[a + 1] : "NO SOUND";
+		}
+	}
+
+	// Nancy12 puzzles no longer carry inline good/bad/completion text.
+	_goodTexts.resize(3);
+	_badTexts.resize(3);
+
+	// --- Piece array (variable count) ---
+	stream.readSint16LE(); // Secondary piece count (matches numPieces in practice)
+	_numPieces = stream.readUint16LE();
+
+	_pieces.resize(_numPieces);
+	for (uint i = 0; i < _numPieces; ++i) {
+		Piece &p = _pieces[i];
+
+		// Two source rects: altSrc = at-home art, srcRect = active art.
+		Common::Rect altSrc;
+		readRect(stream, altSrc);
+		readRect(stream, p.srcRect);
+		if (p.srcRect.isEmpty())
+			p.srcRect = altSrc;
+		else if (!altSrc.isEmpty())
+			p.altSrcRect = altSrc;
+
+		readRect(stream, p.slotRect);
+		readRect(stream, p.homeRect);
+		p.defaultRotation = stream.readByte();
+		// A piece is pre-placed only when this marker is exactly 10.
+		p.isPreRotated = stream.readByte() == 10;
+	}
+
+	// Optional placement-order arrays, each present only when its flag is set.
+	_orderedPlacement = stream.readByte() != 0;
+	if (_orderedPlacement) {
+		_placementOrder.resize(_numPieces);
+		for (uint i = 0; i < _numPieces; ++i)
+			_placementOrder[i] = stream.readSint16LE();
+	}
+
+	if (stream.readByte() != 0) {
+		_legacyPlacementOrder.resize(_numPieces);
+		for (uint i = 0; i < _numPieces; ++i)
+			_legacyPlacementOrder[i] = stream.readSint16LE();
+	}
 }
 
 void OneBuildPuzzle::readData(Common::SeekableReadStream &stream) {
+	if (g_nancy->getGameType() >= kGameTypeNancy12) {
+		readDataNancy12(stream);
+		return;
+	}
+
+	const bool isNancy10 = g_nancy->getGameType() >= kGameTypeNancy10;
+
 	readFilename(stream, _imageName);
 
 	_numPieces = stream.readUint16LE();
@@ -93,64 +255,98 @@ void OneBuildPuzzle::readData(Common::SeekableReadStream &stream) {
 	_canRotateAll = stream.readByte();
 	stream.skip(6); // rotationMode, zoneHeight, zoneWidth, mouse-clamping flag
 	_slotTolerance = stream.readSint16LE();
+
+	if (isNancy10) {
+		// TODO: purpose of this duplicate placement-order block is unknown.
+		_legacyOrderedFlag = stream.readByte() != 0;
+		_legacyPlacementOrder.resize(20);
+		for (uint i = 0; i < 20; ++i)
+			_legacyPlacementOrder[i] = stream.readSint16LE();
+	}
+
 	_orderedPlacement = stream.readByte();
 
 	_placementOrder.resize(20);
 	for (uint i = 0; i < 20; ++i)
 		_placementOrder[i] = stream.readSint16LE();
 
+	// Nancy 10 piece records add an alternative source rect at the front.
+	const uint pieceSize = isNancy10 ? 66 : 50;
+
 	_pieces.resize(_numPieces);
 	for (uint i = 0; i < 20; ++i) {
-		if (i < _numPieces) {
-			Piece &p = _pieces[i];
-			readRect(stream, p.srcRect);
-			readRect(stream, p.slotRect);
-			readRect(stream, p.homeRect);
-			p.defaultRotation = stream.readByte();
-			p.isPreRotated = stream.readByte();
-		} else {
-			stream.skip(50);
+		if (i >= _numPieces) {
+			stream.skip(pieceSize);
+			continue;
 		}
+
+		Piece &p = _pieces[i];
+		if (isNancy10) {
+			// Two rects: altSrc = at-home art, srcRect = active art
+			Common::Rect altSrc;
+			readRect(stream, altSrc);
+			readRect(stream, p.srcRect);
+			if (p.srcRect.isEmpty()) {
+				p.srcRect = altSrc;
+			} else if (!altSrc.isEmpty()) {
+				p.altSrcRect = altSrc;
+			}
+		} else {
+			readRect(stream, p.srcRect);
+		}
+		readRect(stream, p.slotRect);
+		readRect(stream, p.homeRect);
+		p.defaultRotation = stream.readByte();
+		p.isPreRotated = stream.readByte();
 	}
 
-	_pickupSound.readNormal(stream);  // +0x43e: played when rotating a placed piece
-	_rotateSound.readNormal(stream);  // +0x46f: played when picking up an unplaced piece
-	_dropSound.readNormal(stream);    // +0x4a0: played when dropping a piece
+	if (isNancy10) {
+		stream.skip(32); // TODO: 32 post-piece bytes, layout undecoded.
+		readFilename(stream, _extraSoundName);
+		readRect(stream, _animRectA);
+		readRect(stream, _animRectB);
+		for (uint i = 0; i < 6; ++i)
+			_animLayout[i] = stream.readSint16LE();
+		_animSound1.readNormal(stream);
+		_animSound2.readNormal(stream);
+		_hasFinalAnim = !_animRectA.isEmpty();
+	}
+
+	_pickupSound.readNormal(stream);
+	_rotateSound.readNormal(stream);
+	_dropSound.readNormal(stream);
 	readFilename(stream, _dropAlt1Filename);
 	readFilename(stream, _dropAlt2Filename);
 
-	_goodPlacementSound.readNormal(stream); // +0x513
+	const CVTX *autotext = (const CVTX *)g_nancy->getEngineData("AUTOTEXT");
+	assert(autotext);
+
+	_goodPlacementSound.readNormal(stream);
 	readFilename(stream, _goodAlt1Filename);
 	readFilename(stream, _goodAlt2Filename);
+	readPlacementTexts(stream, _goodTexts);
 
-	_goodTexts.resize(3);
-	Common::String unusedKey;
-	for (uint i = 0; i < 3; ++i)
-		readFilename(stream, unusedKey);
-	char textBuf[200];
-	for (uint i = 0; i < 3; ++i) {
-		stream.read(textBuf, 200);
-		assembleTextLine(textBuf, _goodTexts[i], 200);
-	}
-
-	_badPlacementSound.readNormal(stream);  // +0x841
+	_badPlacementSound.readNormal(stream);
 	readFilename(stream, _badAlt1Filename);
 	readFilename(stream, _badAlt2Filename);
+	readPlacementTexts(stream, _badTexts);
 
-	_badTexts.resize(3);
-	for (uint i = 0; i < 3; ++i)
-		readFilename(stream, unusedKey);
-	for (uint i = 0; i < 3; ++i) {
-		stream.read(textBuf, 200);
-		assembleTextLine(textBuf, _badTexts[i], 200);
-	}
-
-	stream.skip(4); // unknown bytes at +0xb6f
+	// Piece hover/drag cursor, then exit cursor (handled via _puzzleExitCursor).
+	_pieceCursorType = stream.readSint16LE();
+	stream.skip(2);
 	_solveScene.readData(stream);
 	_completionSound.readNormal(stream);
-	readFilename(stream, unusedKey);
+
+	// Completion caption: AUTOTEXT key if known, else inline text.
+	Common::String completionKey;
+	char textBuf[200];
+	readFilename(stream, completionKey);
 	stream.read(textBuf, 200);
-	assembleTextLine(textBuf, _completionText, 200);
+	_completionText.clear();
+	if (!completionKey.empty() && autotext->texts.contains(completionKey))
+		_completionText = autotext->texts[completionKey];
+	else
+		assembleTextLine(textBuf, _completionText, 200);
 
 	_cancelScene.readData(stream);
 	readRect(stream, _exitHotspot);
@@ -182,8 +378,9 @@ void OneBuildPuzzle::execute() {
 					// Pickup/rotate sound finished; return to idle (piece still dragging)
 					_solveState = kIdle;
 				} else if (_correctlyPlaced) {
-					playGoodPlacementSound();
 					checkAllPlaced();
+					if (!_isSolved)
+						playGoodPlacementSound();
 				} else {
 					// Wrong drop: play bad placement feedback
 					playBadPlacementSound();
@@ -206,12 +403,18 @@ void OneBuildPuzzle::execute() {
 			break;
 		case kTriggerCompletion:
 			// Play completion sound/text, then wait for it to finish
+			g_nancy->_sound->loadSound(_completionSound);
 			g_nancy->_sound->playSound(_completionSound);
 			if (!_completionText.empty()) {
 				NancySceneState.getTextbox().clear();
 				NancySceneState.getTextbox().addTextLine(_completionText);
 			}
 			_solveState = kWaitCompletion;
+			break;
+		case kAnimateFinal:
+			// 100ms per frame, matches original case 3/4 tick rate
+			if (g_system->getMillis() >= _timerEnd)
+				stepFinalAnimation();
 			break;
 		}
 		break;
@@ -240,10 +443,23 @@ void OneBuildPuzzle::handleInput(NancyInput &input) {
 	Common::Point mouseVP(input.mousePos.x - vpScreen.left,
 						  input.mousePos.y - vpScreen.top);
 
+	// Post-placement final-animation stage: once all pieces are placed on a
+	// puzzle that defines _animRectA, the puzzle waits here until the user
+	// clicks the hotspot (e.g. winding a music-box crank, throwing a lever).
+	if (_waitingForFinalAnim && _solveState == kIdle) {
+		if (_animRectA.contains(mouseVP)) {
+			g_nancy->_cursor->setCursorType(CursorManager::kPuzzleArrow);
+			if (input.input & NancyInput::kLeftMouseButtonUp)
+				startFinalAnimation();
+			return;
+		}
+		// Fall through so the exit hotspot still works while waiting.
+	}
+
 	if (_isDragging) {
 		// Always update drag position while carrying a piece
 		updateDragPosition(mouseVP);
-		g_nancy->_cursor->setCursorType(CursorManager::kCustom1);
+		setPieceCursor();
 
 		if (_solveState != kIdle)
 			return;
@@ -264,23 +480,31 @@ void OneBuildPuzzle::handleInput(NancyInput &input) {
 
 			Common::Rect slot = piece.slotRect;
 
-			// Correct placement: bounding-box must fit within slot +- tolerance
-			// (piece is rotation 0, same size as slot)
+			// Bounding-box must fit within slot +- tolerance.
 			bool nearSlot = (piece.gameRect.left >= slot.left - _slotTolerance &&
 							 piece.gameRect.top  >= slot.top  - _slotTolerance &&
 							 piece.gameRect.right  <= slot.right  + _slotTolerance &&
 							 piece.gameRect.bottom <= slot.bottom + _slotTolerance);
 
-			bool correctRotation = (piece.curRotation == 0);
+			// A piece only fits at its correct (unrotated) orientation; a
+			// 180-degree flip keeps the same bounding box, so proximity alone
+			// would accept an upside-down piece.
+			bool rotationOk = (piece.curRotation == 0);
+
 			bool orderOk = !_orderedPlacement ||
 				(_piecesPlaced < (uint16)_placementOrder.size() &&
 				 _placementOrder[_piecesPlaced] == (int16)(_pickedUpPiece + 1));
 
-			if (nearSlot && correctRotation && orderOk) {
+			if (nearSlot && rotationOk && orderOk) {
 				piece.gameRect = piece.slotRect;
 				piece.placed = true;
 				_correctlyPlaced = true;
 				++_piecesPlaced;
+
+				// Skip pre-placed pieces
+				if (_piecesPlaced < _placementOrder.size() && (uint)(_placementOrder[_piecesPlaced] - 1) < _pieces.size())
+					if (_pieces[_placementOrder[_piecesPlaced] - 1].isPreRotated)
+						++_piecesPlaced;
 			} else {
 				_correctlyPlaced = false;
 				if (!_freePlacement) {
@@ -289,6 +513,12 @@ void OneBuildPuzzle::handleInput(NancyInput &input) {
 					piece.curRotation = piece.defaultRotation;
 					piece.gameRect = piece.homeRect;
 				}
+			}
+
+			// Re-arm at-home art when the piece lands back on homeRect
+			if (!piece.altSurface.empty() && !piece.placed &&
+					piece.gameRect == piece.homeRect) {
+				piece.useAltSurface = true;
 			}
 
 			updatePieceRender(_pickedUpPiece);
@@ -320,19 +550,22 @@ void OneBuildPuzzle::handleInput(NancyInput &input) {
 	}
 
 	if (topmostAny != -1) {
-		g_nancy->_cursor->setCursorType(CursorManager::kHotspot);
-
-		// Right click: rotate topmost piece under cursor
-		if (input.input & NancyInput::kRightMouseButtonUp) {
-			rotatePiece(topmostAny);
-			playPickupSound();
-			return;
-		}
+		if (topmostUnplaced != -1)
+			setPieceCursor();
 
 		// Left click on an unplaced piece: pick it up
-		if ((input.input & NancyInput::kLeftMouseButtonUp) && topmostUnplaced != -1) {
-			Piece &pp = _pieces[topmostUnplaced];
+		// Right click: pick it up and rotate it
+		bool leftClick = (input.input & NancyInput::kLeftMouseButtonUp);
+		bool rightClick = (input.input & NancyInput::kRightMouseButtonUp);
+		if ((leftClick || rightClick) && topmostUnplaced != -1) {
 			_pickedUpPiece = topmostUnplaced;
+
+			Piece &pp = _pieces[_pickedUpPiece];
+			pp.useAltSurface = false;
+
+			if (rightClick)
+				rotatePiece(_pickedUpPiece);
+
 			_isDragging = true;
 			_pickedUpWidth  = pp.rotateSurfaces[pp.curRotation].w;
 			_pickedUpHeight = pp.rotateSurfaces[pp.curRotation].h;
@@ -356,20 +589,54 @@ void OneBuildPuzzle::handleInput(NancyInput &input) {
 
 // --- Internal helpers ---
 
+void OneBuildPuzzle::readPlacementTexts(Common::SeekableReadStream &stream, Common::Array<Common::String> &out) {
+	const CVTX *autotext = (const CVTX *)g_nancy->getEngineData("AUTOTEXT");
+	assert(autotext);
+
+	Common::String keys[3];
+	for (uint i = 0; i < 3; ++i)
+		readFilename(stream, keys[i]);
+
+	char textBuf[200];
+	out.resize(3);
+	for (uint i = 0; i < 3; ++i) {
+		stream.read(textBuf, 200);
+		if (!keys[i].empty() && autotext->texts.contains(keys[i]))
+			out[i] = autotext->texts[keys[i]];
+		else
+			assembleTextLine(textBuf, out[i], 200);
+	}
+}
+
+void OneBuildPuzzle::setPieceCursor() {
+	if (g_nancy->getGameType() >= kGameTypeNancy10)
+		g_nancy->_cursor->setCursorType((CursorManager::CursorType)_pieceCursorType, true, false);
+	else
+		g_nancy->_cursor->setCursorType(CursorManager::kCustom1);
+}
+
 void OneBuildPuzzle::updatePieceRender(int pieceIdx) {
 	Piece &p = _pieces[pieceIdx];
-	int rot = p.curRotation;
-	if (!p.hasSurface[rot])
-		rot = 0;
-	if (!p.hasSurface[rot])
-		return;
-	p._drawSurface.create(p.rotateSurfaces[rot], p.rotateSurfaces[rot].getBounds());
+	if (p.useAltSurface && !p.altSurface.empty()) {
+		p._drawSurface.create(p.altSurface, p.altSurface.getBounds());
+	} else {
+		int rot = p.curRotation;
+		if (!p.hasSurface[rot])
+			rot = 0;
+		if (!p.hasSurface[rot])
+			return;
+		p._drawSurface.create(p.rotateSurfaces[rot], p.rotateSurfaces[rot].getBounds());
+	}
 	p.setTransparent(true);
 	p.moveTo(p.gameRect);
 }
 
 void OneBuildPuzzle::rotatePiece(int pieceIdx) {
 	Piece &p = _pieces[pieceIdx];
+
+	if (!_canRotateAll && !p.isPreRotated)
+		return;
+
 	int oldRot = p.curRotation;
 	int oldW = p.rotateSurfaces[oldRot].w;
 	int oldH = p.rotateSurfaces[oldRot].h;
@@ -440,11 +707,51 @@ void OneBuildPuzzle::clampRectToViewport(Common::Rect &rect) {
 	}
 }
 
+void OneBuildPuzzle::scatterPiece(Piece &p) {
+	// Piece display size at its starting rotation. Fall back to rotation 0 when
+	// the rotated surface wasn't generated (non-rotatable pieces).
+	int rot = p.hasSurface[p.curRotation] ? p.curRotation : 0;
+	int w = p.rotateSurfaces[rot].w;
+	int h = p.rotateSurfaces[rot].h;
+
+	// The scatter zone comes from the puzzle data; if it's degenerate the
+	// original engine falls back to the full viewport (as kBegin does).
+	Common::Rect zone = _scatterZone;
+	if (zone.isEmpty()) {
+		const VIEW *viewData = GetEngineData(VIEW);
+		if (viewData)
+			zone = Common::Rect(viewData->screenPosition.width(), viewData->screenPosition.height());
+	}
+
+	int maxLeft = MAX<int>(zone.left, zone.right - w);
+	int maxTop  = MAX<int>(zone.top, zone.bottom - h);
+	int left = zone.left + (int)g_nancy->_randomSource->getRandomNumber(MAX(0, maxLeft - zone.left));
+	int top  = zone.top  + (int)g_nancy->_randomSource->getRandomNumber(MAX(0, maxTop - zone.top));
+
+	p.gameRect = Common::Rect((int16)left, (int16)top, (int16)(left + w), (int16)(top + h));
+}
+
 void OneBuildPuzzle::checkAllPlaced() {
 	for (uint i = 0; i < _pieces.size(); ++i) {
-		if (!_pieces[i].placed)
-			return;
+		if (_pieces[i].placed)
+			continue;
+
+		// Nancy 10: pieces with an empty slotRect (top == 0 && bottom == 0)
+		// are filler — they don't need to be placed for the puzzle to solve.
+		const Common::Rect &slot = _pieces[i].slotRect;
+		if (slot.top == 0 && slot.bottom == 0)
+			continue;
+
+		return;
 	}
+
+	// Puzzles with a post-placement animation (e.g. scene 3637's music-box
+	// crank) require the player to click _animRectA before the puzzle solves.
+	if (_hasFinalAnim && !_finalAnimDone) {
+		_waitingForFinalAnim = true;
+		return;
+	}
+
 	_isSolved = true;
 	_solveState = kTriggerCompletion;
 }
@@ -516,6 +823,82 @@ void OneBuildPuzzle::playBadPlacementSound() {
 	}
 	_solveState = kWaitPlaceSound;
 	_timerEnd = g_system->getMillis() + 1000;
+}
+
+void OneBuildPuzzle::startFinalAnimation() {
+	_finalAnimDone = true;       // one-shot guard
+	_waitingForFinalAnim = false;
+	_animFrameCounter = 0;
+	_animRowCounter = 0;
+
+	// Without an animation image to step through, fall straight into completion.
+	if (_animImage.w == 0) {
+		if (_animSound1.name != "NO SOUND" && !_animSound1.name.empty()) {
+			g_nancy->_sound->loadSound(_animSound1);
+			g_nancy->_sound->playSound(_animSound1);
+		}
+		_isSolved = true;
+		_solveState = kTriggerCompletion;
+		return;
+	}
+
+	// Position the overlay at _animRectA, translated into screen coords.
+	const VIEW *viewData = GetEngineData(VIEW);
+	Common::Rect dst = _animRectA;
+	if (viewData)
+		dst.translate(viewData->screenPosition.left, viewData->screenPosition.top);
+	_finalAnimOverlay.moveTo(dst);
+	_finalAnimOverlay.setVisible(true);
+
+	if (_animSound1.name != "NO SOUND" && !_animSound1.name.empty()) {
+		g_nancy->_sound->loadSound(_animSound1);
+		g_nancy->_sound->playSound(_animSound1);
+	}
+
+	_solveState = kAnimateFinal;
+	_timerEnd = g_system->getMillis();   // fire immediately on first tick
+}
+
+void OneBuildPuzzle::stepFinalAnimation() {
+	// animLayout = {cols, framesPerStep, baseX, baseY, spacing, totalRows}.
+	// Counter wraps to the next row when (counter / framesPerStep) >= cols.
+	const int16 cols          = _animLayout[0];
+	const int16 framesPerStep = _animLayout[1] ? _animLayout[1] : 1;
+	const int16 baseX         = _animLayout[2];
+	const int16 baseY         = _animLayout[3];
+	const int16 spacing       = _animLayout[4];
+	const int16 totalRows     = _animLayout[5];
+
+	if (_animFrameCounter / framesPerStep >= cols) {
+		_animFrameCounter = 0;
+		++_animRowCounter;
+	}
+
+	if (_animRowCounter < totalRows) {
+		// Source rect on the atlas. Original engine uses inclusive width/height
+		// (right_raw - left_raw), so width()-1 / height()-1 in our convention.
+		const int cellW = _animRectA.width()  - 1;
+		const int cellH = _animRectA.height() - 1;
+		const int srcLeft = baseX + (cellW + spacing) * (_animFrameCounter % framesPerStep);
+		const int srcTop  = baseY + (cellH + spacing) * (_animFrameCounter / framesPerStep);
+		Common::Rect src(srcLeft, srcTop, srcLeft + _animRectA.width(), srcTop + _animRectA.height());
+
+		// Clear to transparent first so any pixels not covered by the source
+		// (or skipped by source-transparency) stay see-through, not garbage.
+		_finalAnimOverlay._drawSurface.clear(g_nancy->_graphics->getTransColor());
+		_finalAnimOverlay._drawSurface.blitFrom(_animImage, src, Common::Point(0, 0));
+		_finalAnimOverlay.setVisible(true);
+		_finalAnimOverlay.setNeedsRedraw(true);
+
+		++_animFrameCounter;
+		_timerEnd = g_system->getMillis() + 100;
+		return;
+	}
+
+	// Animation finished: hide overlay and run the standard completion flow.
+	_finalAnimOverlay.setVisible(false);
+	_isSolved = true;
+	_solveState = kTriggerCompletion;
 }
 
 // static

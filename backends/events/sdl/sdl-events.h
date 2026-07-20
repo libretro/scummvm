@@ -47,7 +47,7 @@ public:
 	/**
 	 * Gets and processes SDL events.
 	 */
-	virtual bool pollEvent(Common::Event &event);
+	bool pollEvent(Common::Event &event) override;
 
 	/**
 	 * Emulates a mouse movement that would normally be caused by a mouse warp
@@ -213,6 +213,20 @@ protected:
 	 */
 	Common::Event _fakeMouseMove;
 
+	/**
+	 * WORKAROUND: Whether stale mouse positions on macOS 26 are corrected in
+	 * handleMouseMotion(). Enabled by default; the testbed engine disables it
+	 * at runtime, through OSystem::kFeatureStaleMousePositionWorkaround, to
+	 * check whether the underlying bug still occurs.
+	 */
+	bool _staleMousePositionWorkaround = true;
+
+public:
+	void setStaleMousePositionWorkaround(bool enable) { _staleMousePositionWorkaround = enable; }
+	bool getStaleMousePositionWorkaround() const { return _staleMousePositionWorkaround; }
+
+protected:
+
 	uint8 _lastHatPosition;
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
@@ -226,6 +240,18 @@ protected:
 	 * KEYDOWN event.
 	 */
 	Common::Event _fakeKeyUp;
+
+	/**
+	 * Whether and how many times _fakeMouseScroll contains an event we need to send .
+	 */
+	int _queuedFakeMouseScroll;
+
+	/**
+	 * A fake mouse scroll event sent when the graphics manager is told to warp
+	 * the mouse but the system mouse is unable to be warped (e.g. because the
+	 * window is not focused).
+	 */
+	Common::Event _fakeMouseScroll;
 
 	enum {
 		MAX_NUM_FINGERS = 3, // number of fingers to track per panel

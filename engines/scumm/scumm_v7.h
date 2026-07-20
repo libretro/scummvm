@@ -38,6 +38,8 @@ class TextRenderer_v7;
 class ScummEngine_v7 : public ScummEngine_v6 {
 	friend class SmushPlayer;
 	friend class Insane;
+	friend class InsaneRebel1;
+	friend class InsaneRebel2;
 public:
 	ScummEngine_v7(OSystem *syst, const DetectorResult &dr);
 	~ScummEngine_v7() override;
@@ -104,6 +106,7 @@ public:
 	void displayDialog() override;
 	bool isSmushActive() override { return _smushActive; }
 	bool isInsaneActive() override { return _insane ? _insane->isInsaneActive() : false; }
+	Insane *getInsane() { return _insane; }
 	void removeBlastTexts() override;
 	void restoreBlastTextsRects();
 

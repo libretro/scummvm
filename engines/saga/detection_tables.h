@@ -997,6 +997,31 @@ static const SAGAGameDescription gameDescriptions[] = {
 		{},
 	},
 
+	// Inherit the earth - Russian Windows CD version (fan translation)
+	{
+		{
+			"ite",
+			"Windows CD Version",
+			{
+				{"ite.rsc",		GAME_RESOURCEFILE,	"fedbe4a01170f7a94e3426a2a9550be3", 9035369},
+				{"scripts.rsc",	GAME_SCRIPTFILE,	"a891405405edefc69c9d6c420c868b84", 328193},
+				AD_LISTEND
+			},
+			Common::RU_RUS,
+			Common::kPlatformWindows,
+			ADGF_CD,
+			GUIO0()
+		},
+		GID_ITE,
+		0,
+		ITE_DEFAULT_SCENE,
+		RESOURCELIST_ITE,
+		FONTLIST_ITE,
+		PATCHLIST_ITE,
+		INTROLIST_ITE_DEFAULT,
+		{},
+	},
+
 	// ITE floppy versions ////////////////////////////////////////////////////////////////////////////////////
 
 	// Inherit the earth - German Floppy version
@@ -1378,7 +1403,7 @@ static const SAGAGameDescription gameDescriptions[] = {
 				{"musicfm.res",	GAME_MUSICFILE_FM,					"0439083e3dfdc51b486071d45872ae52", AD_NO_SIZE},
 				{"musicgm.res",	GAME_MUSICFILE_GM,					"80f875a1fb384160d1f4b27166eef583", AD_NO_SIZE},
 				{"scream.res",	GAME_RESOURCEFILE,					"46bbdc65d164ba7e89836a0935eec8e6", 79211140},
-				{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
+				//{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
 				{"scripts.res",	GAME_SCRIPTFILE,					"be38bbc5a26be809dbf39f13befebd01", AD_NO_SIZE},
 				//{"sfx.res",		GAME_SOUNDFILE,						"1c610d543f32ec8b525e3f652536f269", AD_NO_SIZE},
 				// There are two English versions of the game, each one with a different sfx.res file
@@ -1414,7 +1439,7 @@ static const SAGAGameDescription gameDescriptions[] = {
 				{"musicgm.res",	GAME_MUSICFILE_GM,					"80f875a1fb384160d1f4b27166eef583", AD_NO_SIZE},
 				{"scream.res",	GAME_RESOURCEFILE,					"c92370d400e6f2a3fc411c3729d09224", 78517884},
 				{"scripts.res",	GAME_SCRIPTFILE,					"32aa01a89937520fe0ea513950117292", AD_NO_SIZE},
-				{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
+				//{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
 				{"sfx.res",		GAME_SOUNDFILE,						"1c610d543f32ec8b525e3f652536f269", AD_NO_SIZE},
 				AD_LISTEND
 			},
@@ -1504,7 +1529,7 @@ static const SAGAGameDescription gameDescriptions[] = {
 				{"musicfm.res",	GAME_MUSICFILE_FM,					"0439083e3dfdc51b486071d45872ae52", AD_NO_SIZE},
 				{"musicgm.res",	GAME_MUSICFILE_GM,					"80f875a1fb384160d1f4b27166eef583", AD_NO_SIZE},
 				{"scream.res",	GAME_RESOURCEFILE,					"c92370d400e6f2a3fc411c3729d09224", 78560025},
-				{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
+				//{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
 				{"scripts.res",	GAME_SCRIPTFILE,					"be38bbc5a26be809dbf39f13befebd01", AD_NO_SIZE},
 				{"sfx.res",		GAME_SOUNDFILE,						"1c610d543f32ec8b525e3f652536f269", AD_NO_SIZE},
 				AD_LISTEND
@@ -1565,7 +1590,7 @@ static const SAGAGameDescription gameDescriptions[] = {
 				{"musicgm.res",	GAME_MUSICFILE_GM,					"80f875a1fb384160d1f4b27166eef583", AD_NO_SIZE},
 				{"scream.res",	GAME_RESOURCEFILE,					"c92370d400e6f2a3fc411c3729d09224", 78519324},
 				{"scripts.res",	GAME_SCRIPTFILE,					"32aa01a89937520fe0ea513950117292", AD_NO_SIZE},
-				{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
+				//{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
 				{"sfx.res",		GAME_SOUNDFILE,						"1c610d543f32ec8b525e3f652536f269", AD_NO_SIZE},
 				AD_LISTEND
 			},
@@ -1623,7 +1648,7 @@ static const SAGAGameDescription gameDescriptions[] = {
 				{"musicfm.res",	GAME_MUSICFILE_FM,					"0439083e3dfdc51b486071d45872ae52", AD_NO_SIZE},
 				{"musicgm.res",	GAME_MUSICFILE_GM,					"80f875a1fb384160d1f4b27166eef583", AD_NO_SIZE},
 				{"scream.res",	GAME_RESOURCEFILE,					"46bbdc65d164ba7e89836a0935eec8e6", 79211498},
-				{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
+				//{"patch.re_",	GAME_PATCHFILE | GAME_RESOURCEFILE,	"58b79e61594779513c7f2d35509fa89e", AD_NO_SIZE},
 				{"scripts.res",	GAME_SCRIPTFILE,					"be38bbc5a26be809dbf39f13befebd01", AD_NO_SIZE},
 				{"sfx.res",		GAME_SOUNDFILE,						"1c610d543f32ec8b525e3f652536f269", AD_NO_SIZE},
 				AD_LISTEND

@@ -44,12 +44,13 @@ namespace Gamos {
 
 GamosEngine::GamosEngine(OSystem *syst, const GamosGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc),
-	_messageProc(this),
 	_vm(this, callbackVMCallDispatcher),
+	_messageProc(this),
 	_txtInputVMAccess(_vm),
 	_randomSource("gamos") {
 	for(uint i = 0; i < 256; i++)
 		_txtInputObjects[i] = nullptr;
+	memset(_txtInputBuffer, 0, sizeof(_txtInputBuffer));
 }
 
 GamosEngine::~GamosEngine() {
@@ -1291,7 +1292,7 @@ uint8 GamosEngine::update(Common::Point screenSize, Common::Point mouseMove, Com
 	if (_enableInput == 0) {
 		act1 = ACT_NONE;
 		act2 = ACT_NONE;
-		_pressedKeyCode = ACT_NONE;
+		keyCode = ACT_NONE;
 	}
 
 	_pressedKeyCode = keyCode;
@@ -2970,7 +2971,7 @@ void GamosEngine::vmCallDispatcher(VM::Context *ctx, uint32 funcID) {
 
 		char buffer[256];
 		int a = 0, b = 0, c = 0, d = 0;
-		if (sscanf(str.c_str(), "%s %d %d %d %d", buffer, &a, &b, &c, &d) > 0) {
+		if (sscanf(str.c_str(), "%255s %d %d %d %d", buffer, &a, &b, &c, &d) > 0) {
 			stopMidi();
 			stopSounds();
 
@@ -3466,7 +3467,7 @@ void GamosEngine::addSubtitles(VM::Context *ctx, byte memtype, int32 offset, int
 Object *GamosEngine::addSubtitleImage(uint32 frame, int32 spr, int32 *pX, int32 y) {
 	Object *gfxObj = getFreeObject();
 	gfxObj->flags |= Object::FLAG_GRAPHIC | Object::FLAG_OVERLAY | Object::FLAG_FREECOORDS;
-	gfxObj->frame = 0;
+	//gfxObj->frame = 0;
 	gfxObj->frameMax = 1;
 	gfxObj->priority = _curObject->priority;
 	gfxObj->cell.x = -1;

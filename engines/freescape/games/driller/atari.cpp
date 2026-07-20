@@ -28,168 +28,6 @@
 
 namespace Freescape {
 
-namespace {
-// A simple implementation of memmem, which is a non-standard GNU extension.
-const void *local_memmem(const void *haystack, size_t haystack_len, const void *needle, size_t needle_len) {
-	if (needle_len == 0) {
-		return haystack;
-	}
-	if (haystack_len < needle_len) {
-		return nullptr;
-	}
-	const char *h = (const char *)haystack;
-	for (size_t i = 0; i <= haystack_len - needle_len; ++i) {
-		if (memcmp(h + i, needle, needle_len) == 0) {
-			return h + i;
-		}
-	}
-	return nullptr;
-}
-} // namespace
-
-Common::SeekableReadStream *DrillerEngine::decryptFileAtariVirtualWorlds(const Common::Path &filename) {
-	Common::File file;
-	if (!file.open(filename)) {
-		error("Failed to open %s", filename.toString().c_str());
-	}
-	const int size = file.size();
-	byte *data = (byte *)malloc(size);
-	file.read(data, size);
-
-	int start = 0;
-	int valid_offset = -1;
-	int chunk_size = 0;
-
-	while (true) {
-		const byte *found = (const byte *)local_memmem(data + start, size - start, "CBCP", 4);
-		if (!found) break;
-
-		int idx = found - data;
-		if (idx + 8 <= size) {
-			int sz = READ_BE_UINT32(data + idx + 4);
-			if (sz > 0 && sz < size + 0x20000) {
-				valid_offset = idx;
-				chunk_size = sz;
-			}
-		}
-		start = idx + 1;
-	}
-
-	if (valid_offset == -1) {
-		error("No valid CBCP chunk found in %s", filename.toString().c_str());
-	}
-
-	const byte *payload = data + valid_offset + 8;
-	const int payload_size = chunk_size;
-
-	if (payload_size < 12) {
-		error("Payload too short in %s", filename.toString().c_str());
-	}
-
-	uint32 bit_buf_init = READ_BE_UINT32(payload + payload_size - 12);
-	uint32 checksum_init = READ_BE_UINT32(payload + payload_size - 8);
-	uint32 decoded_size = READ_BE_UINT32(payload + payload_size - 4);
-
-	byte *out_buffer = (byte *)malloc(decoded_size);
-	int dst_idx = decoded_size;
-
-	struct BitStream {
-		const byte *_src_data;
-		int _src_idx;
-		uint32 _bit_buffer;
-		uint32 _checksum;
-		int _refill_carry;
-
-		BitStream(const byte *src_data, int start_idx, uint32 bit_buffer, uint32 checksum) :
-			_src_data(src_data), _src_idx(start_idx), _bit_buffer(bit_buffer), _checksum(checksum), _refill_carry(0) {}
-
-		void refill() {
-			if (_src_idx < 0) {
-				_refill_carry = 0;
-				_bit_buffer = 0x80000000;
-				return;
-			}
-			uint32 val = READ_BE_UINT32(_src_data + _src_idx);
-			_src_idx -= 4;
-			_checksum ^= val;
-			_refill_carry = val & 1;
-			_bit_buffer = (val >> 1) | 0x80000000;
-		}
-
-		int getBits(int count) {
-			uint32 result = 0;
-			for (int i = 0; i < count; ++i) {
-				int carry = _bit_buffer & 1;
-				_bit_buffer >>= 1;
-				if (_bit_buffer == 0) {
-					refill();
-					carry = _refill_carry;
-				}
-				result = (result << 1) | carry;
-			}
-			return result;
-		}
-	};
-
-	int src_idx = payload_size - 16;
-	uint32 checksum = checksum_init ^ bit_buf_init;
-	BitStream bs(payload, src_idx, bit_buf_init, checksum);
-
-	while (dst_idx > 0) {
-		if (bs.getBits(1) == 0) {
-			if (bs.getBits(1) == 1) {
-				int offset = bs.getBits(8);
-				for (int i = 0; i < 2; ++i) {
-					dst_idx--;
-					if (dst_idx >= 0) {
-						out_buffer[dst_idx] = out_buffer[dst_idx + offset];
-					}
-				}
-			} else {
-				int count = bs.getBits(3) + 1;
-				for (int i = 0; i < count; ++i) {
-					dst_idx--;
-					if (dst_idx >= 0) {
-						out_buffer[dst_idx] = bs.getBits(8);
-					}
-				}
-			}
-		} else {
-			int tag = bs.getBits(2);
-			if (tag == 3) {
-				int count = bs.getBits(8) + 9;
-				for (int i = 0; i < count; ++i) {
-					dst_idx--;
-					if (dst_idx >= 0) {
-						out_buffer[dst_idx] = bs.getBits(8);
-					}
-				}
-			} else if (tag == 2) {
-				int length = bs.getBits(8) + 1;
-				int offset = bs.getBits(12);
-				for (int i = 0; i < length; ++i) {
-					dst_idx--;
-					if (dst_idx >= 0) {
-						out_buffer[dst_idx] = out_buffer[dst_idx + offset];
-					}
-				}
-			} else {
-				int bits_offset = 9 + tag;
-				int length = 3 + tag;
-				int offset = bs.getBits(bits_offset);
-				for (int i = 0; i < length; ++i) {
-					dst_idx--;
-					if (dst_idx >= 0) {
-						out_buffer[dst_idx] = out_buffer[dst_idx + offset];
-					}
-				}
-			}
-		}
-	}
-	free(data);
-	return new Common::MemoryReadStream(out_buffer, decoded_size);
-}
-
 Common::SeekableReadStream *DrillerEngine::decryptFileAtari(const Common::Path &filename) {
 	Common::File file;
 	file.open(filename);
@@ -242,7 +80,7 @@ void DrillerEngine::loadAssetsAtariFullGame() {
 		loadGlobalObjects(stream, 0xd116, 8);
 		load8bitBinary(stream, 0x2afb8, 16);
 		loadPalettes(stream, 0x2ab76);
-		loadSoundsFx(stream, 0x30da6 + 0x147c, 25);
+		_sound = loadSoundsFx(stream, 0x30da6 + 0x147c, 25);
 	} else if (_variant & GF_ATARI_BUDGET) {
 		Common::File file;
 		file.open("x.prg");
@@ -267,7 +105,7 @@ void DrillerEngine::loadAssetsAtariFullGame() {
 			loadGlobalObjects(&file, 0xbccc - 0x1da, 8);
 			load8bitBinary(&file, 0x29b3c - 0x1d6, 16);
 			loadPalettes(&file, 0x296fa - 0x1d6);
-			loadSoundsFx(&file, 0x30da6 - 0x1d6, 25);
+			_sound = loadSoundsFx(&file, 0x30da6 - 0x1d6, 25);
 		} else {
 			_border = loadAndConvertNeoImage(stream, 0x1371a);
 			_title = loadAndConvertNeoImage(stream, 0x396);
@@ -283,7 +121,7 @@ void DrillerEngine::loadAssetsAtariFullGame() {
 			loadGlobalObjects(stream, 0xbccc, 8);
 			load8bitBinary(stream, 0x29b3c, 16);
 			loadPalettes(stream, 0x296fa);
-			loadSoundsFx(stream, 0x30da6, 25);
+			_sound = loadSoundsFx(stream, 0x30da6, 25);
 
 			// Budget Atari full-game indicator blocks match the Amiga retail data
 			// shifted by -0xDA in the validated 293062-byte x.prg layout.
@@ -393,7 +231,7 @@ void DrillerEngine::loadAssetsAtariDemo() {
 	if (!file.isOpen())
 		error("Failed to open 'soundfx' executable for AtariST demo");
 
-	loadSoundsFx(&file, 0, 25);
+	_sound = loadSoundsFx(&file, 0, 25);
 
 	for (auto &area : _areaMap) {
 		// Center and pad each area name so we do not have to do it at each frame

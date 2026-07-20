@@ -84,6 +84,10 @@ void Game::tooManyDrawRequests(int order) {
 	_message("Too many draw requests in order %d", order);
 }
 
+bool Game::shouldMusicLoop() {
+	return true;
+}
+
 bool Game::shouldCharacterTrigger(const Character *character, const char *action) {
 	return true;
 }
@@ -147,6 +151,10 @@ void Game::unknownScriptCharacter(const char *action, const char *name) {
 PointObject *Game::unknownGoPutTarget(const Process &process, const char *action, const char *name) {
 	_message("Script tried to make character %s to invalid object %s", action, name);
 	return nullptr;
+}
+
+String Game::alternativeAnimationName(const String &fileName, int variant) {
+	return {};
 }
 
 void Game::missingAnimation(const String &fileName) {
@@ -236,6 +244,16 @@ Game *Game::create() {
 			return createForMoscu();
 		case 'e':
 			return createForEscarabajo();
+		}
+		break;
+	case EngineVersion::V2_1:
+		switch (*desc.desc.gameId) {
+		case 'c':
+			return createForCorvino();
+		case 'b':
+			return createForBalones();
+		case 'm':
+			return createForMamelucos();
 		}
 		break;
 	case EngineVersion::V3_0:

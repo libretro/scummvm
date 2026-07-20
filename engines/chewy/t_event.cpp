@@ -143,7 +143,7 @@ int16 atsAction(int16 txtNr, int16 txtMode, int16 mode) {
 					case 73:
 						if (!_G(gameState).R9Grid) {
 							_G(gameState)._personHide[P_CHEWY] = true;
-							startSetAILWait(5, 1, ANI_FRONT);
+							startDetailWait(5, 1, ANI_FRONT);
 							_G(gameState)._personHide[P_CHEWY] = false;
 						} else {
 							retValue = false;
@@ -1198,7 +1198,7 @@ void selectDialogOption(int16 diaNr, int16 blkNr, int16 strEndNr) {
 		case 20:
 			if (blkNr == 0 && strEndNr == 1) {
 				_G(gameState)._personHide[P_CHEWY] = true;
-				startSetAILWait(28, 3, ANI_FRONT);
+				startDetailWait(28, 3, ANI_FRONT);
 				_G(gameState)._personHide[P_CHEWY] = false;
 			}
 			break;
@@ -1224,7 +1224,7 @@ void endDialogCloseup(int16 diaNr, int16 blkNr, int16 strEndNr) {
 	case 22:
 		if (strEndNr == 1) {
 			_G(det)->del_static_ani(3);
-			startSetAILWait(5, 1, ANI_FRONT);
+			startDetailWait(5, 1, ANI_FRONT);
 			_G(det)->set_static_ani(3, -1);
 			startAadWait(456);
 		}
@@ -1238,6 +1238,7 @@ void endDialogCloseup(int16 diaNr, int16 blkNr, int16 strEndNr) {
 #define R14_HERMIT_DIA 10000
 #define R8_NIMOYANER1_DIA 10001
 #define R8_NIMOYANER2_DIA 10002
+#define R11_TERMINAL_DIA 10003
 #define R12_BORK_DIA 10004
 #define R11_BORK_DIA 10005
 #define R8_NIMOYANER3_DIA 10006
@@ -1283,6 +1284,8 @@ void atdsStringStart(int16 diaNr, int16 strNr, int16 personNr, int16 mode) {
 	case 30000:
 	case 25:
 	case 34:
+	case 111:  // R12: use_linke_rohr()
+	case 114:  // R12: Chewy-as-Bork with terminal
 	case 252:
 	case 253:
 	case 259:
@@ -1324,7 +1327,7 @@ void atdsStringStart(int16 diaNr, int16 strNr, int16 personNr, int16 mode) {
 				break;
 
 			case CHEWY_BORK:
-				aniNr = 68;
+				aniNr = CH_BORK_TALK;
 				break;
 
 			case CHEWY_PUMPKIN:
@@ -1371,6 +1374,7 @@ void atdsStringStart(int16 diaNr, int16 strNr, int16 personNr, int16 mode) {
 	case R14_HERMIT_DIA:
 	case R8_NIMOYANER1_DIA:
 	case R8_NIMOYANER2_DIA:
+	case R11_TERMINAL_DIA:
 		if (personNr <= P_CHEWY) {
 			if (mode == AAD_STR_START) {
 				start_spz(CH_TALK3, 255, ANI_FRONT, P_CHEWY);
@@ -1718,7 +1722,7 @@ void atdsStringStart(int16 diaNr, int16 strNr, int16 personNr, int16 mode) {
 					break;
 
 				case CHEWY_BORK:
-					aniNr = 68;
+					aniNr = CH_BORK_TALK;
 					break;
 
 				case CHEWY_PUMPKIN:

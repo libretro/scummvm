@@ -24,6 +24,7 @@
 #include "common/hashmap.h"
 
 #include "engines/nancy/commontypes.h"
+#include "engines/nancy/enginedata.h"
 
 #ifndef NANCY_PUZZLEDATA_H
 #define NANCY_PUZZLEDATA_H
@@ -114,6 +115,56 @@ struct AssemblyPuzzleData : public SimplePuzzleData {
 	static constexpr uint32 getTag() { return MKTAG('A', 'S', 'M', 'B'); }
 };
 
+// Placed bead-type ids on the thread.
+struct BeadPuzzleData : public PuzzleData {
+	BeadPuzzleData() {}
+	virtual ~BeadPuzzleData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('B', 'E', 'A', 'D'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	Common::Array<int16> placedBeads;
+};
+
+// Cached current/solved tile layouts for a SortPuzzle. Each cell is encoded as
+// 4 consecutive int16s: srcRow, srcCol, value, isEmpty. The first two int16s
+// of each array are the grid rows and cols.
+struct SortPuzzleData : public PuzzleData {
+	SortPuzzleData() {}
+	virtual ~SortPuzzleData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('S', 'O', 'R', 'T'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	Common::Array<int16> currentState;
+	Common::Array<int16> solvedState;
+};
+
+// Per-magnet (left, top, right, bottom, locked) packed as 5 int16s. The
+// puzzle's two scenes (3280, 3281) are the same puzzle with the same data,
+// so a single flat array suffices.
+struct MagnetMazePuzzleData : public PuzzleData {
+	MagnetMazePuzzleData() {}
+	virtual ~MagnetMazePuzzleData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('M', 'M', 'A', 'Z'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	Common::Array<int16> magnetState;
+};
+
+// Per-item (inMap, inItems, mapRow, mapCol, itemsRow, itemsCol) packed as
+// 6 int16s.
+struct GridMapPuzzleData : public PuzzleData {
+	GridMapPuzzleData() {}
+	virtual ~GridMapPuzzleData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('G', 'M', 'A', 'P'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	Common::Array<int16> itemState;
+};
+
 struct QuizPuzzleData : public PuzzleData {
 	QuizPuzzleData() {}
 	virtual ~QuizPuzzleData() {}
@@ -165,6 +216,121 @@ struct TableData : public PuzzleData {
 
 	Common::Array<int16> singleValues;
 	Common::Array<float> comboValues;
+};
+
+// Nancy 10+ cellphone state mutated by the ChangeCellPhoneInfo,
+// SetCellPhoneBatteryAndSignal and AddSearchLink action records,
+// persisted between saves.
+struct CellPhoneData : public PuzzleData {
+	CellPhoneData() {}
+	virtual ~CellPhoneData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('C', 'E', 'L', 'L'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	bool noSignal = false;
+	bool batteryLow = false;
+	// Loaded set to true once the popup has seeded the contact list from
+	// the UICL chunk; we then own it as runtime data.
+	bool seeded = false;
+	Common::Array<UICL::Contact> contacts;
+
+	// Populated by AR 131 (AddSearchLink). Mode 0 → emailMessages (each
+	// with a body-text CVTX key + read flag); any non-zero mode →
+	// searchLinks (web search topics).
+	Common::Array<SearchLink> emailMessages;
+	Common::Array<SearchLink> searchLinks;
+
+private:
+	void syncLinkArray(Common::Serializer &ser, Common::Array<SearchLink> &arr);
+};
+
+// Nancy 11+ AR 69 (TimerControl). 10 software timers, each counting up from
+// zero. A "configured" timer (state 5/6) fires a set of event flags, plays an
+// optional sound and shows an optional caption once its target duration
+// elapses. Started/stopped via ResetAndStartTimer (104) and StopTimer (105),
+// which in Nancy 11 carry a timer-slot index.
+struct TimerData : public PuzzleData {
+	struct Timer {
+		enum State { kIdle = 0, kRunning = 1, kPaused = 2, kOneShot = 5, kRepeating = 6 };
+
+		int32 state = kIdle;
+		uint32 currentTimeMs = 0;
+		uint32 durationMs = 0;
+		bool hasFired = false;
+		SoundDescription sound;
+		Common::String autotextKey;
+		Common::String caption;
+		FlagDescription flags[10];
+
+		void reset() { *this = Timer(); }
+	};
+
+	static const uint kNumTimers = 10;
+
+	TimerData() {}
+	virtual ~TimerData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('T', 'M', 'R', 'S'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	Timer timers[kNumTimers];
+};
+
+// Nancy 12+ UI resource values (from the UIRC boot chunk), e.g. resource 0 is
+// the coin purse amount in cents. Seeded from UIRC on first use, mutated by AR
+// 132 (ResourceUse), and persisted between saves.
+struct UIResourceData : public PuzzleData {
+	UIResourceData() {}
+	virtual ~UIResourceData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('U', 'R', 'E', 'S'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	// Set true once seeded from UIRC, so a loaded save isn't re-seeded.
+	bool seeded = false;
+	Common::Array<int32> values;
+};
+
+// Nancy 10+ taskbar button-disable overrides, set by AR 29 (ControlUIItems).
+// A disable can span a range of scenes set from an earlier scene's AR, so the
+// override has to persist across saves for the button to stay disabled after a
+// load into a scene that doesn't itself re-run the AR.
+struct TaskbarData : public PuzzleData {
+	static const uint kNumButtons = 6;
+	static const uint kNumNotificationSubCategories = 3;
+
+	struct Override {
+		bool active = false;
+		int16 startScene = -1;
+		int16 endScene = -1;
+		uint16 clickSoundMode = 0;
+	};
+
+	TaskbarData() {}
+	virtual ~TaskbarData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('T', 'S', 'K', 'B'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	Override overrides[kNumButtons];
+	// Notification badge flags, mirrored from the Taskbar so they survive a
+	// load. Set by AR triggers (inventory add, ModifyListEntryAdd, etc.) that
+	// won't re-run when loading into a later scene.
+	bool notifications[kNumButtons][kNumNotificationSubCategories] = {};
+};
+
+// Nancy13+ WordFindPuzzle (AR 170). The puzzle is solved one word at a time across
+// several scene visits; this remembers which word is currently active so progress
+// survives leaving and re-entering the scene (and saving/loading).
+struct WordFindPuzzleData : public PuzzleData {
+	WordFindPuzzleData() {}
+	virtual ~WordFindPuzzleData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('W', 'F', 'N', 'D'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	int16 currentWord = 0;
 };
 
 PuzzleData *makePuzzleData(const uint32 tag);

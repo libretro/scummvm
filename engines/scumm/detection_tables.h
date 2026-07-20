@@ -72,6 +72,8 @@ static const PlainGameDescriptor gameDescriptions[] = {
 	{ "indyzak", "Indiana Jones and the Last Crusade & Zak McKracken" },
 	{ "zakloom", "Zak McKracken & Loom" },
 	{ "ft", "Full Throttle" },
+	{ "rebel1", "Star Wars: Rebel Assault" },
+	{ "rebel2", "Star Wars: Rebel Assault II: The Hidden Empire" },
 	{ "dig", "The Dig" },
 	{ "comi", "The Curse of Monkey Island" },
 
@@ -225,6 +227,11 @@ static const GameSettings gameVariantsTable[] = {
 	{"ft",   "", 0, GID_FT,  7, 0, MDT_NONE, 0, UNK, GUIO5(GUIO_NOMIDI, GAMEOPTION_ENHANCEMENTS, GAMEOPTION_ORIGINALGUI, GAMEOPTION_LOWLATENCYAUDIO, GAMEOPTION_TTS)},
 	{"ft",   "Remastered", 0, GID_FT,  7, 0, MDT_NONE, GF_DOUBLEFINE_PAK, UNK, GUIO5(GUIO_NOMIDI, GAMEOPTION_ENHANCEMENTS, GAMEOPTION_ORIGINALGUI, GAMEOPTION_LOWLATENCYAUDIO, GAMEOPTION_TTS)},
 	{"ft",   "Demo", 0, GID_FT,  7, 0, MDT_NONE, GF_DEMO, UNK, GUIO4(GUIO_NOMIDI, GAMEOPTION_ORIGINALGUI, GAMEOPTION_LOWLATENCYAUDIO, GAMEOPTION_TTS)},
+
+	{"rebel1", "", 0, GID_REBEL1, 7, 0, MDT_NONE, GF_TESTING, Common::kPlatformDOS, GUIO3(GUIO_NOMIDI, GAMEOPTION_REBEL1_UNLOCK_ALL, GAMEOPTION_REBEL1_NO_DAMAGE)},
+
+	{"rebel2", "", 0, GID_REBEL2, 7, 0, MDT_NONE, GF_TESTING, Common::kPlatformDOS, GUIO5(GUIO_NOMIDI, GAMEOPTION_REBEL2_HIRES, GAMEOPTION_REBEL2_UNLOCK_ALL, GAMEOPTION_REBEL2_NO_DAMAGE, GAMEOPTION_REBEL2_YODA_MODE)},
+	{"rebel2", "Demo", 0, GID_REBEL2, 7, 0, MDT_NONE, GF_DEMO, Common::kPlatformDOS, GUIO5(GUIO_NOMIDI, GAMEOPTION_REBEL2_HIRES, GAMEOPTION_REBEL2_UNLOCK_ALL, GAMEOPTION_REBEL2_NO_DAMAGE, GAMEOPTION_REBEL2_YODA_MODE)},
 
 	{"dig",  "", 0, GID_DIG, 7, 0, MDT_NONE, 0, UNK, GUIO5(GUIO_NOMIDI, GAMEOPTION_ENHANCEMENTS, GAMEOPTION_ORIGINALGUI, GAMEOPTION_LOWLATENCYAUDIO, GAMEOPTION_TTS)},
 	{"dig",  "Demo", 0, GID_DIG, 7, 0, MDT_NONE, GF_DEMO, UNK, GUIO4(GUIO_NOMIDI, GAMEOPTION_ORIGINALGUI, GAMEOPTION_LOWLATENCYAUDIO, GAMEOPTION_TTS)},
@@ -493,6 +500,11 @@ static const GameFilenamePattern gameFilenamesTable[] = {
 	{ "ft", "Full Throttle Demo Data", kGenUnchanged, UNK_LANG, Common::kPlatformMacintosh, "Demo" },
 	{ "ft", "Vollgas Data", kGenUnchanged, Common::DE_DEU, Common::kPlatformMacintosh, 0 },
 	{ "ft", "Vollgas Demo Data", kGenUnchanged, Common::DE_DEU, Common::kPlatformMacintosh, "Demo" },
+
+	{ "rebel1", "ASSAULT.EXE", kGenUnchanged, UNK_LANG, Common::kPlatformDOS, "" },
+
+	{ "rebel2", "REBEL2.EXE", kGenUnchanged, UNK_LANG, Common::kPlatformDOS, "" },
+	{ "rebel2", "REBEL2.EXE", kGenUnchanged, UNK_LANG, Common::kPlatformDOS, "Demo" },
 
 	{ "comi", "comi.la%d", kGenDiskNum, UNK_LANG, UNK, 0 },
 

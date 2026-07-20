@@ -25,16 +25,33 @@
 #include "access/access.h"
 #include "access/asurface.h"
 
+// for frame contents debugging
+//#define DEBUG_FRAME_DUMP 1
+
+#ifdef DEBUG_FRAME_DUMP
+#include "graphics/paletteman.h"
+#include "image/png.h"
+#include "common/path.h"
+#include "common/file.h"
+#endif
+
+
 namespace Access {
 
-const int TRANSPARENCY = 0;
+static constexpr int TRANSPARENCY = 0;
 
 SpriteResource::SpriteResource(const AccessEngine *vm, Resource *res) {
 	Common::Array<uint32> offsets;
 	int count = res->_stream->readUint16LE();
+	if (count > 4096)
+		error("Corrupt sprite resource: suspicious number of frames (%d)", count);
 
-	for (int i = 0; i < count; i++)
-		offsets.push_back(res->_stream->readUint32LE());
+	for (int i = 0; i < count; i++) {
+		uint32 offset = res->_stream->readUint32LE();
+		if ((int)offset > res->_size)
+			error("Corrupt sprite resource: offset %d (%d) is past end of file (%d)", i, offset, res->_size);
+		offsets.push_back(offset);
+	}
 	offsets.push_back(res->_size);	// For easier calculations of Noctropolis sizes
 
 	// Build up the frames
@@ -84,7 +101,7 @@ SpriteFrame::~SpriteFrame() {
 
 /*------------------------------------------------------------------------*/
 
-ImageEntry::ImageEntry() : _frameNumber(0), _spritesPtr(nullptr), _offsetY(0), _flags(0) {
+ImageEntry::ImageEntry() : _frameNumber(0), _spritesPtr(nullptr), _offsetY(0), _flags(0), _scaleOverride(0) {
 }
 
 /*------------------------------------------------------------------------*/
@@ -179,7 +196,7 @@ void BaseSurface::saveBlock(const Common::Rect &bounds) {
 	_savedBounds.clip(Common::Rect(0, 0, this->w, this->h));
 
 	_savedBlock.free();
-	_savedBlock.create(bounds.width(), bounds.height(),
+	_savedBlock.create(_savedBounds.width(), _savedBounds.height(),
 		Graphics::PixelFormat::createFormatCLUT8());
 	_savedBlock.copyRectToSurface(*this, 0, 0, _savedBounds);
 }
@@ -207,10 +224,14 @@ void BaseSurface::drawLine() {
 }
 
 void BaseSurface::drawBox() {
-	Graphics::ManagedSurface::hLine(_orgX1, _orgY1, _orgX2, _lColor);
-	Graphics::ManagedSurface::hLine(_orgX1, _orgY2, _orgX2, _lColor);
-	Graphics::ManagedSurface::vLine(_orgX1, _orgY1, _orgY2, _lColor);
-	Graphics::ManagedSurface::vLine(_orgX2, _orgY1, _orgY2, _lColor);
+	drawBox(_orgX1, _orgY1, _orgX2, _orgY2, _lColor);
+}
+
+void BaseSurface::drawBox(int x1, int y1, int x2, int y2, int color) {
+	Graphics::ManagedSurface::hLine(x1, y1, x2, color);
+	Graphics::ManagedSurface::hLine(x1, y2, x2, color);
+	Graphics::ManagedSurface::vLine(x1, y1, y2, color);
+	Graphics::ManagedSurface::vLine(x2, y1, y2, color);
 }
 
 void BaseSurface::flipHorizontal(BaseSurface &dest) {
@@ -226,7 +247,7 @@ void BaseSurface::flipHorizontal(BaseSurface &dest) {
 
 void BaseSurface::moveBufferLeft() {
 	byte *p = (byte *)getPixels();
-	Common::copy(p + TILE_WIDTH, p + (w * h), p);
+	Common::copy(p + TILE_WIDTH, p + (pitch * h), p);
 }
 
 void BaseSurface::moveBufferRight() {
@@ -290,6 +311,19 @@ bool BaseSurface::clip(Common::Rect &r) {
 	}
 
 	return false;
+}
+
+void BaseSurface::dump(const char *fname) const {
+#ifdef DEBUG_FRAME_DUMP
+	// For debugging, dump the frame contents.
+	::Common::DumpFile outf;
+	uint32 now = g_system->getMillis();
+	outf.open(::Common::Path(::Common::String::format("/tmp/%07d-%s.png", now, fname)));
+	byte pal[768];
+	((AccessEngine *)g_engine)->_screen->getPalette(pal);
+	::Image::writePNG(outf, *this, pal);
+	outf.close();
+#endif
 }
 
 } // End of namespace Access

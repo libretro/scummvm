@@ -109,6 +109,10 @@ Symbol& Symbol::operator=(const Symbol &s) {
 }
 
 bool Symbol::operator==(Symbol &s) const {
+	if ((s.type == VOIDSYM) && (type == VOIDSYM))
+		return true;
+	if ((!name || !s.name))
+		return false;
 	return ctx == s.ctx && (name->equalsIgnoreCase(*s.name));
 }
 
@@ -160,6 +164,9 @@ LingoState::~LingoState() {
 		if (callstack[i]->retContext) {
 			callstack[i]->retContext->decRefCount();
 		}
+		if (callstack[i]->retWindow) {
+			callstack[i]->retWindow->decRefCount();
+		}
 		delete callstack[i];
 	}
 	if (localVars)
@@ -174,7 +181,6 @@ Lingo::Lingo(DirectorEngine *vm) : _vm(vm) {
 	g_lingo = this;
 
 	_state = nullptr;
-	_currentChannelId = -1;
 	_globalCounter = 0;
 	_freezeState = false;
 	_freezePlay = false;
@@ -201,6 +207,7 @@ Lingo::Lingo(DirectorEngine *vm) : _vm(vm) {
 	_trace = false;
 	_traceLoad = 0;
 	_updateMovieEnabled = false;
+	_soundDevice = "DirectSound";
 
 	// events
 	_passEvent = false;
@@ -398,6 +405,7 @@ void LingoArchive::addCode(const Common::U32String &code, ScriptType type, uint1
 
 	ScriptContext *sc = g_lingo->_compiler->compileLingo(code, this, type, CastMemberID(id, cast->_castLibID), contextName, false, preprocFlags);
 	if (sc) {
+		sc->setCast(cast);
 		scriptContexts[type][id] = sc;
 		sc->incRefCount();
 	}
@@ -422,7 +430,7 @@ Common::String Lingo::formatStack() {
 
 	for (uint i = 0; i < _state->stack.size(); i++) {
 		Datum d = _state->stack[i];
-		stack += Common::String::format("<%s> ", d.asString(true).c_str());
+		stack += Common::String::format("<%s> ", formatStringForDump(d.asString(true)).c_str());
 	}
 	return stack;
 }
@@ -648,7 +656,7 @@ bool Lingo::execute(int targetFrame) {
 
 		// process events every so often
 		if (localCounter > 0 && localCounter % 100 == 0) {
-			_vm->processEvents();
+			_vm->processSysEvents();
 			// Also process update widgets!
 			Movie *movie = g_director->getCurrentMovie();
 			Score *score = movie->getScore();
@@ -724,6 +732,7 @@ bool Lingo::execute(int targetFrame) {
 		}
 		if (_playDone) {
 			_playDone = false;
+			requeuePlayState();
 		}
 	}
 	_abort = false;
@@ -782,6 +791,9 @@ void Lingo::lingoError(const char *s, ...) {
 		_caughtError = true;
 	} else {
 		warning("BUILDBOT: Uncaught Lingo error: %s", buf);
+		debug("Movie: %s", _vm->getCurrentMovie()->getArchive()->getPathName().toString(Common::Path::kNativeSeparator).c_str());
+		debugN("%s", formatCallStack(_state->pc).c_str());
+
 		if (debugChannelSet(-1, kDebugLingoStrict)) {
 			error("Uncaught Lingo error");
 		}

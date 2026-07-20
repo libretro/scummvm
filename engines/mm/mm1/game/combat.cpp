@@ -20,6 +20,7 @@
  */
 
 #include "mm/mm1/game/combat.h"
+#include "mm/mm1/game/spell_casting.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/mm1.h"
 #include "mm/mm1/sound.h"
@@ -672,7 +673,7 @@ void Combat::checkMonsterActions() {
 	_monsterP->_counterFlags--;
 
 	// Pick a random character to shoot at
-	int charNum = getRandomNumber(g_globals->_party.size()) - 1;
+	int charNum = CLIP<int>(getRandomNumber(g_globals->_party.size()) - 1, 0, (int)g_globals->_party.size() - 1);
 	Character &c = g_globals->_party[charNum];
 	g_globals->_currCharacter = &c;
 
@@ -899,6 +900,7 @@ void Combat::updateMonsterStatus() {
 	if (val <= 0) {
 		_monsterP->_hp = 0;
 		_monsterP->_status = MONFLAG_DEAD;
+		Sound::sound2(SOUND_9);
 
 	} else {
 		_monsterP->_hp = val;
@@ -1106,9 +1108,9 @@ void Combat::resetDestMonster() {
 
 void Combat::spellFailed() {
 	g_globals->_combatParty[_currentChar]->_checked = true;
+	Sound::sound(SOUND_2);
 
-	SoundMessage msg(10, 2, Common::String::format("*** %s ***",
-		STRING["spells.failed"].c_str()));
+	SoundMessage msg(10, 2, SpellCasting::spellResultMessage(STRING["spells.failed"]));
 	msg._delaySeconds = 3;
 	displaySpellResult(msg);
 }

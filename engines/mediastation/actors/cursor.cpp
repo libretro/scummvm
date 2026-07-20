@@ -27,7 +27,7 @@ namespace MediaStation {
 void CursorActor::readParameter(Chunk &chunk, ActorHeaderSectionType paramType) {
 	switch (paramType) {
 	case kActorHeaderCursorResourceId:
-		_cursorId = chunk.readUint32LE();
+		_cursorId = chunk.readTypedUint16();
 		break;
 
 	default:
@@ -39,7 +39,9 @@ ScriptValue CursorActor::callMethod(BuiltInMethod methodId, Common::Array<Script
 	ScriptValue returnValue;
 	switch (methodId) {
 	case kCursorSetMethod:
-		g_engine->getCursorManager()->setAsPermanent(_cursorId);
+		if (_cursorId != 0) {
+			g_engine->getCursorManager()->setAsPermanent(_cursorId);
+		}
 		break;
 
 	default:

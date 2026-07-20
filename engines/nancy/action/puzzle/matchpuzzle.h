@@ -49,9 +49,10 @@ public:
 	void execute() override;
 	void handleInput(NancyInput &input) override;
 
+	bool isViewportRelative() const override { return true; }
+
 protected:
 	Common::String getRecordTypeName() const override { return "MatchPuzzle"; }
-	bool isViewportRelative() const override { return true; }
 
 	// ---------- Inner types ----------
 
@@ -64,18 +65,18 @@ protected:
 
 	// ---------- Helpers ----------
 
-	// Shuffle: if allCells=true all cells, otherwise only (col,row). FUN_0046421e
+	// Shuffle: if allCells=true all cells, otherwise only (col,row).
 	void shuffleGrid(bool allCells, int col = 0, int row = 0);
-	// Check cell (col,row) for a 3+ run; fills _match* fields. FUN_00464ba6
+	// Check cell (col,row) for a 3+ run; fills _match* fields.
 	void checkForMatch(int col, int row);
-	// Compute the viewport-relative dest rect for cell (col,row). FUN_004643ef
+	// Compute the viewport-relative dest rect for cell (col,row).
 	void computeDestRect(int col, int row);
 
 	// Rendering helpers
 	void drawCell(int col, int row);
 	void eraseCell(int col, int row);
 	void redrawAllCells();
-	void drawScorePanel();  // FUN_004660ff
+	void drawScorePanel();
 
 	// ---------- Data (read from stream) ----------
 

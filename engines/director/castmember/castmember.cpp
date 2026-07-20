@@ -26,6 +26,7 @@
 #include "director/cast.h"
 #include "director/movie.h"
 #include "director/castmember/castmember.h"
+#include "director/castmember/script.h"
 #include "director/lingo/lingo-the.h"
 #include "director/util.h"
 
@@ -321,7 +322,12 @@ void CastMember::setField(int field, const Datum &d) {
 			warning("CastMember::setField(): CastMember info for %d not found", _castId);
 			return;
 		}
-		_cast->_lingoArchive->replaceCode(*d.u.s, kCastScript, _castId);
+		{
+			ScriptType scriptType = kCastScript;
+			if (_type == kCastLingoScript)
+				scriptType = static_cast<ScriptCastMember *>(this)->_scriptType;
+			_cast->_lingoArchive->replaceCode(*d.u.s, scriptType, _castId);
+		}
 		castInfo->script = d.asString();
 		return;
 	case kTheWidth:
@@ -383,7 +389,7 @@ uint32 CastMember::writeCAStResource(Common::SeekableWriteStream *writeStream) {
 		if (castInfoToWrite) {
 			_cast->writeCastInfo(writeStream, _castId);
 		}
-	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
+	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer1200) {
 		writeStream->writeUint32BE((uint32)_type);
 		writeStream->writeUint32BE(castInfoToWrite);
 		writeStream->writeUint32BE(castDataToWrite);
@@ -439,8 +445,7 @@ uint32 CastMember::getCastResourceSize() {
 		if (_flags1 != 0xFF) {
 			headerSize += 1;
 		}
-	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer600) {
-		// Header size for director version 5
+	} else if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer1200) {
 		headerSize = 12;		// See Cast::loadCastData() for director version 5
 	}
 

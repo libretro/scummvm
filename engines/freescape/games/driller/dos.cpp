@@ -20,9 +20,11 @@
  */
 
 #include "common/file.h"
+#include "common/config-manager.h"
 
 #include "freescape/freescape.h"
 #include "freescape/games/driller/driller.h"
+#include "freescape/games/driller/opl.music.h"
 #include "freescape/language/8bitDetokeniser.h"
 
 namespace Freescape {
@@ -221,7 +223,7 @@ void DrillerEngine::loadAssetsDOSFullGame() {
 		if (!file.isOpen())
 			error("Failed to open DRILLE.EXE");
 
-		loadSpeakerFxDOS(&file, 0x4397 + 0x200, 0x4324 + 0x200, 20);
+		_sound = loadSpeakerFxDOS(&file, 0x4397 + 0x200, 0x4324 + 0x200, 20);
 		loadMessagesFixedSize(&file, 0x4135, 14, 20);
 		loadFonts(&file, 0x99dd);
 		loadGlobalObjects(&file, 0x3b42, 8);
@@ -246,7 +248,7 @@ void DrillerEngine::loadAssetsDOSFullGame() {
 		if (!file.isOpen())
 			error("Failed to open DRILLC.EXE");
 
-		loadSpeakerFxDOS(&file, 0x27e7 + 0x200, 0x2774 + 0x200, 20);
+		_sound = loadSpeakerFxDOS(&file, 0x27e7 + 0x200, 0x2774 + 0x200, 20);
 
 		loadFonts(&file, 0x07a4a);
 		loadMessagesFixedSize(&file, 0x2585, 14, 20);
@@ -267,7 +269,7 @@ void DrillerEngine::loadAssetsDOSFullGame() {
 		if (!file.isOpen())
 			error("Failed to open DRILLH.EXE");
 
-		//loadSpeakerFxDOS(&file, 0x27e7 + 0x200, 0x2774 + 0x200, 20);
+		//_sound = loadSpeakerFxDOS(&file, 0x27e7 + 0x200, 0x2774 + 0x200, 20);
 
 		loadFonts(&file, 0x8871);
 		loadMessagesFixedSize(&file, 0x3411, 14, 20);
@@ -285,6 +287,9 @@ void DrillerEngine::loadAssetsDOSFullGame() {
 		_indicators[0]->convertToInPlace(_gfx->_texturePixelFormat);
 		_indicators[1]->convertToInPlace(_gfx->_texturePixelFormat);
 	}
+
+	if (ConfMan.getBool("opl_music"))
+		_playerMusic = new DrillerOPLMusicPlayer();
 }
 
 void DrillerEngine::loadAssetsDOSDemo() {
@@ -437,7 +442,7 @@ void DrillerEngine::drawDOSUI(Graphics::Surface *surface) {
 	uint32 other = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
 
 	Common::Point compassYawPos = _renderMode == Common::kRenderHercG ? Common::Point(214, 264) : Common::Point(87, 156);
-	drawCompass(surface, compassYawPos.x, compassYawPos.y, _yaw - 30, 10, 75, other);
+	drawCompass(surface, compassYawPos.x, compassYawPos.y, compassYaw() - 30, 10, 75, other);
 	Common::Point compassPitchPos = _renderMode == Common::kRenderHercG ? Common::Point(502, 264) : Common::Point(230, 156);
 	drawCompass(surface, compassPitchPos.x, compassPitchPos.y, _pitch - 30, 10, 60, other);
 }

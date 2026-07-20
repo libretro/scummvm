@@ -208,13 +208,25 @@ bool SXFile::scCallMethod(ScScript *script, ScStack *stack, ScStack *thisStack, 
 	//////////////////////////////////////////////////////////////////////////
 	else if (strcmp(name, "Copy") == 0) {
 		stack->correctParams(2);
-		/* const char *dest = */ stack->pop()->getString();
+		const char *dest = stack->pop()->getString();
 		/* bool overwrite = */ stack->pop()->getBool(true);
 
-		// Known game that need this:
-		// * Space Madness (to copy bonus wallpapers from data.dcp to /saves/ folder)
-		// * games by Rootfix intertainment (to save temporary screenshot as savegame screenshot)
-		warning("SXFile-Method: Copy not supported");
+		if (BaseEngine::instance().getGameId() == "spacemadness") {
+			// 'Space Madness' (to copy bonus wallpapers from data.dcp to /saves/ folder)
+		} else if (BaseEngine::instance().getGameId() == "goldencalf" ||
+				   BaseEngine::instance().getGameId() == "msos") {
+			// 'The Golden Calf' and 'Monday Starts on Saturday' (to save temporary screenshot as savegame screenshot)
+			_readFile = _game->_fileManager->openFile(_filename);
+			if (_readFile) {
+				Common::WriteStream *stream = openSfmFileForWrite(dest);
+				stream->writeStream(_readFile);
+				delete stream;
+				close();
+				stack->pushBool(true);
+			}
+		} else {
+			warning("SXFile-Method: Copy not supported");
+		}
 
 		stack->pushBool(false);
 		return STATUS_OK;

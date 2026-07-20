@@ -23,6 +23,7 @@
 #include "access/access.h"
 #include "access/amazon/amazon_resources.h"
 #include "access/martian/martian_resources.h"
+#include "access/noctropolis/noctropolis_resources.h"
 #include "common/translation.h"
 
 namespace Access {
@@ -32,6 +33,8 @@ Resources *Resources::init(AccessEngine *vm) {
 		return new Amazon::AmazonResources(vm);
 	else if (vm->getGameID() == kGameMartianMemorandum)
 		return new Martian::MartianResources(vm);
+	else if (vm->getGameID() == kGameNoctropolis)
+		return new Noctropolis::NoctropolisResources(vm);
 
 	error("Unknown game");
 }
@@ -98,6 +101,8 @@ bool Resources::load(Common::U32String &errorMessage) {
 void Resources::load(Common::SeekableReadStream &s) {
 	uint count;
 
+	assert(_vm->getGameID() != kGameNoctropolis);
+
 	// Get the offset of the data for the game
 	uint entryOffset = findEntry(_vm->getGameID(), _vm->isCD() ? 1 : 0,
 		_vm->isDemo() ? 1 : 0, _vm->getLanguage());
@@ -160,6 +165,39 @@ uint Resources::findEntry(byte gameId, byte discType, byte demoType, Common::Lan
 	error("Could not locate appropriate access.dat entry");
 }
 
+static const char *const GENERAL_MESSAGES[] = {
+	"LOOKING THERE REVEALS NOTHING OF INTEREST.", // LOOK_MESSAGE
+	"THAT DOESN'T OPEN.",               // OPEN_MESSAGE
+	"THAT WON'T MOVE.",                 // MOVE_MESSAGE
+	"YOU CAN'T TAKE THAT.",             // GET_MESSAGE
+	"THAT DOESN'T SEEM TO WORK.",       // USE_MESSAGE
+	"YOU CAN'T CLIMB THAT.",            // GO_MESSAGE
+	"THERE SEEMS TO BE NO RESPONSE.",   // TALK_MESSAGE
+	"THIS OBJECT REQUIRES NO HINTS",    // HELP_MESSAGE
+	"THIS OBJECT REQUIRES NO HINTS",    // HELP_MESSAGE
+	"THAT DOESN'T SEEM TO WORK."        // USE_MESSAGE
+};
+
+static const char *const ESP_GENERAL_MESSAGES[] = {
+	"MIRANDO AHI NO ENCONTRARAS NADA DE INTERES.", // LOOK_MESSAGE
+	"NO ESTA ABIERTO.",                 // OPEN_MESSAGE
+	"NO PUEDES MOVERLO.",               // MOVE_MESSAGE
+	"NO PUEDES COGER ESO.",             // GET_MESSAGE
+	"NO PARECE QUE FUNCIONE.",          // USE_MESSAGE
+	"NO PUEDES SUBIRTE A ESO.",         // GO_MESSAGE
+	"PARECE QUE NO TE RESPONDE.",       // TALK_MESSAGE
+	"NO HAY AYUDA PARA ESE OBJETO.",    // HELP_MESSAGE
+	"NO HAY AYUDA PARA ESE OBJETO.",    // HELP_MESSAGE
+	"NO PARECE QUE FUNCIONE."           // USE_MESSAGE
+};
+
+const char *Resources::getGeneralMessage(int command) const {
+	if (_vm->getLanguage() == Common::ES_ESP)
+		return ESP_GENERAL_MESSAGES[command];
+	else
+		return GENERAL_MESSAGES[command];
+}
+
 /*------------------------------------------------------------------------*/
 
 const byte INITIAL_PALETTE[18 * 3] = {
@@ -181,32 +219,6 @@ const byte INITIAL_PALETTE[18 * 3] = {
 	0x20, 0x20, 0x20,
 	0x10, 0x10, 0x10,
 	0x00, 0x00, 0x00
-};
-
-const char *const GENERAL_MESSAGES[] = {
-	"LOOKING THERE REVEALS NOTHING OF INTEREST.", // LOOK_MESSAGE
-	"THAT DOESN'T OPEN.",               // OPEN_MESSAGE
-	"THAT WON'T MOVE.",                 // MOVE_MESSAGE
-	"YOU CAN'T TAKE THAT.",             // GET_MESSAGE
-	"THAT DOESN'T SEEM TO WORK.",       // USE_MESSAGE
-	"YOU CAN'T CLIMB THAT.",            // GO_MESSAGE
-	"THERE SEEMS TO BE NO RESPONSE.",   // TALK_MESSAGE
-	"THIS OBJECT REQUIRES NO HINTS",    // HELP_MESSAGE
-	"THIS OBJECT REQUIRES NO HINTS",    // HELP_MESSAGE
-	"THAT DOESN'T SEEM TO WORK."        // USE_MESSAGE
-};
-
-const char *const ESP_GENERAL_MESSAGES[] = {
-	"MIRANDO AHI NO ENCONTRARAS NADA DE INTERES.", // LOOK_MESSAGE
-	"NO ESTA ABIERTO.",                 // OPEN_MESSAGE
-	"NO PUEDES MOVERLO.",               // MOVE_MESSAGE
-	"NO PUEDES COGER ESO.",             // GET_MESSAGE
-	"NO PARECE QUE FUNCIONE.",          // USE_MESSAGE
-	"NO PUEDES SUBIRTE A ESO.",         // GO_MESSAGE
-	"PARECE QUE NO TE RESPONDE.",       // TALK_MESSAGE
-	"NO HAY AYUDA PARA ESE OBJETO.",    // HELP_MESSAGE
-	"NO HAY AYUDA PARA ESE OBJETO.",    // HELP_MESSAGE
-	"NO PARECE QUE FUNCIONE."           // USE_MESSAGE
 };
 
 const int INVCOORDS[][4] = {

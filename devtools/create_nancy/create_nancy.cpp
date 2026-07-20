@@ -37,6 +37,8 @@
 #define NANCYDAT_MAJOR_VERSION 1
 #define NANCYDAT_MINOR_VERSION 1
 
+// From Nancy12 onwards the static data is shipped in the games' own data files
+// instead of the executable, so nancy.dat only carries data up to Nancy11.
 #define NANCYDAT_NUM_GAMES 12
 
 /**
@@ -77,6 +79,9 @@
  * 		Nancy Drew: Danger on Deception Island
  * 		Nancy Drew: The Secret of Shadow Ranch
  * 		Nancy Drew: Curse of Blackmoor Manor
+ *
+ * Nancy12 (Secret of the Old Clock) and newer ship their static data in their
+ * own data files, so they are not included here.
  */
 
 // Add the offset to the next tagged section before the section itself for easier navigation
@@ -345,6 +350,9 @@ int main(int argc, char *argv[]) {
 	WRAPWITHOFFSET(writeGoodbyes(output, _nancy11Goodbyes))
 	WRAPWITHOFFSET(writeRingingTexts(output, _nancy8TelephoneRinging)) // same as 8
 	WRAPWITHOFFSET(writeEventFlagNames(output, _nancy11EventFlagNames))
+
+	// Nancy12 and newer no longer store their static data in the executable, so
+	// there is nothing to write for them here (the engine provides what it needs).
 
 	// Write the offsets for each game in the header
 	output.seek(offsetsOffset);

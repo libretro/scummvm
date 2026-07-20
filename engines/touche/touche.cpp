@@ -36,6 +36,7 @@
 
 #include "engines/util.h"
 #include "graphics/cursorman.h"
+#include "graphics/hotspot_renderer.h"
 #include "graphics/paletteman.h"
 #include "gui/debugger.h"
 
@@ -180,6 +181,7 @@ ToucheEngine::ToucheEngine(OSystem *system, Common::Language language)
 	_inventoryVar2 = nullptr;
 	_currentCursorObject = 0;
 	_talkTextMode = 0;
+	_hotspotSnapshot.currentEpisodeNum = -1;
 }
 
 ToucheEngine::~ToucheEngine() {
@@ -517,6 +519,7 @@ void ToucheEngine::runCycle() {
 	processAnimationTable();
 	updateKeyCharTalk(0);
 	updateDirtyScreenAreas();
+	drawHotspots();
 	++_flagsTable[295];
 	++_flagsTable[296];
 	++_flagsTable[297];
@@ -1505,6 +1508,145 @@ void ToucheEngine::drawHitBoxes() {
 	}
 }
 
+void ToucheEngine::getHotspotPositions(Common::Array< ::Graphics::HotspotInfo> &hotspots) {
+	if (_flagsTable[618] != 0)
+		return;
+
+	int scrollX = _flagsTable[614];
+	int scrollY = _flagsTable[615];
+
+	for (uint i = 0; i < _programHitBoxTable.size(); ++i) {
+		const ProgramHitBoxData &hitBox = _programHitBoxTable[i];
+
+		if (hitBox.item & 0x1000)
+			break;
+
+		if (hitBox.item & 0x2000)
+			continue;
+
+		if (hitBox.hitBoxes[0].top & 0x4000)
+			continue;
+
+		int16 str = hitBox.str;
+		int screenX, screenY;
+		::Graphics::HotspotType hotspotType;
+
+		if (hitBox.item & 0x4000) {
+			const KeyChar *keyChar = &_keyCharsTable[hitBox.item & ~0x4000];
+			if (keyChar->num == 0 || (keyChar->flags & 0x4000))
+				continue;
+			if (keyChar->strNum != 0)
+				str = hitBox.defaultStr;
+
+			const Common::Rect &charRect = keyChar->prevBoundingRect;
+			if (!charRect.isValidRect())
+				continue;
+
+			screenX = (charRect.left + charRect.right) / 2;
+			screenY = (charRect.top + charRect.bottom) / 2;
+			hotspotType = ::Graphics::kHotspotNPC;
+		} else {
+			const Common::Rect &objRect = hitBox.hitBoxes[0];
+			if (!objRect.isValidRect())
+				continue;
+
+			int centerX = (objRect.left + objRect.right) / 2;
+			int centerY = (objRect.top + objRect.bottom) / 2;
+
+			screenX = centerX - scrollX;
+			screenY = centerY - scrollY;
+			hotspotType = ::Graphics::kHotspotObject;
+		}
+
+		if (screenX < 0 || screenX >= kScreenWidth || screenY < 0 || screenY >= kRoomHeight)
+			continue;
+
+		Common::String name;
+		if (str > 0) {
+			const char *strData = getString(str);
+			if (strData)
+				name = Common::String(strData);
+		}
+
+		hotspots.push_back(::Graphics::HotspotInfo(Common::Point(screenX, screenY), name, hotspotType));
+	}
+}
+
+void ToucheEngine::rebuildHotspotSnapshot() const {
+	_hotspotSnapshot.flag618 = _flagsTable[618];
+	_hotspotSnapshot.scrollX = _flagsTable[614];
+	_hotspotSnapshot.scrollY = _flagsTable[615];
+	_hotspotSnapshot.currentEpisodeNum = _currentEpisodeNum;
+	_hotspotSnapshot.hitBoxes.clear();
+	for (uint i = 0; i < _programHitBoxTable.size(); ++i) {
+		const ProgramHitBoxData &hb = _programHitBoxTable[i];
+		HotspotSnapshot::HitBoxEntry e;
+		e.item = hb.item;
+		e.lockedTop = hb.hitBoxes[0].top;
+		e.str = hb.str;
+		e.defaultStr = hb.defaultStr;
+		e.hitBox0 = hb.hitBoxes[0];
+		_hotspotSnapshot.hitBoxes.push_back(e);
+	}
+	for (int i = 0; i < NUM_KEYCHARS; ++i) {
+		_hotspotSnapshot.chars[i].num = _keyCharsTable[i].num;
+		_hotspotSnapshot.chars[i].flags = _keyCharsTable[i].flags;
+		_hotspotSnapshot.chars[i].prevBoundingRect = _keyCharsTable[i].prevBoundingRect;
+	}
+}
+
+bool ToucheEngine::hotspotDirty() const {
+	const int16 flag618 = _flagsTable[618];
+	const int16 scrollX = _flagsTable[614];
+	const int16 scrollY = _flagsTable[615];
+
+	// Fast path: any scalar change forces a snapshot rebuild.
+	if (flag618 != _hotspotSnapshot.flag618 ||
+		scrollX != _hotspotSnapshot.scrollX ||
+		scrollY != _hotspotSnapshot.scrollY ||
+		_currentEpisodeNum != _hotspotSnapshot.currentEpisodeNum ||
+		_programHitBoxTable.size() != _hotspotSnapshot.hitBoxes.size()) {
+		rebuildHotspotSnapshot();
+		return true;
+	}
+
+	// When globally suppressed there are no hotspots to redraw.
+	if (flag618 != 0)
+		return false;
+
+	// Per-hitbox and per-character checks.
+	for (uint i = 0; i < _programHitBoxTable.size(); ++i) {
+		const ProgramHitBoxData &hb = _programHitBoxTable[i];
+		const HotspotSnapshot::HitBoxEntry &snap = _hotspotSnapshot.hitBoxes[i];
+
+		if (hb.item != snap.item ||
+			hb.hitBoxes[0].top != snap.lockedTop ||
+			hb.str != snap.str ||
+			hb.defaultStr != snap.defaultStr ||
+			hb.hitBoxes[0] != snap.hitBox0) {
+			rebuildHotspotSnapshot();
+			return true;
+		}
+
+		if (hb.item & 0x4000) {
+			const int charIdx = hb.item & ~0x4000;
+			const KeyChar &kc = _keyCharsTable[charIdx];
+			const HotspotSnapshot::CharEntry &cs = _hotspotSnapshot.chars[charIdx];
+			if (kc.num != cs.num ||
+				kc.flags != cs.flags ||
+				kc.prevBoundingRect != cs.prevBoundingRect) {
+				rebuildHotspotSnapshot();
+				return true;
+			}
+		}
+
+		if (hb.item & 0x1000)
+			break;
+	}
+
+	return false;
+}
+
 void ToucheEngine::showCursor(bool show) {
 	debugC(9, kDebugEngine, "ToucheEngine::showCursor()");
 	CursorMan.showMouse(show);
@@ -2458,6 +2600,35 @@ void ToucheEngine::removeFromTalkTable(int keyChar) {
 
 void ToucheEngine::addConversationChoice(int16 num) {
 	debugC(9, kDebugEngine, "ToucheEngine::addConversationChoice(%d)", num);
+	// Workaround for bug #6754 - Player may only ask for boat at Rouen river
+	// gate if and only if potion is in inventory and Juliette has been
+	// kidnapped by the Cardinal to his castle. When reaching the castle without potion
+	// the game can not be finished as there is no way back to Rouen river gate.
+
+	// 018d99d5  ; prginstruction  ; 1d 0001      ; getFlag(1: "puzzles solved progress")
+	// 018d99d8  ; prginstruction  ; 06           ; push
+	// 018d99d9  ; prginstruction  ; 13 000d      ; fetchScriptWord(13)
+	// 018d99dc  ; prginstruction  ; 12           ; testLower (13 < flag[1] ? t:0xffff, f:0x0000)
+	// 018d99dd  ; prginstruction  ; 02 018d99e3  ; jz 018d99e3
+	// 018d99e0  ; prginstruction  ; 3e 0004      ; addConversationChoice("We need a boat...")
+	// 018d99e3  ; prginstruction  ; 1c           ; stopScript
+	if (_currentEpisodeNum == 103  /* Rouen river gate episode */
+			&& _currentRoomNum == 67  /* Rouen river gate */
+			&& _flagsTable[1] == 14   /* Juliette kidnapped */
+			&& num == 4  /* "We need a boat..." */) {
+		bool havePotion = false;
+		int16 *p = _inventoryStateTable[0].itemsList;
+		for (; *p != -1; ++p) {
+			if (*p == 0x0009 /* potion */) {
+				havePotion = true;
+				break;
+			}
+		}
+		if (!havePotion) {
+			return;
+		}
+	}
+
 	_conversationChoicesUpdated = true;
 	int16 msg = _programConversationTable[_currentConversation + num].msg;
 	for (int i = 0; i < NUM_CONVERSATION_CHOICES; ++i) {

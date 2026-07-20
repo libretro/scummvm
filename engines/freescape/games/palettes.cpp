@@ -195,6 +195,8 @@ void FreescapeEngine::loadPalettes(Common::SeekableReadStream *file, int offset)
 		numberOfAreas += 5;
 	else if (isCastle())
 		numberOfAreas += 20;
+	else if (isEclipse())
+		numberOfAreas += 2;
 
 	for (uint i = 0; i < numberOfAreas; i++) {
 		int label = readField(file, 8);
@@ -215,7 +217,12 @@ void FreescapeEngine::loadPalettes(Common::SeekableReadStream *file, int offset)
 			palette[c][2] = b & 0xff;
 			debugC(1, kFreescapeDebugParser, "Color %d: (%04x) %02x %02x %02x", c, v, palette[c][0], palette[c][1], palette[c][2]);
 		}
-		assert(!_paletteByArea.contains(label));
+		if (_paletteByArea.contains(label)) {
+			// Eclipse Atari ST / Amiga has a duplicate palette entry for area 42
+			assert(isEclipse() && (isAtariST() || isAmiga()));
+			delete[] palette;
+			continue;
+		}
 		_paletteByArea[label] = (byte *)palette;
 	}
 }

@@ -50,7 +50,9 @@ public:
 	virtual void readChunk(Chunk &chunk) override;
 	virtual ScriptValue callMethod(BuiltInMethod methodId, Common::Array<ScriptValue> &args) override;
 	virtual void loadIsComplete() override;
-	virtual void process() override;
+
+	virtual void onEvent(const ActorEvent &event) override;
+	virtual void timerEvent(const TimerEvent &event) override;
 
 	Common::Point getViewportOrigin();
 	Common::Rect getViewportBounds();
@@ -61,11 +63,11 @@ public:
 private:
 	bool _lensOpen = false;
 	bool _addedToStage = false;
-	double _panDuration = 0.0;
+	double _totalPanDuration = 0.0;
+	double _durationBetweenStepEvents = 0.0;
 	uint _currentPanStep = 0;
 	uint _maxPanStep = 0;
 	uint _startTime = 0;
-	uint _nextPanStepTime = 0;
 	CameraPanState _panState = kCameraNotPanning;
 	Common::Point _offset;
 	Common::Point _currentViewportOrigin;
@@ -94,12 +96,12 @@ private:
 	void stopPan();
 	bool continuePan();
 
-	void timerEvent();
 	bool processViewportMove();
 	void processNextPanStep();
 	void adjustCameraViewport(Common::Point &viewportToAdjust);
 	void calcNewViewportOrigin();
 	double percentComplete();
+	Common::Rect getAdvanceRect();
 };
 
 } // End of namespace MediaStation

@@ -227,17 +227,25 @@ public:
 	Common::SharedPtr<Node> _assemblyAST;	// Optionally contains AST when we compile Lingo
 
 private:
+	friend class Cast;	// clears _cast directly in ~Cast
+
 	DatumHash _properties;
 	Common::Array<Common::String> _propertyNames;
 	bool _onlyInLctxContexts = false;
+	Cast *_cast = nullptr;
 
 public:
 	ScriptContext(Common::String name, ScriptType type = kNoneScript, int id = 0, uint16 castLibHint = 0, uint16 parentNumber = 0, int scriptId = 0);
 	ScriptContext(const ScriptContext &sc);
 	~ScriptContext() override;
 
+	Cast *getCast() const { return _cast; }
+	void setCast(Cast *cast);
+
 	bool isFactory() const { return _objType == kFactoryObj; };
 	void setFactory(bool flag) { _objType = flag ? kFactoryObj : kScriptObj; }
+
+	const Common::Array<Common::String> &getPropertyNames() const { return _propertyNames; }
 
 	void setOnlyInLctxContexts() { _onlyInLctxContexts = true; }
 	bool getOnlyInLctxContexts() { return _onlyInLctxContexts; }

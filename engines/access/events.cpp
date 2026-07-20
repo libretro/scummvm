@@ -28,9 +28,7 @@
 #include "access/events.h"
 #include "access/player.h"
 #include "access/amazon/amazon_resources.h"
-
-#define CURSOR_WIDTH 16
-#define CURSOR_HEIGHT 16
+#include "access/noctropolis/noctropolis_game.h"
 
 namespace Access {
 
@@ -48,6 +46,7 @@ EventsManager::EventsManager(AccessEngine *vm) : _vm(vm) {
 	_keyCode = Common::KEYCODE_INVALID;
 	_priorTimerTime = 0;
 	_action = kActionNone;
+	_interfaceOff = false;
 }
 
 EventsManager::~EventsManager() {
@@ -74,35 +73,42 @@ void EventsManager::setCursor(CursorType cursorId) {
 	} else {
 		// Get a pointer to the mouse data to use, and get the cursor hotspot
 		const byte *srcP = _vm->_res->getCursor(cursorId);
-		int hotspotX = (int16)READ_LE_UINT16(srcP);
-		int hotspotY = (int16)READ_LE_UINT16(srcP + 2);
+		const int width = _vm->_res->getCursorWidth(cursorId);
+		const int height = _vm->_res->getCursorHeight(cursorId);
+		const int hotspotX = (int16)READ_LE_UINT16(srcP);
+		const int hotspotY = (int16)READ_LE_UINT16(srcP + 2);
 		srcP += 4;
 
 		// Create a surface to build up the cursor on
 		Graphics::Surface cursorSurface;
-		cursorSurface.create(CURSOR_WIDTH, CURSOR_HEIGHT, Graphics::PixelFormat::createFormatCLUT8());
+		cursorSurface.create(width, height, Graphics::PixelFormat::createFormatCLUT8());
 		byte *destP = (byte *)cursorSurface.getPixels();
-		Common::fill(destP, destP + CURSOR_WIDTH * CURSOR_HEIGHT, 0);
 
-		// Loop to build up the cursor
-		for (int y = 0; y < CURSOR_HEIGHT; ++y) {
-			destP = (byte *)cursorSurface.getBasePtr(0, y);
-			int width = CURSOR_WIDTH;
-			int skip = *srcP++;
-			int plot = *srcP++;
-			if (skip >= width)
-				break;
+		if (_vm->getGameID() != kGameNoctropolis) {
+			Common::fill(destP, destP + width * height, 0);
+			// Loop to build up the cursor
+			for (int y = 0; y < height; ++y) {
+				destP = (byte *)cursorSurface.getBasePtr(0, y);
+				int w = width;
+				int skip = *srcP++;
+				int plot = *srcP++;
+				if (skip >= width)
+					break;
 
-			// Skip over pixels
-			destP += skip;
-			width -= skip;
+				// Skip over pixels
+				destP += skip;
+				w -= skip;
 
-			// Write out the pixels to plot
-			while (plot > 0 && width > 0) {
-				*destP++ = *srcP++;
-				--plot;
-				--width;
+				// Write out the pixels to plot
+				while (plot > 0 && w > 0) {
+					*destP++ = *srcP++;
+					--plot;
+					--w;
+				}
 			}
+		} else {
+			// Simple bitmaps in Noctropolis.
+			memcpy(destP, srcP, width * height);
 		}
 
 		// Set the cursor
@@ -216,6 +222,11 @@ void EventsManager::keyControl(Common::KeyCode keycode, bool isKeyDown) {
 	_keyCode = keycode;
 }
 
+uint32 EventsManager::getDoubleClickTime() const {
+	uint32 timeout = g_system->getDoubleClickTime();
+	return timeout > 0 ? timeout : 400;
+}
+
 void EventsManager::actionControl(Common::CustomEventType action, bool isKeyDown) {
 	Player &player = *_vm->_player;
 
@@ -226,6 +237,10 @@ void EventsManager::actionControl(Common::CustomEventType action, bool isKeyDown
 		}
 		return;
 	}
+
+	// Ignore all actions except skip when the inteface is locked.
+	if (_interfaceOff && action != kActionSkip)
+		return;
 
 	_action = action;
 
@@ -297,6 +312,9 @@ void EventsManager::nextFrame() {
 void EventsManager::nextTimer() {
 	_vm->_animation->updateTimers();
 	_vm->_timers.updateTimers();
+	_vm->_player->updateTimers();
+	if (_vm->getGameID() == kGameNoctropolis)
+		((Noctropolis::NoctropolisEngine *)_vm)->_stil->updateTimers();
 }
 
 void EventsManager::delay(int time) {
@@ -325,6 +343,12 @@ bool EventsManager::isKeyActionPending() const {
 
 void EventsManager::debounceLeft() {
 	while (_leftButton && !_vm->shouldQuit()) {
+		pollEventsAndWait();
+	}
+}
+
+void EventsManager::debounceRight() {
+	while (_rightButton && !_vm->shouldQuit()) {
 		pollEventsAndWait();
 	}
 }
@@ -374,11 +398,28 @@ bool EventsManager::isKeyActionMousePressed() {
 }
 
 void EventsManager::centerMousePos() {
-	_mousePos = Common::Point(160, 100);
+	_mousePos = Common::Point(_vm->getScreenWidth() / 2, _vm->getScreenHeight() / 2);
 }
 
 void EventsManager::restrictMouse() {
 	// No implementation in ScummVM
 }
+
+/*static*/
+int16 EventsManager::clipMouseCenter(int16 mousePos, int16 length, int16 maxLength, int16 &warpMousePos) {
+	int16 basePos;
+	if (mousePos - (length / 2) < 0) {
+		basePos = 0;
+		warpMousePos = length / 2;
+	} else if (mousePos + length >= maxLength) {
+		basePos = maxLength - length;
+		warpMousePos = maxLength - (length / 2);
+	} else {
+		basePos = mousePos - (length / 2);
+		warpMousePos = mousePos;
+	}
+	return basePos;
+}
+
 
 } // End of namespace Access

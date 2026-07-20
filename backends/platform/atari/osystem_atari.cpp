@@ -19,6 +19,8 @@
  *
  */
 
+#define FORCE_TEXT_CONSOLE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -40,18 +42,21 @@
 
 #include "backends/platform/atari/osystem_atari.h"
 
-#include "backends/audiocd/default/default-audiocd.h"
-#include "common/config-manager.h"
+#include "backends/audiocd/atari/atari-audiocd.h"
 #include "backends/events/atari/atari-events.h"
 #include "backends/events/default/default-events.h"
 #include "backends/graphics/atari/atari-graphics.h"
 #include "backends/keymapper/hardware-input.h"
 #include "backends/mixer/atari/atari-mixer.h"
 #include "backends/mutex/null/null-mutex.h"
-#include "backends/platform/atari/atari-debug.h"
+#ifdef DYNAMIC_MODULES
+#include "backends/plugins/atari/atari-provider.h"
+#endif
 #include "backends/saves/default/default-saves.h"
 #include "backends/timer/default/default-timer.h"
 #include "base/main.h"
+#include "common/config-manager.h"
+#include "common/debug.h"
 
 #define INPUT_ACTIVE
 
@@ -124,7 +129,7 @@ static long atari_200hz_shutdown(void)
 }
 
 static void critical_restore() {
-	//atari_debug("critical_restore()");
+	//debug("critical_restore()");
 
 	Supexec(atari_200hz_shutdown);
 
@@ -159,7 +164,7 @@ static void critical_restore() {
 // called on normal program termination (via exit() or returning from main())
 static void exit_restore() {
 	// causes a crash upon termination
-	//atari_debug("exit_restore()");
+	//debug("exit_restore()");
 
 	if (!s_dtor_already_called)
 		g_system->destroy();
@@ -228,7 +233,7 @@ OSystem_Atari::OSystem_Atari() {
 }
 
 OSystem_Atari::~OSystem_Atari() {
-	atari_debug("OSystem_Atari::~OSystem_Atari()");
+	debug("OSystem_Atari::~OSystem_Atari()");
 
 	s_dtor_already_called = true;
 
@@ -282,7 +287,7 @@ OSystem_Atari::~OSystem_Atari() {
 }
 
 void OSystem_Atari::initBackend() {
-	atari_debug("OSystem_Atari::initBackend()");
+	debug("OSystem_Atari::initBackend()");
 
 	s_app_id = appl_init();
 	if (s_app_id != -1) {
@@ -328,28 +333,46 @@ void OSystem_Atari::initBackend() {
 	atariEventSource->setGraphicsManager(atariGraphicsManager);
 
 #ifdef DISABLE_FANCY_THEMES
-	// On the lite build force "null" as the audio driver, i.e. do not attempt
+	// On the lite build force "None" as the opl driver, i.e. do not attempt
+	// to emulate anything by default.
+	if (!ConfMan.hasKey("opl_driver")) {
+		ConfMan.set("opl_driver", "null");
+	}
+	// On the lite build force "STMIDI" as the audio driver, i.e. do not attempt
 	// to emulate anything by default.
 	if (!ConfMan.hasKey("music_driver")) {
-		ConfMan.set("music_driver", "null");
+		ConfMan.set("music_driver", "stmidi");
+	}
+	if (!ConfMan.hasKey("gm_device")) {
+		ConfMan.set("gm_device", "auto");
+	}
+	if (!ConfMan.hasKey("mt32_device")) {
+		ConfMan.set("mt32_device", "auto");
 	}
 #endif
+	// This produces hard pause even in most optimised engines
+	// and even on CT60...
+	if (!ConfMan.hasKey("autosave_period")) {
+		ConfMan.setInt("autosave_period", 0);
+	}
 
 	_mixerManager = new AtariMixerManager();
 	// Setup and start mixer
 	_mixerManager->init();
 
+	_audiocdManager = new AtariAudioCDManager();
+
 	BaseBackend::initBackend();
 }
 
 void OSystem_Atari::engineInit() {
-	//atari_debug("engineInit");
+	//debug("engineInit");
 
 	g_gameEngineActive = true;
 }
 
 void OSystem_Atari::engineDone() {
-	//atari_debug("engineDone");
+	//debug("engineDone");
 
 	g_gameEngineActive = false;
 }
@@ -371,7 +394,7 @@ void OSystem_Atari::delayMillis(uint msecs) {
 }
 
 void OSystem_Atari::getTimeAndDate(TimeDate &td, bool skipRecord) const {
-	//atari_debug("getTimeAndDate");
+	//debug("getTimeAndDate");
 	time_t curTime = time(0);
 	struct tm t = *localtime(&curTime);
 	td.tm_sec = t.tm_sec;
@@ -401,7 +424,7 @@ Common::HardwareInputSet *OSystem_Atari::getHardwareInputSet() {
 }
 
 void OSystem_Atari::quit() {
-	atari_debug("OSystem_Atari::quit()");
+	debug("OSystem_Atari::quit()");
 
 	if (!s_dtor_already_called)
 		destroy();
@@ -410,7 +433,7 @@ void OSystem_Atari::quit() {
 }
 
 void OSystem_Atari::fatalError() {
-	atari_debug("OSystem_Atari::fatalError()");
+	debug("OSystem_Atari::fatalError()");
 
 	if (!s_dtor_already_called)
 		destroy();
@@ -508,6 +531,10 @@ OSystem *OSystem_Atari_create() {
 int main(int argc, char *argv[]) {
 	g_system = OSystem_Atari_create();
 	assert(g_system);
+
+#ifdef DYNAMIC_MODULES
+	PluginManager::instance().addPluginProvider(new AtariPluginProvider());
+#endif
 
 	// Invoke the actual ScummVM main entry point:
 	int res = scummvm_main(argc, argv);

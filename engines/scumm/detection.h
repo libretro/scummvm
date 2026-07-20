@@ -38,6 +38,12 @@ namespace Scumm {
 #define GAMEOPTION_COPY_PROTECTION                           GUIO_GAMEOPTIONS7
 #define GAMEOPTION_USE_REMASTERED_AUDIO                      GUIO_GAMEOPTIONS8
 #define GAMEOPTION_TTS                                       GUIO_GAMEOPTIONS9
+#define GAMEOPTION_REBEL2_HIRES                              GUIO_GAMEOPTIONS10
+#define GAMEOPTION_REBEL2_UNLOCK_ALL                         GUIO_GAMEOPTIONS11
+#define GAMEOPTION_REBEL1_UNLOCK_ALL                         GUIO_GAMEOPTIONS12
+#define GAMEOPTION_REBEL2_NO_DAMAGE                          GUIO_GAMEOPTIONS13
+#define GAMEOPTION_REBEL2_YODA_MODE                          GUIO_GAMEOPTIONS14
+#define GAMEOPTION_REBEL1_NO_DAMAGE                          GUIO_GAMEOPTIONS15
 
 /**
  * Descriptor of a specific SCUMM game. Used internally to store
@@ -147,6 +153,9 @@ enum GameFeatures {
 	/** A demo, not a full blown game. */
 	GF_DEMO = 1 << 0,
 
+	/** Games ready for public testing, but not yet fully supported. */
+	GF_TESTING = 1 << 1,
+
 	/** Games with the AKOS costume system (ScummEngine_v7 and subclasses, HE games). */
 	GF_NEW_COSTUMES = 1 << 2,
 
@@ -221,6 +230,8 @@ enum ScummGameId {
 	GID_CMI,
 	GID_DIG,
 	GID_FT,
+	GID_REBEL1,
+	GID_REBEL2,
 	GID_INDY3,
 	GID_INDY4,
 	GID_LOOM,
@@ -280,7 +291,6 @@ enum {
 	DEBUG_SMUSH,		// Track SMUSH
 	DEBUG_MOONBASE_AI,	// Moonbase AI
 	DEBUG_NETWORK,		// Track Networking
-	DEBUG_IMGUI,		// Show ImGui debug window (if available)
 };
 
 } // End of namespace Scumm

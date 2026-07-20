@@ -14,14 +14,10 @@ Project Leaders
 .. list-table::
    :widths: 35 65
 
-   * - Paweł Kołodziejski
-     -
    * - Eugene Sandulenko
-     -
-   * - Einar Johan T. Sømåen
-     -
+     - Project Leader
    * - Lothar Serra Mari
-     -
+     - Project Co-Leader and Admin
 
 PR Office
 *********
@@ -314,6 +310,15 @@ Blade Runner
    * - Peter Kohaut
      -
    * - Eugene Sandulenko
+     -
+
+Bolt
+^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Andrea Boscarino
      -
 
 Buried
@@ -710,6 +715,15 @@ Hades Challenge
    * - Vladimir Serbinenko/Google
      -
 
+Harvester
+^^^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Alex Bevilacqua
+     -
+
 HDB
 ^^^
 
@@ -885,6 +899,17 @@ M4
    * - Arnaud Boutonné
      -
 
+Macs2
+^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Florian Mehm
+     -
+   * - Martin Gerhardy
+     -
+
 MacVenture
 ^^^^^^^^^^
 
@@ -1013,6 +1038,8 @@ Nancy
 
    * - Kaloyan Chehlarski
      -
+   * - Filippos Karapetis
+     -
    * - Walter van Niftrik
      -
 
@@ -1054,6 +1081,15 @@ Pegasus
    * - Matthew Hoops
      - (retired)
 
+Pelrock
+^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Gabriel Sanmartín
+     -
+
 Petka
 ^^^^^
 
@@ -1075,6 +1111,8 @@ PhoenixVR
      -
    * - Hermann Noll
      - Help with 3D VR projections
+   * - Scorp
+     - Dracula 1/2 and Messenger support, Engine improvements
 
 Pink
 ^^^^
@@ -1213,6 +1251,8 @@ SCUMM
      - (retired)
    * - Jonathan Gray
      - (retired)
+   * - Gustavo Grieco
+     - Rebel Assault I & II
    * - Vincent Hamm
      - (retired)
    * - Max Horn
@@ -2920,6 +2960,17 @@ Special thanks to Bob Heitman and Corey Cole for their support of FreeSCI.
 
 ResidualVM Contributors
 ***********************
+
+Project Leaders
+^^^^^^^^^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Paweł Kołodziejski
+     -
+   * - Einar Johan T. Sømåen
+     -
 
 Grim
 ^^^^

@@ -1683,6 +1683,18 @@ static const struct ADGameDescription SciGameDescriptions[] = {
 		AD_LISTEND},
 		Common::KO_KOR, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO_STD16_UNDITHER	},
 
+
+	// King's Quest 1 SCI Remake - Fanmade Hebrew translation (from the King's Quest Collection)
+	// Executable scanning reports "S.old.010", VERSION file reports "1.000.051"
+	// SCI interpreter version 0.000.999
+	{"kq1sci", "SCI", {
+		{"resource.map", 0, "7fe9399a0bec84ca5727309778d27f07", 5790},
+		{"resource.001", 0, "fed9e0072ffd511d248674e60dee2099", 555439},
+		{"resource.002", 0, "fed9e0072ffd511d248674e60dee2099", 714062},
+		{"resource.003", 0, "fed9e0072ffd511d248674e60dee2099", 717478},
+		{"font.000", 0, "97c705f14ce1dd1a940d10eef0e6d252", 2835}, AD_LISTEND},
+		Common::HE_ISR, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO_STD16_UNDITHER},
+
 	// King's Quest 1 SCI Remake - English DOS (supplied by ssburnout in bug report #5270)
 	// 1.000.051 9x5.25" (label: INT#9.19.90)
 	{"kq1sci", "SCI", {
@@ -2514,6 +2526,26 @@ static const struct ADGameDescription SciGameDescriptions[] = {
 		AD_LISTEND},
 		Common::KO_KOR, Common::kPlatformWindows, ADGF_CD, GUIO5(GUIO_NOASPECT, GAMEOPTION_WINDOWS_CURSORS, GAMEOPTION_PREFER_DIGITAL_SFX, GAMEOPTION_ORIGINAL_SAVELOAD, GAMEOPTION_MIDI_MODE)	},
 
+	// King's Quest 6 - Fanmade Hebrew translation Windows CD (based on the series GOG version)
+	// Executable scanning reports "1.cfs.158", VERSION file reports "1.000.00G"
+	// SCI interpreter version 1.001.054
+	{"kq6", "", {
+		{"resource.map", 0, "7a550ebfeae2575ca00d47703a6a774c", 9215},
+		{"resource.000", 0, "233394a5f33b475ae5975e7e9a420865", 8376352},
+		{"0.fon", 0, "a2fc0fd2c4ddcf1f1dc5207126cd998b", 3419},
+		AD_LISTEND},
+		Common::HE_ISR, Common::kPlatformDOS, ADGF_CD, GUIO_KQ6_CD},
+
+	// King's Quest 6 - Fanmade Hebrew translation Windows CD (based on the series GOG version)
+	// Executable scanning reports "1.cfs.158", VERSION file reports "1.000.00G"
+	// SCI interpreter version 1.001.054
+	{"kq6", "", {
+		{"resource.map", 0, "7a550ebfeae2575ca00d47703a6a774c", 9215},
+		{"resource.000", 0, "233394a5f33b475ae5975e7e9a420865", 8376352},
+		{"0.fon", 0, "a2fc0fd2c4ddcf1f1dc5207126cd998b", 3419},
+		AD_LISTEND},
+		Common::HE_ISR, Common::kPlatformWindows, ADGF_CD, GUIO_KQ6_CD_WINDOWS},
+
 	// King's Quest 6 - English Macintosh Floppy
 	// VERSION file reports "1.0"
 	{"kq6", "", {
@@ -2632,6 +2664,23 @@ static const struct ADGameDescription SciGameDescriptions[] = {
 		{"avi/int08x11.avi", 0, NULL,                           AD_NO_SIZE},
 		AD_LISTEND},
 		Common::EN_ANY, Common::kPlatformWindows, ADGF_NO_FLAGS, GUIO_KQ7 },
+
+	// King's Quest 7 - Hebrew Windows (from GOG)
+	// SCI interpreter version 2.100.002, VERSION file reports "2.00b"
+	{"kq7", "", {
+		{"resource.map", 0, "8676b0fbbd7362989a029fe72fea14c6", 18709},
+		{"resource.000", 0, "51c1ead1163e19a2de8f121c39df7a76", 200764100},
+		{"PATCHES/0.fon", 0, "98a0809f0122e776e7ff00961f8135bc", 3419},
+		// We need to look for these AVIs before enabling the Windows version
+		// because GOG.com releases are missing them. Their contents do not
+		// matter (some users replace them with higher quality versions created
+		// from the rare 1.65c release, which should not cause a detection
+		// failure)
+		{"avi/91.rbt", 0, NULL, AD_NO_SIZE},
+		{"avi/911.rbt", 0, NULL, AD_NO_SIZE},
+		{"avi/912.rbt", 0, NULL, AD_NO_SIZE},
+		AD_LISTEND},
+		Common::HE_ISR, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO_KQ7},
 
 	// King's Quest 7 - Italian DOS (from dego93 on bug report Trac#9739)
 	// VERSION file reports "2.00"
@@ -4932,6 +4981,21 @@ static const struct ADGameDescription SciGameDescriptions[] = {
 		AD_LISTEND},
 		Common::EN_ANY, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO_STD16_UNDITHER },
 
+	// Quest for Glory 1 / Hero's Quest - EGA Version.
+	// Fanmade Hebrew translation, based on the series GOG version 1.200
+	// English DOS 3.5" Floppy (supplied by merkur in bug report #4253)
+	// Executable scanning reports "0.000.566"
+	{"qfg1", "", {
+		{"resource.map", 0, "74a108a7fb345bfc84f4113b6e5241bb", 6432},
+		{"resource.000", 0, "40332d3ebfc70a4b6a6a0443c2763287", 79181},
+		{"resource.001", 0, "917fcef303e9489597154727baaa9e07", 461422},
+		{"resource.002", 0, "05ddce5f437a516b89ede2438fac09d8", 635734},
+		{"resource.003", 0, "951299a82a8134ed12c5c18118d45c2f", 640483},
+		{"resource.004", 0, "951299a82a8134ed12c5c18118d45c2f", 644443},
+		{"font.000", 0, "5053e202adbd7a4fdebb30b2ea76ce27", 2835},
+		AD_LISTEND},
+		Common::HE_ISR, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO_STD16_UNDITHER},
+
 	// Quest for Glory 1 / Hero's Quest - English DOS 3.5" Floppy v1.001 Int#0.000.566 (supplied by alonzotg in bug report #5606)
 	{"qfg1", "", {
 		{"resource.map", 0, "85512508ed4e4ef1e3b309adabceeda9", 6486},
@@ -5962,6 +6026,13 @@ static const struct ADGameDescription SciGameDescriptions[] = {
 		{"resource.001", 0, "c47b9817cf13f16b803fcbce647e63f3", 1514692},
 		AD_LISTEND},
 		Common::ES_ESP, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO_STD16_PALETTEMODS },
+
+	// Space Quest 3 - Russian fan translation by Igor Malyshko
+	{ "sq3", "", {
+		{"resource.map", 0, "7f1a45f497a8b93dce14147807ce383c", 3726},
+		{"resource.001", 0, "b62b0f98ff876304a5af214c9557f266", 1674902},
+		AD_LISTEND},
+		Common::RU_RUS, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO_STD16_PALETTEMODS },
 
 #define GUIO_SQ4_CD GUIO6(GAMEOPTION_SQ4_SILVER_CURSORS,	\
 						  GAMEOPTION_PREFER_DIGITAL_SFX,	\

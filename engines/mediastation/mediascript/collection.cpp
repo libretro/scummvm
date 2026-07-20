@@ -80,11 +80,13 @@ ScriptValue Collection::callMethod(BuiltInMethod methodId, Common::Array<ScriptV
 
 	case kGetAtMethod: {
 		ARGCOUNTCHECK(1);
-		uint index = static_cast<uint>(args[0].asFloat());
-		if (index < size()) {
+		// Index can be -1, so make sure we check for that.
+		int index = static_cast<uint>(args[0].asFloat());
+		if (index >= 0 && (uint)index < size()) {
 			returnValue = operator[](index);
 		} else {
 			warning("%s: Index %d out of bounds %d", __func__, index, size());
+			returnValue.setToFloat(0.0);
 		}
 		break;
 	}
@@ -184,9 +186,9 @@ void Collection::send(const Common::Array<ScriptValue> &args) {
 	Common::Array<ScriptValue> sendArgs;
 	for (const ScriptValue &item : *this) {
 		uint actorId = item.asActorId();
-		Actor *targetActor = g_engine->getActorById(actorId);
+		Actor *targetActor = g_engine->getImtGod()->getActorById(actorId);
 		if (targetActor != nullptr) {
-			debugC(7, kDebugScript, "%s: %s: %d", __func__, builtInMethodToStr(methodToSend), actorId);
+			debugC(7, kDebugScript, "%s: %s: %s", __func__, builtInMethodToStr(methodToSend), targetActor->debugName());
 			targetActor->callMethod(methodToSend, argsToSend);
 		}
 	}

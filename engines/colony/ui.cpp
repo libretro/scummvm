@@ -45,16 +45,6 @@
 
 namespace Colony {
 
-// Pack RGB into 32-bit ARGB with 0xFF000000 marker for direct RGB rendering.
-uint32 packRGB(byte r, byte g, byte b) {
-	return 0xFF000000 | ((uint32)r << 16) | ((uint32)g << 8) | b;
-}
-
-// Pack Mac 16-bit RGB into 32-bit ARGB.
-uint32 packMacColorUI(const uint16 rgb[3]) {
-	return 0xFF000000 | ((rgb[0] >> 8) << 16) | ((rgb[1] >> 8) << 8) | (rgb[2] >> 8);
-}
-
 bool drawMacTextPopup(Graphics::MacWindowManager *wm, Renderer *gfx,
 		int screenWidth, int screenHeight, int centerX, int centerY,
 		const Common::Array<Common::String> &lines, Graphics::TextAlign align, bool macColor) {
@@ -171,18 +161,16 @@ bool drawMacTextPopup(Graphics::MacWindowManager *wm, Renderer *gfx,
 	return true;
 }
 
-// Load a PICT resource from the Mac resource fork, returning a new RGB surface.
-// Try Color Colony first (has color dashboard PICTs), then fall back to B&W Colony.
+// Load a dashboard PICT resource from the Mac resource fork, returning a new
+// RGB surface. The companion Color Colony resource fork contains the complete
+// dashboard PICT set, so prefer it when available and fall back to the base app.
 // Caller owns the returned surface. Returns nullptr on failure.
 Graphics::Surface *ColonyEngine::loadPictSurface(int resID) {
 	Common::SeekableReadStream *pictStream = nullptr;
 
-	// Try Color Colony resource fork first
-	if (_colorResMan && _colorResMan->hasResFork()) {
+	if (_colorResMan && _colorResMan->hasResFork())
 		pictStream = _colorResMan->getResource(MKTAG('P', 'I', 'C', 'T'), (int16)resID);
-	}
 
-	// Fall back to B&W Colony resource fork
 	if (!pictStream && _resMan && (_resMan->isMacFile() || _resMan->hasResFork())) {
 		pictStream = _resMan->getResource(MKTAG('P', 'I', 'C', 'T'), (int16)resID);
 	}
@@ -211,7 +199,7 @@ Graphics::Surface *ColonyEngine::loadPictSurface(int resID) {
 			}
 
 			result = new Graphics::Surface();
-			result->create(src->w, src->h, Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0));
+			result->create(src->w, src->h, _gfx->getPixelFormat());
 			for (int y = 0; y < src->h; y++) {
 				for (int x = 0; x < src->w; x++) {
 					byte r, g, b;
@@ -243,25 +231,13 @@ Graphics::Surface *ColonyEngine::loadPictSurface(int resID) {
 	return result;
 }
 
-// Draw a PICT surface at a specific destination position using packRGB.
-// Matches original DrawPicture(pic, &rect) where rect is positioned at (destX, destY).
+// Draw a PICT surface at a specific destination position. The surface was
+// created by loadPictSurface() in the exact ARGB layout the renderer's
+// drawSurface() consumes, so this is a single textured-quad blit.
 void ColonyEngine::drawPictAt(Graphics::Surface *surf, int destX, int destY) {
 	if (!surf)
 		return;
-	for (int y = 0; y < surf->h; y++) {
-		int sy = destY + y;
-		if (sy < 0 || sy >= _height)
-			continue;
-		for (int x = 0; x < surf->w; x++) {
-			int sx = destX + x;
-			if (sx < 0 || sx >= _width)
-				continue;
-			uint32 pixel = surf->getPixel(x, y);
-			byte a, r, g, b;
-			surf->format.colorToARGB(pixel, a, r, g, b);
-			_gfx->setPixel(sx, sy, packRGB(r, g, b));
-		}
-	}
+	_gfx->drawSurface(surf, destX, destY);
 }
 
 void ColonyEngine::updateViewportLayout() {
@@ -273,7 +249,7 @@ void ColonyEngine::updateViewportLayout() {
 		return Common::Rect(left, top, right, bottom);
 	};
 
-	const bool isMac = (_renderMode == Common::kRenderMacintosh);
+	const bool isMac = isMacRenderMode();
 
 	// Original IBM_INIT.C: pix_per_Qinch = pixResX/4, pixResY/4
 	// MetaWINDOW EGA 640x350: pixResX=96, pixResY=72 → pQx=24, pQy=18
@@ -314,12 +290,35 @@ void ColonyEngine::updateViewportLayout() {
 	if (isMac) {
 		// Original Mac layout from inits.c/compass.c/power.c:
 		// screenR.left = 96  sidebar is 96px wide.
-		// Two floating windows centered in sidebar over gray desktop.
+		// Two floating windows over gray desktop.
 		// moveWindow: compRect = (0,0, 2*CCENTER, 3*CCENTER) = (0,0, 70, 105)
 		//   floorRect (minimap) = (8,8)-(62,62)  54x54 inside moveWindow
 		//   compass dish below at (19,66)-(51,98), needle center at (35,82)
-		// infoWindow: sized from PICT resource, positioned above moveWindow
+		// infoWindow: original WIND 10930 rect (9,26)-(79,189).
 		const int CCENTER = 35;
+		auto loadWindowRect = [this, &makeSafeRect](int resID, const Common::Rect &fallback) {
+			Common::SeekableReadStream *windStream = nullptr;
+			if (_resMan && (_resMan->isMacFile() || _resMan->hasResFork()))
+				windStream = _resMan->getResource(MKTAG('W', 'I', 'N', 'D'), (int16)resID);
+			if (!windStream && _colorResMan && _colorResMan->hasResFork())
+				windStream = _colorResMan->getResource(MKTAG('W', 'I', 'N', 'D'), (int16)resID);
+
+			if (!windStream)
+				return fallback;
+
+			Common::Rect r = fallback;
+			if (windStream->size() >= 8) {
+				const int top = windStream->readSint16BE();
+				const int left = windStream->readSint16BE();
+				const int bottom = windStream->readSint16BE();
+				const int right = windStream->readSint16BE();
+				r = makeSafeRect(left, top, right, bottom);
+			}
+			delete windStream;
+			return r;
+		};
+
+		const Common::Rect infoWindow = loadWindowRect(10930, Common::Rect(9, 26, 79, 189));
 
 		// Load PICT surfaces (cached after first load)
 		if (!_pictCompass)
@@ -333,23 +332,24 @@ void ColonyEngine::updateViewportLayout() {
 			if (_armor > 0)
 				wantID = -32755;
 			else
-				wantID = _hasMacColors ? -32761 : -32752;
+				wantID = isMacColorMode() ? -32761 : -32752;
 			_pictPower = loadPictSurface(wantID);
 			if (!_pictPower && _armor > 0 && wantID != -32755)
 				_pictPower = loadPictSurface(-32755);
 			_pictPowerID = _pictPower ? wantID : 0;
 		}
 
-		// moveWindow dimensions from original constants
+		// Keep the ScummVM dashboard's bottom moveWindow placement. The original
+		// Mac window resource is for a compact 512x342 desktop and should not
+		// move this panel upward on our larger Mac render surface.
 		const int moveW = 2 * CCENTER; // 70
 		const int moveH = 3 * CCENTER; // 105
-		const int infoW = _pictPower ? _pictPower->w : moveW;
-		const int infoH = _pictPower ? _pictPower->h : moveH;
+		const int infoW = infoWindow.width();
+		const int infoH = infoWindow.height();
 
-		// Center panels horizontally in sidebar
 		const int centerX = dashWidth / 2;
 
-		// Position moveWindow at the bottom of the sidebar
+		// Position moveWindow at the bottom of the sidebar.
 		const int moveLeft = MAX(0, centerX - moveW / 2);
 		const int moveTop = _height - pad - moveH;
 
@@ -361,11 +361,12 @@ void ColonyEngine::updateViewportLayout() {
 		// _compassRect = entire moveWindow (used for compass dish drawing)
 		_compassRect = makeSafeRect(moveLeft, moveTop, moveLeft + moveW, moveTop + moveH);
 
-		// Position infoWindow below the Mac menu bar.
-		// Original PICT is drawn at (-2,-2) in window-local coords, so offset
-		// the panel by 2px to prevent the PICT from overlapping the menu bar.
-		const int infoLeft = MAX(0, centerX - infoW / 2);
-		const int infoTop = menuTop + pad;
+		int infoLeft = infoWindow.left;
+		int infoTop = infoWindow.top;
+		if (infoLeft + infoW > dashWidth)
+			infoLeft = MAX(0, dashWidth - infoW);
+		if (infoTop + infoH > _height)
+			infoTop = MAX(menuTop, _height - pad - infoH);
 		_powerRect = makeSafeRect(infoLeft, infoTop, infoLeft + infoW, infoTop + infoH);
 	} else {
 		// DASHBOAR.C RCompass(): compOval before shrink
@@ -449,7 +450,7 @@ void ColonyEngine::drawDashboardStep1() {
 	if (_dashBoardRect.width() <= 0 || _dashBoardRect.height() <= 0)
 		return;
 
-	const bool isMac = (_renderMode == Common::kRenderMacintosh);
+	const bool isMac = isMacRenderMode();
 
 	if (isMac) {
 		drawDashboardMac();
@@ -471,8 +472,8 @@ void ColonyEngine::drawDashboardStep1() {
 	// RCompass(): draw compass oval
 	// _compassRect stores the post-shrink compOval (inner erasable area)
 	if (_compassRect.width() > 2 && _compassRect.height() > 2) {
-		// Original draws FillOval on the pre-shrink rect, then EraseOval on the shrunk rect.
-		// Pre-shrink = _compassRect expanded by 2 on each side
+		// Original DOS draws a solid black outer oval, shrinks the rect by 2px on
+		// each side, then erases the inner oval to white, leaving a black annulus.
 		const int cx = (_compassRect.left + _compassRect.right) >> 1;
 		const int cy = (_compassRect.top + _compassRect.bottom) >> 1;
 		const int outerRx = (_compassRect.width() + 4) >> 1;
@@ -480,16 +481,14 @@ void ColonyEngine::drawDashboardStep1() {
 		const int innerRx = _compassRect.width() >> 1;
 		const int innerRy = _compassRect.height() >> 1;
 
-		// FillOval: filled oval (vINTWHITE background)
-		_gfx->fillEllipse(cx, cy, outerRx, outerRy, 15);
-		// EraseOval: clear interior (also vINTWHITE)
+		_gfx->fillEllipse(cx, cy, outerRx, outerRy, 0);
 		_gfx->fillEllipse(cx, cy, innerRx, innerRy, 15);
-		// Frame the outer oval
-		_gfx->drawEllipse(cx, cy, outerRx, outerRy, 0);
 
-		// Compass needle: updateDashBoard() uses Me.ang
-		const int ex = cx + ((_cost[_me.ang] * innerRx) >> 8);
-		const int ey = cy - ((_sint[_me.ang] * innerRy) >> 8);
+		// In the current ScummVM colony controls, the rendered camera follows
+		// _me.look. Using _me.ang here leaves the DOS compass static under
+		// mouse/camera rotation even though the scene is turning.
+		const int ex = cx + ((_cost[_me.look] * _compassRect.width()) >> 8);
+		const int ey = cy - ((_sint[_me.look] * _compassRect.height()) >> 8);
 		_gfx->drawLine(cx, cy, ex, ey, 0); // vBLACK needle
 	}
 
@@ -544,10 +543,10 @@ void ColonyEngine::drawDashboardStep1() {
 // Original Mac had two floating windows (infoWindow + moveWindow) over gray desktop.
 
 void ColonyEngine::drawDashboardMac() {
-	const bool macColor = _hasMacColors;
+	const bool macColor = isMacColorMode();
 	const uint32 colBlack = packRGB(0, 0, 0);
 	const uint32 colWhite = packRGB(255, 255, 255);
-	const uint32 colWinBg = macColor ? packMacColorUI(_macColors[7].bg) : colWhite;
+	const uint32 colWinBg = macColor ? packMacColor(_macColors[7].bg) : colWhite;
 	// power.c: ForeColor(blueColor)  on 1-bit display, blue maps to black
 	const uint32 colBlue = macColor ? packRGB(0, 0, 255) : colBlack;
 
@@ -600,30 +599,72 @@ void ColonyEngine::drawDashboardMac() {
 		}
 
 		// power.c: SetRect(&info, -2, -2, xSize-2, ySize-2); DrawPicture(inf, &info)
+		// — art pixel (2,2) sits at the window origin, so color blits at -2.
+		// The B&W path keeps its screenshot-calibrated +1 offset.
 		// In the original B&W game, GetPicture(-32752) returns null when !armor,
 		// so DrawPicture is a no-op — the window just shows white fill.
-		if (_pictPower)
-			drawPictAt(_pictPower, _powerRect.left - 2, _powerRect.top - 2);
+		if (_pictPower) {
+			if (macColor)
+				drawPictAt(_pictPower, _powerRect.left - 2, _powerRect.top - 2);
+			else
+				drawPictAt(_pictPower, _powerRect.left + 1, _powerRect.top + 1);
+		}
+
+		if (!macColor) {
+			// Match the B&W Window Manager shadow as pixels. The shadow is
+			// staggered over the checkerboard desktop; a solid rect is too wide.
+			_gfx->fillRect(Common::Rect(_powerRect.right, _powerRect.top - 1,
+				_powerRect.right + 1, _powerRect.bottom + 3), colBlack);
+			_gfx->fillRect(Common::Rect(_powerRect.right + 1, _powerRect.top,
+				_powerRect.right + 2, _powerRect.bottom + 4), colBlack);
+			_gfx->fillRect(Common::Rect(_powerRect.right + 2, _powerRect.top - 1,
+				_powerRect.right + 3, _powerRect.top), colBlack);
+			_gfx->fillRect(Common::Rect(_powerRect.right + 2, _powerRect.top + 1,
+				_powerRect.right + 3, _powerRect.bottom + 3), colBlack);
+			_gfx->fillRect(Common::Rect(_powerRect.left - 2, _powerRect.bottom,
+				_powerRect.right + 3, _powerRect.bottom + 1), colBlack);
+			_gfx->fillRect(Common::Rect(_powerRect.left + 1, _powerRect.bottom + 1,
+				_powerRect.right + 4, _powerRect.bottom + 2), colBlack);
+			_gfx->fillRect(Common::Rect(_powerRect.left, _powerRect.bottom + 2,
+				_powerRect.right + 3, _powerRect.bottom + 3), colBlack);
+		}
 
 		// Blue bars only when armored (power.c: if(armor) { ... ForeColor(blueColor) ... })
 		if (_armor > 0 && _pictPower) {
-			// power.c info rect adjustments: left+=3,right+=3,top-=3,bottom-=3, then ++/--
-			// Net effect: info is adjusted relative to PICT position
-			const int infoLeft = _powerRect.left - 2 + 2;  // -2 (PICT offset) +3-1 = 0, +2 net
-			const int infoBottom = _powerRect.top - 2 + _pictPower->h - 2; // PICT bottom adjusted
-			const int bot = infoBottom - 27; // power.c: bot = info.bottom - 27
+			// power.c draws the bars with QuickDraw MoveTo/LineTo after shifting
+			// the PICT rect. GL line rasterization does not cover the same pixels,
+			// so draw the observed bar strips explicitly.
+			if (macColor) {
+				// Color power.c DrawInfo(): lft = 3 + info.left + i*23 with the
+				// shifted info rect's local origin at engine x = _powerRect.left
+				// (PICT blitted at -2); strips MoveTo(lft+1)..LineTo(lft+16) = 16px.
+				const int infoLeft = _powerRect.left;
+				const int bot = _powerRect.bottom - 30; // power.c: bot = info.bottom - 27
 
-			for (int i = 0; i < 3; i++) {
-				// power.c: lft = 3 + info.left + i*23
-				const int lft = 3 + infoLeft + i * 23;
-				for (int j = 0; j < ePower[i] && j < 20; j++) {
-					const int ln = bot - 3 * j;
-					if (ln <= _powerRect.top)
-						break;
-					// power.c: MoveTo(lft+1,ln); LineTo(lft+16,ln);  16px wide, 2 lines
-					_gfx->drawLine(lft + 1, ln, lft + 16, ln, colBlue);
-					if (ln - 1 > _powerRect.top)
-						_gfx->drawLine(lft + 1, ln - 1, lft + 16, ln - 1, colBlue);
+				for (int i = 0; i < 3; i++) {
+					const int lft = 3 + infoLeft + i * 23;
+					for (int j = 0; j < ePower[i] && j < 20; j++) {
+						const int ln = bot - 3 * j;
+						if (ln <= _powerRect.top)
+							break;
+						_gfx->fillRect(Common::Rect(lft + 1, ln - 1, lft + 17, ln + 1), colBlue);
+					}
+				}
+			} else {
+				// The B&W art uses other sizes than the color source. Reference B&W
+				// frame: columns start at x 10, 33, 56; bars are inset by 2 pixels
+				// on each side: x 12..29, 35..52, 58..75 (18px wide).
+				const int infoLeft = _powerRect.left - 1;
+				const int bot = _powerRect.bottom - 27; // power.c: bot = info.bottom - 27
+
+				for (int i = 0; i < 3; i++) {
+					const int lft = 3 + infoLeft + i * 23;
+					for (int j = 0; j < ePower[i] && j < 20; j++) {
+						const int ln = bot - 3 * j;
+						if (ln <= _powerRect.top)
+							break;
+						_gfx->fillRect(Common::Rect(lft + 1, ln - 1, lft + 19, ln + 1), colBlue);
+					}
 				}
 			}
 		}
@@ -717,7 +758,7 @@ void ColonyEngine::drawMiniMap(uint32 lineColor) {
 			_gfx->drawLine(x1, y1, x2, y2, color);
 	};
 
-	const bool isMac = (_renderMode == Common::kRenderMacintosh);
+	const bool isMac = isMacRenderMode();
 
 	int lExt, sExt, xloc, yloc, ccenterx, ccentery;
 	if (isMac) {
@@ -741,8 +782,9 @@ void ColonyEngine::drawMiniMap(uint32 lineColor) {
 		ccenterx = (_headsUpRect.left + _headsUpRect.right) >> 1;
 		ccentery = (_headsUpRect.top + _headsUpRect.bottom) >> 1;
 	}
-	const int tsin = _sint[_me.look];
-	const int tcos = _cost[_me.look];
+	const uint8 mapAngle = _me.look;
+	const int tsin = _sint[mapAngle];
+	const int tcos = _cost[mapAngle];
 
 	int xcorner[6];
 	int ycorner[6];
@@ -943,7 +985,8 @@ void ColonyEngine::drawAutomap() {
 		return;
 
 	const int lv = _level - 1;
-	const bool isMac = (_renderMode == Common::kRenderMacintosh);
+	const bool isMac = isMacRenderMode();
+	const bool macColor = isMacColorMode();
 
 	const Common::Rect vp(0, _menuBarHeight, _width, _height);
 	const int vpW = vp.width();
@@ -951,7 +994,9 @@ void ColonyEngine::drawAutomap() {
 	if (vpW <= 0 || vpH <= 0)
 		return;
 
-	_gfx->fillRect(vp, isMac ? 0xFFA0D0FF : 15);
+	// Match the minimap: B&W Mac is white background + black lines, like the
+	// compass area; color Mac keeps its tinted background.
+	_gfx->fillRect(vp, macColor ? 0xFFA0D0FF : (isMac ? packRGB(255, 255, 255) : 15));
 	_gfx->drawRect(vp, 0);
 
 	const int lExt = MIN(vpW, vpH) / 12;
@@ -962,8 +1007,9 @@ void ColonyEngine::drawAutomap() {
 	const int yloc = (lExt * ((_me.yindex << 8) - _me.yloc)) >> 8;
 	const int ccx = (vp.left + vp.right) >> 1;
 	const int ccy = (vp.top + vp.bottom) >> 1;
-	const int tsin = _sint[_me.look];
-	const int tcos = _cost[_me.look];
+	const uint8 mapAngle = _me.look;
+	const int tsin = _sint[mapAngle];
+	const int tcos = _cost[mapAngle];
 	const uint32 lineColor = 0;
 
 	const int radius = (int)(sqrtf((float)(vpW * vpW + vpH * vpH)) / (2.0f * lExt)) + 2;
@@ -1019,6 +1065,48 @@ void ColonyEngine::drawAutomap() {
 	_gfx->drawEllipse(ccx, ccy, eyeRx, eyeRy, lineColor);
 	_gfx->fillEllipse(ccx, ccy, eyeRx >> 1, eyeRy, lineColor);
 }
+// inits.c: fl_icon[i] = GetIcon(i+1) — 32x32 1-bit ICON resources 1-5.
+// display.c PlotIcon: 1-bits are drawn black, 0-bits take the RGBBackColor —
+// white for the empty fork, the carried object's body color otherwise.
+void ColonyEngine::loadForkliftIcons() {
+	_flIconsLoaded = true;
+
+	// c_box1, c_cryo, c_teleport, c_ccore
+	static const int kBgColorIdx[5] = { -1, 84, 90, 93, 111 };
+	const uint32 white = packRGB(255, 255, 255);
+	const uint32 black = packRGB(0, 0, 0);
+
+	for (int i = 0; i < 5; i++) {
+		Common::SeekableReadStream *s = nullptr;
+		if (_colorResMan && _colorResMan->hasResFork())
+			s = _colorResMan->getResource(MKTAG('I', 'C', 'O', 'N'), i + 1);
+		if (!s && _resMan)
+			s = _resMan->getResource(MKTAG('I', 'C', 'O', 'N'), i + 1);
+		if (!s || s->size() < 128) {
+			delete s;
+			continue;
+		}
+
+		byte bits[128];
+		s->read(bits, 128);
+		delete s;
+
+		uint32 bg = white;
+		if (kBgColorIdx[i] >= 0 && isMacColorMode())
+			bg = packMacColor(_macColors[kBgColorIdx[i]].bg);
+
+		Graphics::Surface *surf = new Graphics::Surface();
+		surf->create(32, 32, renderColorFormat());
+		for (int y = 0; y < 32; y++) {
+			for (int x = 0; x < 32; x++) {
+				const bool on = (bits[y * 4 + (x >> 3)] >> (7 - (x & 7))) & 1;
+				surf->setPixel(x, y, on ? black : bg);
+			}
+		}
+		_flIconSurf[i] = surf;
+	}
+}
+
 void ColonyEngine::drawForkliftOverlay() {
 	if (_fl <= 0 || _screenR.width() <= 0 || _screenR.height() <= 0)
 		return;
@@ -1026,13 +1114,16 @@ void ColonyEngine::drawForkliftOverlay() {
 	// Original display.c: two diagonal fork arm lines when fl > 0.
 	// Left arm:  (centerX/4, 0) to (centerX/2, Height)
 	// Right arm: (Width - centerX/4, 0) to (Width - centerX/2, Height)
-	// Drawn with PenSize(2,2) in black (white in battle mode).
+	// Drawn with PenSize(2,2) in black (white pen pattern in battle mode).
 	const int left = _screenR.left;
 	const int top = _screenR.top;
 	const int w = _screenR.width();
 	const int h = _screenR.height();
 	const int cx = w / 2;
-	const uint32 color = (_renderMode == Common::kRenderMacintosh) ? packRGB(0, 0, 0) : 0;
+	const bool isMac = isMacRenderMode();
+	const bool battle = (_gameMode == kModeBattle);
+	const uint32 color = isMac ? (battle ? packRGB(255, 255, 255) : packRGB(0, 0, 0))
+		: (battle ? 15 : 0);
 
 	const int tx2 = cx >> 2;  // centerX/4
 	const int tx1 = cx >> 1;  // centerX/2
@@ -1043,13 +1134,48 @@ void ColonyEngine::drawForkliftOverlay() {
 	// Right fork arm
 	_gfx->drawLine(left + w - tx2, top, left + w - tx1, top + h - 1, color);
 	_gfx->drawLine(left + w - tx2 - 1, top, left + w - tx1 - 1, top + h - 1, color);
+
+	// Fork status: fl==1 → empty fork, fl==2 → carried object type.
+	int fnum = 0;
+	if (_fl != 1) {
+		switch (_carryType) {
+		case kObjBox1:
+		case kObjBox2:     fnum = 1; break;
+		case kObjCryo:     fnum = 2; break;
+		case kObjTeleport: fnum = 3; break;
+		case kObjReactor:  fnum = 4; break;
+		default: break;
+		}
+	}
+
+	if (isMac) {
+		// display.c: PlotIcon(&fl_rect, fl_icon[fnum]);
+		// inits.c: fl_rect = (32, Height-64)-(64, Height-32), window-local.
+		if (!_flIconsLoaded)
+			loadForkliftIcons();
+		if (_flIconSurf[fnum])
+			_gfx->drawSurface(_flIconSurf[fnum], left + 32, _screenR.bottom - 64);
+	} else {
+		// IBM_DISP.C: framed white box at the bottom center naming the
+		// fork state, black text on vINTWHITE.
+		static const char *fltext[5] = { "EMPTY", "BOX", "CRYO", "TELEPORT", "REACTOR" };
+		Graphics::DosFont font;
+		const int half = 4 + font.getStringWidth(fltext[fnum]) / 2;
+		const Common::Rect r(_centerX - half, _screenR.bottom - 15, _centerX + half, _screenR.bottom - 1);
+		_gfx->fillRect(r, 15);
+		_gfx->drawRect(r, 0);
+		_gfx->drawString(&font, fltext[fnum], _centerX,
+			_screenR.bottom - 8 - font.getFontHeight() / 2, 0, Graphics::kTextAlignCenter);
+	}
 }
 
 void ColonyEngine::drawCrosshair() {
-	if (!_crosshair || _screenR.width() <= 0 || _screenR.height() <= 0)
+	// display.c / IBM_DISP.C: "if(fl){...} else if(crosshair)" — no aim
+	// crosshair while driving the forklift (you cannot shoot from it).
+	if (!_crosshair || _fl > 0 || _screenR.width() <= 0 || _screenR.height() <= 0)
 		return;
 
-	const bool isMac = (_renderMode == Common::kRenderMacintosh);
+	const bool isMac = isMacRenderMode();
 	if (isMac && _cursorShoot && !_mouseLocked && _weapons > 0)
 		return;
 
@@ -1057,7 +1183,7 @@ void ColonyEngine::drawCrosshair() {
 	if (isMac) {
 		// Mac: black when powered, gray when no weapons, white when armed but no power
 		// B&W: no gray, so powered=black, else white
-		if (_hasMacColors)
+		if (isMacColorMode())
 			color = (_corePower[_coreIndex] > 0) ? packRGB(0, 0, 0)
 				: (_weapons > 0) ? packRGB(255, 255, 255) : packRGB(128, 128, 128);
 		else
@@ -1127,8 +1253,8 @@ void ColonyEngine::printMessage(const char *text[], bool hold) {
 		numLines++;
 	}
 
-	if (_renderMode == Common::kRenderMacintosh && drawMacTextPopup(_wm, _gfx,
-			_width, _height, _centerX, _centerY, lines, Graphics::kTextAlignCenter, _hasMacColors)) {
+	if (isMacRenderMode() && drawMacTextPopup(_wm, _gfx,
+			_width, _height, _centerX, _centerY, lines, Graphics::kTextAlignCenter, isMacColorMode())) {
 		if (hold)
 			waitForInput();
 		return;
@@ -1244,13 +1370,13 @@ void ColonyEngine::doText(int entry, int center) {
 	if (maxlines > (int)lineArray.size())
 		maxlines = lineArray.size();
 
-	if (_renderMode == Common::kRenderMacintosh) {
+	if (isMacRenderMode()) {
 		Common::Array<Common::String> popupLines;
 		for (int i = 0; i < maxlines; ++i)
 			popupLines.push_back(lineArray[i]);
 		popupLines.push_back((int)lineArray.size() > maxlines ? kmore : kpress);
 		if (drawMacTextPopup(_wm, _gfx, _width, _height, _centerX, _centerY, popupLines,
-				center == 1 ? Graphics::kTextAlignCenter : Graphics::kTextAlignLeft, _hasMacColors)) {
+				center == 1 ? Graphics::kTextAlignCenter : Graphics::kTextAlignLeft, isMacColorMode())) {
 			waitForInput();
 			delete[] page;
 			return;

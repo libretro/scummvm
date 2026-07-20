@@ -35,7 +35,7 @@ namespace Freescape {
 
 DarkEngine::DarkEngine(OSystem *syst, const ADGameDescription *gd) : FreescapeEngine(syst, gd) {
 	_playerC64Sfx = nullptr;
-	_playerC64Music = nullptr;
+	_playerMusic = nullptr;
 	_c64UseSFX = false;
 	_c64CompassInitialized = false;
 	_c64CompassPosition = 0;
@@ -105,8 +105,9 @@ DarkEngine::DarkEngine(OSystem *syst, const ADGameDescription *gd) : FreescapeEn
 }
 
 DarkEngine::~DarkEngine() {
-	delete _playerC64Sfx;
-	delete _playerC64Music;
+	if (_sound != _playerC64Sfx)
+		delete _playerC64Sfx;
+	delete _playerMusic;
 
 	for (auto &indicator : _cpcIndicators) {
 		indicator->free();
@@ -348,8 +349,8 @@ void DarkEngine::initGameState() {
 		}
 	}
 
-	if (isC64() && _playerC64Music)
-		_playerC64Music->startMusic();
+	if (isC64() && _playerMusic)
+		_playerMusic->startMusic();
 }
 
 void DarkEngine::loadAssets() {
@@ -568,8 +569,8 @@ bool DarkEngine::checkIfGameEnded() {
 		} else {
 			restoreECD(*_currentArea, index);
 			insertTemporaryMessage(_messagesList[1], _countdown - 2);
-			stopAllSounds(_movementSoundHandle);
-			playSound(_soundIndexRestoreECD, false, _soundFxHandle);
+			stopAllSounds(Sound::kTypeMovement);
+			playSound(_soundIndexRestoreECD, false);
 		}
 		_gameStateVars[kVariableDarkECD] = 0;
 
@@ -714,11 +715,11 @@ void DarkEngine::gotoArea(uint16 areaID, int entranceID) {
 	_gameStateVars[0x1f] = 0;
 
 	if (areaID == _startArea && entranceID == _startEntrance) {
-		playSound(_soundIndexStart, true, _soundFxHandle);
+		playSound(_soundIndexStart, true);
 	} else if (areaID == _endArea && entranceID == _endEntrance) {
 		_pitch = 10;
 	} else {
-		playSound(_soundIndexAreaChange, false, _soundFxHandle);
+		playSound(_soundIndexAreaChange, false);
 	}
 
 	debugC(1, kFreescapeDebugMove, "starting player position: %f, %f, %f", _position.x(), _position.y(), _position.z());
@@ -772,12 +773,14 @@ void DarkEngine::pressedKey(const int keycode) {
 			_flyMode = false;
 			insertTemporaryMessage(_messagesList[13], _countdown - 2);
 		} else if (_flyMode) {
+			// TODO: Reimplement inside Sound class using existing chip instances
+			SizedPCSpeaker *speaker = new SizedPCSpeaker();
 			float hzFreq = 1193180.0f / 0xd537;
-			_speaker->play(Audio::PCSpeaker::kWaveFormSquare, hzFreq, -1);
-			_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandleJetpack, _speaker, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::NO);
+			speaker->play(Audio::PCSpeaker::kWaveFormSquare, hzFreq, -1);
+			_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandleJetpack, speaker, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::YES);
 			insertTemporaryMessage(_messagesList[11], _countdown - 2);
 		} else {
-			_speaker->stop();
+			_mixer->stopHandle(_soundFxHandleJetpack);
 			resolveCollisions(_position);
 			if (!_hasFallen)
 				insertTemporaryMessage(_messagesList[12], _countdown - 2);
@@ -923,6 +926,9 @@ void DarkEngine::drawHorizontalCompass(int x, int y, float angle, uint32 front, 
 		uint8 r, g, b;
 		_gfx->selectColorFromFourColorPalette(3, r, g, b);
 		green = _gfx->_texturePixelFormat.ARGBToColor(0xFF, r, g, b);
+	} else if (isSpectrum()) {
+		// The ZX HUD uses a single ink color for all the text, including the compass.
+		green = front;
 	}
 
 	int delta = (angle - 180) / 5.5;
@@ -1018,7 +1024,7 @@ void DarkEngine::drawIndicator(Graphics::Surface *surface, int xPosition, int yP
 void DarkEngine::drawSensorShoot(Sensor *sensor) {
 	if (_gameStateControl == kFreescapeGameStatePlaying) {
 		// Avoid playing new sounds, so the endgame can progress
-		playSound(_soundIndexHit, true, _soundFxHandle);
+		playSound(_soundIndexHit, true);
 	}
 
 	Math::Vector3d target;
@@ -1111,7 +1117,7 @@ void DarkEngine::drawInfoMenu() {
 					toggleC64Sound();
 					_eventManager->purgeKeyboardEvents();
 				} else if (isDOS() && event.customType == kActionToggleSound) {
-					playSound(6, true, _soundFxHandle);
+					playSound(6, true);
 					_eventManager->purgeKeyboardEvents();
 				} else if (event.customType == kActionEscape) {
 					_forceEndGame = true;
@@ -1124,6 +1130,12 @@ void DarkEngine::drawInfoMenu() {
 				break;
 			case Common::EVENT_SCREEN_CHANGED:
 				_gfx->computeScreenViewport();
+				break;
+			case Common::EVENT_RBUTTONDOWN:
+			// fallthrough
+			case Common::EVENT_LBUTTONDOWN:
+				if (isTouchscreenActive())
+					cont = false;
 				break;
 
 			default:

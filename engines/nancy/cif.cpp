@@ -60,6 +60,14 @@ static void syncCifInfo(Common::Serializer &ser, CifInfo &info, bool tree) {
 	if (!tree) {
 		info.dataOffset = ser.bytesSynced();
 	}
+
+	// From Nancy4 on, the original decides compression from the resource type
+	// (image and script resources are always LZSS-compressed) and ignores the
+	// 'comp' byte, which isn't reliably written in the later games. Only Nancy2
+	// and Nancy3 actually key off the 'comp' byte read above.
+	if (g_nancy->getGameType() >= kGameTypeNancy4)
+		info.comp = (info.type == CifInfo::kResTypeImage || info.type == CifInfo::kResTypeScript) ?
+			CifInfo::kResCompression : CifInfo::kResCompressionNone;
 }
 
 // Reads the data for ciftree cif files
@@ -303,6 +311,7 @@ bool CifTree::sync(Common::Serializer &ser) {
 	uint32 ver = (g_nancy->getGameType() <= kGameTypeNancy1) ? 0 : 1;
 	ser.syncAsUint16LE(ver);
 
+	// TODO: Nancy16 introduced version 3
 	if (ver != 0 && ver != 1 && ver != 2) {
 		warning("Unsupported version %d found in CifTree '%s'", ver, _name.toString().c_str());
 		return false;
@@ -334,6 +343,18 @@ bool CifTree::sync(Common::Serializer &ser) {
 	}
 
 	return true;
+}
+
+Common::Array<Common::Path> CifTree::getPathsForType(CifInfo::ResType type) const {
+	Common::Array<Common::Path> pathList;
+
+	for (auto &it : _fileMap) {
+		if (type == CifInfo::kResTypeAny || it._value.type == type) {
+			pathList.push_back(it._key);
+		}
+	}
+
+	return pathList;
 }
 
 bool PatchTree::hasFile(const Common::Path &path) const {

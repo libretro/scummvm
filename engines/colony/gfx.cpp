@@ -27,19 +27,81 @@
 
 #include "common/config-manager.h"
 #include "common/system.h"
+#include "common/textconsole.h"
 #include "engines/util.h"
+#include "graphics/renderer.h"
 
 #include "colony/renderer.h"
+#include "colony/renderer_opengl_shaders.h"
 
 namespace Colony {
 
-// Forward declaration for the OpenGL renderer factory
+// Forward declaration for the fixed-function OpenGL renderer factory.
 Renderer *createOpenGLRenderer(OSystem *system, int width, int height);
 
+// Pick the renderer type. Honors --renderer=<code> on the command line /
+// ConfMan key, restricted to what was compiled in.
+//
+// Phase 1 policy: default users get fixed-function OpenGL. The shader path
+// is opt-in (--renderer=opengl_shaders) until later phases bring its
+// primitive coverage up to parity. Note that the generic preference order
+// in graphics/renderer.cpp:122 picks shaders for the Default case, so we
+// must override it here.
+static Graphics::RendererType pickRendererType() {
+	const Common::String configured = ConfMan.get("renderer");
+	const Graphics::RendererType desired = Graphics::Renderer::parseTypeCode(configured);
+
+	if (desired == Graphics::kRendererTypeDefault) {
+#ifdef USE_OPENGL_GAME
+		return Graphics::kRendererTypeOpenGL;
+#elif defined(USE_OPENGL_SHADERS)
+		return Graphics::kRendererTypeOpenGLShaders;
+#else
+		return Graphics::kRendererTypeDefault;
+#endif
+	}
+
+	const uint32 supported =
+#ifdef USE_OPENGL_GAME
+		Graphics::kRendererTypeOpenGL |
+#endif
+#ifdef USE_OPENGL_SHADERS
+		Graphics::kRendererTypeOpenGLShaders |
+#endif
+		0;
+	const Graphics::RendererType matching =
+		Graphics::Renderer::getBestMatchingAvailableType(desired, supported);
+
+	if (matching != desired)
+		warning("Colony: requested renderer '%s' is unavailable, falling back",
+			configured.c_str());
+	return matching;
+}
+
 Renderer *createRenderer(OSystem *system, int width, int height) {
-	// Always use OpenGL (following Freescape's pattern for accelerated renderers)
+	const Graphics::RendererType type = pickRendererType();
 	initGraphics3d(width, height);
-	return createOpenGLRenderer(system, width, height);
+
+#if defined(USE_OPENGL_SHADERS)
+	if (type == Graphics::kRendererTypeOpenGLShaders) {
+		Renderer *r = createOpenGLShaderRenderer(system, width, height);
+		if (r)
+			return r;
+		warning("Colony: shader renderer factory returned null, falling back to fixed-function");
+	}
+#endif
+
+#if defined(USE_OPENGL_GAME)
+	if (type == Graphics::kRendererTypeOpenGL || type == Graphics::kRendererTypeDefault)
+		return createOpenGLRenderer(system, width, height);
+#endif
+
+	// Last resort: try fixed-function unconditionally so the engine still
+	// runs in builds where neither flag was caught above.
+	Renderer *r = createOpenGLRenderer(system, width, height);
+	if (!r)
+		error("Colony: no renderer available (built without OpenGL support?)");
+	return r;
 }
 
 } // End of namespace Colony

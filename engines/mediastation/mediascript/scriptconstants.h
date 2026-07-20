@@ -22,6 +22,8 @@
 #ifndef MEDIASTATION_MEDIASCRIPT_BUILTINS_H
 #define MEDIASTATION_MEDIASCRIPT_BUILTINS_H
 
+#include "common/scummsys.h"
+
 namespace MediaStation {
 
 enum ExpressionType {
@@ -93,7 +95,9 @@ enum BuiltInFunction {
 	kMazeSolveFunction = 0x21,
 	kBeginTimedIntervalFunction = 0x22,
 	kEndTimedIntervalFunction = 0x23,
-	kDrawingFunction = 0x25,
+	kCheckersFunction = 0x24, // Hercules
+	kDrawingFunction = 0x25, // IBM/Crayola
+	kMoveSophieFunction = 0x44c, // Puzzle Castle
 
 	// Early engine versions (like for Lion King and such), had different opcodes
 	// for some functions, even though the functions were the same. So those are
@@ -114,7 +118,7 @@ enum BuiltInFunction {
 	kLegacy_GetAudioVolumeFunction = 0xBF,
 	kLegacy_SystemLanguagePreferenceFunction = 0xC8,
 };
-const char *builtInFunctionToStr(BuiltInFunction function);
+const char *builtInFunctionToStr(uint function);
 
 enum BuiltInMethod {
 	kInvalidMethod = 0,
@@ -144,16 +148,14 @@ enum BuiltInMethod {
 	kSetMousePositionMethod = 0x129,
 	// It isn't clear what the difference is meant to be
 	// between these two, as the code looks the same for both.
-	kGetXScaleMethod1 = 0x16E,
-	kGetXScaleMethod2 = 0x17E,
-	kSetScaleMethod = 0x16F,
-	kSetXScaleMethod = 0x17F,
-	kGetYScaleMethod = 0x180,
-	kSetYScaleMethod = 0x181,
+	kGetParallaxFactorXMethod1 = 0x16E,
+	kGetParallaxFactorXMethod2 = 0x17E,
+	kSetParallaxFactorMethod = 0x16F,
+	kSetParallaxFactorXMethod = 0x17F,
+	kGetParallaxFactorYMethod = 0x180,
+	kSetParallaxFactorYMethod = 0x181,
 	kStartCachingMethod = 0x113,
 	kIsCachingMethod = 0x114,
-	kPauseMethod = 0xD0,
-	kResumeMethod = 0xD1,
 	kIsPausedMethod = 0x175,
 
 	// STREAM MOVIE METHODS.
@@ -217,7 +219,7 @@ enum BuiltInMethod {
 	// DOCUMENT METHODS.
 	kDocumentBranchToScreenMethod = 0xC9,
 	kDocumentQuitMethod = 0xD9,
-	kDocumentContextLoadInProgressMethod = 0x169,
+	kIsLoadingMethod = 0x169,
 	kDocumentSetMultipleStreamsMethod = 0x174,
 	kDocumentSetMultipleSoundsMethod = 0x175,
 	kDocumentLoadContextMethod = 0x176,
@@ -284,29 +286,71 @@ enum BuiltInMethod {
 	// between two camera methods and two printer methods.
 	kOpenLensMethod = 0x15A,
 	kCloseLensMethod = 0x15B,
+	kIsPrinterReadyMethod = 0x110,
+	kPrintActorsMethod = 0x111,
+	kPrintScreenMethod = 0x112,
+	kSetPortraitPrintMethod = 0x115,
+	kGetPortraitPrintMethod = 0x116,
+	kSetLeftPrintMarginMethod = 0x117,
+	kSetTopPrintMarginMethod = 0x118,
+	kSetRightPrintMarginMethod = 0x119,
+	kSetBottomPrintMarginMethod = 0x11a,
+	kGetLeftPrintMarginMethod = 0x11b,
+	kGetTopPrintMarginMethod = 0x11c,
+	kGetRightPrintMarginMethod = 0x11d,
+	kGetBottomPrintMarginMethod = 0x11e,
 
 	// CURSOR METHODS.
 	kCursorSetMethod = 0xC8,
+
+	// DISK IMAGE ACTOR METHODS.
+	kPreloadMethod = 0x166,
+	kPurgeMethod = 0x167,
+	kStopLoadMethod = 0x168,
+	kIsRectInMemoryMethod = 0x16A,
+
+	// MINIGAME ACTOR METHODS.
+	kMinigameResetMethod = 0xE2,
+	kMinigameActivateMethod = 0xE3,
+	kMinigameDeactivateMethod = 0xE4,
+	kDotGameHitMethod = 0xE5,
+
+	// STALKING ACTOR METHODS.
+	kStalkingStartZazuLookingMethod = 0xDF,
+	kStalkingStopZazuLookingMethod = 0xE0,
+	kStalkingGetZazuLookDirectionMethod = 0xE1,
+	kStalkingEnableAudio = 0xE7,
+	kStalkingDisableAudio = 0xE8,
 };
 const char *builtInMethodToStr(BuiltInMethod method);
 
 enum EventType {
-	kTimerEvent = 0x05,
+	kEventTypeInvalid = 0x00,
+	kDisplayAutoUpdateEvent = 0x02,
+	kDisplayEnableAutoUpdateEvent = 0x03,
+	kTimerServiceAlarmEvent = 0x04, // This schedules when the timer is supposed to fire.
+	kTimerScriptEvent = 0x05, // This is specifically a script timer event.
 	kMouseDownEvent = 0x06,
 	kMouseUpEvent = 0x07,
 	kMouseMovedEvent = 0x08,
 	kMouseEnteredEvent = 0x09,
 	kMouseExitedEvent = 0x0A,
+	kMouseEnterExitEvent = 0x0B,
+	kMouseOutOfFocusEvent = 0x0C,
 	kKeyDownEvent = 0x0D,
 	kSoundEndEvent = 0x0E,
 	kMovieEndEvent = 0x0F,
 	kPathEndEvent = 0x10,
 	kScreenEntryEvent = 0x11,
+	kScreenBranchEvent = 0x12,
 	kSoundAbortEvent = 0x13,
 	kSoundFailureEvent = 0x14,
 	kMovieAbortEvent = 0x15,
 	kMovieFailureEvent = 0x16,
 	kSpriteMovieEndEvent = 0x17,
+	kMinigameSuccessEvent = 0x18,
+	kMinigameDefeatEvent = 0x19,
+	kMinigameCrouchedEvent = 0x1A,
 	kScreenExitEvent = 0x1B,
 	kPathStepEvent = 0x1C,
 	kSoundStoppedEvent = 0x1D,
@@ -314,17 +358,22 @@ enum EventType {
 	kMovieStoppedEvent = 0x1F,
 	kMovieBeginEvent = 0x20,
 	kPathStoppedEvent = 0x21,
+	kCachingFailureEvent = 0x22,
+	kCachingEndedEvent = 0x23,
+	kCachingStartedEvent = 0x24,
 	kTextInputEvent = 0x25,
 	kTextErrorEvent = 0x26,
+	kDiskImageActorStepEvent = 0x27,
+	kDiskImageActorEndEvent = 0x28,
 	kCameraPanStepEvent = 0x29,
 	kCameraPanEndEvent = 0x2A,
 	kCameraPanAbortEvent = 0x2B,
 	kContextLoadCompleteEvent = 0x2C,
-	// TODO: These last 3 events appear as valid event types, but I haven't found
-	// scripts that actually use them. So the names might be wrong.
-	kContextLoadCompleteEvent2 = 0x2D,
-	kContextLoadAbortEvent = 0x2E,
-	kContextLoadFailureEvent = 0x2F,
+	kContextAlreadyLoadedEvent = 0x2D,
+	kContextReleaseCompleteEvent = 0x2E,
+	kContextAlreadyReleasedEvent = 0x2F,
+	kContextLoadStartEvent = 0x30,
+	kContextReleaseStartEvent = 0x31
 };
 const char *eventTypeToStr(EventType type);
 

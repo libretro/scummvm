@@ -62,7 +62,6 @@ pthread_key_t JNI::_env_tls;
 
 JavaVM *JNI::_vm = 0;
 jobject JNI::_jobj = 0;
-jobject JNI::_jobj_audio_track = 0;
 jobject JNI::_jobj_egl = 0;
 jobject JNI::_jobj_egl_display = 0;
 jobject JNI::_jobj_egl_surface = 0;
@@ -102,6 +101,7 @@ jmethodID JNI::_MID_getScummVMBasePath;
 jmethodID JNI::_MID_getScummVMConfigPath;
 jmethodID JNI::_MID_getScummVMLogPath;
 jmethodID JNI::_MID_setCurrentGame = 0;
+jmethodID JNI::_MID_notifyHTTPService = 0;
 jmethodID JNI::_MID_getSysArchives = 0;
 jmethodID JNI::_MID_getAllStorageLocations = 0;
 jmethodID JNI::_MID_initSurface = 0;
@@ -115,17 +115,11 @@ jmethodID JNI::_MID_importBackup = 0;
 
 jmethodID JNI::_MID_EGL10_eglSwapBuffers = 0;
 
-jmethodID JNI::_MID_AudioTrack_flush = 0;
-jmethodID JNI::_MID_AudioTrack_pause = 0;
-jmethodID JNI::_MID_AudioTrack_play = 0;
-jmethodID JNI::_MID_AudioTrack_stop = 0;
-jmethodID JNI::_MID_AudioTrack_write = 0;
-
 const JNINativeMethod JNI::_natives[] = {
 	{ "create", "(Landroid/content/res/AssetManager;"
 				"Ljavax/microedition/khronos/egl/EGL10;"
 				"Ljavax/microedition/khronos/egl/EGLDisplay;"
-				"Landroid/media/AudioTrack;IIZ)V",
+				"Z)V",
 		(void *)JNI::create },
 	{ "destroy", "()V",
 		(void *)JNI::destroy },
@@ -145,6 +139,10 @@ const JNINativeMethod JNI::_natives[] = {
 		(void *)JNI::setPause },
 	{ "systemInsetsUpdated", "([I[I[I)V",
 		(void *)JNI::systemInsetsUpdated },
+	{ "setDefaultAudioValues", "(II)V",
+		(void *)JNI::setDefaultAudioValues },
+	{ "notifyAudioDisconnect", "()V",
+		(void *)JNI::notifyAudioDisconnect },
 	{ "getNativeVersionInfo", "()Ljava/lang/String;",
 		(void *)JNI::getNativeVersionInfo }
 };
@@ -585,6 +583,19 @@ void JNI::setCurrentGame(const Common::String &target) {
 	}
 }
 
+void JNI::notifyHTTPService(int localPort, bool minimal) {
+	JNIEnv *env = JNI::getEnv();
+
+	env->CallVoidMethod(_jobj, _MID_notifyHTTPService, localPort, minimal);
+
+	if (env->ExceptionCheck()) {
+		LOGE("Error notifying HTTP service state");
+
+		env->ExceptionDescribe();
+		env->ExceptionClear();
+	}
+}
+
 // The following adds assets folder to search set.
 // However searching and retrieving from "assets" on Android this is slow
 // so we also make sure to add the base directory, with a higher priority
@@ -683,59 +694,10 @@ int JNI::fetchEGLVersion() {
 	return _egl_version;
 }
 
-void JNI::setAudioPause() {
-	JNIEnv *env = JNI::getEnv();
-
-	env->CallVoidMethod(_jobj_audio_track, _MID_AudioTrack_flush);
-
-	if (env->ExceptionCheck()) {
-		LOGE("Error flushing AudioTrack");
-
-		env->ExceptionDescribe();
-		env->ExceptionClear();
-	}
-
-	env->CallVoidMethod(_jobj_audio_track, _MID_AudioTrack_pause);
-
-	if (env->ExceptionCheck()) {
-		LOGE("Error setting AudioTrack: pause");
-
-		env->ExceptionDescribe();
-		env->ExceptionClear();
-	}
-}
-
-void JNI::setAudioPlay() {
-	JNIEnv *env = JNI::getEnv();
-
-	env->CallVoidMethod(_jobj_audio_track, _MID_AudioTrack_play);
-
-	if (env->ExceptionCheck()) {
-		LOGE("Error setting AudioTrack: play");
-
-		env->ExceptionDescribe();
-		env->ExceptionClear();
-	}
-}
-
-void JNI::setAudioStop() {
-	JNIEnv *env = JNI::getEnv();
-
-	env->CallVoidMethod(_jobj_audio_track, _MID_AudioTrack_stop);
-
-	if (env->ExceptionCheck()) {
-		LOGE("Error setting AudioTrack: stop");
-
-		env->ExceptionDescribe();
-		env->ExceptionClear();
-	}
-}
-
 // natives for the dark side
 
 void JNI::create(JNIEnv *env, jobject self, jobject asset_manager,
 				jobject egl, jobject egl_display,
-				jobject at, jint audio_sample_rate, jint audio_buffer_size,
 				jboolean assets_updated_) {
 	LOGI("Native version: %s", gScummVMFullVersion);
 
@@ -759,7 +721,6 @@ void JNI::create(JNIEnv *env, jobject self, jobject asset_manager,
         }                                                                   \
     } while (0)
 
-	FIND_METHOD(, setWindowCaption, "(Ljava/lang/String;)V");
 	FIND_METHOD(, getDPI, "([F)V");
 	FIND_METHOD(, displayMessageOnOSD, "(Ljava/lang/String;)V");
 	FIND_METHOD(, openUrl, "(Ljava/lang/String;)V");
@@ -767,6 +728,7 @@ void JNI::create(JNIEnv *env, jobject self, jobject asset_manager,
 	FIND_METHOD(, getTextFromClipboard, "()Ljava/lang/String;");
 	FIND_METHOD(, setTextInClipboard, "(Ljava/lang/String;)Z");
 	FIND_METHOD(, isConnectionLimited, "()Z");
+	FIND_METHOD(, setWindowCaption, "(Ljava/lang/String;)V");
 	FIND_METHOD(, showVirtualKeyboard, "(Z)V");
 	FIND_METHOD(, showOnScreenControls, "(I)V");
 	FIND_METHOD(, setTouchMode, "(I)V");
@@ -776,6 +738,7 @@ void JNI::create(JNIEnv *env, jobject self, jobject asset_manager,
 	FIND_METHOD(, getScummVMConfigPath, "()Ljava/lang/String;");
 	FIND_METHOD(, getScummVMLogPath, "()Ljava/lang/String;");
 	FIND_METHOD(, setCurrentGame, "(Ljava/lang/String;)V");
+	FIND_METHOD(, notifyHTTPService, "(IZ)V");
 	FIND_METHOD(, getSysArchives, "()[Ljava/lang/String;");
 	FIND_METHOD(, getAllStorageLocations, "()[Ljava/lang/String;");
 	FIND_METHOD(, initSurface, "()Ljavax/microedition/khronos/egl/EGLSurface;");
@@ -800,18 +763,6 @@ void JNI::create(JNIEnv *env, jobject self, jobject asset_manager,
 				"(Ljavax/microedition/khronos/egl/EGLDisplay;"
 				"Ljavax/microedition/khronos/egl/EGLSurface;)Z");
 
-	_jobj_audio_track = env->NewGlobalRef(at);
-
-	env->DeleteLocalRef(cls);
-
-	cls = env->GetObjectClass(_jobj_audio_track);
-
-	FIND_METHOD(AudioTrack_, flush, "()V");
-	FIND_METHOD(AudioTrack_, pause, "()V");
-	FIND_METHOD(AudioTrack_, play, "()V");
-	FIND_METHOD(AudioTrack_, stop, "()V");
-	FIND_METHOD(AudioTrack_, write, "([BII)I");
-
 	env->DeleteLocalRef(cls);
 #undef FIND_METHOD
 
@@ -831,7 +782,7 @@ void JNI::create(JNIEnv *env, jobject self, jobject asset_manager,
 	_asset_archive = new AndroidAssetArchive(asset_manager);
 	assert(_asset_archive);
 
-	_system = new OSystem_Android(audio_sample_rate, audio_buffer_size);
+	_system = new OSystem_Android();
 	assert(_system);
 
 	g_system = _system;
@@ -856,7 +807,6 @@ void JNI::destroy(JNIEnv *env, jobject self) {
 
 	JNI::getEnv()->DeleteGlobalRef(_jobj_egl_display);
 	JNI::getEnv()->DeleteGlobalRef(_jobj_egl);
-	JNI::getEnv()->DeleteGlobalRef(_jobj_audio_track);
 	JNI::getEnv()->DeleteGlobalRef(_jobj);
 }
 
@@ -993,6 +943,8 @@ void JNI::systemInsetsUpdated(JNIEnv *env, jobject self, jintArray gestureInsets
 	env->GetIntArrayRegion(gestureInsets, 0, ARRAYSIZE(gestures_insets), gestures_insets);
 	env->GetIntArrayRegion(cutoutInsets, 0, ARRAYSIZE(cutout_insets), cutout_insets);
 }
+
+// JNI::setDefaultAudioValues and JNI::notifyAudioDisconnect are in android-mixer.cpp
 
 jstring JNI::getNativeVersionInfo(JNIEnv *env, jobject self) {
 	return convertToJString(env, Common::U32String(gScummVMVersion));

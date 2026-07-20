@@ -458,8 +458,9 @@ void ColonyEngine::battleInit() {
 	_projon = false;
 	_pcount = 0;
 
-	// Mountain parallax
-	_battledx = _width / 59;
+	// Mountain parallax. battleBackdrop() recomputes this once the viewport
+	// layout is final; keep a sane initial value for freshly initialized state.
+	_battledx = MAX<int>(1, _screenR.width() / 59);
 
 	// Generate mountain height profile (smoothed random)
 	int temp[257];
@@ -514,6 +515,16 @@ void ColonyEngine::battleSet() {
 	}
 }
 
+void ColonyEngine::normalizeBattlePlayerPosition() {
+	// The original stored battle coordinates in 16-bit ints. Airlock map
+	// targets such as 253<<8 wrap to negative world coordinates there; keep
+	// the same representation before battle culling and camera math run.
+	_me.xloc = battleNormalizeCoord(_me.xloc);
+	_me.yloc = battleNormalizeCoord(_me.yloc);
+	_me.xindex = wrapBattleCoord(_me.xloc) >> 8;
+	_me.yindex = wrapBattleCoord(_me.yloc) >> 8;
+}
+
 // =====================================================================
 // battleBackdrop: Draw 2D sky gradient and ground fill.
 // Called before 3D rendering begins.
@@ -533,7 +544,7 @@ void ColonyEngine::battleBackdrop() {
 		int blue = (i * 16);
 		if (blue > 255)
 			blue = 255;
-		uint32 color = (0xFF << 24) | (0 << 16) | (0 << 8) | blue;
+		uint32 color = (0xFFu << 24) | (0 << 16) | (0 << 8) | blue;
 		Common::Rect band(_screenR.left, bandTop, _screenR.right, bandBottom);
 		_gfx->fillRect(band, color);
 	}
@@ -548,7 +559,13 @@ void ColonyEngine::battleBackdrop() {
 	// Mountain silhouette
 	uint32 mtColor = 0xFF606060;
 	uint8 ang = _me.look;
-	int xloc = -_battledx;
+	// Original battle.c draws the mountain profile under ClipRect(&Clip).
+	// Align the first sample to the active viewport, not to logical x=0
+	// where the Mac dashboard/sidebar lives in ScummVM.
+	_battledx = MAX<int>(1, _screenR.width() / 59);
+	if (!isMacRenderMode())
+		_battledx++;
+	int xloc = _screenR.left - _battledx;
 	if (ang & 0x01) {
 		xloc += _battledx;
 		ang--;
@@ -569,7 +586,12 @@ void ColonyEngine::battleBackdrop() {
 			sunon = true;
 		}
 		int curY = horizonY - _mountains[ang];
-		_gfx->drawLine(prevX, prevY, xloc, curY, mtColor);
+		int x1 = prevX;
+		int y1 = prevY;
+		int x2 = xloc;
+		int y2 = curY;
+		if (clipLineToRect(x1, y1, x2, y2, _screenR))
+			_gfx->drawLine(x1, y1, x2, y2, mtColor);
 		prevX = xloc;
 		prevY = curY;
 	}
@@ -1175,6 +1197,7 @@ void ColonyEngine::battleProjCommand(int xcheck, int ycheck) {
 // Called from the main loop when _gameMode == kModeBattle.
 // =====================================================================
 void ColonyEngine::renderBattle() {
+	normalizeBattlePlayerPosition();
 	_battleMaxP = 0;
 
 	// Phase 1: 2D backdrop (sky gradient, mountains, sun) follows camera pitch

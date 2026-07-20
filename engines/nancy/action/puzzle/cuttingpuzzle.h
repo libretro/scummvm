@@ -52,6 +52,8 @@ public:
 	void execute() override;
 	void handleInput(NancyInput &input) override;
 
+	bool isViewportRelative() const override { return true; }
+
 protected:
 	enum SubState {
 		kIdle           = 0, // waiting for player input, or checking solution
@@ -61,7 +63,6 @@ protected:
 	};
 
 	Common::String getRecordTypeName() const override { return "CuttingPuzzle"; }
-	bool isViewportRelative() const override { return true; }
 
 	void redrawSurface();
 	int grooveTypeForIndex(int i) const;
@@ -98,11 +99,11 @@ protected:
 
 	Common::Array<int16> _correctGrooves;        // data+0x3cc  8 target depths (one per groove slot)
 
-	SoundDescription _latheSound;  // data+0x3dc  looping lathe running sound
-	SoundDescription _clickSound;  // data+0x40d  click sound (lever / UI)
-	SoundDescription _clickSound2; // data+0x43e  click sound 2
-	SoundDescription _clickSound3; // data+0x46f  click sound 3
-	SoundDescription _cutSound;    // data+0x4a0  groove-cutting sound
+	SoundDescription _latheSound;     // data+0x3dc  looping lathe running sound
+	SoundDescription _moveSound;      // data+0x40d  move left & right sound
+	SoundDescription _startStopSound; // data+0x43e  on/off switch sound
+	SoundDescription _depthSound;     // data+0x46f  depth adjust sound
+	SoundDescription _cutSound;       // data+0x4a0  groove-cutting sound
 
 	SceneChangeWithFlag _puzzleSolvedScene;    // data+0x4d1 (25 bytes)
 	uint16 _doneSoundDelaySecs = 0;        // data+0x4ea  wait before playing done sound (seconds)
@@ -113,6 +114,7 @@ protected:
 
 	SceneChangeDescription _missingGogglesScene;    // data+0x520  (20 bytes + 2-byte skip = 22 bytes total)
 	SceneChangeWithFlag    _cancelScene;   // data+0x536  (25 bytes)
+	Common::Rect _exitHotspot;
 
 	// ---- runtime state ----
 

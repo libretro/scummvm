@@ -180,7 +180,13 @@ static const char HELP_STRING4[] =
 	"  --enable-gs              Enable Roland GS mode for MIDI playback\n"
 	"  --output-channels=CHANNELS Select output channel count (e.g. 2 for stereo)\n"
 	"  --output-rate=RATE       Select output sample rate in Hz (e.g. 22050)\n"
-	"  --opl-driver=DRIVER      Select AdLib (OPL) emulator (db, mame"
+	"  --opl-driver=DRIVER      Select AdLib (OPL) emulator ("
+#ifndef DISABLE_MAME_OPL
+																	 "mame"
+#endif
+#ifndef DISABLE_DOSBOX_OPL
+																	 ", db"
+#endif
 #ifndef DISABLE_NUKED_OPL
 																	 ", nuked"
 #endif
@@ -396,6 +402,7 @@ void registerDefaults() {
 	ConfMan.registerDefault("gui_return_to_launcher_at_exit", false);
 	ConfMan.registerDefault("gui_launcher_chooser", "list");
 	ConfMan.registerDefault("grid_items_per_row", 4);
+	ConfMan.registerDefault("gui_kinetic_scrolling", true);
 	// Specify threshold for scanning directories in the launcher
 	// If number of game entries in scummvm.ini exceeds the specified
 	// number, then skip scanning. -1 = scan always

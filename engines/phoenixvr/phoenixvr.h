@@ -27,6 +27,7 @@
 #include "common/fs.h"
 #include "common/hash-str.h"
 #include "common/keyboard.h"
+#include "common/ptr.h"
 #include "common/random.h"
 #include "common/scummsys.h"
 #include "common/serializer.h"
@@ -42,10 +43,19 @@
 #include "phoenixvr/detection.h"
 #include "phoenixvr/region_set.h"
 #include "phoenixvr/script.h"
+#include "phoenixvr/variables.h"
 #include "phoenixvr/vr.h"
+
+namespace Common {
+struct Event;
+}
 
 namespace Graphics {
 class Font;
+}
+
+namespace Video {
+class Subtitles;
 }
 
 namespace PhoenixVR {
@@ -61,6 +71,8 @@ enum struct RolloverType : uint8 {
 };
 
 class PhoenixVREngine : public Engine {
+	friend class ARN;
+
 private:
 	static constexpr uint kFPSLimit = 60;
 	static constexpr float kMaxTick = 4.0f / kFPSLimit;
@@ -84,6 +96,8 @@ public:
 
 	uint32 getFeatures() const;
 
+	int version() const;
+
 	bool gameIdMatches(const char *gameId) const;
 
 	/**
@@ -96,6 +110,7 @@ public:
 	bool hasFeature(EngineFeature f) const override {
 		return (f == kSupportsLoadingDuringRuntime) ||
 			   (f == kSupportsSavingDuringRuntime) ||
+			   (f == kSupportsSubtitleOptions) ||
 			   (f == kSupportsReturnToLauncher);
 	};
 
@@ -114,17 +129,22 @@ public:
 	// Script API
 	void setNextScript(const Common::String &path);
 	bool goToWarp(const Common::String &warp, bool savePrev = false);
+	void goToLevel(const Common::String &name);
 	void returnToWarp();
+	void loadCursor(int idx, const Common::String &path, int w, int h);
 	void setCursorDefault(int idx, const Common::String &path);
+	void setCursorDefault(int idx, int cursorIdx);
 	void setCursor(const Common::String &path, const Common::String &warp, int idx);
 	void hideCursor(const Common::String &warp, int idx);
 
 	void playSound(const Common::String &sound, Audio::Mixer::SoundType type, uint8 volume, int loops, bool spatial = false, float angle = 0);
+	void playRandomSound(const Common::String &sound, Audio::Mixer::SoundType type, uint8 volume, int probability, int loops);
 	void stopSound(const Common::String &sound);
 	void stopAllSounds();
 	void playMovie(const Common::String &movie);
 
 	void declareVariable(const Common::String &name);
+	bool hasVariable(const Common::String &name) const;
 	void setVariable(const Common::String &name, int value);
 	int getVariable(const Common::String &name) const;
 
@@ -138,7 +158,7 @@ public:
 
 	void resetLockKey();
 	void lockKey(int idx, const Common::String &warp);
-	void startTimer(float seconds);
+	void startTimer(float seconds, bool showTimer);
 	void pauseTimer(bool pause, bool deactivate);
 	void killTimer();
 	void playAnimation(const Common::String &name, const Common::String &var, int varValue, float speed);
@@ -148,6 +168,7 @@ public:
 	}
 	void interpolateAngle(float x, float y, float speed, float zoom);
 	void fade(int start, int stop, int speed);
+	void transFade(int speed);
 
 	void setXMax(float max) {
 		_angleY.setRange(-max, max);
@@ -175,6 +196,7 @@ public:
 	Common::Error loadGameStream(Common::SeekableReadStream *stream) override;
 	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave = false) override;
 	void drawSlot(int idx, int face, int x, int y);
+	void drawSaveCard(int idx);
 	void captureContext();
 
 	void setContextLabel(const Common::String &contextLabel) {
@@ -185,36 +207,83 @@ public:
 
 	bool wasRestarted() const { return _restarted; }
 	bool wasLoaded() const { return _loaded; }
+	uint currentLevel() const;
 
 	void saveVariables();
 	void loadVariables();
 
 	void rollover(int textId, RolloverType type);
+	void clearText();
 	void showWaves();
 	void restart();
 	bool setNextLevel();
 
 	void setGlobalVolume(int vol);
+	void setGlobalPan(int pan);
+	void drawArchiveImage(const Common::String &image, int x, int y);
+	void drawArchiveText(int textId, const Common::Rect &dstRect, int size, bool bold, uint16 color);
+	void clearArchiveText(const Common::Rect &dstRect);
+	void showImageOverlay(const Common::String &image, int x, int y);
+	void stopImageOverlay();
+	void updateStage();
+	void startCible(const Common::String &name, int periodSeconds, const Common::Array<int> &bounds);
+	void stopCible();
+	void testCible(const Common::String &insideVar, const Common::String &outsideVar);
 
 private:
+	struct ArchiveImage {
+		Common::String image;
+		Common::Point pos;
+	};
+
+	struct TextState {
+		TextState() : textId(-1), size(0), bold(false), color(0) {}
+		TextState(int textId_, const Common::Rect &rect_, int size_, bool bold_, uint16 color_) : textId(textId_), rect(rect_), size(size_), bold(bold_), color(color_) {}
+
+		int textId;
+		Common::Rect rect;
+		int size;
+		bool bold;
+		uint16 color;
+	};
+
+	struct Level {
+		Common::String path;
+		Common::String name;
+	};
+
 	static Common::String removeDrive(const Common::String &path);
 	Common::SeekableReadStream *open(const Common::String &name, Common::String *origName = nullptr);
 	Common::SeekableReadStream *tryOpen(const Common::Path &name, Common::String *origName);
 
-	Graphics::Surface *loadSurface(const Common::String &path);
-	Graphics::Surface *loadCursor(const Common::String &path);
-	void paint(Graphics::Surface &src, Common::Point dst);
+	Graphics::ManagedSurface *loadSurface(const Common::String &path);
+	Graphics::ManagedSurface *loadCursor(const Common::String &path, int w = 0, int h = 0);
 	PointF currentVRPos() const {
 		return RectF::transform(_angleX.angle(), _angleY.angle(), _fov);
 	}
 	void tick(float dt);
 	void tickTimer(float dt);
 	void loadNextScript();
+	const Graphics::Surface *findArchiveImage(const Common::String &image) const;
 	void renderVR(float dt);
+	void renderArchiveImages();
+	void renderArchiveTexts();
+	void paintText(const TextState &textState);
+	void renderImageOverlay();
 	void renderTimer();
 	void renderFade(int color);
 	void resetState();
 	const Graphics::Font *getFont(int size, bool bold) const;
+	Common::Path getSubtitlePath(const Common::String &path) const;
+	Common::SharedPtr<Video::Subtitles> loadSubtitles(const Common::String &path) const;
+	void setupSubtitles(Video::Subtitles &subtitles) const;
+	void drawAudioSubtitles();
+
+	void processGenericEvents(const Common::Event &event);
+	void pauseEngineIntern(bool pause) override;
+	Common::String getLevelLabel(const Common::String &script) const;
+	Common::String getLevelScript(const Level &level) const;
+	void saveThumbnail();
 
 private:
 	bool _hasFocus = true;
@@ -226,6 +295,7 @@ private:
 	int _nextWarp = -1;
 	int _prevWarp = -1;
 	int _hoverIndex = -1;
+	int _messengerInventoryHover = -1;
 	int _nextTest = -1;
 
 	struct KeyCodeHash : public Common::UnaryFunction<Common::KeyCode, uint> {
@@ -233,27 +303,44 @@ private:
 	};
 
 	Common::Array<Common::String> _lockKey;
-	Common::Array<Common::String> _variableOrder;
-	Common::Array<int> _variableSnapshot;
-	Common::HashMap<Common::String, int, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _variables;
+
+	Variables _variables;
+
 	struct Sound {
 		Audio::SoundHandle handle;
 		bool spatial;
 		float angle;
 		uint8 volume;
 		int loops;
+		Common::SharedPtr<Video::Subtitles> subtitles;
 	};
 	Common::HashMap<Common::String, Sound, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _sounds;
+
+	struct RandomSound {
+		Common::String sound;
+		Audio::Mixer::SoundType type;
+		int volume;
+		int probability;
+		int loops;
+	};
+	Common::Array<RandomSound> _randomSounds;
+
 	Common::ScopedPtr<Script> _script;
 
 	Common::ScopedPtr<RegionSet> _regSet;
 
-	Common::HashMap<Common::String, Graphics::Surface *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _cursorCache;
+	struct PreloadedCursor {
+		Common::String path;
+	};
+	Common::Array<PreloadedCursor> _loadedCursors;
+
+	Common::HashMap<Common::String, Graphics::ManagedSurface *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _cursorCache;
 
 	Common::Array<Common::Array<Common::String>> _cursors;
 	Common::String _defaultCursor[2];
 	Common::String _currentMusic;
 	int _currentMusicVolume = 0;
+	int _globalPan = 128;
 
 	VR _vr;
 	float _fov;
@@ -265,6 +352,7 @@ private:
 	static constexpr byte kPaused = 2;
 	static constexpr byte kActive = 4;
 	byte _timerFlags = 0;
+	bool _showTimer = false;
 	float _timer = 0, _initialTimer = 0;
 
 	Common::String _contextScript;
@@ -272,17 +360,24 @@ private:
 	Common::Array<byte> _capturedState;
 	Common::Array<byte> _loadedState;
 
-	Common::HashMap<int, Common::String> _textes;
+	Common::HashMap<int, Common::U32String> _textes;
 
-	Common::ScopedPtr<Graphics::Font> _font12;
-	Common::ScopedPtr<Graphics::Font> _font14;
-	Common::ScopedPtr<Graphics::Font> _font18;
+	static const int kFontSizeCount = 6;
+	Common::ScopedPtr<Graphics::Font> _regularFonts[kFontSizeCount];
+	Common::ScopedPtr<Graphics::Font> _boldFonts[kFontSizeCount];
 
-	Common::ScopedPtr<Graphics::ManagedSurface> _text;
-	Common::Rect _textRect;
+	TextState _rolloverText;
+	Common::ScopedPtr<Graphics::ManagedSurface> _imageOverlay;
+	Common::Point _imageOverlayPos;
+	Common::Array<ArchiveImage> _archiveImages;
+	Common::Array<TextState> _archiveTexts;
+	bool _cibleActive = false;
+	uint32 _cibleStartMillis = 0;
+	int _ciblePeriodSeconds = 0;
+	Common::Array<int> _cibleBounds;
 
-	Common::Array<Common::String> _levels;
-	uint _currentLevel = 0;
+	Common::Array<Level> _levels;
+	uint _nextLevel = 0;
 
 	bool _restarted = false;
 	bool _loaded = false;

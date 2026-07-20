@@ -70,7 +70,6 @@ bool ConResource::isMouseOver(uint32 mouseX, uint32 mouseY) {
 
 void ConResource::drawToScreen(bool doMask) {
 	uint8 *screenPos = _y * GAME_SCREEN_WIDTH + _x + _screen;
-	uint8 *updatePos = screenPos;
 
 	if (!_spriteData)
 		return;
@@ -91,7 +90,6 @@ void ConResource::drawToScreen(bool doMask) {
 			spriteData += _spriteData->s_width;
 		}
 	}
-	_system->copyRectToScreen(updatePos, GAME_SCREEN_WIDTH, _x, _y, _spriteData->s_width, _spriteData->s_height);
 }
 
 TextResource::TextResource(void *pSpData, uint32 pNSprites, uint32 pCurSprite, uint16 pX, uint16 pY, uint32 pText, uint8 pOnClick, OSystem *system, uint8 *screen) :
@@ -129,7 +127,6 @@ void TextResource::drawToScreen(bool doMask) {
 			cpHeight = PAN_CHAR_HEIGHT;
 		for (cnty = 0; cnty < cpHeight; cnty++)
 			memcpy(_screen + (cnty + _oldY) * GAME_SCREEN_WIDTH + _oldX, _oldScreen + cnty * PAN_LINE_WIDTH, cpWidth);
-		_system->copyRectToScreen(_screen + _oldY * GAME_SCREEN_WIDTH + _oldX, GAME_SCREEN_WIDTH, _oldX, _oldY, cpWidth, PAN_CHAR_HEIGHT);
 	}
 	if (!_spriteData) {
 		_oldX = GAME_SCREEN_WIDTH;
@@ -153,7 +150,6 @@ void TextResource::drawToScreen(bool doMask) {
 		copyDest += PAN_LINE_WIDTH;
 		screenPos += GAME_SCREEN_WIDTH;
 	}
-	_system->copyRectToScreen(_screen + _y * GAME_SCREEN_WIDTH + _x, GAME_SCREEN_WIDTH, _x, _y, cpWidth, cpHeight);
 }
 
 ControlStatus::ControlStatus(Text *skyText, OSystem *system, uint8 *scrBuf) {
@@ -410,7 +406,6 @@ void Control::drawCross(uint16 x, uint16 y) {
 		crossPos += CROSS_SZ_X;
 	}
 	bufPos = _screenBuf + y * GAME_SCREEN_WIDTH + x;
-	_system->copyRectToScreen(bufPos, GAME_SCREEN_WIDTH, x, y, CROSS_SZ_X, CROSS_SZ_Y);
 	_text->drawToScreen(WITH_MASK);
 }
 
@@ -420,6 +415,7 @@ void Control::animClick(ConResource *pButton) {
 		_text->flushForRedraw();
 		pButton->drawToScreen(NO_MASK);
 		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
 		_system->updateScreen();
 		delay(CLICK_DELAY);
 		if (!_controlPanel)
@@ -428,13 +424,13 @@ void Control::animClick(ConResource *pButton) {
 		_text->flushForRedraw();
 		pButton->drawToScreen(NO_MASK);
 		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
 		_system->updateScreen();
 	}
 }
 
 void Control::drawMainPanel() {
 	memset(_screenBuf, 0, GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
-	_system->copyRectToScreen(_screenBuf, GAME_SCREEN_WIDTH, 0, 0, GAME_SCREEN_WIDTH, FULL_SCREEN_HEIGHT);
 	if (_controlPanel)
 		_controlPanel->drawToScreen(NO_MASK);
 	_exitButton->drawToScreen(NO_MASK);
@@ -473,7 +469,7 @@ void Control::doLoadSavePanel() {
 	saveRestorePanel(false);
 
 	memset(_screenBuf, 0, GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
-	_system->copyRectToScreen(_screenBuf, GAME_SCREEN_WIDTH, 0, 0, GAME_SCREEN_WIDTH, FULL_SCREEN_HEIGHT);
+	_skyScreen->renderControlPanel(_screenBuf);
 	_system->updateScreen();
 	_skyScreen->forceRefresh();
 	_skyScreen->setPaletteEndian((uint8 *)_skyCompact->fetchCpt(SkyEngine::_systemVars->currentPalette));
@@ -519,6 +515,7 @@ void Control::doControlPanel() {
 
 	while (!quitPanel && !Engine::shouldQuit()) {
 		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
 		_system->updateScreen();
 		_mouseClicked = false;
 		delay(ANIM_DELAY);
@@ -552,7 +549,7 @@ void Control::doControlPanel() {
 			buttonControl(NULL);
 	}
 	memset(_screenBuf, 0, GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
-	_system->copyRectToScreen(_screenBuf, GAME_SCREEN_WIDTH, 0, 0, GAME_SCREEN_WIDTH, FULL_SCREEN_HEIGHT);
+	_skyScreen->renderControlPanel(_screenBuf);
 	if (!Engine::shouldQuit())
 		_system->updateScreen();
 	_skyScreen->forceRefresh();
@@ -672,6 +669,7 @@ bool Control::getYesNo(char *text, uint bufSize) {
 			mouseType = wantMouse;
 			_skyMouse->spriteMouse(mouseType, 0, 0);
 		}
+		_skyScreen->renderControlPanel(_screenBuf);
 		_system->updateScreen();
 		delay(ANIM_DELAY);
 		if (!_controlPanel) {
@@ -731,6 +729,7 @@ uint16 Control::doMusicSlide() {
 		}
 		buttonControl(_slide2);
 		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
 		_system->updateScreen();
 	}
 	return 0;
@@ -762,6 +761,7 @@ uint16 Control::doSpeedSlide() {
 		}
 		buttonControl(_slide);
 		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
 		_system->updateScreen();
 	}
 	SkyEngine::_systemVars->gameSpeed = speedDelay;
@@ -781,6 +781,7 @@ void Control::toggleFx(ConResource *pButton) {
 	ConfMan.setBool("sfx_mute", (SkyEngine::_systemVars->systemFlags & SF_FX_OFF) != 0);
 
 	pButton->drawToScreen(WITH_MASK);
+	_skyScreen->renderControlPanel(_screenBuf);
 	_system->updateScreen();
 }
 
@@ -806,6 +807,7 @@ uint16 Control::toggleText() {
 
 	drawTextCross(flags);
 
+	_skyScreen->renderControlPanel(_screenBuf);
 	_system->updateScreen();
 	return TOGGLED;
 }
@@ -825,6 +827,7 @@ void Control::toggleMusic(ConResource *pButton) {
 	ConfMan.setBool("music_mute", (SkyEngine::_systemVars->systemFlags & SF_MUS_OFF) != 0);
 
 	pButton->drawToScreen(WITH_MASK);
+	_skyScreen->renderControlPanel(_screenBuf);
 	_system->updateScreen();
 }
 
@@ -934,6 +937,7 @@ uint16 Control::saveRestorePanel(bool allowSave) {
 		}
 
 		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
 		_system->updateScreen();
 		_mouseClicked = false;
 		delay(ANIM_DELAY);
@@ -1111,7 +1115,6 @@ void Control::showSprites(DataFileHeader **nameSprites, bool allowSave) {
 				drawResource->setXY(GAME_NAME_X + _enteredTextWidth + 1, GAME_NAME_Y + cnt * PAN_CHAR_HEIGHT + 4);
 				drawResource->drawToScreen(WITH_MASK);
 			}
-			_system->copyRectToScreen(_screenBuf + (GAME_NAME_Y + cnt * PAN_CHAR_HEIGHT) * GAME_SCREEN_WIDTH + GAME_NAME_X, GAME_SCREEN_WIDTH, GAME_NAME_X, GAME_NAME_Y + cnt * PAN_CHAR_HEIGHT, PAN_LINE_WIDTH, PAN_CHAR_HEIGHT);
 		} else
 			drawResource->drawToScreen(NO_MASK);
 	}
@@ -1508,7 +1511,7 @@ uint16 Control::quickXRestore(uint16 slot) {
 	_savedCharSet = _skyText->giveCurrentCharSet();
 	_skyText->fnSetFont(2);
 
-	_system->copyRectToScreen(_screenBuf, GAME_SCREEN_WIDTH, 0, 0, FULL_SCREEN_WIDTH, FULL_SCREEN_HEIGHT);
+	_skyScreen->renderControlPanel(_screenBuf);
 	_system->updateScreen();
 
 	if (SkyEngine::_systemVars->gameVersion < 331)
@@ -1532,7 +1535,7 @@ uint16 Control::quickXRestore(uint16 slot) {
 		_skyScreen->setPaletteEndian((uint8 *)_skyCompact->fetchCpt(SkyEngine::_systemVars->currentPalette));
 	} else {
 		memset(_screenBuf, 0, FULL_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
-		_system->copyRectToScreen(_screenBuf, GAME_SCREEN_WIDTH, 0, 0, GAME_SCREEN_WIDTH, FULL_SCREEN_HEIGHT);
+		_skyScreen->renderControlPanel(_screenBuf);
 		_system->updateScreen();
 		_skyScreen->showScreen(_skyScreen->giveCurrent());
 		_skyScreen->setPalette(60111);

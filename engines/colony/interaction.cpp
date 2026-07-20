@@ -136,7 +136,7 @@ void ColonyEngine::interactWithObject(int objNum) {
 					_carryPatch[1].xloc = 1;
 					_carryPatch[1].yloc = 1;
 					_carryPatch[1].ang = 1;
-					newPatch(kObjTeleport, from, _carryPatch[1], _mapData[from.xindex][from.yindex][4]);
+					newPatch(kObjTeleport, from, _carryPatch[1], _mapData[CLIP<int>(from.xindex, 0, 30)][CLIP<int>(from.yindex, 0, 30)][4]);
 					_carryType = kObjTeleport;
 					_robotArray[obj.where.xindex][obj.where.yindex] = 0;
 					_objects[objNum - 1].alive = 0;
@@ -175,10 +175,10 @@ void ColonyEngine::interactWithObject(int objNum) {
 		_me.xloc = (targetX << 8) + 128;
 		_me.yloc = (targetY << 8) + 128;
 		_me.ang = _me.look;
-		if (oldX >= 0 && oldX < 32 && oldY >= 0 && oldY < 32)
+		if (oldX >= 0 && oldX < 32 && oldY >= 0 && oldY < 32 &&
+				_robotArray[oldX][oldY] == kMeNum)
 			_robotArray[oldX][oldY] = 0;
-		if (_me.xindex >= 0 && _me.xindex < 32 && _me.yindex >= 0 && _me.yindex < 32)
-			_robotArray[_me.xindex][_me.yindex] = kMeNum;
+		setPlayerCellMarker();
 		break;
 	}
 	case kObjDrawer:
@@ -230,7 +230,7 @@ void ColonyEngine::interactWithObject(int objNum) {
 					_carryPatch[0].xloc = 0;
 					_carryPatch[0].yloc = 0;
 					_carryPatch[0].ang = 0;
-					newPatch(kObjForkLift, from, _carryPatch[0], _mapData[from.xindex][from.yindex][4]);
+					newPatch(kObjForkLift, from, _carryPatch[0], _mapData[CLIP<int>(from.xindex, 0, 30)][CLIP<int>(from.yindex, 0, 30)][4]);
 					_robotArray[obj.where.xindex][obj.where.yindex] = 0;
 					_objects[objNum - 1].alive = 0;
 					_me.look = _me.ang = obj.where.ang;
@@ -263,7 +263,7 @@ void ColonyEngine::interactWithObject(int objNum) {
 					_carryPatch[1].xloc = 1;
 					_carryPatch[1].yloc = 1;
 					_carryPatch[1].ang = 1;
-					newPatch(obj.type, from, _carryPatch[1], _mapData[from.xindex][from.yindex][4]);
+					newPatch(obj.type, from, _carryPatch[1], _mapData[CLIP<int>(from.xindex, 0, 30)][CLIP<int>(from.yindex, 0, 30)][4]);
 					_carryType = obj.type;
 					_robotArray[obj.where.xindex][obj.where.yindex] = 0;
 					_objects[objNum - 1].alive = 0;
@@ -342,6 +342,62 @@ void ColonyEngine::setPower(int p0, int p1, int p2) {
 	}
 }
 
+bool ColonyEngine::isShootableRobotType(int type) const {
+	return (type >= kRobEye && type <= kRobUPyramid) ||
+		type == kRobQueen || type == kRobDrone || type == kRobSoldier;
+}
+
+bool ColonyEngine::isShotBlockingObjectType(int type) const {
+	return type == kObjForkLift || type == kObjTeleport || type == kObjPToilet ||
+		type == kObjBox2 || type == kObjReactor || type == kObjScreen;
+}
+
+int ColonyEngine::findAimedObject(const Common::Point &aim, bool *isBlocker, int *targetDist) const {
+	int bestIdx = -1;
+	int bestDist = INT_MAX;
+	bool bestIsBlocker = false;
+
+	for (uint i = 0; i < _objects.size(); i++) {
+		const Thing &obj = _objects[i];
+		if (!obj.alive)
+			continue;
+
+		if (obj.where.xmn > obj.where.xmx || obj.where.zmn > obj.where.zmx)
+			continue;
+		if (obj.where.xmn > aim.x || obj.where.xmx < aim.x ||
+			obj.where.zmn > aim.y || obj.where.zmx < aim.y)
+			continue;
+
+		const int type = obj.type;
+		const bool isRobot = isShootableRobotType(type);
+		const bool isBlockerObject = isShotBlockingObjectType(type);
+		if (!isRobot && !isBlockerObject)
+			continue;
+
+		const int dx = obj.where.xloc - _me.xloc;
+		const int dy = obj.where.yloc - _me.yloc;
+		const int dist = (int)sqrtf((float)(dx * dx + dy * dy));
+
+		if (dist < bestDist) {
+			bestDist = dist;
+			bestIdx = (int)i + 1; // 1-based object index
+			bestIsBlocker = isBlockerObject;
+		}
+	}
+
+	if (isBlocker)
+		*isBlocker = bestIsBlocker;
+	if (targetDist)
+		*targetDist = bestDist;
+	return bestIdx;
+}
+
+bool ColonyEngine::hasAimedRobotTarget() const {
+	bool blocker = false;
+	const int target = findAimedObject(getAimPoint(), &blocker);
+	return target > 0 && !blocker && isShootableRobotType(_objects[target - 1].type);
+}
+
 // shoot.c CShoot(): player fires weapon at the cursor or screen center.
 // Original hit detection uses the rendered object bounds on screen.
 void ColonyEngine::cShoot() {
@@ -368,39 +424,9 @@ void ColonyEngine::cShoot() {
 	// Drain weapons power: -(1 << level) per shot
 	setPower(-(1 << _level), 0, 0);
 
-	int bestIdx = -1;
-	int bestDist = INT_MAX;
 	bool bestIsBlocker = false;
-
-	for (uint i = 0; i < _objects.size(); i++) {
-		const Thing &obj = _objects[i];
-		if (!obj.alive)
-			continue;
-
-		if (obj.where.xmn > obj.where.xmx || obj.where.zmn > obj.where.zmx)
-			continue;
-		if (obj.where.xmn > cx || obj.where.xmx < cx ||
-			obj.where.zmn > cy || obj.where.zmx < cy)
-			continue;
-
-		int t = obj.type;
-		bool isRobot = (t >= kRobEye && t <= kRobUPyramid) ||
-			t == kRobQueen || t == kRobDrone || t == kRobSoldier;
-		bool blocksShot = (t == kObjForkLift || t == kObjTeleport || t == kObjPToilet ||
-			t == kObjBox2 || t == kObjReactor || t == kObjScreen);
-		if (!isRobot && !blocksShot)
-			continue;
-
-		int dx = obj.where.xloc - _me.xloc;
-		int dy = obj.where.yloc - _me.yloc;
-		int dist = (int)sqrtf((float)(dx * dx + dy * dy));
-
-		if (dist < bestDist) {
-			bestDist = dist;
-			bestIdx = (int)i + 1; // 1-based robot index
-			bestIsBlocker = blocksShot;
-		}
-	}
+	int bestDist = INT_MAX;
+	const int bestIdx = findAimedObject(aim, &bestIsBlocker, &bestDist);
 
 	if (bestIdx > 0 && !bestIsBlocker) {
 		const Thing &target = _objects[bestIdx - 1];
@@ -458,7 +484,39 @@ void ColonyEngine::destroyRobot(int num) {
 					_robotArray[gx][gy] = 0;
 				}
 			}
-			_sound->play(Sound::kExplode);
+			// Mac shoot.c: InvertRect(&Clip) strobe while the explosion sound
+			// plays (16 inversions with sound off). DOS SHOOT.C has no flash.
+			if (isMacRenderMode()) {
+				auto invertViewport = [this]() {
+					_gfx->setXorMode(true);
+					_gfx->fillRect(_screenR, 0xFFFFFF);
+					_gfx->setXorMode(false);
+					_gfx->copyToScreen();
+					_system->updateScreen();
+				};
+				const uint32 kFlipMs = 40;
+				int flips = 0;
+				if (!_soundOn) {
+					for (; flips < 16 && !shouldQuit(); flips++) {
+						invertViewport();
+						_system->delayMillis(kFlipMs);
+					}
+				} else {
+					_sound->play(Sound::kExplode);
+					const uint32 start = _system->getMillis();
+					while (!shouldQuit() && _sound->isPlaying() &&
+							_system->getMillis() - start < 1200) {
+						invertViewport();
+						_system->delayMillis(kFlipMs);
+						flips++;
+					}
+					_sound->stop();
+				}
+				if (flips & 1)
+					invertViewport();
+			} else {
+				_sound->play(Sound::kExplode);
+			}
 			copyOverflowObjectToSlot(num);
 			debugC(1, kColonyDebugCombat, "Robot %d destroyed!", num);
 		} else {
@@ -475,7 +533,7 @@ void ColonyEngine::destroyRobot(int num) {
 // bottom-left and bottom-right corners of the viewport converging at the aim
 // point, plus a small filled oval at center. Simulates a rifle-barrel perspective.
 void ColonyEngine::doShootCircles(int cx, int cy) {
-	const bool isMac = (_renderMode == Common::kRenderMacintosh);
+	const bool isMac = isMacRenderMode();
 
 	if (isMac) {
 		// Mac shoot.c CShoot(): patXor diagonal lines radiating from aim point
@@ -541,7 +599,7 @@ void ColonyEngine::doShootCircles(int cx, int cy) {
 // SHOOT.C doBurnHole(): expanding concentric random rays in blue/yellow/white
 // when a robot is hit. Creates an "explosion" effect at the hit location.
 void ColonyEngine::doBurnHole(int cx, int cy, int radius) {
-	const bool isMac = (_renderMode == Common::kRenderMacintosh);
+	const bool isMac = isMacRenderMode();
 
 	if (isMac) {
 		// Mac: InvertOval at robot bounds
@@ -605,7 +663,7 @@ void ColonyEngine::meGetShot() {
 	if (vw <= 0 || vh <= 0)
 		return;
 
-	const bool isMac = (_renderMode == Common::kRenderMacintosh);
+	const bool isMac = isMacRenderMode();
 
 	if (isMac) {
 		// Mac shoot.c: InvertRect(&Clip) — full viewport flash

@@ -114,6 +114,12 @@ void FreescapeEngine::initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *
 	act->addDefaultInputMapping("i");
 	act->addDefaultInputMapping("JOY_GUIDE");
 	engineKeyMap->addAction(act);
+
+	// I18N: Toggles the red/blue stereoscopic 3D effect (anaglyph glasses).
+	act = new Common::Action("STEREO3D", _("Toggle red/blue 3D"));
+	act->setCustomEngineActionEvent(kActionToggleStereoscopic);
+	act->addDefaultInputMapping("3");
+	engineKeyMap->addAction(act);
 }
 
 Math::AABB createPlayerAABB(Math::Vector3d const position, int playerHeight, float reductionHeight = 0.0f) {
@@ -302,7 +308,7 @@ void FreescapeEngine::shoot() {
 	if (_shootingFrames > 0) // No more than one shot at a time
 		return;
 
-	playSound(_soundIndexShoot, false, _movementSoundHandle);
+	playSound(_soundIndexShoot, false, Sound::kTypeMovement);
 	g_system->delayMillis(2);
 	_shootingFrames = 8;
 
@@ -321,7 +327,8 @@ void FreescapeEngine::shoot() {
 
 	Math::Vector3d direction = directionToVector(_pitch + angleOffsetY, _yaw - angleOffsetX, false);
 	Math::Ray ray(_position, direction);
-	Object *shot = _currentArea->checkCollisionRay(ray, 8192);
+	// Original shooting picks from rendered faces, so fully transparent geometry does not catch shots.
+	Object *shot = _currentArea->checkCollisionRay(ray, 8192, true);
 	if (shot) {
 		GeometricObject *gobj = (GeometricObject *)shot;
 		debugC(1, kFreescapeDebugMove, "Shot object %d with flags %x", gobj->getObjectID(), gobj->getObjectFlags());
@@ -601,7 +608,7 @@ void FreescapeEngine::resolveCollisions(Math::Vector3d const position) {
 		if ((lastPosition - newPosition).length() < 1) { // Something is blocking the player
 			if (!executed && !isCastle())
 				setGameBit(31);
-			playSound(_soundIndexCollide, false, _movementSoundHandle);
+			playSound(_soundIndexCollide, false, Sound::kTypeMovement);
 		}
 		_position = newPosition;
 		return;
@@ -650,7 +657,7 @@ void FreescapeEngine::resolveCollisions(Math::Vector3d const position) {
 		if (isEclipse()) // No need for an variable index, since these are special types of sound
 			playSoundFx(0, true);
 		else
-			playSound(_soundIndexFall, false, _movementSoundHandle);
+			playSound(_soundIndexFall, false, Sound::kTypeMovement);
 
 		if (_hasFallen)
 			stopMovement();
@@ -674,16 +681,16 @@ void FreescapeEngine::resolveCollisions(Math::Vector3d const position) {
 
 	if (isSteppingUp)  {
 		//debug("Stepping up sound!");
-		if (!_mixer->isSoundHandleActive(_movementSoundHandle))
-			playSound(_soundIndexStepUp, false, _movementSoundHandle);
+		if (!isPlayingSound(Sound::kTypeMovement))
+			playSound(_soundIndexStepUp, false, Sound::kTypeMovement);
 	} else if (isSteppingDown) {
 		//debug("Stepping down sound!");
-		if (!_mixer->isSoundHandleActive(_movementSoundHandle))
-			playSound(_soundIndexStepDown, false, _movementSoundHandle);
+		if (!isPlayingSound(Sound::kTypeMovement))
+			playSound(_soundIndexStepDown, false, Sound::kTypeMovement);
 	} else if (isCollidingWithWall) {
 		//debug("Colliding with wall sound!");
-		if (!_mixer->isSoundHandleActive(_movementSoundHandle))
-			playSound(_soundIndexCollide, false, _movementSoundHandle);
+		if (!isPlayingSound(Sound::kTypeMovement))
+			playSound(_soundIndexCollide, false, Sound::kTypeMovement);
 	}
 
 	_position = newPosition;
@@ -707,7 +714,7 @@ bool FreescapeEngine::runCollisionConditions(Math::Vector3d const lastPosition, 
 	Object *collided = nullptr;
 	_gotoExecuted = false;
 
-	_speaker->stop();
+	stopAllSounds(Sound::kTypeMovement);
 
 	Math::Ray ray(newPosition, -_upVector);
 	collided = _currentArea->checkCollisionRay(ray, _playerHeight + 3);

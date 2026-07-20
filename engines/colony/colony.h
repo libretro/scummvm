@@ -34,6 +34,8 @@
 #include "common/rendermode.h"
 #include "engines/advancedDetector.h"
 #include "engines/engine.h"
+#include "graphics/pixelformat.h"
+#include "graphics/surface.h"
 
 namespace Common {
 class MacResManager;
@@ -47,13 +49,30 @@ class FrameLimiter;
 class MacMenu;
 class MacWindowManager;
 class ManagedSurface;
-struct Surface;
 }
 
 namespace Colony {
 
 class Renderer;
 class Sound;
+
+// Engine-wide color packing. The OpenGL renderer's useColor() treats values
+// with the high byte == 0xFF as direct ARGB (R=bits 16-23, G=8-15, B=0-7) and
+// values with high byte 0 as palette indices. The PixelFormat below matches
+// that direct-ARGB layout exactly so we can build colors via ARGBToColor.
+inline const Graphics::PixelFormat &renderColorFormat() {
+	static const Graphics::PixelFormat fmt(4, 8, 8, 8, 8, 16, 8, 0, 24);
+	return fmt;
+}
+
+inline uint32 packRGB(byte r, byte g, byte b) {
+	return renderColorFormat().ARGBToColor(255, r, g, b);
+}
+
+// Mac native QuickDraw stores RGB as 16-bit-per-channel; we collapse to 8 bits.
+inline uint32 packMacColor(const uint16 rgb[3]) {
+	return packRGB((byte)(rgb[0] >> 8), (byte)(rgb[1] >> 8), (byte)(rgb[2] >> 8));
+}
 
 enum ColonyAction {
 	kActionNone,
@@ -66,11 +85,11 @@ enum ColonyAction {
 	kActionLookLeft,
 	kActionLookRight,
 	kActionLookBehind,
+	kActionFaceForward,
 	kActionToggleMouselook,
 	kActionToggleDashboard,
 	kActionToggleWireframe,
 	kActionToggleFullscreen,
-	kActionSkipIntro,
 	kActionEscape,
 	kActionFire
 };
@@ -373,8 +392,22 @@ struct Sprite {
 	Common::Rect locate;
 	bool used;
 
-	Sprite() : fg(nullptr), mask(nullptr), used(false) {}
-	~Sprite() { delete fg; delete mask; }
+	// Per-sprite render cache: bit-pattern + mask are baked into an
+	// alpha-keyed RGBA surface and uploaded once via drawSurface, instead
+	// of issuing setPixel per pixel each frame. Invalidated when the
+	// (fgColor, bgColor) pair changes (level/palette transition).
+	Graphics::Surface *baked;
+	uint64 bakedKey;
+
+	Sprite() : fg(nullptr), mask(nullptr), used(false), baked(nullptr), bakedKey(0) {}
+	~Sprite() {
+		delete fg;
+		delete mask;
+		if (baked) {
+			baked->free();
+			delete baked;
+		}
+	}
 };
 
 struct ComplexSprite {
@@ -418,6 +451,8 @@ public:
 	Common::Platform getPlatform() const { return _gameDescription->platform; }
 	bool isSoundEnabled() const { return _soundOn; }
 	const Graphics::Surface *getSavedScreen() const { return _savedScreen; }
+	bool isMacRenderMode() const { return _renderMode == Common::kRenderMacintosh || _renderMode == Common::kRenderMacintoshBW; }
+	bool isMacColorMode() const { return _renderMode == Common::kRenderMacintosh && _hasMacColors; }
 
 	void initTrig();
 	void loadMacColors();
@@ -431,6 +466,9 @@ public:
 	int checkwallMoveTo(int xnew, int ynew, int xind2, int yind2, Locate *pobject, uint8 trailCode);
 	int checkwallTryFeature(int xnew, int ynew, int xind2, int yind2, Locate *pobject, int dir);
 	int checkwall(int xnew, int ynew, Locate *pobject);
+	void clearPlayerCellMarker();
+	void setPlayerCellMarker();
+	bool playerIntersectsObjectFootprint(const Thing &obj, int xloc, int yloc) const;
 	void cCommand(int xnew, int ynew, bool allowInteraction);
 	bool scrollInfo(const Graphics::Font *macFont = nullptr);
 	bool checkSkipRequested();
@@ -467,6 +505,8 @@ private:
 	Graphics::FrameLimiter *_frameLimiter = nullptr;
 	Common::RenderMode _renderMode;
 	Graphics::Surface *_savedScreen = nullptr;
+	Graphics::Surface *_flIconSurf[5] = {};
+	bool _flIconsLoaded = false;
 
 
 	int _tsin = 0, _tcos = 0;
@@ -474,7 +514,7 @@ private:
 	int _cost[256];
 	int _centerX, _centerY;
 	int _width, _height;
-	int _mouseSensitivity;
+	float _mouseSensitivity;
 	bool _mouseLocked;
 	bool _soundOn = true;
 	bool _showDashBoard;
@@ -498,6 +538,13 @@ private:
 	bool _rotateRight;
 	bool _sprint;
 
+	// Sub-unit accumulators for deltaTime-based smooth movement.
+	// Position uses 256-units-per-cell integers, angles are uint8 — these
+	// retain fractional progress between frames so low speeds aren't lost.
+	float _moveAccumX;
+	float _moveAccumY;
+	float _rotAccum;
+
 	Common::RandomSource _randomSource;
 	Common::Point _mousePos;
 	uint8 _decode1[4];
@@ -515,9 +562,11 @@ private:
 	uint32 _blackoutColor = 0;
 	uint32 _lastClickTime = 0;
 	uint32 _displayCount = 0; // Frame counter for COLOR wall animation (Mac: count)
+	uint32 _lastColonyThinkTime = 0; // Last 125ms CThink tick, for render-only interpolation
 	uint32 _lastHotfootTime = 0;  // Time-gate for HOTFOOT damage (~8fps)
 	uint32 _lastAnimUpdate = 0;
 	uint32 _lastWarningChimeTime = 0;
+	uint32 _lastCollisionSoundTime = 0;
 	int _action0 = 0, _action1 = 0;
 	int _creature = 0;
 	bool _allGrow = false;
@@ -611,6 +660,10 @@ private:
 	void drawPrismOval3D(Thing &thing, const PrismPartDef &def, bool useLook, int colorOverride, bool forceVisible = false);
 	void drawEyeOverlays3D(Thing &thing, const PrismPartDef &irisDef, int irisColorOverride,
 		const PrismPartDef &pupilDef, int pupilColorOverride, bool useLook);
+	float growRenderTickFraction() const;
+	bool drawInterpolatedGrowRobot(Thing &obj, int eyeballColor, int pupilColor);
+	void drawInterpolatedGrowPrism(Thing &obj, const PrismPartDef &fromDef, const PrismPartDef &toDef, float progress);
+	void drawInterpolatedGrowEye(Thing &obj, int fromStage, int toStage, float progress, int eyeballColor, int pupilColor);
 	bool drawStaticObjectPrisms3D(Thing &obj);
 	void initRobots();
 	void renderCorridor3D();
@@ -620,12 +673,31 @@ private:
 	void getWallFace3D(int cellX, int cellY, int direction, float corners[4][3]);
 	void getCellFace3D(int cellX, int cellY, bool ceiling, float corners[4][3]);
 
-	int occupiedObjectAt(int x, int y, const Locate *pobject);
+	int occupiedObjectAt(int xnew, int ynew, int x, int y, const Locate *pobject);
 	void interactWithObject(int objNum);
+
+	// Convert a mouse coord delivered by the event manager into engine
+	// logical coords. With kSupportsArbitraryResolutions declared, the
+	// framework rewrites _currentState.gameWidth to the overlay (window)
+	// pixel size in recalculateDisplayAreas() — so g_system->getWidth()
+	// no longer matches our _width, and mouse events arrive in window
+	// pixels. The engine's hit-test math (whichSprite, _screenR) is in
+	// logical coords, so we have to scale back. Same pattern Freescape
+	// uses in mousePosToCrossairPos (freescape.cpp:593-597).
+	Common::Point eventMouseToLogical(const Common::Point &p) const;
+	// Inverse of eventMouseToLogical: warp the mouse to a position
+	// expressed in engine-logical coords. _system->warpMouse expects
+	// virtual-screen coords, which with kSupportsArbitraryResolutions
+	// is window pixels.
+	void warpMouseLogical(int x, int y);
 
 	// shoot.c: shooting and power management
 	void setPower(int p0, int p1, int p2);
 	void cShoot();
+	bool isShootableRobotType(int type) const;
+	bool isShotBlockingObjectType(int type) const;
+	int findAimedObject(const Common::Point &aim, bool *isBlocker = nullptr, int *targetDist = nullptr) const;
+	bool hasAimedRobotTarget() const;
 	void destroyRobot(int num);
 	void doShootCircles(int cx, int cy);
 	void doBurnHole(int cx, int cy, int radius);
@@ -635,6 +707,7 @@ private:
 	void battleInit();
 	void battleSet();
 	void battleThink();
+	void normalizeBattlePlayerPosition();
 	void enterColonyFromBattle(int mapNum, int xloc, int yloc);
 	void battleCommand(int xnew, int ynew);
 	void battleShoot();
@@ -682,6 +755,7 @@ private:
 	int automapWallFeature(int fx, int fy, int dir);
 	void automapDrawWallWithFeature(const Common::Rect &vp, int wx1, int wy1, int wx2, int wy2, int feat, int lExt, uint32 color);
 	void drawForkliftOverlay();
+	void loadForkliftIcons();
 	void drawCrosshair();
 	bool clipLineToRect(int &x1, int &y1, int &x2, int &y2, const Common::Rect &clip) const;
 	void wallLine(const float corners[4][3], float u1, float v1, float u2, float v2, uint32 color);
@@ -699,6 +773,10 @@ private:
 	Common::Array<ComplexSprite *> _lSprites;
 	Image *_backgroundMask = nullptr;
 	Image *_backgroundFG = nullptr;
+	// Same render cache convention as Sprite::baked, applied to the
+	// per-animation background image (no Sprite owner, so it lives here).
+	Graphics::Surface *_backgroundBaked = nullptr;
+	uint64 _backgroundBakedKey = 0;
 	Common::Rect _backgroundClip;
 	Common::Rect _backgroundLocate;
 	bool _backgroundActive;
@@ -707,10 +785,37 @@ private:
 	byte _topBG[8] = {};
 	byte _bottomBG[8] = {};
 	int16 _divideBG;
+
+	// Cache for the animation background pattern. Regenerated only when
+	// pattern bytes / colors / split point change. Replaces a 110k-pixel
+	// setPixel loop with one texture upload, fixing cursor choppiness
+	// during animations on the OpenGL renderer.
+	Graphics::Surface *_animPatternSurface = nullptr;
+	byte _animPatternKeyTopBG[8] = {};
+	byte _animPatternKeyBottomBG[8] = {};
+	int16 _animPatternKeyDivide = -1;
+	uint32 _animPatternKeyTopColor = 0;
+	uint32 _animPatternKeyBotColor = 0;
+	int _animPatternKeyMode = -1; // 0=DOS, 1=Mac B&W, 2=Mac color
+	bool _animPatternValid = false;
 	Common::String _animationName;
 	Common::Array<int16> _animBMColors;
 	bool _animationRunning;
 	int _animationResult;
+	bool _animExitPressed = false;
+	bool _animExitInside = false;
+	Common::Rect _animExitStrip;
+	Common::Rect _animExitButton;
+	int _coderPick[4] = {};
+	int _coderCursor = 0;
+	int _coderPressed = -1;
+	bool _coderPressInside = false;
+	Image *_coderTiles[4] = {};
+	Image *_coderBtnUp = nullptr;
+	Image *_coderBtnDown = nullptr;
+	bool _coderTilesLoaded = false;
+	Common::Rect _coderWin;
+	Common::Rect _coderIconRects[4];
 	bool _doorOpen;
 	int _liftObject = 0;  // sprite index for the carried object in lift animation
 	bool _liftUp = false;     // current lift state: true=raised, false=lowered
@@ -734,14 +839,20 @@ private:
 	void playAnimation();
 	void updateAnimation();
 	void drawAnimation();
+	void drawAnimationExitButton(int ox, int oy);
+	void drawColonyCoder(int animOx, int animOy);
+	void loadCoderTiles();
+	bool handleColonyCoderClick(const Common::Point &pt);
 	void drawComplexSprite(int index, int ox, int oy);
-	void drawAnimationImage(Image *img, Image *mask, int x, int y, uint32 fillColor = 0xFFFFFFFF);
+	void drawAnimationImage(Image *img, Image *mask, int x, int y, uint32 fillColor,
+			Graphics::Surface *&bakedCache, uint64 &bakedCacheKey);
 	uint32 resolveAnimColor(int16 bmEntry) const;
 	Image *loadImage(Common::SeekableReadStreamEndian &file);
 	void unpackBytes(Common::SeekableReadStreamEndian &file, byte *dst, uint32 len);
 	Common::Rect readRect(Common::SeekableReadStreamEndian &file);
 	int whichSprite(const Common::Point &p);
 	void handleAnimationClick(int item);
+	void playCollisionSound();
 	void handleDeskClick(int item);
 	void handleVanityClick(int item);
 	void handleSlidesClick(int item);

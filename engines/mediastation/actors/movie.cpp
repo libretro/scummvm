@@ -55,7 +55,7 @@ bool StreamMovieProxy::isVisible() const {
 }
 
 MovieFrame::MovieFrame(Chunk &chunk) {
-	if (g_engine->isFirstGenerationEngine()) {
+	if (g_engine->getImtGod()->isFirstGenerationEngine()) {
 		blitType = static_cast<MovieBlitType>(chunk.readTypedUint16());
 		startInMilliseconds = chunk.readTypedUint32();
 		endInMilliseconds = chunk.readTypedUint32();
@@ -92,6 +92,7 @@ MovieFrameImage::MovieFrameImage(Chunk &chunk, uint index, uint keyframeEndInMil
 
 StreamMovieActor::~StreamMovieActor() {
 	unregisterWithStreamManager();
+	unregisterForSyncCalls();
 	if (_streamFeed != nullptr) {
 		g_engine->getStreamFeedManager()->closeStreamFeed(_streamFeed);
 		_streamFeed = nullptr;
@@ -162,7 +163,7 @@ void StreamMovieActor::readParameter(Chunk &chunk, ActorHeaderSectionType paramT
 	}
 
 	case kActorHeaderSoundInfo:
-		_streamSound->_audioSequence.readParameters(chunk);
+		_streamSound->getAudioSequence().readParameters(chunk);
 		break;
 
 	case kStreamMovieProxyInfo: {
@@ -230,7 +231,7 @@ ScriptValue StreamMovieActor::callMethod(BuiltInMethod methodId, Common::Array<S
 
 	case kTimeStopMethod: {
 		ARGCOUNTCHECK(0);
-		timeStop();
+		timeStop(false);
 		break;
 	}
 
@@ -291,7 +292,7 @@ ScriptValue StreamMovieActor::callMethod(BuiltInMethod methodId, Common::Array<S
 				debugName(), __func__, g_engine->formatParamTokenName(scriptId).c_str());
 			break;
 		}
-		StageActor *parentStage = static_cast<StageActor *>(g_engine->getActorByIdAndType(targetStageId, kActorTypeStage));
+		StageActor *parentStage = static_cast<StageActor *>(g_engine->getImtGod()->getActorByIdAndType(targetStageId, kActorTypeStage));
 		if (parentStage == nullptr) {
 			warning("[%s] %s: Stream movie proxy with script ID %s has null parent stage",
 				debugName(), __func__, g_engine->formatParamTokenName(scriptId).c_str());
@@ -315,7 +316,7 @@ ScriptValue StreamMovieActor::callMethod(BuiltInMethod methodId, Common::Array<S
 		}
 
 		RootStage *rootStage = g_engine->getRootStage();
-		StageActor *sourceStage = static_cast<StageActor *>(g_engine->getActorByIdAndType(sourceStageId, kActorTypeStage));
+		StageActor *sourceStage = static_cast<StageActor *>(g_engine->getImtGod()->getActorByIdAndType(sourceStageId, kActorTypeStage));
 		if (sourceStage == nullptr) {
 			warning("[%s] %s: Stream movie proxy with script ID %s has null parent stage",
 				debugName(), __func__, g_engine->formatParamTokenName(scriptId).c_str());
@@ -333,6 +334,40 @@ ScriptValue StreamMovieActor::callMethod(BuiltInMethod methodId, Common::Array<S
 	return returnValue;
 }
 
+void StreamMovieActor::onEvent(const ActorEvent &event) {
+	switch (event.type) {
+	case kMovieEndEvent:
+		triggerRemainingTimerEvents();
+		break;
+
+	case kCachingStartedEvent:
+	case kCachingEndedEvent:
+	case kCachingFailureEvent:
+		// Caching-related events are not implemented, but they can be implemented
+		// if the original CD-ROM streaming/caching logic is reimplemented.
+		Actor::onEvent(event);
+		break;
+
+	case kMovieStoppedEvent:
+	case kMovieAbortEvent:
+	case kMovieFailureEvent:
+		_isPlaying = false;
+		break;
+
+	default:
+		break;
+	}
+
+	runScriptResponseIfExists(event.type);
+}
+
+void StreamMovieActor::timerEvent(const TimerEvent &event) {
+	Actor::processTimeScriptResponses();
+
+	g_engine->getTimerService()->stopTimer(_timer);
+	setupNextScriptResponseTimer();
+}
+
 void StreamMovieActor::timePlay() {
 	if (_streamFeed == nullptr) {
 		_streamFeed = g_engine->getStreamFeedManager()->openStreamFeed(_id);
@@ -343,42 +378,71 @@ void StreamMovieActor::timePlay() {
 		return;
 	}
 
-	_streamSound->_audioSequence.play();
+	setupNextScriptResponseTimer();
+	registerForSyncCalls();
+	_streamSound->getAudioSequence().start();
 	_framesNotYetShown = _streamFrames->_frames;
 	_framesOnScreen.clear();
 	_isPlaying = true;
-	_startTime = g_system->getMillis();
+	_startTime = g_engine->getTotalPlayTime();
 	_lastProcessedTime = 0;
-	runScriptResponseIfExists(kMovieBeginEvent);
-	process();
+
+	ActorEvent actorEvent(_id, kMovieBeginEvent);
+	g_engine->getEventLoop()->queueEvent(actorEvent);
+
+	if (_disableScreenAutoUpdateToken == 0) {
+		_disableScreenAutoUpdateToken = g_engine->getDisplayUpdateManager()->disableAutoUpdate();
+
+		g_engine->getDisplayUpdateManager()->enableAutoUpdate(_disableScreenAutoUpdateToken);
+		_disableScreenAutoUpdateToken = 0;
+	}
+
+	updateFrameState();
 }
 
-void StreamMovieActor::timeStop() {
+void StreamMovieActor::timeStop(bool isMovieEnd) {
 	if (!_isPlaying) {
 		return;
 	}
 
-	for (MovieFrame *frame : _framesOnScreen) {
-		invalidateRect(getFrameBoundingBox(frame));
-	}
-	_streamSound->_audioSequence.stop();
-	_framesNotYetShown.empty();
+	_isPlaying = false;
+	_streamSound->getAudioSequence().stop();
+	g_engine->getTimerService()->stopTimer(_timer);
+	unregisterForSyncCalls();
+
+	_framesNotYetShown.clear();
 	if (_hasStill) {
 		_framesNotYetShown = _streamFrames->_frames;
 	}
 	_framesOnScreen.clear();
-	_startTime = 0;
-	_lastProcessedTime = 0;
-	_isPlaying = false;
-	runScriptResponseIfExists(kMovieStoppedEvent);
+
+	EventType eventType = isMovieEnd ? kMovieEndEvent : kMovieStoppedEvent;
+	ActorEvent actorEvent(_id, eventType);
+	g_engine->getEventLoop()->queueEvent(actorEvent);
+
+	if (_disableScreenAutoUpdateToken == 0) {
+		_disableScreenAutoUpdateToken = g_engine->getDisplayUpdateManager()->disableAutoUpdate();
+
+		DisplayEvent event(kDisplayEnableAutoUpdateEvent, _disableScreenAutoUpdateToken);
+		g_engine->getEventLoop()->queueEvent(event);
+		_disableScreenAutoUpdateToken = 0;
+	}
+
+	updateFrameState();
 }
 
-void StreamMovieActor::process() {
+PreDisplaySyncState StreamMovieActor::preDisplaySync() {
+	if (!_isPlaying) {
+		return kPreDisplaySyncNoScreenUpdateRequested;
+	}
+
+	// Update frame state if visible.
 	if (_isVisible) {
-		if (_isPlaying) {
-			processTimeScriptResponses();
-		}
 		updateFrameState();
+		return kPreDisplaySyncForceScreenUpdate;
+	} else {
+		// Request display update when playing.
+		return kPreDisplaySyncNoScreenUpdateRequested;
 	}
 }
 
@@ -392,7 +456,7 @@ void StreamMovieActor::setVisibility(bool visibility) {
 void StreamMovieActor::updateFrameState() {
 	uint movieTime = 0;
 	if (_isPlaying) {
-		uint currentTime = g_system->getMillis();
+		uint currentTime = g_engine->getTotalPlayTime();
 		movieTime = currentTime - _startTime;
 	}
 	debugC(7, kDebugGraphics, "[%s] %s: Starting update (movie time: %d)", debugName(), __func__, movieTime);
@@ -432,12 +496,7 @@ void StreamMovieActor::updateFrameState() {
 			it = _framesOnScreen.erase(it);
 
 			if (_framesOnScreen.empty() && movieTime >= _fullTime) {
-				_isPlaying = false;
-				if (_hasStill) {
-					_framesNotYetShown = _streamFrames->_frames;
-					updateFrameState();
-				}
-				runScriptResponseIfExists(kMovieEndEvent);
+				timeStop(true);
 				break;
 			}
 		} else {
@@ -500,7 +559,6 @@ void StreamMovieActor::invalidateLocalBounds() {
 	}
 	SpatialEntity::invalidateLocalBounds();
 }
-
 
 Common::Rect StreamMovieActor::getFrameBoundingBox(MovieFrame *frame) {
 	// Use _boundingBox directly (which may be temporarily offset by camera rendering)
@@ -566,9 +624,19 @@ void StreamMovieActorSound::readChunk(Chunk &chunk) {
 	_audioSequence.readChunk(chunk);
 }
 
-StreamMovieActor::StreamMovieActor() : _framesOnScreen(StreamMovieActor::compareFramesByZIndex), SpatialEntity(kActorTypeMovie) {
+void StreamMovieActorSound::soundPlayStateChanged(SoundPlayState state, SoundStopReason why) {
+	if (state == kSoundPlayStateStopped) {
+		if (why == kSoundStopForFailure) {
+			ActorEvent actorEvent(_parent->_id, kMovieFailureEvent);
+			g_engine->getEventLoop()->queueEvent(actorEvent);
+		}
+	}
+}
+
+StreamMovieActor::StreamMovieActor() :
+	_framesOnScreen(StreamMovieActor::compareFramesByZIndex), SpatialEntity(kActorTypeMovie) {
 	_streamFrames = new StreamMovieActorFrames(this);
-	_streamSound = new StreamMovieActorSound();
+	_streamSound = new StreamMovieActorSound(this);
 }
 
 void StreamMovieActor::readChunk(Chunk &chunk) {
@@ -611,6 +679,7 @@ void StreamMovieActor::decompressIntoAuxImage(MovieFrame *frame) {
 	frame->keyframeImage->_image.create(frame->keyframeImage->width(), frame->keyframeImage->height(), Graphics::PixelFormat::createFormatCLUT8());
 	frame->keyframeImage->_image.setTransparentColor(0);
 	g_engine->getDisplayManager()->imageBlit(origin, frame->keyframeImage, 1.0, nullptr, &frame->keyframeImage->_image);
+	frame->keyframeImage->setCompressionType(kUncompressedBitmap);
 }
 
 void StreamMovieActorFrames::readImageData(Chunk &chunk) {

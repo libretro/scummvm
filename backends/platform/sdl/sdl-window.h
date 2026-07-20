@@ -185,6 +185,11 @@ public:
 	 */
 	void destroyWindow();
 
+	/**
+	 * @return The last window flags set
+	 */
+	uint32 getWindowFlags() const { return _lastFlags; }
+
 protected:
 	SDL_Window *_window;
 
@@ -204,7 +209,7 @@ private:
 
 class SdlIconlessWindow : public SdlWindow {
 public:
-	virtual void setupIcon() {}
+	void setupIcon() override {}
 };
 
 #endif

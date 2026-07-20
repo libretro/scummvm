@@ -45,6 +45,7 @@ class DirectorEngine;
 class Lingo;
 struct LingoArchive;
 struct Resource;
+class ScriptContext;
 class Stxt;
 class RTE0;
 class RTE1;
@@ -86,12 +87,14 @@ struct TilePatternEntry {
 
 class Cast {
 public:
-	Cast(Movie *movie, uint16 castLibID, bool isShared = false, bool isExternal = false, uint16 libResourceId = 1024);
+	Cast(Movie *movie, uint16 castLibID, bool isShared = false, bool isExternal = false, uint32 libResourceId = 1024);
 	~Cast();
 
 	void loadArchive();
-	void setArchive(Archive *archive);
-	Archive *getArchive() const { return _castArchive; };
+	void setArchive(Common::SharedPtr<Archive> archive);
+	Common::SharedPtr<Archive> getArchive() const { return _castArchive; };
+	Movie *getMovie() const { return _movie; }
+	void setMovie(Movie *movie) { _movie = movie; }
 	Common::String getMacName() const { return _macName; }
 	Common::String getCastName() const { return _castName; }
 	void setCastName(const Common::String &name) { _castName = name; }
@@ -144,6 +147,10 @@ public:
 	Common::CodePage getFileEncoding();
 	Common::U32String decodeString(const Common::String &str);
 
+	// Script contexts keep a back-pointer to their owning cast.
+	void registerScriptContext(ScriptContext *ctx) { _liveScriptContexts.setVal(ctx, true); }
+	void unregisterScriptContext(ScriptContext *ctx) { _liveScriptContexts.erase(ctx); }
+
 	Common::String formatCastSummary(int castId);
 	PaletteV4 loadPalette(Common::SeekableReadStreamEndian &stream, int id);
 
@@ -158,10 +165,10 @@ private:
 	uint32 computeChecksum();
 
 public:
-	Archive *_castArchive;
+	Common::SharedPtr<Archive> _castArchive;
 	Common::Platform _platform;
 	uint16 _castLibID;
-	uint16 _libResourceId;
+	uint32 _libResourceId;
 	bool _isExternal;
 
 	CharMap _macCharsToWin;
@@ -186,6 +193,9 @@ public:
 	LingoDec::ScriptContext *_lingodec = nullptr;
 	LingoDec::ChunkResolver *_chunkResolver = nullptr;
 
+	uint16 _castArrayStartForChecksum;
+	uint16 _castArrayEndForChecksum;
+
 	/* Config Data to be saved */
 	/*  0 */ uint16 _len;
 	/*  2 */ uint16 _fileVersion;
@@ -198,10 +208,10 @@ public:
 	// Director 6 and below
 		/* 18 */ int16 _unk1;	// Mentioned in ProjectorRays as preD7field11
 
-	// Director 7 and above
-	// Currently not supporting Director 7
-		// /* 18 */ int8 D7stageColorG;
-		// /* 19 */ int8 D7stageColorB;
+	// Director 7 and above: stageColorG at byte 18, stageColorB at byte 19;
+	// _unk1 keeps the raw 16-bit value for the VWCF checksum and save.
+		/* 18 */ uint8 _D7stageColorG;
+		/* 19 */ uint8 _D7stageColorB;
 
 	/* 20 */ uint16 _commentFont;
 	/* 22 */ uint16 _commentSize;
@@ -209,10 +219,10 @@ public:
 
 	// Director 6 and below
 		/* 26 */ uint16 _stageColor;
-	// Director 7 and above
-	// Currently not supporting Director 7
-		// /* 26 */ uint8 D7stageColorIsRGB;
-		// /* 27 */ uint8 D7stageColorR;
+	// Director 7 and above: stageColorIsRGB at byte 26, stageColorR at
+	// byte 27; _stageColor keeps the raw 16-bit value for checksum and save.
+		/* 26 */ uint8 _D7stageColorIsRGB;
+		/* 27 */ uint8 _D7stageColorR;
 
 	/* 28 */ uint16 _bitdepth;
 	/* 30 */ uint8 _field17;
@@ -263,6 +273,8 @@ private:
 	Common::HashMap<uint16, CastMemberInfo *> _castsInfo;
 	Common::HashMap<Common::String, int, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _castsNames;
 	Common::HashMap<uint16, int> _castsScriptIds;
+
+	Common::HashMap<ScriptContext *, bool> _liveScriptContexts;
 
 };
 

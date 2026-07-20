@@ -148,7 +148,7 @@ void MartianScripts::cmdSpecial6() {
 	_vm->_screen->setIconPalette();
 	_vm->_screen->forceFadeIn();
 
-	Resource *cellsRes = _vm->_files->loadFile("CELLS00.LZ");
+	Resource *cellsRes = _vm->_files->loadRawFile("CELLS00.LZ");
 	_vm->_objectsTable[0] = new SpriteResource(_vm, cellsRes);
 	delete cellsRes;
 
@@ -161,7 +161,7 @@ void MartianScripts::cmdSpecial6() {
 	_vm->_screen->_maxChars = 50;
 	_vm->_screen->_printOrg = _vm->_screen->_printStart = Common::Point(24, 18);
 
-	Resource *notesRes = _vm->_files->loadFile("ETEXT.DAT");
+	Resource *notesRes = _vm->_files->loadRawFile("ETEXT.DAT");
 	notesRes->_stream->seek(72);
 	uint16 offset = notesRes->_stream->readUint16LE();
 	notesRes->_stream->seek(offset);
@@ -191,8 +191,7 @@ void MartianScripts::cmdSpecial7() {
 	_vm->_midi->loadMusic(47, 8);
 
 	_vm->_sound->freeSounds();
-	Resource *sound = _vm->_sound->loadSound(46, 14);
-	_vm->_sound->_soundTable.push_back(SoundEntry(sound, 1));
+	_vm->_sound->loadAndAddSound(46, 14);
 
 	_vm->_screen->setDisplayScan();
 	_vm->_screen->forceFadeOut();
@@ -278,12 +277,9 @@ void MartianScripts::cmdSpecial7() {
 	}
 
 	_vm->_sound->freeSounds();
-	sound = _vm->_sound->loadSound(40, 8);
-	_vm->_sound->_soundTable.push_back(SoundEntry(sound, 1));
-	sound = _vm->_sound->loadSound(40, 9);
-	_vm->_sound->_soundTable.push_back(SoundEntry(sound, 1));
-	sound = _vm->_sound->loadSound(40, 10);
-	_vm->_sound->_soundTable.push_back(SoundEntry(sound, 1));
+	_vm->_sound->loadAndAddSound(40, 8);
+	_vm->_sound->loadAndAddSound(40, 9);
+	_vm->_sound->loadAndAddSound(40, 10);
 
 	_vm->_screen->forceFadeOut();
 	_vm->_files->loadScreen(40, 7);
@@ -341,7 +337,7 @@ void MartianScripts::cmdSpecial7() {
 	_vm->_events->pollEvents();
 }
 
-void MartianScripts::executeSpecial(int commandIndex, int param1, int param2) {
+bool MartianScripts::executeSpecial(int commandIndex, int param1, int param2) {
 	switch (commandIndex) {
 	case 0:
 		cmdSpecial0();
@@ -370,6 +366,7 @@ void MartianScripts::executeSpecial(int commandIndex, int param1, int param2) {
 	default:
 		warning("Unexpected Special code %d - Skipped", commandIndex);
 	}
+	return false;
 }
 
 typedef void(MartianScripts::*MartianScriptMethodPtr)();

@@ -19,6 +19,8 @@
  *
  */
 
+#include "common/config-manager.h"
+
 #include "mediastation/actors/screen.h"
 #include "mediastation/debugchannels.h"
 #include "mediastation/clients.h"
@@ -26,8 +28,15 @@
 #include "mediastation/mediastation.h"
 
 namespace MediaStation {
+ParameterClient::ParameterClient() {
+	g_engine->getImtGod()->registerParameterClient(this);
+}
 
-bool DeviceOwner::attemptToReadFromStream(Chunk &chunk, uint sectionType) {
+ParameterClient::~ParameterClient() {
+	g_engine->getImtGod()->unregisterParameterClient(this);
+}
+
+bool ImtDeviceOwner::attemptToReadFromStream(Chunk &chunk, uint sectionType) {
 	bool handledParam = true;
 	switch (sectionType) {
 	case kDeviceOwnerAllowMultipleSounds:
@@ -44,6 +53,7 @@ bool DeviceOwner::attemptToReadFromStream(Chunk &chunk, uint sectionType) {
 
 	return handledParam;
 }
+
 
 bool Document::attemptToReadFromStream(Chunk &chunk, uint sectionType) {
 	bool handledParam = true;
@@ -96,23 +106,26 @@ void Document::readContextLoadComplete(Chunk &chunk) {
 	}
 }
 
-void Document::beginTitle(uint overriddenEntryPointScreenId) {
+void Document::beginTitle() {
 	_entryPointStreamId = MediaStationEngine::BOOT_STREAM_ID;
-	if (overriddenEntryPointScreenId != 0) {
-		// This lets us override the default entry screen for development purposes.
-		_entryPointScreenId = overriddenEntryPointScreenId;
+	if (ConfMan.hasKey("entry_context")) {
+		// For development purposes, we can choose to start at an arbitrary context
+		// in this title. This might not work in all cases.
+		_entryPointScreenId = ConfMan.get("entry_context").asUint64();
 		_entryPointScreenIdWasOverridden = true;
+		warning("%s: Starting at user-requested context %d", __func__, _entryPointScreenId);
 	}
+
 	startFeed(_entryPointStreamId);
 }
 
 
 void Document::startContextLoad(uint contextId) {
 	debugC(5, kDebugLoading, "%s: Loading context %d", __func__, contextId);
-	Context *existingContext = g_engine->_loadedContexts.getValOrDefault(contextId);
+	Context *existingContext = g_engine->getImtGod()->getContextById(contextId);
 	if (existingContext == nullptr) {
 		if (_loadingContextId == 0) {
-			const ContextReference &contextRef = g_engine->contextRefWithId(contextId);
+			const ContextReference &contextRef = g_engine->getImtGod()->contextRefWithId(contextId);
 			if (contextRef._contextId != 0) {
 				_loadingContextId = contextId;
 				startFeed(contextRef._streamId);
@@ -122,10 +135,10 @@ void Document::startContextLoad(uint contextId) {
 		}
 	} else {
 		if (_currentScreenActorId != 0 && contextId != _loadingContextId) {
-			Actor *currentScreen = g_engine->getActorById(_currentScreenActorId);
 			ScriptValue arg;
 			arg.setToActorId(contextId);
-			currentScreen->runScriptResponseIfExists(kContextLoadCompleteEvent2, arg);
+			ActorEvent event(_currentScreenActorId, kContextAlreadyLoadedEvent, arg);
+			g_engine->getEventLoop()->queueEvent(event);
 		}
 
 		if (_loadingContextId == 0) {
@@ -144,23 +157,7 @@ bool Document::isContextLoadInProgress(uint contextId) {
 	}
 }
 
-void Document::branchToScreen() {
-	if (_loadingScreenActorId == 0) {
-		_loadingScreenActorId = _requestedScreenBranchId;
-		_requestedScreenBranchId = 0;
-		uint contextId = contextIdForScreenActorId(_loadingScreenActorId);
-
-		blowAwayCurrentScreen();
-		preloadParentContexts(contextId);
-		addToContextLoadQueue(contextId);
-
-		if (_loadingContextId == 0) {
-			checkQueuedContextLoads();
-		}
-	}
-}
-
-void Document::scheduleScreenBranch(uint screenActorId) {
+void Document::branchToScreen(uint screenId, bool disableScreenAutoUpdate) {
 	// This is to support not immediately branching to the wrong screen
 	// when we are starting at a user-defined context. This is because the click
 	// handler usually points to the main menu screen rather than the screen
@@ -170,15 +167,28 @@ void Document::scheduleScreenBranch(uint screenActorId) {
 	// so we need to run another screen entry event to bring things back in again.)
 	if (_entryPointScreenIdWasOverridden) {
 		_entryPointScreenIdWasOverridden = false;
-		screenActorId = _currentScreenActorId;
+		screenId = _entryPointScreenId;
 	}
 
-	_requestedScreenBranchId = screenActorId;
-}
+	if (_loadingScreenActorId == 0) {
+		_loadingScreenActorId = screenId;
 
-void Document::scheduleContextRelease(uint contextId) {
-	if (!g_engine->contextIsLocked(contextId)) {
-		_requestedContextReleaseId.push_back(contextId);
+		if (disableScreenAutoUpdate) {
+			_disabledScreenAutoUpdateToken = g_engine->getDisplayUpdateManager()->disableAutoUpdate();
+		}
+
+		uint contextId = contextIdForScreenActorId(_loadingScreenActorId);
+		if (contextId == 0) {
+			error("%s: Screen %d doesn't have a context in current title", __func__, _loadingScreenActorId);
+		}
+
+		blowAwayCurrentScreen();
+		preloadParentContexts(contextId);
+		addToContextLoadQueue(contextId);
+
+		if (_loadingContextId == 0) {
+			checkQueuedContextLoads();
+		}
 	}
 }
 
@@ -196,8 +206,7 @@ void Document::streamDidFinish(uint streamId) {
 	if (currentStreamIsTargetStream) {
 		stopFeed();
 		if (streamId == _entryPointStreamId) {
-			_requestedScreenBranchId = _entryPointScreenId;
-			branchToScreen();
+			branchToScreen(_entryPointScreenId, false);
 		} else {
 			checkQueuedContextLoads();
 		}
@@ -208,31 +217,21 @@ void Document::contextLoadDidComplete() {
 	if (_currentScreenActorId != 0) {
 		ScriptValue arg;
 		arg.setToActorId(_loadingContextId);
-		Actor *currentScreen = g_engine->getActorById(_currentScreenActorId);
-		if (currentScreen != nullptr) {
-			currentScreen->runScriptResponseIfExists(kContextLoadCompleteEvent, arg);
-		}
+		ActorEvent event(_currentScreenActorId, kContextLoadCompleteEvent, arg);
+		g_engine->getEventLoop()->queueEvent(event);
 	}
 	_loadingContextId = 0;
 }
 
 void Document::screenLoadDidComplete() {
 	_currentScreenActorId = _loadingScreenActorId;
-	Actor *currentScreen = g_engine->getActorById(_loadingScreenActorId);
-	currentScreen->runScriptResponseIfExists(kScreenEntryEvent);
+	ActorEvent event(_currentScreenActorId, kScreenEntryEvent);
+	g_engine->getEventLoop()->queueEvent(event);
 	_loadingScreenActorId = 0;
-}
 
-void Document::process() {
-	if (!_requestedContextReleaseId.empty()) {
-		for (uint contextId : _requestedContextReleaseId) {
-			g_engine->destroyContext(contextId);
-		}
-		_requestedContextReleaseId.clear();
-	}
-
-	if (_requestedScreenBranchId != 0) {
-		branchToScreen();
+	if (_disabledScreenAutoUpdateToken != 0) {
+		g_engine->getDisplayUpdateManager()->enableAutoUpdate(_disabledScreenAutoUpdateToken);
+		_disabledScreenAutoUpdateToken = 0;
 	}
 }
 
@@ -240,15 +239,21 @@ void Document::blowAwayCurrentScreen() {
 	if (_currentScreenActorId != 0) {
 		uint contextId = contextIdForScreenActorId(_currentScreenActorId);
 		if (contextId != 0) {
-			Actor *currentScreen = g_engine->getActorById(_currentScreenActorId);
-			currentScreen->runScriptResponseIfExists(kScreenExitEvent);
-			g_engine->destroyContext(contextId);
+			ScreenActor *screenActor = static_cast<ScreenActor *>(g_engine->getImtGod()->getActorByIdAndType(_currentScreenActorId, kActorTypeScreen));
+			if (screenActor != nullptr) {
+				ActorEvent event(_currentScreenActorId, kScreenExitEvent);
+				screenActor->onEvent(event);
+			}
+			g_engine->getImtGod()->destroyContext(contextId);
+			// There is a contextWasDestroyed call in here, but it just
+			// does OS-specific memory management which we don't need to replicate.
 		}
+		_currentScreenActorId = 0;
 	}
 }
 
 uint Document::contextIdForScreenActorId(uint screenActorId) {
-	ScreenReference screenRef = g_engine->screenRefWithId(screenActorId);
+	ScreenReference screenRef = g_engine->getImtGod()->screenRefWithId(screenActorId);
 	return screenRef._contextId;
 }
 
@@ -266,14 +271,15 @@ void Document::stopFeed() {
 }
 
 void Document::preloadParentContexts(uint contextId) {
-	ContextReference contextReference = g_engine->contextRefWithId(contextId);
+	ContextReference contextReference = g_engine->getImtGod()->contextRefWithId(contextId);
 	for (uint parentContextId : contextReference._parentContextIds) {
 		if (parentContextId != 0) {
-			Context *existingContext = g_engine->_loadedContexts.getValOrDefault(parentContextId);
+			Context *existingContext = g_engine->getImtGod()->getContextById(parentContextId);
 			if (existingContext == nullptr && parentContextId != contextId) {
 				debugC(5, kDebugLoading, "%s: Loading parent context %d", __func__, parentContextId);
 				addToContextLoadQueue(parentContextId);
 			}
+			g_engine->getImtGod()->lockContext(parentContextId);
 		}
 	}
 }
@@ -283,6 +289,15 @@ void Document::addToContextLoadQueue(uint contextId) {
 		_contextLoadQueue.push_back(contextId);
 	} else {
 		warning("%s: Context %d already queued for load", __func__, contextId);
+	}
+}
+
+void Document::removeFromContextLoadQueue(uint contextId) {
+	for (uint i = 0; i < _contextLoadQueue.size(); i++) {
+		if (_contextLoadQueue[i] == contextId) {
+			_contextLoadQueue.remove_at(i);
+			return;
+		}
 	}
 }
 
@@ -301,6 +316,37 @@ void Document::checkQueuedContextLoads() {
 		_contextLoadQueue.erase(_contextLoadQueue.begin());
 		startContextLoad(contextId);
 	}
+}
+
+void Document::contextReleaseComplete(uint contextId) {
+	if (_currentScreenActorId != 0) {
+		ScriptValue arg;
+		arg.setToActorId(contextId);
+		ActorEvent actorEvent(_currentScreenActorId, kContextReleaseCompleteEvent, arg);
+		g_engine->getEventLoop()->queueEvent(actorEvent);
+	}
+}
+
+void Document::contextAlreadyReleased(uint contextId) {
+	ScriptValue arg;
+	arg.setToActorId(contextId);
+	ActorEvent actorEvent(_currentScreenActorId, kContextAlreadyReleasedEvent, arg);
+	g_engine->getEventLoop()->queueEvent(actorEvent);
+}
+
+Common::String Document::getDebugString() {
+	return Common::String::format(
+		"currentScreen: %s\n"
+		"loadingScreen: %s\n"
+		"loadingContext: %s\n"
+		"entryScreen: %s\n"
+		"entryStream: %u",
+		g_engine->formatActorName(_currentScreenActorId).c_str(),
+		g_engine->formatActorName(_loadingScreenActorId).c_str(),
+		g_engine->formatActorName(_loadingContextId).c_str(),
+		g_engine->formatActorName(_entryPointScreenId).c_str(),
+		_entryPointStreamId
+	);
 }
 
 } // End of namespace MediaStation

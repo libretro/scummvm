@@ -100,6 +100,7 @@ public:
 	static Common::String getScummVMLogPath();
 	static jint getAndroidSDKVersionId();
 	static void setCurrentGame(const Common::String &target);
+	static void notifyHTTPService(int localPort, bool minimal);
 
 	static inline bool haveSurface();
 	static inline bool swapBuffers();
@@ -111,13 +112,6 @@ public:
 		}
 		return fetchEGLVersion();
 	}
-
-	static void setAudioPause();
-	static void setAudioPlay();
-	static void setAudioStop();
-
-	static inline int writeAudio(JNIEnv *env, jbyteArray &data, int offset,
-									int size);
 
 	static Common::Array<Common::String> getAllStorageLocations();
 
@@ -134,7 +128,6 @@ private:
 	static JavaVM *_vm;
 	// back pointer to (java) peer instance
 	static jobject _jobj;
-	static jobject _jobj_audio_track;
 	static jobject _jobj_egl;
 	static jobject _jobj_egl_display;
 	static jobject _jobj_egl_surface;
@@ -163,6 +156,7 @@ private:
 	static jmethodID _MID_getScummVMConfigPath;
 	static jmethodID _MID_getScummVMLogPath;
 	static jmethodID _MID_setCurrentGame;
+	static jmethodID _MID_notifyHTTPService;
 	static jmethodID _MID_getSysArchives;
 	static jmethodID _MID_getAllStorageLocations;
 	static jmethodID _MID_initSurface;
@@ -176,12 +170,6 @@ private:
 
 	static jmethodID _MID_EGL10_eglSwapBuffers;
 
-	static jmethodID _MID_AudioTrack_flush;
-	static jmethodID _MID_AudioTrack_pause;
-	static jmethodID _MID_AudioTrack_play;
-	static jmethodID _MID_AudioTrack_stop;
-	static jmethodID _MID_AudioTrack_write;
-
 	static const JNINativeMethod _natives[];
 
 	static void throwByName(JNIEnv *env, const char *name, const char *msg);
@@ -190,8 +178,6 @@ private:
 	// natives for the dark side
 	static void create(JNIEnv *env, jobject self, jobject asset_manager,
 						jobject egl, jobject egl_display,
-						jobject at, jint audio_sample_rate,
-						jint audio_buffer_size,
 						jboolean assets_updated_);
 	static void destroy(JNIEnv *env, jobject self);
 
@@ -206,6 +192,9 @@ private:
 	static void setPause(JNIEnv *env, jobject self, jboolean value);
 
 	static void systemInsetsUpdated(JNIEnv *env, jobject self, jintArray gestureInsets, jintArray systemInsets, jintArray cutoutInsets);
+
+	static void setDefaultAudioValues(JNIEnv *env, jclass clazz, jint sampleRate, jint framesPerBurst);
+	static void notifyAudioDisconnect(JNIEnv *env, jclass clazz);
 
 	static jstring getNativeVersionInfo(JNIEnv *env, jobject self);
 	static jstring convertToJString(JNIEnv *env, const Common::U32String &str);
@@ -224,11 +213,6 @@ inline bool JNI::swapBuffers() {
 
 	return env->CallBooleanMethod(_jobj_egl, _MID_EGL10_eglSwapBuffers,
 									_jobj_egl_display, _jobj_egl_surface);
-}
-
-inline int JNI::writeAudio(JNIEnv *env, jbyteArray &data, int offset, int size) {
-	return env->CallIntMethod(_jobj_audio_track, _MID_AudioTrack_write, data,
-								offset, size);
 }
 
 #endif
