@@ -22,6 +22,10 @@
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/sound.h"
 #include "engines/nancy/resource.h"
+#include "engines/nancy/graphics.h"
+#include "engines/nancy/font.h"
+#include "engines/nancy/cursor.h"
+#include "engines/nancy/input.h"
 #include "engines/nancy/util.h"
 
 #include "engines/nancy/action/miscrecords.h"
@@ -30,6 +34,7 @@
 
 #include "common/events.h"
 #include "common/config-manager.h"
+#include "common/random.h"
 #include "nancy/ui/taskbar.h"
 
 namespace Nancy {
@@ -435,19 +440,175 @@ static TimerData::Timer *getSoftwareTimer(int16 index) {
 	return timerData ? &timerData->timers[index] : nullptr;
 }
 
+// Nancy 12+: adds a trigger to a running timer, unless an identical one already
+// exists (so re-running the record on scene re-entry doesn't stack duplicates)
+// or the timer's kNumTriggers slots are full.
+static void addTimerTrigger(TimerData::Timer &timer, TimerData::Trigger::Type type,
+		uint32 durationMs, const SoundDescription &sound, const Common::Array<FlagDescription> &flags) {
+	for (uint i = 0; i < timer.triggers.size(); ++i) {
+		const TimerData::Trigger &t = timer.triggers[i];
+		if (t.type != type || t.durationMs != durationMs ||
+			t.sound.name != sound.name || t.sound.channelID != sound.channelID ||
+			t.sound.volume != sound.volume) {
+			continue;
+		}
+
+		bool flagsMatch = true;
+		for (uint j = 0; j < ARRAYSIZE(t.flags); ++j) {
+			FlagDescription incoming = j < flags.size() ? flags[j] : FlagDescription();
+			if (t.flags[j].label != incoming.label || t.flags[j].flag != incoming.flag) {
+				flagsMatch = false;
+				break;
+			}
+		}
+
+		if (flagsMatch) {
+			return;
+		}
+	}
+
+	if (timer.triggers.size() >= TimerData::kNumTriggers) {
+		return;
+	}
+
+	TimerData::Trigger trigger;
+	trigger.type = type;
+	trigger.durationMs = durationMs;
+	trigger.hasFired = false;
+	trigger.sound = sound;
+	for (uint i = 0; i < ARRAYSIZE(trigger.flags); ++i) {
+		trigger.flags[i] = i < flags.size() ? flags[i] : FlagDescription();
+	}
+
+	timer.triggers.push_back(trigger);
+}
+
+// Reads exactly size bytes from the stream, returning the text up to the first
+// null byte. Used for the fixed-size string fields inside a TimerControl chunk.
+static Common::String readFixedSizeString(Common::SeekableReadStream &stream, uint size) {
+	Common::String result;
+	bool ended = false;
+	for (uint i = 0; i < size; ++i) {
+		byte b = stream.readByte();
+		if (b == 0) {
+			ended = true;
+		}
+		if (!ended) {
+			result += (char)b;
+		}
+	}
+
+	return result;
+}
+
 void ResetAndStartTimer::readData(Common::SeekableReadStream &stream) {
-	_timerIndex = stream.readByte();
+	if (g_nancy->getGameType() < kGameTypeNancy12) {
+		_timerIndex = stream.readByte();
+		return;
+	}
+
+	_timerIndex = stream.readSint16LE();    // 0x00
+	_command = stream.readSint16LE();        // 0x02
+
+	switch (_command) {
+	case kAddTime:
+	case kSubtractTime:
+	case kSetTime:
+		_hours = stream.readSint16LE();      // 0x04
+		_minutes = stream.readSint16LE();    // 0x06
+		_seconds = stream.readSint16LE();    // 0x08
+		stream.skip(2);                      // 0x0a, unused
+		break;
+	case kConfigOneShot:
+	case kConfigRepeating: {
+		_hours = stream.readSint16LE();          // 0x04
+		_minutes = stream.readSint16LE();        // 0x06
+		_seconds = stream.readSint16LE();        // 0x08
+		stream.skip(2);                          // 0x0a, unused
+		_sound.volume = stream.readUint16LE();   // 0x0c
+		_sound.channelID = stream.readUint16LE(); // 0x0e
+		_sound.numLoops = 1;
+
+		// Three candidate expiry-sound names (0x10, 33 bytes each); one is
+		// picked at random, "NO SOUND" marks an empty slot
+		Common::Array<Common::String> names;
+		for (uint i = 0; i < 3; ++i) {
+			Common::String name = readFixedSizeString(stream, 0x21);
+			if (!name.empty() && !name.equalsIgnoreCase("NO SOUND")) {
+				names.push_back(name);
+			}
+		}
+
+		if (!names.empty()) {
+			_sound.name = names[g_nancy->_randomSource->getRandomNumber(names.size() - 1)];
+		}
+
+		// Event flags fired on expiry (count at 0x73)
+		uint16 numFlags = stream.readUint16LE();
+		_flags.resize(numFlags);
+		for (uint i = 0; i < numFlags; ++i) {
+			_flags[i].label = stream.readSint16LE();
+			_flags[i].flag = (byte)stream.readSint16LE();
+		}
+		break;
+	}
+	default:
+		// kStart, kClear and kPause carry no further data
+		break;
+	}
 }
 
 void ResetAndStartTimer::execute() {
-	NancySceneState.resetAndStartTimer();
+	if (g_nancy->getGameType() < kGameTypeNancy12) {
+		NancySceneState.resetAndStartTimer();
 
-	// Nancy 11 also resets and starts one of the software-timer slots
-	if (g_nancy->getGameType() >= kGameTypeNancy11) {
-		TimerData::Timer *timer = getSoftwareTimer(_timerIndex);
-		if (timer) {
-			timer->reset();
+		// Nancy 11 also resets and starts one of the software-timer slots
+		if (g_nancy->getGameType() >= kGameTypeNancy11) {
+			TimerData::Timer *timer = getSoftwareTimer(_timerIndex);
+			if (timer) {
+				timer->reset();
+				timer->state = TimerData::Timer::kRunning;
+			}
+		}
+
+		_isDone = true;
+		return;
+	}
+
+	// Nancy 12+ issues a command to one of the software-timer slots. Every
+	// command other than kStart only takes effect while the slot is running.
+	TimerData::Timer *timer = getSoftwareTimer(_timerIndex);
+	if (timer) {
+		if (_command == kStart) {
 			timer->state = TimerData::Timer::kRunning;
+		} else if (timer->state == TimerData::Timer::kRunning) {
+			const uint32 durationMs = ((uint32)_hours * 3600 + (uint32)_minutes * 60 + (uint32)_seconds) * 1000;
+
+			switch (_command) {
+			case kClear:
+				timer->reset();
+				break;
+			case kPause:
+				timer->state = TimerData::Timer::kPaused;
+				break;
+			case kAddTime:
+				timer->currentTimeMs += durationMs;
+				break;
+			case kSubtractTime:
+				timer->currentTimeMs = timer->currentTimeMs > durationMs ? timer->currentTimeMs - durationMs : 0;
+				break;
+			case kSetTime:
+				timer->currentTimeMs = durationMs;
+				break;
+			case kConfigOneShot:
+			case kConfigRepeating:
+				addTimerTrigger(*timer,
+					(_command == kConfigRepeating) ? TimerData::Trigger::kRepeating : TimerData::Trigger::kOneShot,
+					durationMs, _sound, _flags);
+				break;
+			default:
+				break;
+			}
 		}
 	}
 
@@ -469,24 +630,6 @@ void StopTimer::execute() {
 	}
 
 	_isDone = true;
-}
-
-// Reads exactly size bytes from the stream, returning the text up to the first
-// null byte. Used for the fixed-size string fields inside a TimerControl chunk.
-static Common::String readFixedSizeString(Common::SeekableReadStream &stream, uint size) {
-	Common::String result;
-	bool ended = false;
-	for (uint i = 0; i < size; ++i) {
-		byte b = stream.readByte();
-		if (b == 0) {
-			ended = true;
-		}
-		if (!ended) {
-			result += (char)b;
-		}
-	}
-
-	return result;
 }
 
 void TimerControl::readData(Common::SeekableReadStream &stream) {
@@ -741,33 +884,165 @@ void HintSystem::selectHint() {
 }
 
 void ResourceUse::readData(Common::SeekableReadStream &stream) {
-	_resourceIndex = stream.readSint16LE();   // which UIRC resource to change
-	_amount = stream.readSint16LE();           // value / delta
-	_mode = stream.readByte();                 // 0 = set, non-zero = add
-	_flag.label = stream.readSint16LE();       // event flag set on success
+	_resourceIndex = stream.readSint16LE();      // which UIRC resource to change
+	_amount = stream.readSint16LE();             // value / delta
+	_mode = stream.readByte();                   // 0 = set, non-zero = add
+	_flag.label = stream.readSint16LE();         // event flag set on success
 	_flag.flag = stream.readByte();
-	// The rest of the 113-byte block (success/fail sounds, an optional scene
-	// change at +0x5b, and a transient "UIResource_Overlay" sprite) isn't
-	// handled yet.
-	stream.skip(0x71 - 8);
+
+	readFilename(stream, _failSoundName);        // played when the change can't be applied
+	readFilename(stream, _successSoundName);     // played when it is applied
+
+	readRect(stream, _paymentHotspot);
+	_useResourceCursor = stream.readByte();
+
+	_sceneID = stream.readUint16LE();
+	_continueSceneSound = stream.readUint16LE();
+
+	_drawResourceOverlay = stream.readByte() != 0;
+	_overlayDest.x = stream.readSint32LE();
+	_overlayDest.y = stream.readSint32LE();
+
+	_drawResourceValue = stream.readByte() != 0;
+	_valueDest.x = stream.readSint32LE();
+	_valueDest.y = stream.readSint32LE();
 }
 
-void ResourceUse::execute() {
+void ResourceUse::init() {
+	Common::Rect screenBounds = NancySceneState.getViewport().getBounds();
+	_drawSurface.create(screenBounds.width(), screenBounds.height(), g_nancy->_graphics->getInputPixelFormat());
+	_drawSurface.clear(g_nancy->_graphics->getTransColor());
+	setTransparent(true);
+	moveTo(screenBounds);
+
+	const UIRC *uirc = GetEngineData(UIRC);
+	const bool haveItem = uirc && _resourceIndex >= 0 && (uint)_resourceIndex < uirc->items.size();
+
+	if (haveItem && _drawResourceOverlay) {
+		const UIRC::ItemRecord &item = uirc->items[_resourceIndex];
+		Graphics::ManagedSurface image;
+		g_nancy->_resource->loadImage(item.overlayName, image);
+		image.setTransparentColor(_drawSurface.getTransparentColor());
+
+		Common::Rect src = item.rect;
+		Common::Rect dest(_overlayDest.x, _overlayDest.y,
+			_overlayDest.x + src.width(), _overlayDest.y + src.height());
+		_drawSurface.blitFrom(image, src, dest);
+	}
+
+	if (haveItem && _drawResourceValue) {
+		// The value is rendered with a '$' prefix and `unknown2` decimal places
+		// (Old Clock tracks cents), using the font selected by `unknown1`.
+		const UIRC::ItemRecord &item = uirc->items[_resourceIndex];
+		const Font *font = g_nancy->_graphics->getFont(item.unknown1);
+		if (font && item.unknown2 > 0) {
+			const int32 value = NancySceneState.getUIResource(_resourceIndex);
+			const Common::String text = Common::String::format("$%d.%02d", value / 100, value % 100);
+			font->drawString(&_drawSurface, text, _valueDest.x, _valueDest.y, screenBounds.width() - _valueDest.x, 0);
+		}
+	}
+
+	setVisible(_drawResourceOverlay || _drawResourceValue);
+	registerGraphics();
+}
+
+void ResourceUse::applyChange() {
 	if (_mode == 0) {
 		// Set the resource outright.
 		NancySceneState.setUIResource(_resourceIndex, _amount);
 		NancySceneState.setEventFlag(_flag);
+		_paymentApplied = true;
 	} else {
 		// Add the (signed) amount, but never let the resource go negative —
 		// the original skips the change (e.g. when Nancy can't afford it).
 		const int32 result = NancySceneState.getUIResource(_resourceIndex) + _amount;
-		if (result >= 0) {
+		_paymentApplied = result >= 0;
+		if (_paymentApplied) {
 			NancySceneState.setUIResource(_resourceIndex, result);
 			NancySceneState.setEventFlag(_flag);
 		}
 	}
 
-	_isDone = true;
+	// Start the sound matching the outcome, if there is one.
+	const Common::String &soundName = _paymentApplied ? _successSoundName : _failSoundName;
+	if (!soundName.empty() && !soundName.equalsIgnoreCase("NO SOUND") && !soundName.equalsIgnoreCase("NO SOUND PLAY")) {
+		_sound.name = soundName;
+		_sound.numLoops = 1;
+
+		const UIRC *uirc = GetEngineData(UIRC);
+		if (uirc && _resourceIndex >= 0 && (uint)_resourceIndex < uirc->items.size()) {
+			_sound.channelID = uirc->items[_resourceIndex].soundChannel;
+			_sound.volume = uirc->items[_resourceIndex].soundVolume;
+		}
+
+		g_nancy->_sound->loadSound(_sound);
+		g_nancy->_sound->playSound(_sound);
+		_hasSound = true;
+	}
+
+	_paymentResolved = true;
+}
+
+void ResourceUse::handleInput(NancyInput &input) {
+	if (!_interactive || _state != kRun || _paymentResolved) {
+		return;
+	}
+
+	if (NancySceneState.getViewport().convertViewportToScreen(_paymentHotspot).contains(input.mousePos)) {
+		g_nancy->_cursor->setCursorType(_useResourceCursor ?
+			(CursorManager::CursorType)(_resourceIndex + 0x1f) : CursorManager::kNormal, true);
+
+		if (input.input & NancyInput::kLeftMouseButtonUp) {
+			applyChange();
+		}
+	}
+}
+
+void ResourceUse::execute() {
+	switch (_state) {
+	case kBegin:
+		init();
+
+		// A non-degenerate hotspot means the player has to click it (e.g. a coin
+		// slot) to trigger the change; otherwise it happens immediately.
+		_interactive = _paymentHotspot.top != _paymentHotspot.bottom;
+		if (!_interactive) {
+			applyChange();
+		}
+
+		_state = kRun;
+		break;
+	case kRun:
+		// Interactive changes wait for the player to click the hotspot.
+		if (_interactive && !_paymentResolved) {
+			return;
+		}
+
+		// Keep the overlay up until the outcome sound has finished.
+		if (_hasSound && g_nancy->_sound->isSoundPlaying(_sound)) {
+			return;
+		}
+
+		_state = kActionTrigger;
+		break;
+	case kActionTrigger:
+		if (_hasSound) {
+			g_nancy->_sound->stopSound(_sound);
+		}
+
+		setVisible(false);
+
+		// Only a successful change advances the scene.
+		if (_paymentApplied && _sceneID != kNoScene) {
+			SceneChangeDescription sceneChange;
+			sceneChange.sceneID = _sceneID;
+			sceneChange.continueSceneSound = _continueSceneSound;
+			NancySceneState.changeScene(sceneChange);
+		}
+
+		finishExecution();
+		break;
+	}
 }
 
 } // End of namespace Action

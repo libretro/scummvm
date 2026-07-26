@@ -122,6 +122,8 @@ public:
 	Audio::Timestamp getLength(const SoundDescription &description);
 	Audio::Timestamp getLength(const Common::String &chunkName);
 
+	bool isCommonSound(const Common::String &soundName) const { return _commonSounds.contains(soundName); }
+
 	void soundEffectMaintenance();
 	void recalculateSoundEffects();
 
@@ -159,6 +161,13 @@ protected:
 	};
 
 	void soundEffectMaintenance(uint16 channelID, bool force = false);
+
+	// Nancy 13 introduced the MMIX ("music mix") boot chunk, a table mapping a
+	// short location code (e.g. "CAM", "BRI") to a set of interchangeable music /
+	// ambience tracks. When a sound is loaded by such a code, the engine picks one
+	// of the mapped tracks at random and plays that instead. Returns the resolved
+	// filename, or the input name unchanged when it doesn't match any mix record.
+	Common::String resolveMusicMix(const Common::String &name) const;
 
 	// Returns the listener position override if one is active, otherwise
 	// the scene summary's listener position

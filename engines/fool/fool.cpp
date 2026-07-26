@@ -43,6 +43,7 @@ FoolEngine::FoolEngine(OSystem *syst, const FOOLGameDescription *gameDesc) : Eng
 }
 
 FoolEngine::~FoolEngine() {
+	delete _wm;
 }
 
 uint32 FoolEngine::getFeatures() const {
@@ -54,14 +55,17 @@ Common::String FoolEngine::getGameId() const {
 }
 
 Common::Error FoolEngine::run() {
+	_wm = new Graphics::MacWindowManager();
 	initGraphics(SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	_screen.create(SCREEN_WIDTH, SCREEN_HEIGHT, Graphics::PixelFormat::createFormatCLUT8());
-	_wm.setScreen(&_screen);
+	_wm->setScreen(&_screen);
 
 	Common::String versionStr(_gameDescription->desc.extra);
 	FoolVersion version = kFool20;
-	if (versionStr == "v1.1") {
+	if (versionStr == "Demo v1.0") {
+		version = kFoolDemo10;
+	} else if (versionStr == "v1.1") {
 		version = kFool11;
 	} else if (versionStr == "v2.0") {
 		version = kFool20;

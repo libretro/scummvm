@@ -72,6 +72,7 @@ Score::Score(Movie *movie, bool haveInteractivity) {
 	_labels = nullptr;
 
 	_currentFrameRate = 20;
+	_currentDigitalVideoTimeScale = 60;
 	_nextFrame = 0;
 	_currentLabel = 0;
 	_nextFrameTime = 0;
@@ -504,6 +505,9 @@ void Score::updateCurrentFrame() {
 		// This copies in the frame data and updates _curFrameNumber.
 		loadFrame(nextFrameNumberToLoad, true);
 
+		for (uint ch = 0; ch < _channels.size(); ch++)
+			_channels[ch]->_sprite->releaseAutoPuppet(_currentFrame->_sprites[ch]->_copyBackMask);
+
 		// Finally, update the channels and buffer any dirty rectangles.
 		// This will ignore any channel data that is overridden with the puppet flag.
 		updateSprites(kRenderModeNormal, true);
@@ -908,6 +912,16 @@ bool Score::renderTransition(uint16 frameId, RenderMode mode) {
 }
 
 void Score::incrementFilmLoops() {
+	// Film loops do not advance while the movie is paused
+	if (_window->_playbackPaused)
+		return;
+
+	// In D4, film loops also freeze while the playhead loops in a single
+	// frame, e.g. via go the frame. D5 and later animate in that case
+	if (_vm->getVersion() < 500 && _curFrameNumber == _filmLoopsLastFrame)
+		return;
+	_filmLoopsLastFrame = _curFrameNumber;
+
 	for (auto &it : _channels) {
 		if (it->_sprite->_cast && (it->_sprite->_cast->_type == kCastFilmLoop || it->_sprite->_cast->_type == kCastMovie)) {
 			FilmLoopCastMember *fl = ((FilmLoopCastMember *)it->_sprite->_cast);

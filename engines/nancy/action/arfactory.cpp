@@ -63,6 +63,7 @@
 #include "engines/nancy/action/puzzle/onebuildpuzzle.h"
 #include "engines/nancy/action/puzzle/orderingpuzzle.h"
 #include "engines/nancy/action/puzzle/overridelockpuzzle.h"
+#include "engines/nancy/action/puzzle/pachinkopuzzle.h"
 #include "engines/nancy/action/puzzle/passwordpuzzle.h"
 #include "engines/nancy/action/puzzle/peepholepuzzle.h"
 #include "engines/nancy/action/puzzle/pegspuzzle.h"
@@ -215,9 +216,10 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new PlaySecondaryMovie(true);
 	case 46:	// Nancy11
 		return new PlayRandomMovieControl();
-	case 47:	// Nancy14 - PlaySecondaryMovie subclass with a per-frame flag list
-		// TODO: not yet implemented
-		return nullptr;
+	case 47:	// Nancy14
+		// A PlaySecondaryMovie subclass that appends a named {value, flag} list.
+		// Handled inside PlaySecondaryMovie via _type == 47.
+		return new PlaySecondaryMovie();
 	case 50:
 		return new ConversationVideo(); // PlayPrimaryVideoChan0
 	case 51:
@@ -286,7 +288,7 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new ModifyListEntry(ModifyListEntry::kDelete);
 	case 73:
 		return new ModifyListEntry(ModifyListEntry::kMark);
-	case 74:	// Nancy10
+	case 74:	// Nancy10 only: writes the full, taskbar-covering box
 		return new FrameTextBox(true);
 	case 75:
 		if (g_nancy->getGameType() <= kGameTypeNancy9)
@@ -381,8 +383,14 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new AddSearchLink();
 	case 132:	// Nancy12
 		return new ResourceUse();
-	case 133:	// Nancy14
+	case 133:	// Nancy14 - CameraAction
+		// Cell-phone camera action (introduced alongside the UICM camera UI).
 		// TODO: not yet implemented
+		return nullptr;
+	case 134:	// Nancy15 - PlayCharAR
+		// Switches the active player character (Nancy / Frank / Joe), the
+		// dual-protagonist mechanic new to The Creature of Kapu Cave.
+		// TODO: not yet implemented (depends on the PCUI/LDSN player-char UI)
 		return nullptr;
 	case 140:
 		if (g_nancy->getGameType() >= kGameTypeNancy12)
@@ -394,9 +402,10 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		// Saves a cropped image of the screen to a bitmap/TGA file.
 		// TODO: debug-only feature, not implemented
 		return nullptr;
-	case 143:	// Nancy14
-	case 144:	// Nancy14
-		// TODO: new paired AR, not yet implemented
+	case 143:	// Nancy14 - ConcatSound
+	case 144:	// Nancy14 - MultiSound (dropped from the Nancy15 dispatch)
+		// Sibling sound ARs. ConcatSound plays a list of named sounds back-to-back;
+		// TODO: not yet implemented
 		return nullptr;
 	case 145:	// Nancy13
 		return new PlaySound(); // Moved from 150 in Nancy13
@@ -448,7 +457,7 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new PlayRandomSound();
 	case 159:
 		if (g_nancy->getGameType() >= kGameTypeNancy14)
-			return nullptr;	// Nancy14: new AR here, not PlaySoundTerse. TODO.
+			return new GridMapPuzzle();	// moved from 244
 		return new PlaySoundTerse();
 	case 160:
 		if (g_nancy->getGameType() >= kGameTypeNancy12)
@@ -489,28 +498,36 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 	case 174:
 		return new ScalePuzzle();	// balance scale
 	case 175:
-		// PachinkoPuzzle (ball drop)
-		// TODO: not yet implemented
-		return nullptr;
+		return new PachinkoPuzzle();	// ball drop / pinball
 	case 176:
 		return new DropSortPuzzle();	// conveyor-belt candy sorting
 	// -- Nancy14 new puzzles (types 177-182) --
 	case 177:	// HangmanPuzzle
 		// TODO: not yet implemented
 		return nullptr;
-	case 178:	// logic-grid / crossword-like puzzle, unconfirmed
+	case 178:	// AdjustPuzzle
 		// TODO: not yet implemented
 		return nullptr;
-	case 179:	// small utility AR, unconfirmed
+	case 179:	// MeterPuzzle
 		// TODO: not yet implemented
 		return nullptr;
-	case 180:	// movie-driven puzzle, unconfirmed
+	case 180:	// BlockingPuzzle
 		// TODO: not yet implemented
 		return nullptr;
-	case 181:	// image/hotspot puzzle, unconfirmed
+	case 181:	// PaintPuzzle
 		// TODO: not yet implemented
 		return nullptr;
-	case 182:	// word puzzle, unconfirmed
+	case 182:	// DecoderPuzzle
+		// TODO: not yet implemented
+		return nullptr;
+	// -- Nancy15 new puzzles (types 183-185) --
+	case 183:	// MagicBoxPuzzle
+		// TODO: not yet implemented
+		return nullptr;
+	case 184:	// EscapeGridPuzzle
+		// TODO: not yet implemented
+		return nullptr;
+	case 185:	// WeightSortPuzzle
 		// TODO: not yet implemented
 		return nullptr;
 	case 200:

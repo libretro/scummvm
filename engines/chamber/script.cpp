@@ -60,19 +60,24 @@ byte *script_ptr, *script_end_ptr;
 byte *script_stack[5 * 2];
 byte **script_stack_ptr = script_stack;
 
-void *script_vars[kScrPools_MAX] = {
-	&script_word_vars,
-	&script_word_vars,
-	&script_byte_vars,
-	inventory_items,
-	zones_data,
-	pers_list,
-	inventory_items,
-	inventory_items + kItemZapstik1 - 1,
-	pers_list
-};
+void *script_vars[kScrPools_MAX] = {};
 
 extern void askDisk2(void);
+
+
+void initScriptVars() {
+	// Late init of global array entries to avoid having a global constructor
+
+	script_vars[0] = &script_word_vars;
+	script_vars[1] = &script_word_vars;
+	script_vars[2] = &script_byte_vars;
+	script_vars[3] = inventory_items;
+	script_vars[4] = zones_data;
+	script_vars[5] = pers_list;
+	script_vars[6] = inventory_items;
+	script_vars[7] = inventory_items + kItemZapstik1 - 1;
+	script_vars[8] = pers_list;
+}
 
 /*
 Get next random byte value
@@ -2846,6 +2851,8 @@ Copy backbuffer to screen, with added vertical mirror
 void ShowMirrored(uint16 h, uint16 ofs) {
 	uint16 x, ofs2 = ofs;
 
+	bool egaClearAbove = isEgaLikeRenderer();
+
 	/*move 1 line up*/
 	ofs2 ^= g_vm->_line_offset;
 	if ((ofs2 & g_vm->_line_offset) != 0 || g_vm->_line_offset == 0)
@@ -2854,7 +2861,8 @@ void ShowMirrored(uint16 h, uint16 ofs) {
 	while (h--) {
 
 		for (x = 0; x < g_vm->_screenBPL; x++) {
-			frontbuffer[ofs2 + x] = frontbuffer[ofs + x] = backbuffer[ofs + x];
+			frontbuffer[ofs + x] = backbuffer[ofs + x];
+			frontbuffer[ofs2 + x] = egaClearAbove ? 0 : backbuffer[ofs + x];
 			backbuffer[ofs + x] = 0;
 		}
 
@@ -2942,6 +2950,8 @@ static void AnimSaucer(void) {
 		height_prev -= (yy - 1);
 
 		/*scale the saucer*/
+		if (isEgaLikeRenderer())
+			memset(backbuffer, 0, 320 * 200);
 		g_vm->_renderer->zoomInplaceXY(cur_image_pixels, width, height, ww, hh, xx, yy, backbuffer);
 
 		baseofs = g_vm->_renderer->calcXY(0, yy);
@@ -3002,7 +3012,7 @@ static void AnimSaucer(void) {
 		height_prev = height_new;
 
 		waitVBlank();
-		g_system->delayMillis(delay / 250);
+		g_system->delayMillis(delay / 1000);
 		delay += 500;
 	}
 }

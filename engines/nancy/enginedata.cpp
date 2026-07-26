@@ -282,7 +282,7 @@ TBOX::TBOX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 
 	if (g_nancy->getGameType() >= kGameTypeNancy10) {
 		lineStartXCursor = chunkStream->readUint16LE();	// text left inset
-		chunkStream->skip(2);	// bottom margin
+		stripRightMargin = chunkStream->readUint16LE();	// strip text right margin (see FrameTextBox)
 		chunkStream->skip(2);	// unused
 		chunkStream->skip(2);	// initial color (we use the AR for this)
 	}
@@ -894,7 +894,7 @@ TASK::TASK(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	readRect(*chunkStream, srcRect);
 	readRect(*chunkStream, dstRect);
 	readRect(*chunkStream, unkRect1);
-	readRect(*chunkStream, unkRect2);
+	readRect(*chunkStream, ccTextboxScreenRect);
 
 	// The button count varies by game (Nancy12 adds a 6th slot for the coin
 	// purse), so derive it from the chunk size. A slot marked "NO_UI_ITEM" (e.g.
@@ -978,7 +978,9 @@ UICL::UICL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 		readFilename(*chunkStream, cameraClickSound);
 		readRect(*chunkStream, pictureDisplayRect);
 
-		// Camera picture-slot / thumbnail data (int16 rects). Not yet mapped.
+		// TODO: Camera picture-slot / thumbnail data (int16 rects, ~9 records) —
+		// skipped for now. Map these if the picture-view thumbnail grid is ever
+		// implemented (the original stores per-slot source rects here).
 		chunkStream->skip(114);
 
 		readRect(*chunkStream, noPictureScreenRect);
@@ -989,17 +991,25 @@ UICL::UICL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 		statusTextX = cameraTextX;
 		statusTextY = cameraTextY;
 
-		// Eight dial/web/dir/camera label SrcDestRectPairs across three on-screen
-		// columns (dest x = 437 / 492 / 551), each with alternate glyph variants;
-		// take one pair per column for the dial / web / dir labels.
-		readRect(*chunkStream, dialLabel.srcRect);	// column 1 (x=437)
+		// Eight ribbon-label SrcDestRectPairs across three on-screen columns
+		// (dest x = 437 / 492 / 551). Atlas order is CAM, DIAL, MENU, DIR, DEL,
+		// SEND, YES, NO; each screen shows one label per column.
+		readRect(*chunkStream, dialLabel.srcRect);		// CAM (col 437)
 		readRect(*chunkStream, dialLabel.destRect);
-		chunkStream->skip(32);						// second x=437 variant
-		readRect(*chunkStream, webLabel.srcRect);	// column 2 (x=492)
+		readRect(*chunkStream, dialingLabel.srcRect);	// DIAL (col 437)
+		readRect(*chunkStream, dialingLabel.destRect);
+		readRect(*chunkStream, webLabel.srcRect);		// MENU (col 492)
 		readRect(*chunkStream, webLabel.destRect);
-		readRect(*chunkStream, dirLabel.srcRect);	// column 3 (x=551)
+		readRect(*chunkStream, dirLabel.srcRect);		// DIR (col 551)
 		readRect(*chunkStream, dirLabel.destRect);
-		chunkStream->skip(4 * 32);					// remaining variants
+		readRect(*chunkStream, delLabel.srcRect);		// DEL (col 492)
+		readRect(*chunkStream, delLabel.destRect);
+		readRect(*chunkStream, sendLabel.srcRect);		// SEND (col 551)
+		readRect(*chunkStream, sendLabel.destRect);
+		readRect(*chunkStream, yesLabel.srcRect);		// YES (col 492)
+		readRect(*chunkStream, yesLabel.destRect);
+		readRect(*chunkStream, noLabel.srcRect);		// NO (col 551)
+		readRect(*chunkStream, noLabel.destRect);
 	} else {
 		readRect(*chunkStream, dialHilite.srcRect);
 		readRect(*chunkStream, dialHilite.destRect);
@@ -1083,17 +1093,23 @@ UICL::UICL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	readRect(*chunkStream, dirCursorSrc);
 
 	if (isNancy13) {
-		// Online / directory headings — N13 changed these values, not mapped yet.
-		chunkStream->skip(48);
+		// Nancy 13 has 11 online sub-buttons (Ghidra widgets 0x10..0x1a). The
+		// first (0x10, at what older games use for the directory heading) is the
+		// Back button, so the whole array is read contiguously here.
+		for (uint i = 0; i < kNumSubButtonsNancy13; ++i) {
+			readRect(*chunkStream, subButtons[i].srcRectIdle);
+			readRect(*chunkStream, subButtons[i].srcRectPressed);
+			readRect(*chunkStream, subButtons[i].destRect);
+		}
 	} else {
 		readRect(*chunkStream, dirHeading.srcRect);
 		readRect(*chunkStream, dirHeading.destRect);
-	}
 
-	for (uint i = 0; i < kNumSubButtons; ++i) {
-		readRect(*chunkStream, subButtons[i].srcRectIdle);
-		readRect(*chunkStream, subButtons[i].srcRectPressed);
-		readRect(*chunkStream, subButtons[i].destRect);
+		for (uint i = 0; i < kNumSubButtons; ++i) {
+			readRect(*chunkStream, subButtons[i].srcRectIdle);
+			readRect(*chunkStream, subButtons[i].srcRectPressed);
+			readRect(*chunkStream, subButtons[i].destRect);
+		}
 	}
 
 	readRect(*chunkStream, searchHeading.srcRect);
@@ -1155,7 +1171,10 @@ UICL::UICL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	}
 
 	if (isNancy13) {
-		// Trailing captured-picture slot table, added in Nancy 13.
+		// Trailing captured-picture slot table, added in Nancy 13. These are the
+		// game's built-in photo slots; runtime captures are persisted separately
+		// (CellPhonePictureData), so this table is parsed but currently unused.
+		// TODO: identify PictureRecord::unknown (6 bytes, identical across slots).
 		const uint16 pictureCount = chunkStream->readUint16LE();
 		pictures.resize(pictureCount);
 		for (uint i = 0; i < pictureCount; ++i) {
@@ -1164,6 +1183,28 @@ UICL::UICL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 			readRect(*chunkStream, p.rect);
 			chunkStream->read(p.unknown, sizeof(p.unknown));
 		}
+	}
+}
+
+UICM::UICM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, overlayImageName);
+
+	readRect(*chunkStream, viewRect);
+	maxPictures = chunkStream->readUint16LE();
+	pictureCount = chunkStream->readByte();
+	chunkStream->skip(2);
+
+	shutterSound.readData(*chunkStream);
+
+	const uint16 count = chunkStream->readUint16LE();
+	subjects.resize(count);
+	for (uint i = 0; i < count; ++i) {
+		CameraSubject &s = subjects[i];
+		s.hotspot.readData(*chunkStream);
+		s.subjectID = chunkStream->readSint16LE();
+		s.flag.label = chunkStream->readSint16LE();
+		s.flag.flag = chunkStream->readByte();
+		chunkStream->skip(1);
 	}
 }
 
@@ -1278,6 +1319,73 @@ MMIX::MMIX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 		rec.musicNames.resize(numTracks);
 		for (uint16 j = 0; j < numTracks; ++j) {
 			readFilename(*chunkStream, rec.musicNames[j]);
+		}
+	}
+}
+
+LVLN::LVLN(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	// The count is the total number of strings, which always comes in
+	// (code, name) pairs - hence it must be even.
+	const uint16 count = chunkStream->readUint16LE();
+	const uint16 numPairs = count / 2;
+	levelCodes.resize(numPairs);
+	levelNames.resize(numPairs);
+
+	for (uint16 i = 0; i < numPairs; ++i) {
+		readFilename(*chunkStream, levelCodes[i]);
+		readFilename(*chunkStream, levelNames[i]);
+	}
+}
+
+PCUI::PCUI(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	flag = chunkStream->readByte();
+	const uint16 count = chunkStream->readUint16LE();
+	characters.resize(count);
+
+	for (uint16 i = 0; i < count; ++i) {
+		// Each entry begins with the slot index it populates.
+		const byte slot = chunkStream->readByte();
+		Character &chr = (slot < characters.size()) ? characters[slot] : characters[i];
+		readFilename(*chunkStream, chr.imageName);
+		readFilename(*chunkStream, chr.defaultImageName);
+		chr.id = chunkStream->readUint16LE();
+	}
+}
+
+LDSN::LDSN(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, backgroundImageName);
+	readFilename(*chunkStream, overlayImageName);
+
+	// The remainder is a run of button/selection rects (16 bytes each),
+	// followed by a short trailer whose fields aren't fully understood yet.
+	while (chunkStream->pos() + 16 <= chunkStream->size()) {
+		Common::Rect rect;
+		readRect(*chunkStream, rect);
+		rects.push_back(rect);
+	}
+}
+
+PUIH::PUIH(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	flag = chunkStream->readByte();
+	readFilename(*chunkStream, themeName);
+	readFilename(*chunkStream, swatchImageName);
+}
+
+PUIV::PUIV(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, name);
+	channelID = chunkStream->readUint16LE();
+	unknown   = chunkStream->readUint32LE();
+	volume    = chunkStream->readUint16LE();
+
+	const uint16 count = chunkStream->readUint16LE();
+	soundGroups.resize(count);
+	for (uint16 i = 0; i < count; ++i) {
+		SoundGroup &group = soundGroups[i];
+		group.tag = chunkStream->readByte();
+		const uint16 numVariants = chunkStream->readUint16LE();
+		group.variants.resize(numVariants);
+		for (uint16 j = 0; j < numVariants; ++j) {
+			readFilename(*chunkStream, group.variants[j]);
 		}
 	}
 }

@@ -48,6 +48,10 @@
 #include "scumm/file.h"
 #include "scumm/file_nes.h"
 
+#if defined(ENABLE_REBEL2_PSX) && !defined(ENABLE_SCUMM_7_8)
+#error "SCUMM v7 & v8 games must be enabled for Rebel Assault II PlayStation. Specify --enable-engine=scumm-7-8,rebel2-psx"
+#endif
+
 namespace Scumm {
 
 Common::Path ScummEngine::generateFilename(const int room) const {
@@ -234,6 +238,11 @@ bool ScummMetaEngine::hasFeature(MetaEngineFeature f) const {
 }
 
 bool ScummEngine::hasFeature(EngineFeature f) const {
+#ifdef ENABLE_REBEL2_PSX
+	if (_game.id == GID_REBEL2 && _game.platform == Common::kPlatformPSX &&
+			(f == kSupportsLoadingDuringRuntime || f == kSupportsSavingDuringRuntime))
+		return false;
+#endif
 	return
 		(f == kSupportsReturnToLauncher) ||
 		(f == kSupportsLoadingDuringRuntime) ||
@@ -449,6 +458,12 @@ Common::Error ScummMetaEngine::createInstance(OSystem *syst, Engine **engine,
 		if (!(res.extra && strcmp(res.extra, "Steam") == 0))
 			res.game.midi = MDT_MACINTOSH;
 	}
+
+#ifndef ENABLE_REBEL2_PSX
+	if (res.game.id == GID_REBEL2 && res.game.platform == Common::kPlatformPSX)
+		return Common::Error(Common::kUnsupportedGameidError,
+				_s("Rebel Assault II PlayStation support is not compiled in"));
+#endif
 
 	// Finally, we have massaged the GameDescriptor to our satisfaction, and can
 	// instantiate the appropriate game engine. Hooray!
@@ -882,7 +897,7 @@ static const ExtraGuiOption enableRebel2HiRes = {
 	_s("High resolution mode"),
 	_s("Run the game in 640x400 high resolution mode instead of 320x200"),
 	"rebel2_hires",
-	false,
+	true,
 	0,
 	0
 };
@@ -1240,6 +1255,7 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 	}
 
 	if (gameId == "rebel2") {
+		const bool isRebel2PSX = parsePlatform(ConfMan.get("platform", target)) == kPlatformPSX;
 		Keymap *rebel2Keymap = new Keymap(Keymap::kKeymapTypeGame, "scumm-rebel2", _("Rebel Assault II controls"));
 
 		act = new Action("RA2UP", _("Aim up / menu up"));
@@ -1295,10 +1311,16 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 		act->addDefaultInputMapping("JOY_A");
 		rebel2Keymap->addAction(act);
 
-		act = new Action("RA2COVER", _("Cover"));
+		act = new Action("RA2COVER", isRebel2PSX ? _("Change view") : _("Cover"));
 		act->setCustomEngineActionEvent(kScummActionInsaneSwitch);
-		act->addDefaultInputMapping("JOY_X");
-		act->addDefaultInputMapping("JOY_Y");
+		if (isRebel2PSX) {
+			act->addDefaultInputMapping("TAB");
+			act->addDefaultInputMapping("JOY_Y");
+			act->addDefaultInputMapping("JOY_BACK");
+		} else {
+			act->addDefaultInputMapping("JOY_X");
+			act->addDefaultInputMapping("JOY_Y");
+		}
 		rebel2Keymap->addAction(act);
 
 		act = new Action("RA2SKIP", _("Skip / back"));

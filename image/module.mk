@@ -42,6 +42,11 @@ MODULE_OBJS += \
 	codecs/mpeg.o
 endif
 
+ifdef USE_MSMPEG4
+MODULE_OBJS += \
+	codecs/msmpeg4.o
+endif
+
 ifdef USE_CDTOONS
 MODULE_OBJS += \
 	codecs/cdtoons.o

@@ -26270,96 +26270,76 @@ static const uint16 torinVolumeResetPatch2[] = {
 // move through it to continue the cutscene. This patch fixes the fast-forward
 // code 'soBoogleBackUp::ff' in the seraglio so that Boogle's in-the-bag flag
 // is set when fast-forwarding.
-// Applies to at least: English CD, Spanish CD
+//
+// Applies to: All versions
+// Responsible method: soBoogleBackUp:ff
 // Fixes bug: #9836
-static const uint16 torinSeraglioBoogleFlagSignature[] = {
-	0x35, 0x00,                 // ldi 0
+static const uint16 torinSeraglioBoogleFlagSignature1[] = {
 	SIG_MAGICDWORD,
-	0xa3, 0x00,                 // sal local[0]
-	0x38, SIG_SELECTOR16(test), // pushi test
-	SIG_ADDTOOFFSET(+0x5a),     // all the rest of the method
-	// CHECKME: Spanish version seems to have a total of 0x5d bytes from this point to the ret
-	// FIXME: Check for end of method (e.g. ret) and add different signatures in case localized versions are different
+	0x35, 0x00,                    // ldi 00
+	0xa3, 0x00,                    // sal 00 [ local0 = 0 ]
+	0x38, SIG_SELECTOR16(test),    // pushi test
+	0x78,                          // push1
+	0x39, 0x5e,                    // pushi 5e
+	SIG_ADDTOOFFSET(+9),           // [ ScriptID 64017 0 ]
+	0x4a, SIG_UINT16(0x0006),      // send 06 [ oFlags test: 94 ]
+	0x30, SIG_UINT16(0x0031),      // bnt 0031
+	0x38, SIG_SELECTOR16(get),     // pushi get
+	0x78,                          // push1
+	0x38, SIG_SELECTOR16(get),     // pushi get
+	0x78,                          // push1
+	0x39, 0x14,                    // pushi 14
+	SIG_ADDTOOFFSET(+9),           // [ ScriptID 64001 0 ]
+	0x4a, SIG_UINT16(0x0006),      // send 06 [ oInvHandler get: 20 ]
 	SIG_END
 };
 
-static const uint16 torinSeraglioBoogleFlagPatch[] = {
-	// @1e5f
-	// ldi 0, sal local[0] removed from here (+4 bytes)
+static const uint16 torinSeraglioBoogleFlagPatch1[] = {
+	0xa3, 0x00,                    // sal 00 [ local0 = 0, acc is always zero ]
+	0x38, PATCH_SELECTOR16(set),   // pushi set
+	0x78,                          // push1
+	0x38, PATCH_UINT16(0x00e8),    // pushi 00e8
+	PATCH_GETORIGINALBYTES(4, 6),  // pushi test / push1 / pushi 5e
+	0x78,                          // push1
+	0x38, PATCH_UINT16(0xfa11),    // pushi fa11
+	0x43, 0x02,	PATCH_UINT16(0x0002), // callk ScriptID 02 [ ScriptID 64017 ]
+	0x4a, PATCH_UINT16(0x000c),    // send 0c [ oFlags set 232: test: 94 ]
+	0x31, 0x2e,                    // bnt 2e
+	0x38, PATCH_SELECTOR16(get),   // pushi get
+	0x3c,                          // dup
+	0x78,                          // push1
+	0x39, 0x14,                    // pushi 14
+	0x78,                          // push1
+	0x38, PATCH_UINT16(0xfa01),    // pushi fa01
+	0x43, 0x02,	PATCH_UINT16(0x0002), // callk ScriptID 02 [ ScriptID 64001 ]
+	0x4a, PATCH_UINT16(0x0006),    // send 06 [ oInvHandler get: 20 ]
+	0x78,                          // push1
+	PATCH_END
+};
 
-	// @1e5f (+4 bytes)
-	// local[0] = /* oFlags */ ScriptID(64017, 0);
-	0x7a,                               // push2
-	0x38, PATCH_UINT16(0xfa11),         // pushi 64017
-	0x76,                               // push0
-	0x43, 0x02, PATCH_UINT16(0x0004),   // callk ScriptID[2], 4
-	0xa3, 0x00,                         // sal local[0] (-2 bytes)
+// Alternate patch for versions with debug line numbers (French, German)
+static const uint16 torinSeraglioBoogleFlagSignature2[] = {
+	0x7e, SIG_ADDTOOFFSET(+2),     // line
+	SIG_MAGICDWORD,
+	0x35, 0x00,                    // ldi 00
+	0xa3, 0x00,                    // sal 00 [ local0 = 0 ]
+	0x7e, SIG_ADDTOOFFSET(+2),     // line
+	0x38, SIG_SELECTOR16(test),    // pushi test
+	0x78,                          // push1
+	0x39, 0x5e,                    // pushi 5e
+	SIG_ADDTOOFFSET(+9),
+	0x4a, SIG_UINT16(0x0006),      // send 06 [ oFlags test: 94 ]
+	SIG_END
+};
 
-	// @1e6a (+2 bytes)
-	// acc = local[0].test(94);
-	0x38, PATCH_SELECTOR16(test),       // pushi test
-	0x78,                               // push1
-	0x39, 0x5e,                         // pushi 94
-	0x4a, PATCH_UINT16(0x0006),         // send 6
-
-	// @1e73 (+2 bytes)
-	// if (!acc) goto elseCase;
-	0x30, PATCH_UINT16(0x0034),         // bnt 0x31 + 3
-
-	// @1e76 (+2 bytes)
-	// global[0].get(ScriptID(64001, 0).get(20));
-	0x38, PATCH_SELECTOR16(get),        // pushi get
-	0x78,                               // push1
-	0x38, PATCH_SELECTOR16(get),        // pushi get
-	0x78,                               // push1
-	0x39, 0x14,                         // pushi 20
-	0x7a,                               // push2
-	0x38, PATCH_UINT16(0xfa01),         // pushi 64001
-	0x76,                               // push0
-	0x43, 0x02, PATCH_UINT16(0x0004),   // callk ScriptID[2], 4
-	0x4a, PATCH_UINT16(0x0006),         // send 6
-	0x36,                               // push
-	0x81, 0x00,                         // lag global[0] (ego)
-	0x4a, PATCH_UINT16(0x0006),         // send 6
-
-	// @1e92 (+2 bytes)
-	// local[0].set(52);
-	0x38, PATCH_SELECTOR16(set),        // pushi set
-	0x78,                               // push1
-	0x39, 0x34,                         // pushi 52
-	0x83, 0x00,                         // lal local[0] (+7 byte)
-	0x4a, PATCH_UINT16(0x0006),         // send 6
-
-	// @1e9d (+9 bytes)
-	// goto endOfBranch;
-	0x33, 0x0b,                         // jmp [to end of conditional branch] (+1 byte)
-
-	// @1e9f (+10 bytes)
-	// elseCase: local[0].clear(97);
-	0x38, PATCH_SELECTOR16(clear),      // pushi clear
-	0x78,                               // push1
-	0x39, 0x61,                         // pushi 97
-	0x83, 0x00,                         // lal local[0] (+7 bytes)
-	0x4a, PATCH_UINT16(0x0006),         // send 6
-
-	// @1eaa (+17 bytes)
-	// endOfBranch: local[0].set(232);
-	0x38, PATCH_SELECTOR16(set),        // pushi set (-3 bytes)
-	0x78,                               // push1 (-1 byte)
-	0x38, PATCH_UINT16(0x00e8),         // pushi 232 (Boogle-in-bag flag) (-3 bytes)
-	0x83, 0x00,                         // lal local[0] (-2 bytes)
-	0x4a, PATCH_UINT16(0x0006),         // send 6 (-3 bytes)
-
-	// @1eb6 (+5 bytes)
-	// local[0] = 0; self.dispose();
-	0x38, PATCH_SELECTOR16(dispose),    // pushi dispose
-	0x76,                               // push0
-	0x3c,                               // dup (-1 byte)
-	0xab, 0x00,                         // ssl local[0] (-2 bytes)
-	0x54, PATCH_UINT16(0x0004),         // self 4
-	0x48,                               // ret
-
-	// @1ec1 (+2 bytes)
+static const uint16 torinSeraglioBoogleFlagPatch2[] = {
+	0x76,                          // push0
+	0xab, 0x00,                    // ssl 00 [ local0 = 0 ]
+	0x38, PATCH_SELECTOR16(set),   // pushi set
+	0x78,                          // push1
+	0x38, PATCH_UINT16(0x00e8),    // pushi 00e8
+	PATCH_ADDTOOFFSET(+15),
+	0x4a, PATCH_UINT16(0x000c),    // send 0c [ oFlags set: 232 test: 94 ]
 	PATCH_END
 };
 
@@ -26370,6 +26350,11 @@ static const uint16 torinSeraglioBoogleFlagPatch[] = {
 // (it will just explode later when mismatched selectors are used). So, here we
 // are hot-patching all of the wrong offsets in the original heap to match the
 // patched script.
+//
+// The German PointSoft release (and possibly others) contains the same mismatch
+// in the resource volume, but it includes 20700.HEP and 20700.SCR patch files
+// from TORINPAT that override the mismatch.
+//
 // Applies to at least: French PointSoft CD release
 static const uint16 torinPointSoft20700HeapSignature[] = {
 	0xe1, 0x15, 0x23, 0x16, // end of patched 20700.SCR (so we don't
@@ -26464,10 +26449,43 @@ static const uint16 torinPointSoft20700HeapPatch[] = {
 	PATCH_END
 };
 
+// In the German version, the game crashes if the crystcorder is playing when
+//  Torin is throw into the Null Void. The room script attempts to stop the
+//  crystcorder but the crystcorder script was compiled with English selectors.
+//
+// At least the PointSoft release contains patch files from Sierra's TORINPAT
+//  and additional patch files for the crystcorder's script 56000. All of these
+//  patched scripts were compiled using the English version's selector table.
+//  Only a few selector values are different, but they involve the crystcorder.
+//  The jail cell (room 50500) is the one German script that sends a selector
+//  whose value changed to a patched script that expects English selectors.
+//
+// We fix this by patching the German jail cell script to send the English
+//  stopCorder selector to oCrystCorder in 56000. This patch is only enabled
+//  when the unique version of script 56000 with English selectors is present.
+//
+// Applies to at least: German PointSoft release
+// Responsible method: soPlayMovie2:changeState(8)
+static const uint16 torinGermanCrystcorderSignature[] = {
+	SIG_MAGICDWORD,
+	0x38, SIG_UINT16(0x04f5),      // pushi stopCorder [ German selector ]
+	0x76,                          // push0
+	0x7a,                          // push2
+	0x38, SIG_UINT16(0xdac0),      // pushi dac0 [ oCrystCorder script ] 
+	SIG_END
+};
+
+static const uint16 torinGermanCrystcorderPatch[] = {
+	0x38, PATCH_UINT16(0x04fe),    // pushi stopCorder [ English selector ]
+	PATCH_END
+};
+
 //          script, description,                                      signature                         patch
 static const SciScriptPatcherEntry torinSignatures[] = {
-	{  true, 20600, "fix wrong boogle bag flag on fast-forward",   1, torinSeraglioBoogleFlagSignature,  torinSeraglioBoogleFlagPatch },
+	{  true, 20600, "fix boogle bag flag on fast-forward",         1, torinSeraglioBoogleFlagSignature1, torinSeraglioBoogleFlagPatch1 },
+	{  true, 20600, "fix boogle bag flag on fast-forward",         1, torinSeraglioBoogleFlagSignature2, torinSeraglioBoogleFlagPatch2 },
 	{  true, 20700, "fix bad heap in PointSoft release",           1, torinPointSoft20700HeapSignature,  torinPointSoft20700HeapPatch },
+	{ false, 50500, "fix German crystcorder selector",             1, torinGermanCrystcorderSignature,   torinGermanCrystcorderPatch },
 	{  true, 64000, "disable volume reset on startup (1/2)",       1, torinVolumeResetSignature1,        torinVolumeResetPatch1 },
 	{  true, 64000, "disable volume reset on startup (2/2)",       1, torinVolumeResetSignature2,        torinVolumeResetPatch2 },
 	{  true, 64866, "increase number of save games",               1, torinLarry7NumSavesSignature,      torinLarry7NumSavesPatch },
@@ -27275,6 +27293,16 @@ void ScriptPatcher::processScript(uint16 scriptNr, SciSpan<byte> scriptData) {
 			case GID_SQ6:
 				if (g_sci->isDemo()) {
 					enablePatch(signatureTable, "demo: fix inventory crash");
+				}
+				break;
+			case GID_TORIN:
+				if (!g_sci->isDemo()) {
+					// Enable patch to fix incompatible selectors when the German
+					// crystcorder script containing English selectors is present.
+					Resource *crystcorderScript = g_sci->getResMan()->findResource(ResourceId(kResourceTypeScript, 56000), false);
+					if (crystcorderScript && crystcorderScript->size() == 4104) {
+						enablePatch(signatureTable, "fix German crystcorder selector");
+					}
 				}
 				break;
 			default:

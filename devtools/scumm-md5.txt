@@ -452,10 +452,18 @@ ft	Full Throttle
 rebel1	Star Wars: Rebel Assault
 	b9ac90e4411da1b6f7dd075cc4b03c2a	214435	en	DOS	-	v1.0	-	-
 	e210a57b756473be705d24b9378a8233	212383	en	DOS	-	v1.3	-	-
-	6bb0fe2d7816c5528c773f2898e4e0ff	212915	en	DOS	-	v1.7	-	-	
+	6bb0fe2d7816c5528c773f2898e4e0ff	212915	en	DOS	-	v1.7	-	-
+	02236dcfb0cac59457153fc296233825	213171	fr	DOS	-	v1.7	-	-
+	b978b92affdfe5744711ca0cb3548720	213115	de	DOS	-	v1.7	-	-
+	bb1d02798011e5906c4c726be4d63544	1908	en	3DO	-	-	-	-
+	d77be4d8a3e609092703508e09f1ed5d	132904	ja	SEGA	-	-	-	-
+	62543831f454b46ef8d0f50b9e1c063c	560453	en	Mac	-	-	68k application	-
+	8e1272e5c12ac35e29e3e4c50ec4a525	526296	en	Mac	-	-	PowerPC application	-
 
 rebel2	Star Wars: Rebel Assault II: The Hidden Empire
-	6b73a08c535c0544785d73ff812908a0	9430	en	DOS	-	-	-	-
+	6b73a08c535c0544785d73ff812908a0	9430	All	DOS	-	-	-	-
+	569b6160d1d56573ff54f2c908483897	720896	us	PSX	PlayStation	-	Disc 1 executable	-
+	ae607f6ed270311d7dbc033d3e943d3e	750723120	us	PSX	PlayStation	-	Disc 1 raw image	-
 
 	e977ed046b88e75b645491caeff37b0c	313689	en	DOS	Demo	Demo	-	-
 

@@ -55,6 +55,9 @@
 #include "scumm/players/player_towns.h"
 #include "scumm/insane/insane.h"
 #include "scumm/insane/rebel2/rebel.h"
+#ifdef ENABLE_REBEL2_PSX
+#include "scumm/insane/rebel2/psx/psx.h"
+#endif
 #include "scumm/insane/rebel1/rebel.h"
 #include "scumm/he/animation_he.h"
 #include "scumm/he/font_he.h"
@@ -145,6 +148,10 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 			_gdi = new GdiPCEngine(this);
 		else if (_game.heversion > 0)
 			_gdi = new GdiHE16bit(this);
+#ifdef ENABLE_REBEL2_PSX
+		else if (_game.id == GID_REBEL2 && _game.platform == Common::kPlatformPSX)
+			_gdi = new Gdi(this);
+#endif
 	} else
 #endif
 	if (_game.heversion > 0) {
@@ -401,6 +408,10 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 		// #15666, #11290, and <https://forums.scummvm.org/viewtopic.php?p=97395#p97395>).
 		if (_game.id == GID_LOOM || !ConfMan.getBool("trim_fmtowns_to_200_pixels"))
 			_screenHeight = 240;
+#ifdef ENABLE_REBEL2_PSX
+	} else if (_game.id == GID_REBEL2 && _game.platform == Common::kPlatformPSX) {
+		_screenHeight = 240;
+#endif
 	} else if (_game.id == GID_REBEL2 && ConfMan.getBool("rebel2_hires")) {
 		_screenWidth = 640;
 		_screenHeight = 400;
@@ -962,6 +973,9 @@ ScummEngine_v7::~ScummEngine_v7() {
 	}
 
 	delete _insane;
+#ifdef ENABLE_REBEL2_PSX
+	delete _rebel2PSX;
+#endif
 	delete _textV7;
 	delete[] _guiStringTransBuff;
 
@@ -1054,6 +1068,9 @@ Common::Error ScummEngine::init() {
 		SearchMan.addSubDirectoryMatching(gameDataDir, "video");
 		SearchMan.addSubDirectoryMatching(gameDataDir, "data");
 	}
+
+	if (_game.id == GID_REBEL1 && _game.platform == Common::kPlatformMacintosh)
+		SearchMan.addSubDirectoryMatching(gameDataDir, "REBEL", 0, 2);
 #endif
 
 	// Extra directories needed for the Steam versions
@@ -1262,7 +1279,7 @@ Common::Error ScummEngine::init() {
 		Common::MacResManager resource;
 
 		// Indy3 and LOOM *must* use the _macScreen
-		if (isUsingOriginalGUI() || _game.version == 3) {
+		if (_game.id != GID_REBEL1 && (isUsingOriginalGUI() || _game.version == 3)) {
 			_macScreen = new Graphics::Surface();
 			_macScreen->create(640, _useMacScreenCorrectHeight ? 480 : 400, Graphics::PixelFormat::createFormatCLUT8());
 		}
@@ -1831,6 +1848,15 @@ void ScummEngine_v7::setupScumm(const Common::Path &macResourceFile) {
 	}
 
 	if (_game.id == GID_REBEL2) {
+#ifdef ENABLE_REBEL2_PSX
+		if (_game.platform == Common::kPlatformPSX) {
+			_useOriginalGUI = false;
+			_musicEngine = _imuseDigital = nullptr;
+			_rebel2PSX = new Rebel2PSX(this);
+			return;
+		}
+#endif
+
 		_res->allocResTypeData(rtBuffer, 0, 10, kDynamicResTypeMode);
 		initScreens(0, _screenHeight);
 
@@ -1851,7 +1877,7 @@ void ScummEngine_v7::setupScumm(const Common::Path &macResourceFile) {
 		_useOriginalGUI = false;
 
 		_sound = new Sound(this, _mixer, false);
-		// Rebel Assault 2 doesn't use iMUSE for audio - audio is handled directly by INSANE
+		// Rebel Assault 2 doesn't use iMUSE for audio.
 		_musicEngine = _imuseDigital = nullptr;
 		_insane = new InsaneRebel2(this);
 		_splayer = new SmushPlayerRebel2(this, nullptr, _insane);
@@ -2735,6 +2761,10 @@ Common::Error ScummEngine::go() {
 
 	if (_game.id == GID_REBEL2) {
 		ScummEngine_v7 *vm7 = (ScummEngine_v7 *)this;
+#ifdef ENABLE_REBEL2_PSX
+		if (_game.platform == Common::kPlatformPSX)
+			return vm7->getRebel2PSX()->runGame();
+#endif
 		InsaneRebel2 *rebel = (InsaneRebel2 *)vm7->getInsane();
 		rebel->runGame();
 		return Common::kNoError;

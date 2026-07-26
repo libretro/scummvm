@@ -42,7 +42,13 @@ PaletteCastMember::PaletteCastMember(Cast *cast, uint16 castId, PaletteCastMembe
 	source.load();
 	_loaded = true;
 
-	_palette = source._palette ? new PaletteV4(*source._palette) : nullptr;
+	if (source._palette) {
+		byte *colors = new byte[source._palette->length * 3];
+		memcpy(colors, source._palette->palette, source._palette->length * 3);
+		_palette = new PaletteV4(source._palette->id, colors, source._palette->length);
+	} else {
+		_palette = nullptr;
+	}
 }
 
 PaletteCastMember::PaletteCastMember(Cast *cast, uint16 castId, byte *paletteData, PaletteV4 *pal)
@@ -52,12 +58,8 @@ PaletteCastMember::PaletteCastMember(Cast *cast, uint16 castId, byte *paletteDat
 	_loaded = true;
 }
 
-// Need to make a deep copy
 CastMember *PaletteCastMember::duplicate(Cast *cast, uint16 castId) {
-	byte *buf = (byte *)malloc(_palette->length);
-	memcpy(buf, _palette, _palette->length);
-
-	return (CastMember *)(new PaletteCastMember(cast, castId, buf, _palette));
+	return new PaletteCastMember(cast, castId, *this);
 }
 
 PaletteCastMember::~PaletteCastMember() {
@@ -136,6 +138,11 @@ void PaletteCastMember::unload() {
 }
 
 // PaletteCastMember has no data in the 'CASt' resource or is ignored
+bool PaletteCastMember::canWriteCastData() {
+	// D5-D10 legitimately have no 'CASt' data (it lives in 'CLUT')
+	return _cast->_version >= kFileVer400 && _cast->_version < kFileVer1100;
+}
+
 // This is the data in 'CASt' resource
 uint32 PaletteCastMember::getCastDataSize() {
 	if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer1100) {

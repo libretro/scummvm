@@ -160,7 +160,7 @@ TextCastMember::TextCastMember(Cast *cast, uint16 castId, Common::SeekableReadSt
 
 TextCastMember::TextCastMember(Cast *cast, uint16 castId, TextCastMember &source)
 	: CastMember(cast, castId) {
-	_type = kCastText;
+	_type = source._type;	// kCastText or kCastButton
 	// force a load so we can copy the cast resource information
 	source.load();
 	_loaded = true;
@@ -980,6 +980,11 @@ void TextCastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
 	if (_type == kCastButton) {
 		writeStream->writeUint16BE(_buttonType + 1);		// 30 bytes
 	}
+}
+
+bool TextCastMember::canWriteCastData() {
+	// writeCastData() is version-agnostic beyond the D4 header difference
+	return _cast->_version >= kFileVer400;
 }
 
 uint32 TextCastMember::getCastDataSize() {

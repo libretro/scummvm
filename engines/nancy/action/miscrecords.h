@@ -285,14 +285,33 @@ protected:
 };
 
 // Starts the timer. Used in combination with Dependency types that check for
-// how much time has passed since the timer was started. From Nancy 11 onwards
-// the record also carries a software-timer slot index (see TimerControl).
+// how much time has passed since the timer was started. Nancy 11 also carries a
+// software-timer slot index (see TimerControl). From Nancy 12 the record became
+// a general "Control a Timer" command: a slot index plus a command whose value
+// selects a variable-size payload.
 class ResetAndStartTimer : public ActionRecord {
 public:
+	enum Command {
+		kStart           = 0, // Begin counting up from the current time
+		kClear           = 1, // Reset the slot back to idle
+		kConfigOneShot   = 2, // Set target/payload; fire once, then reset
+		kConfigRepeating = 3, // Set target/payload; fire once, then keep counting
+		kPause           = 4, // Suspend counting
+		kAddTime         = 5, // Add the duration to the elapsed time
+		kSubtractTime    = 6, // Subtract the duration from the elapsed time
+		kSetTime         = 7  // Set the elapsed time to the duration
+	};
+
 	void readData(Common::SeekableReadStream &stream) override;
 	void execute() override;
 
-	byte _timerIndex = 0; // Nancy 11+ software-timer slot
+	int16 _timerIndex = 0;   // Software-timer slot (Nancy 11+)
+	int16 _command = kStart; // Nancy 12+
+	int16 _hours = 0;
+	int16 _minutes = 0;
+	int16 _seconds = 0;
+	SoundDescription _sound;               // Played on expiry when configured
+	Common::Array<FlagDescription> _flags; // Fired on expiry when configured
 
 protected:
 	Common::String getRecordTypeName() const override { return "ResetAndStartTimer"; }
@@ -443,19 +462,53 @@ protected:
 };
 
 // Added in Nancy12 (AR 132). Adjusts a UI overlay resource (from the UIRC boot
-// chunk) at runtime.
-class ResourceUse : public ActionRecord {
+// chunk) at runtime -- e.g. paying coins from the purse (resource 0). Applying
+// the change plays a sound, optionally shows a transient overlay (a sprite and/or
+// the resource's numeric value) and can change scene on success.
+class ResourceUse : public RenderActionRecord {
 public:
+	ResourceUse() : RenderActionRecord(7) {}
+
+	void init() override;
 	void readData(Common::SeekableReadStream &stream) override;
 	void execute() override;
+	void handleInput(NancyInput &input) override;
+
+	bool isViewportRelative() const override { return true; }
 
 protected:
 	Common::String getRecordTypeName() const override { return "ResourceUse"; }
+
+	// Applies the resource change (respecting affordability), sets the event
+	// flag and starts the matching outcome sound.
+	void applyChange();
 
 	int16 _resourceIndex = 0;
 	int16 _amount = 0;
 	byte _mode = 0;        // 0 = set the resource, non-zero = add (clamped to >= 0)
 	FlagDescription _flag; // event flag set when the change is applied
+
+	Common::String _failSoundName;    // played when the change can't be applied
+	Common::String _successSoundName; // played when it is applied
+
+	// When this rect is non-degenerate the change is interactive: the player
+	// clicks it (e.g. a coin slot) to pay. A degenerate rect applies at once.
+	Common::Rect _paymentHotspot;
+	byte _useResourceCursor = 0;      // 0 = normal cursor, else the resource's own hover cursor
+
+	uint16 _sceneID = kNoScene;       // scene entered on success (9999 = none)
+	uint16 _continueSceneSound = 0;
+
+	bool _drawResourceOverlay = false; // blit the resource's UIRC sprite
+	Common::Point _overlayDest;
+	bool _drawResourceValue = false;   // draw the resource's numeric value
+	Common::Point _valueDest;
+
+	SoundDescription _sound;
+	bool _hasSound = false;
+	bool _interactive = false;
+	bool _paymentResolved = false;
+	bool _paymentApplied = false;
 };
 
 } // End of namespace Action

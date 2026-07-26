@@ -44,11 +44,11 @@ int getRebel2IndicatorScale(int width, int height) {
 	return (width >= 640 || height >= 400) ? 2 : 1;
 }
 
-static bool isValidEmbeddedFrame(const InsaneRebel2::EmbeddedSanFrame &frame) {
+bool isValidEmbeddedFrame(const InsaneRebel2::EmbeddedSanFrame &frame) {
 	return frame.valid && frame.pixels && frame.width > 0 && frame.height > 0;
 }
 
-static int countEmbeddedFramePixels(const InsaneRebel2::EmbeddedSanFrame &frame) {
+int countEmbeddedFramePixels(const InsaneRebel2::EmbeddedSanFrame &frame) {
 	if (!isValidEmbeddedFrame(frame))
 		return 0;
 
@@ -72,7 +72,7 @@ bool parseRebel2TextOverlayFormat(const char *&str, NutRenderer *&curFont, int &
 	return fontId == -2;
 }
 
-static Common::String getRebel2VisibleTextPrefix(const char *text, int visibleChars) {
+Common::String getRebel2VisibleTextPrefix(const char *text, int visibleChars) {
 	Common::String out;
 	if (!text || visibleChars <= 0)
 		return out;
@@ -102,7 +102,7 @@ static Common::String getRebel2VisibleTextPrefix(const char *text, int visibleCh
 	return out;
 }
 
-static const char *getRebel2LevelEndFallbackString(int id) {
+const char *getRebel2LevelEndFallbackString(int id) {
 	switch (id) {
 	case 190:
 		return "^f02^c244Chapter Complete\n^f01^c244Password: %s";
@@ -172,7 +172,7 @@ void drawHandler8PovOverlayText(const Rebel2FontSet &fontSet, byte *renderBitmap
 	drawRebel2String(fontSet, str, strlen(str), renderBitmap, clipRect, x, y, pitch, color, flags);
 }
 
-static void blitEmbeddedFrameRegion(byte *renderBitmap, int pitch, int clipWidth, int clipHeight,
+void blitEmbeddedFrameRegion(byte *renderBitmap, int pitch, int clipWidth, int clipHeight,
 		const InsaneRebel2::EmbeddedSanFrame &frame, int destX, int destY,
 		int srcX, int srcY, int drawWidth, int drawHeight) {
 	if (!renderBitmap || !isValidEmbeddedFrame(frame) || drawWidth <= 0 || drawHeight <= 0)
@@ -204,7 +204,7 @@ static void blitEmbeddedFrameRegion(byte *renderBitmap, int pitch, int clipWidth
 	}
 }
 
-static bool readEmbeddedSanChunkHeader(Common::SeekableReadStream &stream, int64 containerEnd, const char *context,
+bool readEmbeddedSanChunkHeader(Common::SeekableReadStream &stream, int64 containerEnd, const char *context,
 		uint32 &tag, uint32 &chunkSize, int64 &dataEnd, int64 &nextChunkPos) {
 	const int64 headerPos = stream.pos();
 	if (headerPos < 0 || headerPos + 8 > containerEnd)
@@ -1939,7 +1939,7 @@ void renderNutSpriteClipped(byte *dst, int pitch, int dstH,
 	}
 }
 
-static void renderNutSpriteScaledClipped(byte *dst, int pitch, int width, int height,
+void renderNutSpriteScaledClipped(byte *dst, int pitch, int width, int height,
 		int clipLeft, int clipTop, int clipRight, int clipBottom,
 		int x, int y, NutRenderer *nut, int spriteIdx, bool mirror, int scale, bool transparent231) {
 	if (!nut || spriteIdx < 0 || spriteIdx >= nut->getNumChars() || !dst)
@@ -2795,6 +2795,7 @@ void InsaneRebel2::renderTextOverlay(byte *renderBitmap, int pitch, int width, i
 	}
 
 	const int textScale = isHiRes() ? 2 : 1;
+	const bool useCJK = _vm->_language == Common::JA_JPN;
 	int drawY = _textOverlayY * textScale;
 	int visCount = 0;
 
@@ -2813,11 +2814,13 @@ void InsaneRebel2::renderTextOverlay(byte *renderBitmap, int pitch, int width, i
 				if (parseRebel2TextOverlayFormat(s, mFont, mColor, fonts, ARRAYSIZE(fonts), defaultFont))
 					continue;
 				lineFont = mFont;
-				byte c = (byte)*s++;
+				uint charLen;
+				uint16 c = decodeRebel2Char(s, lineEnd - s, charLen, useCJK);
+				s += charLen;
 				if (c >= 'a' && c <= 'z')
 					c = c - 'a' + 'A';
-				if (mFont && c < mFont->getNumChars())
-					lineWidth += mFont->getCharWidth(c);
+				if (mFont && (c > 0xff || c < mFont->getNumChars()))
+					lineWidth += mFont->getCharWidth((byte)c);
 				lineVisCount++;
 			}
 		}
@@ -2831,14 +2834,16 @@ void InsaneRebel2::renderTextOverlay(byte *renderBitmap, int pitch, int width, i
 			while (s < lineEnd && (visCount + lineCharsDrawn) < displayLen) {
 				if (parseRebel2TextOverlayFormat(s, curFont, curColor, fonts, ARRAYSIZE(fonts), defaultFont))
 					continue;
-				byte c = (byte)*s++;
+				uint charLen;
+				uint16 c = decodeRebel2Char(s, lineEnd - s, charLen, useCJK);
+				s += charLen;
 				if (c >= 'a' && c <= 'z')
 					c = c - 'a' + 'A';
-				if (!curFont || c >= curFont->getNumChars()) {
+				if (!curFont || (c <= 0xff && c >= curFont->getNumChars())) {
 					lineCharsDrawn++;
 					continue;
 				}
-				int charW = curFont->getCharWidth(c);
+				int charW = curFont->getCharWidth((byte)c);
 				if (drawX >= 0 && drawY >= 0 && charW > 0) {
 					drawRebel2Char(curFont, renderBitmap, clipRect, drawX, drawY, pitch, curColor, c);
 				}
@@ -3191,7 +3196,7 @@ void InsaneRebel2::renderHandler7FlySprite(byte *renderBitmap, int pitch, int wi
 	}
 }
 
-static Common::Point getHandler7SpriteDrawPoint(const Common::Point &base, NutRenderer *nut, int spriteIndex) {
+Common::Point getHandler7SpriteDrawPoint(const Common::Point &base, NutRenderer *nut, int spriteIndex) {
 	Common::Point point = base;
 	if (nut && spriteIndex >= 0 && spriteIndex < nut->getNumChars()) {
 		point.x += nut->getCharXOffset(spriteIndex);
@@ -4168,7 +4173,7 @@ void InsaneRebel2::renderHandler8PovOverlay(byte *renderBitmap, int pitch, int w
 	if (_rebelHandler != 8 || !renderBitmap || !_smush_talkfontNut || !_smush_povfontNut)
 		return;
 
-	Rebel2FontSet fontSet;
+	Rebel2FontSet fontSet(_vm->_language == Common::JA_JPN);
 	fontSet.numFonts = 4;
 	fontSet.defaultFont = 0;
 	fontSet.fonts[0] = _smush_talkfontNut;

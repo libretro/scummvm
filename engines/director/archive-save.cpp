@@ -41,6 +41,20 @@
 namespace Director {
 
 bool RIFXArchive::writeToFile(Common::String filename, Movie *movie) {
+	if (_rifxType == MKTAG('F', 'G', 'D', 'M') || _rifxType == MKTAG('F', 'G', 'D', 'C')) {
+		warning("STUB: RIFXArchive::writeToFile(): saving Afterburner movies is not supported");
+		return false;
+	}
+
+	// Refuse rather than silently lose runtime changes to members whose
+	// writer can't re-serialize them for this version
+	for (auto &it : *movie->getCasts()) {
+		if (it._value->getArchive().get() == this && it._value->hasUnsavableChanges()) {
+			warning("RIFXArchive::writeToFile(): not saving '%s': modified cast members would lose their changes", movie->getMacName().c_str());
+			return false;
+		}
+	}
+
 	// If the filename is empty, we save the movie with the name of the current movie
 	if (filename.empty()) {
 		filename = movie->getMacName();
@@ -75,10 +89,6 @@ bool RIFXArchive::writeToFile(Common::String filename, Movie *movie) {
 		writeMemoryMap(saveFile, builtResources);
 		break;
 
-	case MKTAG('F', 'G', 'D', 'M'):
-	case MKTAG('F', 'G', 'D', 'C'):
-		writeAfterBurnerMap(saveFile);
-		break;
 	default:
 		break;
 	}
@@ -115,61 +125,55 @@ bool RIFXArchive::writeToFile(Common::String filename, Movie *movie) {
 			break;
 
 		case MKTAG('V', 'W', 'C', 'F'):
-			// There is only 'VWCF' resource, that is for the internal cast
+		case MKTAG('D', 'R', 'C', 'F'):
+			// There is only one config resource, that is for the internal cast
 			// The external casts don't have a config
 			// movie->getCast() returns the internal cast
 			cast = movie->getCast();
-			cast->saveConfig(saveFile, it->offset);
-			break;
-
-		case MKTAG('B', 'I', 'T', 'D'):
-			{
-				uint32 parentIndex = findParentIndex(it->tag, it->index);
-				Resource parent = castResMap[parentIndex];
-
-				cast = movie->getCastByLibResourceID(parent.libResourceId);
-				BitmapCastMember *target = (BitmapCastMember *)cast->getCastMember(parent.castId + cast->_castArrayStart);
-				target->writeBITDResource(saveFile, it->offset);
-			}
-			break;
-
-		case MKTAG('S', 'T', 'X', 'T'):
-			{
-				uint32 parentIndex = findParentIndex(it->tag, it->index);
-				Resource parent = castResMap[parentIndex];
-
-				cast = movie->getCastByLibResourceID(parent.libResourceId);
-				TextCastMember *target = (TextCastMember *)cast->getCastMember(parent.castId + cast->_castArrayStart);
-				target->writeSTXTResource(saveFile, it->offset);
-			}
-			break;
-
-		case MKTAG('C', 'L', 'U', 'T'):
-			{
-				uint32 parentIndex = findParentIndex(it->tag, it->index);
-				Resource parent = castResMap[parentIndex];
-
-				cast = movie->getCastByLibResourceID(parent.libResourceId);
-				PaletteCastMember *target = (PaletteCastMember *)cast->getCastMember(parent.castId + cast->_castArrayStart);
-				target->writePaletteData(saveFile, it->offset);
-			}
-			break;
-
-		case MKTAG('S', 'C', 'V', 'W'):
-
-			{
-				uint32 parentIndex = findParentIndex(it->tag, it->index);
-				Resource parent = castResMap[parentIndex];
-
-				cast = movie->getCastByLibResourceID(parent.libResourceId);
-				FilmLoopCastMember *target = (FilmLoopCastMember *)cast->getCastMember(parent.castId + cast->_castArrayStart);
-				target->writeSCVWResource(saveFile, it->offset);
+			if (cast->getConfigSize() == 0) {
+				// Unsupported version (D10+): keep the original bytes
+				debugC(7, kDebugSaving, "Saving resource %s as it is, without modification", tag2str(it->tag));
+				saveFile->seek(it->offset, SEEK_SET);
+				saveFile->writeUint32LE(it->tag);
+				saveFile->writeUint32LE(it->size);
+				saveFile->writeStream(getResource(it->tag, it->index));
+			} else {
+				cast->saveConfig(saveFile, it->offset, it->tag);
 			}
 			break;
 
 		case MKTAG('V', 'W', 'S', 'C'):
 			movie->getScore()->writeVWSCResource(saveFile, it->offset);
 			break;
+
+		case MKTAG('B', 'I', 'T', 'D'):
+		case MKTAG('S', 'T', 'X', 'T'):
+		case MKTAG('C', 'L', 'U', 'T'):
+		case MKTAG('S', 'C', 'V', 'W'):
+			{
+				CastMember *member = findResourceOwner(movie, it->tag, it->index);
+				// The owner is not always the type the tag implies, e.g. a D4
+				// script cast member owns its source text in an 'STXT'
+				if (member) {
+					if (it->tag == MKTAG('B', 'I', 'T', 'D') && member->_type == kCastBitmap) {
+						((BitmapCastMember *)member)->writeBITDResource(saveFile, it->offset);
+						continue;
+					}
+					if (it->tag == MKTAG('S', 'T', 'X', 'T') && (member->_type == kCastText || member->_type == kCastButton)) {
+						((TextCastMember *)member)->writeSTXTResource(saveFile, it->offset);
+						continue;
+					}
+					if (it->tag == MKTAG('C', 'L', 'U', 'T') && member->_type == kCastPalette) {
+						((PaletteCastMember *)member)->writePaletteData(saveFile, it->offset);
+						continue;
+					}
+					if (it->tag == MKTAG('S', 'C', 'V', 'W') && member->_type == kCastFilmLoop) {
+						((FilmLoopCastMember *)member)->writeSCVWResource(saveFile, it->offset);
+						continue;
+					}
+				}
+			}
+			// fall through
 
 		default:
 			debugC(7, kDebugSaving, "Saving resource %s as it is, without modification", tag2str(it->tag));
@@ -333,10 +337,10 @@ bool RIFXArchive::writeCast(Common::SeekableWriteStream *writeStream, uint32 off
 	debugCN(5, kDebugSaving, "'CASt' indexes: [");
 	for (uint32 i = 0; i <= maxCastId; i++) {
 		uint32 castIndex = castIndexes.getValOrDefault(i, 0);
-		if (castIndex) {
+		// CAS* is a positional array: empty slots are written as 0
+		writeStream->writeUint32BE(castIndex);
+		if (castIndex)
 			debugCN(5, kDebugSaving, (i == 0 ? "%d" : ", %d"), castIndex);
-			writeStream->writeUint32BE(castIndex);
-		}
 	}
 	debugC(5, kDebugSaving, "]");
 
@@ -380,21 +384,38 @@ Common::Array<Resource *> RIFXArchive::rebuildResources(Movie *movie) {
 				if (!res) {
 					// If the castId is new, create a new resource
 					// Assigning the next available index to the resource
-					res = &castResMap[_resources.size()];
+					uint16 newResIndex = _resources.size();
+					res = &castResMap[newResIndex];
 					res->tag = MKTAG('C', 'A', 'S', 't');
 					res->accessed = true;
 
 					res->libResourceId = cast->_libResourceId;
-					res->children = jt._value->_children;
-					res->index = _resources.size();
+					res->index = newResIndex;
 					res->castId = jt._value->getID() - cast->_castArrayStart;
+					_resources.push_back(res);
 
+					// Clone the child resources that are re-serialized from
+					// their owning member's state: the duplicate must not
+					// share them with its source
+					res->children.clear();
 					for (auto child : jt._value->_children) {
+						if (child.tag == MKTAG('S', 'T', 'X', 'T') || child.tag == MKTAG('B', 'I', 'T', 'D') ||
+								child.tag == MKTAG('C', 'L', 'U', 'T') || child.tag == MKTAG('S', 'C', 'V', 'W')) {
+							uint16 childIndex = _resources.size();
+							Resource &newChild = _types[child.tag][childIndex];
+							newChild = child;
+							newChild.index = childIndex;
+							_resources.push_back(&newChild);
+							child.index = childIndex;
+						}
+						res->children.push_back(child);
+					}
+
+					for (auto child : res->children) {
 						_keyData[child.tag][res->index].push_back(child.index);
 						_keyTableUsedCount += 1;
 						_keyTableEntryCount += 1;
 					}
-					_resources.push_back(res);
 
 					debugC(5, kDebugSaving, "RIFXArchive::rebuildResources(): new 'CASt' resource added");
 				} else {
@@ -471,10 +492,11 @@ Common::Array<Resource *> RIFXArchive::rebuildResources(Movie *movie) {
 				// The castIds of cast members start from _castArrayStart
 				CastMember *target = cast->getCastMember(it->castId + cast->_castArrayStart);
 
-				if (target) {
+				if (target && !cast->keepOriginalCastBytes(target)) {
 					resSize = target->getCastResourceSize();
 					it->size = resSize;		// getCastResourceSize returns size without header and size
 				} else {
+					// Members without a version-capable writer keep the original bytes
 					resSize = it->size;
 				}
 				it->offset = currentSize;
@@ -498,79 +520,83 @@ Common::Array<Resource *> RIFXArchive::rebuildResources(Movie *movie) {
 			break;
 
 		case MKTAG('V', 'W', 'C', 'F'):
+		case MKTAG('D', 'R', 'C', 'F'):
 			{
-				// Only one cast config per movie
+				// Only one config resource per movie
 				// No need to update the key mapping
 				cast = movie->getCast();
 				resSize = cast->getConfigSize();
 
 				it->offset = currentSize;
 
+				if (resSize == 0) {
+					// Unsupported Director version: keep the original size
+					resSize = it->size;
+				} else {
+					it->size = resSize;
+				}
+
 				currentSize += resSize + 8;			// getConfigSize() doesn't include header and size
-				it->size = resSize;
 			}
 			break;
 
 		case MKTAG('S', 'T', 'X', 'T'):
 			{
-				uint32 parentIndex = findParentIndex(it->tag, it->index);
-				Resource parent = castResMap[parentIndex];
-
-				TextCastMember *target = (TextCastMember *)cast->getCastMember(parent.castId + cast->_castArrayStart);
-				resSize = target->getSTXTResourceSize();
+				CastMember *member = findResourceOwner(movie, it->tag, it->index);
+				if (member && (member->_type == kCastText || member->_type == kCastButton)) {
+					resSize = ((TextCastMember *)member)->getSTXTResourceSize();
+					it->size = resSize;
+				} else {
+					// Kept verbatim; see the matching case in writeToFile()
+					resSize = it->size;
+				}
 
 				it->offset = currentSize;
-				it->size = resSize;
-
 				currentSize += resSize + 8;
 			}
 			break;
 
 		case MKTAG('C', 'L', 'U', 'T'):
 			{
-				uint32 parentIndex = findParentIndex(it->tag, it->index);
-				Resource parent = castResMap[parentIndex];
-
-				// Get the appropriate cast in case of multiple casts
-				cast = movie->getCastByLibResourceID(parent.libResourceId);
-				PaletteCastMember *target = (PaletteCastMember *)cast->getCastMember(parent.castId + cast->_castArrayStart);
-				resSize = target->getPaletteDataSize();
+				CastMember *member = findResourceOwner(movie, it->tag, it->index);
+				if (member && member->_type == kCastPalette) {
+					resSize = ((PaletteCastMember *)member)->getPaletteDataSize();
+					it->size = resSize;
+				} else {
+					resSize = it->size;
+				}
 
 				it->offset = currentSize;
-				it->size = resSize;
-
 				currentSize += resSize + 8;
 			}
 			break;
 
 		case MKTAG('B', 'I', 'T', 'D'):
 			{
-				uint32 parentIndex = findParentIndex(it->tag, it->index);
-				Resource parent = castResMap[parentIndex];
-
-				// Get the appropriate cast in case of multiple casts
-				cast = movie->getCastByLibResourceID(parent.libResourceId);
-				BitmapCastMember *target = (BitmapCastMember *)cast->getCastMember(parent.castId + cast->_castArrayStart);
-				resSize = target->getBITDResourceSize();
+				CastMember *member = findResourceOwner(movie, it->tag, it->index);
+				if (member && member->_type == kCastBitmap) {
+					resSize = ((BitmapCastMember *)member)->getBITDResourceSize();
+					it->size = resSize;
+				} else {
+					resSize = it->size;
+				}
 
 				it->offset = currentSize;
-				it->size = resSize;
-
 				currentSize += resSize + 8;
 			}
 			break;
 
 		case MKTAG('S', 'C', 'V', 'W'):
 			{
-				uint32 parentIndex = findParentIndex(it->tag, it->index);
-				Resource parent = castResMap[parentIndex];
-
-				FilmLoopCastMember *target = (FilmLoopCastMember *)cast->getCastMember(parent.castId + cast->_castArrayStart);
-				resSize = target->getSCVWResourceSize();
+				CastMember *member = findResourceOwner(movie, it->tag, it->index);
+				if (member && member->_type == kCastFilmLoop) {
+					resSize = ((FilmLoopCastMember *)member)->getSCVWResourceSize();
+					it->size = resSize;
+				} else {
+					resSize = it->size;
+				}
 
 				it->offset = currentSize;
-				it->size = resSize;
-
 				currentSize += resSize + 8;
 			}
 			break;
@@ -693,7 +719,23 @@ uint32 RIFXArchive::findParentIndex(uint32 tag, uint16 index) {
 	}
 
 	warning("RIFXArchive::findParentIndex: The parent for resource: %s, index: %d, was not found", tag2str(tag), index);
-	return 0;
+	return kNoParent;
+}
+
+// Resolves the cast member owning a child resource (BITD, STXT, CLUT,
+// SCVW); nullptr when the parent or member is missing
+CastMember *RIFXArchive::findResourceOwner(Movie *movie, uint32 tag, uint16 index) {
+	uint32 parentIndex = findParentIndex(tag, index);
+	if (parentIndex == kNoParent)
+		return nullptr;
+
+	ResourceMap &castResMap = _types[MKTAG('C', 'A', 'S', 't')];
+	if (!castResMap.contains(parentIndex))
+		return nullptr;
+
+	const Resource &parent = castResMap[parentIndex];
+	Cast *cast = movie->getCastByLibResourceID(parent.libResourceId);
+	return cast ? cast->getCastMember(parent.castId + cast->_castArrayStart) : nullptr;
 }
 
 SavedArchive::SavedArchive(const Common::String &target) {

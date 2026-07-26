@@ -78,13 +78,18 @@ FilmLoopCastMember::FilmLoopCastMember(Cast *cast, uint16 castId, FilmLoopCastMe
 	_enableSound = source._enableSound;
 	_crop = source._crop;
 	_center = source._center;
-	_score = source._score;
+	_score = nullptr;
+	if (source._score)
+		_score = new Score(*source._score);
 	_subchannels = source._subchannels;
 	_looping = source._looping;
 }
 
 FilmLoopCastMember::~FilmLoopCastMember() {
-
+	if (_score) {
+		delete _score;
+		_score = nullptr;
+	}
 }
 
 bool FilmLoopCastMember::isModified() {
@@ -139,7 +144,7 @@ Common::Array<Channel> *FilmLoopCastMember::getSubChannels(Common::Rect &bbox, u
 			continue;
 
 		if (src._cast == nullptr && _cast != nullptr)
-			src._cast = _cast->getCastMember(src._castId.member, true);
+			src.setCast(src._castId);
 
 		debugCN(5, kDebugImages, "FilmLoopCastMember::getSubChannels(): sprite: %d - cast: %s, orig: %d,%d %dx%d",
 				iter, src._castId.asString().c_str(),
@@ -237,6 +242,11 @@ void FilmLoopCastMember::load() {
 		warning("STUB: FilmLoopCastMember::load(): Film loops not yet supported for version v%d (%d)", humanVersion(_cast->_version), _cast->_version);
 	}
 
+	if (_score) {
+		delete _score;
+		_score = nullptr;
+	}
+
 	if (loop) {
 		debugC(2, kDebugLoading, "****** FilmLoopCastMember::load(): Loading '%s' id: %d, %d bytes", tag2str(tag), filmLoopId, (int)loop->size());
 		_score = new Score(g_director->getCurrentMovie(), false);
@@ -259,6 +269,10 @@ Common::Point FilmLoopCastMember::getRegistrationOffset() {
 
 Common::Point FilmLoopCastMember::getRegistrationOffset(int16 currentWidth, int16 currentHeight) {
 	return Common::Point(currentWidth / 2, currentHeight / 2);
+}
+
+bool FilmLoopCastMember::canWriteCastData() {
+	return _cast->_version >= kFileVer400 && _cast->_version < kFileVer700;
 }
 
 uint32 FilmLoopCastMember::getCastDataSize() {

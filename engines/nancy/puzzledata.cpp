@@ -352,6 +352,29 @@ void CellPhoneData::syncLinkArray(Common::Serializer &ser, Common::Array<SearchL
 	}
 }
 
+void CellPhonePictureData::synchronize(Common::Serializer &ser) {
+	uint16 numPictures = (uint16)pictures.size();
+	ser.syncAsUint16LE(numPictures);
+	if (ser.isLoading()) {
+		pictures.resize(numPictures);
+	}
+
+	for (uint16 i = 0; i < numPictures; ++i) {
+		CapturedPicture &p = pictures[i];
+		ser.syncAsUint16LE(p.width);
+		ser.syncAsUint16LE(p.height);
+		ser.syncAsByte(p.sent);
+
+		uint32 numBytes = (uint32)p.width * p.height * 4;
+		if (ser.isLoading()) {
+			p.pixels.resize(numBytes);
+		}
+		if (numBytes) {
+			ser.syncBytes(p.pixels.data(), numBytes);
+		}
+	}
+}
+
 void TimerData::synchronize(Common::Serializer &ser) {
 	for (uint i = 0; i < kNumTimers; ++i) {
 		Timer &t = timers[i];
@@ -372,6 +395,33 @@ void TimerData::synchronize(Common::Serializer &ser) {
 		for (uint j = 0; j < ARRAYSIZE(t.flags); ++j) {
 			ser.syncAsSint16LE(t.flags[j].label);
 			ser.syncAsByte(t.flags[j].flag);
+		}
+
+		// Nancy 12+ triggers, added in savegame version 6
+		if (ser.getVersion() >= 6) {
+			uint16 numTriggers = (uint16)t.triggers.size();
+			ser.syncAsUint16LE(numTriggers);
+			if (ser.isLoading()) {
+				t.triggers.resize(numTriggers);
+			}
+
+			for (uint j = 0; j < numTriggers; ++j) {
+				TimerData::Trigger &trig = t.triggers[j];
+				ser.syncAsSint32LE(trig.type);
+				ser.syncAsUint32LE(trig.durationMs);
+				ser.syncAsByte(trig.hasFired);
+
+				ser.syncString(trig.sound.name);
+				ser.syncAsUint16LE(trig.sound.channelID);
+				ser.syncAsUint16LE(trig.sound.playCommands);
+				ser.syncAsUint16LE(trig.sound.numLoops);
+				ser.syncAsUint16LE(trig.sound.volume);
+
+				for (uint k = 0; k < ARRAYSIZE(trig.flags); ++k) {
+					ser.syncAsSint16LE(trig.flags[k].label);
+					ser.syncAsByte(trig.flags[k].flag);
+				}
+			}
 		}
 	}
 }
@@ -445,6 +495,8 @@ PuzzleData *makePuzzleData(const uint32 tag) {
 		return new TableData();
 	case CellPhoneData::getTag():
 		return new CellPhoneData();
+	case CellPhonePictureData::getTag():
+		return new CellPhonePictureData();
 	case TimerData::getTag():
 		return new TimerData();
 	case UIResourceData::getTag():

@@ -159,6 +159,7 @@ public:
 	void resetLockKey();
 	void lockKey(int idx, const Common::String &warp);
 	void startTimer(float seconds, bool showTimer);
+	void startTimer(float seconds, bool showTimer, const Common::String &warp);
 	void pauseTimer(bool pause, bool deactivate);
 	void killTimer();
 	void playAnimation(const Common::String &name, const Common::String &var, int varValue, float speed);
@@ -172,6 +173,9 @@ public:
 
 	void setXMax(float max) {
 		_angleY.setRange(-max, max);
+	}
+	void limitView(float min, float max) {
+		_angleY.setRange(kPi2 - max, kPi2 - min);
 	}
 
 	// this is set to large values and effectively useless
@@ -197,6 +201,7 @@ public:
 	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave = false) override;
 	void drawSlot(int idx, int face, int x, int y);
 	void drawSaveCard(int idx);
+	void loadSaveCardSprite(int idx, const Common::String &name);
 	void captureContext();
 
 	void setContextLabel(const Common::String &contextLabel) {
@@ -229,6 +234,17 @@ public:
 	void startCible(const Common::String &name, int periodSeconds, const Common::Array<int> &bounds);
 	void stopCible();
 	void testCible(const Common::String &insideVar, const Common::String &outsideVar);
+
+	int retrieveState(int index) const;
+	void storeState(int index, int value);
+
+	void spriteLoad(const Common::String &name, const Common::String &path);
+	void spriteScreen(int index, const Common::String &name, int x, int y);
+	void setLens(int index, const Common::String &name, float size);
+	void resetLensflare();
+	void setLensflare(float x, float y);
+	void startLight(const Common::String &path);
+	void stopLight();
 
 private:
 	struct ArchiveImage {
@@ -272,6 +288,9 @@ private:
 	void renderImageOverlay();
 	void renderTimer();
 	void renderFade(int color);
+	void renderSprites();
+	void renderLensflare();
+	void renderLightEffect();
 	void resetState();
 	const Graphics::Font *getFont(int size, bool bold) const;
 	Common::Path getSubtitlePath(const Common::String &path) const;
@@ -291,9 +310,11 @@ private:
 	Common::String _nextScript;
 	Common::Path _currentScriptPath;
 	int _warpIdx = -1;
+	int _vrWarpIdx = -1; // temporary v2 hack
 	Script::ConstWarpPtr _warp;
 	int _nextWarp = -1;
 	int _prevWarp = -1;
+	Common::List<int> _prevWarpHistory; // V2 stack of warps
 	int _hoverIndex = -1;
 	int _messengerInventoryHover = -1;
 	int _nextTest = -1;
@@ -305,6 +326,7 @@ private:
 	Common::Array<Common::String> _lockKey;
 
 	Variables _variables;
+	Common::Array<int> _state;
 
 	struct Sound {
 		Audio::SoundHandle handle;
@@ -334,7 +356,23 @@ private:
 	};
 	Common::Array<PreloadedCursor> _loadedCursors;
 
-	Common::HashMap<Common::String, Graphics::ManagedSurface *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _cursorCache;
+	Common::HashMap<Common::String, Common::ScopedPtr<Graphics::ManagedSurface>, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _cursorCache;
+	Common::HashMap<Common::String, Common::ScopedPtr<Graphics::ManagedSurface>, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _loadedSprites;
+	struct Sprite {
+		Common::String name;
+		int x = 0;
+		int y = 0;
+	};
+	Common::Array<Sprite> _sprites;
+	struct Lens {
+		Common::String name;
+		float scale = 0.0f;
+	};
+	Common::Array<Lens> _lenses;
+	bool _lensflareActive = false;
+	float _lensflareX = 0.0f;
+	float _lensflareY = 0.0f;
+	Common::Array<uint32> _lightEffect;
 
 	Common::Array<Common::Array<Common::String>> _cursors;
 	Common::String _defaultCursor[2];
@@ -354,6 +392,7 @@ private:
 	byte _timerFlags = 0;
 	bool _showTimer = false;
 	float _timer = 0, _initialTimer = 0;
+	Common::String _timerWarp;
 
 	Common::String _contextScript;
 	Common::String _contextLabel;
@@ -381,6 +420,8 @@ private:
 
 	bool _restarted = false;
 	bool _loaded = false;
+
+	Video::VideoDecoder *_currentDecoder = nullptr;
 };
 
 extern PhoenixVREngine *g_engine;

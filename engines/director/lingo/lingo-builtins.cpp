@@ -245,7 +245,7 @@ static const BuiltinProto builtins[] = {
 	{ "true",			LB::b_true,			0, 0, 200, KBLTIN },	// D2 k
 	{ "version",		LB::b_version,		0, 0, 300, KBLTIN },	//		D3 k
 	// References
-	{ "cast",			LB::b_cast,			1, 1, 400, FBLTIN },	//			D4 f
+	{ "cast",			LB::b_member,			1, 2, 400, FBLTIN },	//			D4 f
 	{ "castLib",		LB::b_castLib,		1, 1, 500, FBLTIN },	//				D5 f
 	{ "member",			LB::b_member,		1, 2, 500, FBLTIN },	//				D5 f
 	{ "script",			LB::b_script,		1, 2, 400, FBLTIN },	//			D4 f
@@ -831,70 +831,6 @@ void LB::b_value(int nargs) {
 		g_lingo->push(Datum(0));
 		return;
 	}
-
-	bool maybeExpression = false;
-
-	// First, let's check that it is a number
-	if (expr[0] == '-' || expr[0] == '+' || (expr[0] >= '0' && expr[0] <= '9') ||
-			(expr[0] == '.' && expr.size() > 1 && expr[1] >= '0' && expr[1] <= '9')) {
-		char *endPtr = nullptr;
-		double result = strtof(expr.c_str(), &endPtr);
-
-		// Maybe it is part of an expression?
-		if (endPtr && *endPtr) {
-			while (*endPtr && Common::isSpace(*endPtr))
-				endPtr++;
-
-			if (strchr("-+*/%^:,()><&|", *endPtr) != NULL) {
-				maybeExpression = true;
-			}
-		}
-
-		if (!maybeExpression) {
-			if (result < INT_MAX && floor(result) == result) {
-				g_lingo->push(Datum((int)result));
-			} else {
-				g_lingo->push(Datum(result));
-			}
-			return;
-		}
-	}
-
-	// Or maybe it is a string with quotes around it?
-	if (expr.size() >= 2 && expr[0] == '"') {
-		// scan for the end quote, ignoring escaped quotes
-		bool escaped = false;
-		size_t i;
-		for (i = 1; i < expr.size(); i++) {
-			if (expr[i] == '"' && !escaped) {
-				break;
-			}
-			escaped = (expr[i] == '\\' && !escaped);
-		}
-		if (i == expr.size()) {
-			// No closing quote found, push void
-			g_lingo->pushVoid();
-			return;
-		}
-
-		if (i + 1 < expr.size()) {
-			// There are extra characters after the closing quote, this is not a simple string
-			size_t j = i + 1;
-			while (expr[j] && Common::isSpace(expr[j]))
-				j++;
-
-			if (strchr("&", expr[j]) != NULL) {
-				maybeExpression = true;
-			}
-		}
-
-		if (!maybeExpression) {
-			g_lingo->push(expr.substr(1, i - 1));
-			return;
-		}
-	}
-
-	// There is no simple way, feed it to the Lingo parser
 
 	Common::String code = "return " + expr;
 	// Compile the code to an anonymous function and call it
@@ -1547,7 +1483,7 @@ void LB::b_setAt(int nargs) {
 	Datum list = g_lingo->pop();
 
 	TYPECHECK2(indexD, INT, FLOAT);
-	TYPECHECK3(list, ARRAY, PARRAY, RECT);
+	TYPECHECK4(list, ARRAY, PARRAY, POINT, RECT);
 	int index = indexD.asInt();
 
 	switch (list.type) {
@@ -1565,9 +1501,11 @@ void LB::b_setAt(int nargs) {
 		ARRBOUNDSCHECK(index, list);
 		list.u.parr->arr[index - 1].v = value;
 		break;
+	case POINT:
 	case RECT:
 		ARRBOUNDSCHECK(index, list);
 		list.u.farr->arr[index-1] = value;
+		break;
 	default:
 		break;
 	}
@@ -2870,7 +2808,7 @@ void LB::b_importFileInto(int nargs) {
 }
 
 void menuCommandsCallback(int action, Common::String &text, void *data) {
-	g_director->getCurrentMovie()->queueInputEvent(kEventMenuCallback, action);
+	g_director->getStage()->getCurrentMovie()->queueInputEvent(kEventMenuCallback, action);
 }
 
 void LB::b_installMenu(int nargs) {
@@ -2883,7 +2821,10 @@ void LB::b_installMenu(int nargs) {
 		g_director->_wm->removeMenu();
 		return;
 	}
-	Movie *movie = g_director->getCurrentMovie();
+	// FIXME: it might be possible for other windows than the stage to create and use menus.
+	// This would probably mean reworking MacWindowManager to have a per-window menu model.
+	Window *window = g_director->getStage();
+	Movie *movie = window->getCurrentMovie();
 	CastMember *member = movie->getCastMember(memberID);
 	if (!member) {
 		g_lingo->lingoError("installMenu: Unknown %s", memberID.asString().c_str());
@@ -2918,10 +2859,8 @@ void LB::b_installMenu(int nargs) {
 	char CODE_SEPARATOR_CHAR = '\xC5';
 	// FIXME: For some reason there are games which use º (Mac) or ¼ (Win) and it works too?
 	char CODE_SEPARATOR_CHAR_2 = '\xBC';
-	if (g_director->getVersion() >= 500) {
-		// D5 changed this to be the pipe | character, the same in Windows and Mac.
-		CODE_SEPARATOR_CHAR = '\x7C';
-	}
+	// D5 changed this to be the pipe | character, the same in Windows and Mac. ≈ also works.
+	char CODE_SEPARATOR_CHAR_3 = (g_director->getVersion() >= 500) ? '\x7C' : '\xC5';
 	// Continuation character is 0xac to denote a line running over.
 	// For Mac, this is ¨. For Windows, this is ¬.
 	const char CONTINUATION_CHAR = '\xAC';
@@ -2985,6 +2924,8 @@ void LB::b_installMenu(int nargs) {
 		size_t sepOffset = line.find(CODE_SEPARATOR_CHAR);
 		if (sepOffset == Common::String::npos)
 			sepOffset = line.find(CODE_SEPARATOR_CHAR_2);
+		if (sepOffset == Common::String::npos)
+			sepOffset = line.find(CODE_SEPARATOR_CHAR_3);
 
 		Common::String text;
 
@@ -3007,6 +2948,7 @@ void LB::b_installMenu(int nargs) {
 					commandId++;
 				}
 				mainArchive->replaceCode(command.decode(Common::kMacRoman), kEventScript, commandId);
+				debugC(3, kDebugLoading, "LB::b_installMenu(): %s -> %s (EventScript %d)", text.c_str(), command.c_str(), commandId);
 				submenuText += Common::String::format("[%d];", commandId);
 			} else {
 				submenuText += ';';
@@ -4191,13 +4133,6 @@ void LB::b_version(int nargs) {
 ///////////////////
 // References
 ///////////////////
-void LB::b_cast(int nargs) {
-	Datum d = g_lingo->pop();
-	Datum res = d.asMemberID();
-	res.type = CASTREF;
-	g_lingo->push(res);
-}
-
 void LB::b_castLib(int nargs) {
 	Datum d = g_lingo->pop();
 	Datum res(0);
@@ -4217,6 +4152,9 @@ void LB::b_member(int nargs) {
 		Datum member = g_lingo->pop();
 		res = member.asMemberID();
 	} else if (nargs == 2) {
+		if (g_director->getVersion() < 500) {
+			warning("b_member: included a castLib argument! These aren't supposed to exist until D5");
+		}
 		Datum library = g_lingo->pop();
 		Datum member = g_lingo->pop();
 		res = g_lingo->toCastMemberID(member, library);
