@@ -995,7 +995,7 @@ void retro_init(void) {
 
 				if (path && *path) {
 					if (retro_log_cb) {
-						LibRetroFilesystemNode probe(Common::String(path));
+						LibRetroFilesystemNode probe((Common::String(path)));
 						retro_log_cb(RETRO_LOG_INFO,
 							"[scummvm-saf] check path='%s' exists=%d dir=%d\n",
 							path,
