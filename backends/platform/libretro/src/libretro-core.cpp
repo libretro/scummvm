@@ -969,18 +969,51 @@ void retro_init(void) {
 		struct retro_vfs_authorized_locations locations;
 		memset(&locations, 0, sizeof(locations));
 
-		if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VFS_AUTHORIZED_LOCATIONS, &locations) &&
-				locations.locations) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO, "[scummvm-saf] consuming authorized locations\n");
+
+		bool saf_ok = environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VFS_AUTHORIZED_LOCATIONS, &locations);
+
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO,
+				"[scummvm-saf] GET_VFS_AUTHORIZED_LOCATIONS ok=%d count=%u locations=%p\n",
+				saf_ok ? 1 : 0,
+				(unsigned)(saf_ok ? locations.count : 0),
+				(void *)(saf_ok ? locations.locations : NULL));
+
+		if (saf_ok && locations.locations) {
 			for (size_t i = 0; i < locations.count; ++i) {
 				const char *path = locations.locations[i].path;
 				const char *label = locations.locations[i].label;
 
-				if (path && *path)
+				if (retro_log_cb)
+					retro_log_cb(RETRO_LOG_INFO,
+						"[scummvm-saf] recv[%u] path='%s' label='%s'\n",
+						(unsigned)i,
+						path ? path : "(null)",
+						label ? label : "(null)");
+
+				if (path && *path) {
+					if (retro_log_cb) {
+						LibRetroFilesystemNode probe(Common::String(path));
+						retro_log_cb(RETRO_LOG_INFO,
+							"[scummvm-saf] check path='%s' exists=%d dir=%d\n",
+							path,
+							probe.exists() ? 1 : 0,
+							probe.isDirectory() ? 1 : 0);
+					}
+
 					LibRetroFilesystemNode::addAuthorizedLocation(
 							Common::String(path),
 							label ? Common::String(label) : Common::String());
+				}
 			}
 		}
+
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO,
+				"[scummvm-saf] accepted hasAuthorized=%d\n",
+				LibRetroFilesystemNode::hasAuthorizedLocations() ? 1 : 0);
 	}
 
 	if (retro_log_cb)
