@@ -120,7 +120,7 @@ bool LibretroOptionsWidget::cleanFolder(Common::String &path) {
 		Common::FSNode *fshook = dynamic_cast<Common::FSNode *>(hook.get());
 		if (!fshook || fshook->isDirectory())
 			continue;
-		if (remove(fshook->getPath().toString().c_str()) == 0)
+		if (filestream_delete(fshook->getPath().toString().c_str()) == 0)
 			if (retro_log_cb)
 				retro_log_cb(RETRO_LOG_INFO, "Hook file deleted in '%s'.\n", fshook->getPath().toString().c_str());
 		else {

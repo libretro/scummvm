@@ -37,16 +37,79 @@
 #include <stdio.h>
 
 #include "backends/platform/libretro/include/libretro-fs.h"
-#include "backends/fs/stdiostream.h"
+#include "backends/platform/libretro/include/libretro-stream.h"
+#include "backends/platform/libretro/include/libretro-vfs.h"
 #include "common/algorithm.h"
+#include "common/util.h"
+
+/**
+ * Frontend VFS paths may be URIs (e.g. saf://<tree>/dir/file on Android)
+ * rather than plain file system paths. Their scheme must be kept out of any
+ * path manipulation, as normalizing it would collapse the "//" separator.
+ *
+ * @return the length of the "scheme://" prefix, 0 if the path has none.
+ */
+static uint uriSchemeLength(const Common::String &path) {
+	uint i;
+
+	for (i = 0; i < path.size(); i++) {
+		const char c = path[i];
+
+		if (Common::isAlnum(c) || c == '+' || c == '-' || c == '.')
+			continue;
+
+		// A scheme must not be empty and is followed by "://"
+		return (i > 0 && !strncmp(path.c_str() + i, "://", 3)) ? i + 3 : 0;
+	}
+
+	return 0;
+}
+
+/**
+ * Normalizes a path, leaving any URI scheme prefix untouched.
+ */
+static Common::String normalizeRetroPath(const Common::String &path) {
+	const uint schemeLength = uriSchemeLength(path);
+
+	if (!schemeLength)
+		return Common::normalizePath(path, '/');
+
+	return Common::String(path.c_str(), schemeLength) + Common::normalizePath(Common::String(path.c_str() + schemeLength), '/');
+}
+
+/**
+ * Returns the offset of the first path component below the root of the given
+ * path, i.e. the point up to which getParent() may strip components. For URIs
+ * the root is the scheme along with the location it refers to (e.g. the SAF
+ * tree), which cannot be split any further.
+ */
+static uint rootLength(const Common::String &path) {
+	uint i = uriSchemeLength(path);
+
+	if (!i)
+		return 1; // "/"
+
+	while (i < path.size() && path[i] != '/')
+		i++;
+
+	return i;
+}
 
 void LibRetroFilesystemNode::setFlags() {
 	const char *fspath = _path.c_str();
 
 	_isValid = path_is_valid(fspath);
 	_isDirectory = path_is_directory(fspath);
-	_isReadable = access(fspath, R_OK) == 0;
-	_isWritable = access(_path.c_str(), W_OK) == 0;
+
+	if (retro_vfs_enabled()) {
+		// The VFS interface reports no permissions, assume whatever the
+		// frontend hands out can be both read and written.
+		_isReadable = _isValid;
+		_isWritable = _isValid;
+	} else {
+		_isReadable = access(fspath, R_OK) == 0;
+		_isWritable = access(fspath, W_OK) == 0;
+	}
 }
 
 LibRetroFilesystemNode::LibRetroFilesystemNode(const Common::String &p) {
@@ -69,8 +132,9 @@ LibRetroFilesystemNode::LibRetroFilesystemNode(const Common::String &p) {
 	strcpy(portable_path, _path.c_str());
 	pathname_make_slashes_portable(portable_path);
 
-	// Normalize the path (that is, remove unneeded slashes etc.)
-	_path = Common::normalizePath(Common::String(portable_path), '/');
+	// Normalize the path (that is, remove unneeded slashes etc.), keeping any
+	// URI scheme of a frontend VFS path intact
+	_path = normalizeRetroPath(Common::String(portable_path));
 	_displayName = Common::lastPathComponent(_path, '/');
 
 	setFlags();
@@ -137,12 +201,49 @@ bool LibRetroFilesystemNode::getChildren(AbstractFSList &myList, ListMode mode, 
 	}
 	retro_closedir(dirp);
 
+	if (mode != Common::FSNode::kListFilesOnly && _path == "/")
+		addAuthorizedLocations(myList);
+
 	return true;
+}
+
+void LibRetroFilesystemNode::addAuthorizedLocations(AbstractFSList &myList) const {
+	// Locations the frontend granted access to (e.g. SAF trees on Android)
+	// live outside of the local file system hierarchy, hence they are exposed
+	// as additional children of the root node to make them browsable.
+	Common::Array<LibRetroVfsLocation> locations = retro_get_authorized_locations();
+	Common::StringArray usedNames;
+
+	for (uint i = 0; i < locations.size(); i++) {
+		LibRetroFilesystemNode entry(locations[i].path);
+
+		if (!entry._isValid || !entry._isDirectory)
+			continue;
+
+		if (!locations[i].label.empty())
+			entry._displayName = locations[i].label;
+
+		// Frontends may label several locations the same way (e.g. all SAF
+		// trees on Android), make sure each entry is distinguishable
+		Common::String name(entry._displayName);
+		for (uint n = 2; Common::find(usedNames.begin(), usedNames.end(), entry._displayName) != usedNames.end(); n++)
+			entry._displayName = Common::String::format("%s (%u)", name.c_str(), n);
+
+		usedNames.push_back(entry._displayName);
+		myList.push_back(new LibRetroFilesystemNode(entry));
+	}
 }
 
 AbstractFSNode *LibRetroFilesystemNode::getParent() const {
 	if (_path == "/")
 		return 0; // The filesystem root has no parent
+
+	const uint root = rootLength(_path);
+
+	// A frontend VFS location cannot be split any further: its parent is the
+	// root node, which lists all of them along with the local file system
+	if (_path.size() <= root)
+		return makeNode("/");
 
 	const char *start = _path.c_str();
 	const char *end = start + _path.size();
@@ -156,6 +257,9 @@ AbstractFSNode *LibRetroFilesystemNode::getParent() const {
 		return 0;
 	}
 
+	if ((uint)(end - start) <= root)
+		return makeNode(Common::String(start, root));
+
 	AbstractFSNode *parent = makeNode(Common::String(start, end));
 
 	if (parent->isDirectory() == false)
@@ -165,11 +269,11 @@ AbstractFSNode *LibRetroFilesystemNode::getParent() const {
 }
 
 Common::SeekableReadStream *LibRetroFilesystemNode::createReadStream() {
-	return StdioStream::makeFromPath(getPath(), StdioStream::WriteMode_Read);
+	return LibRetroStream::makeFromPath(getPath(), LibRetroStream::WriteMode_Read);
 }
 
 Common::SeekableWriteStream *LibRetroFilesystemNode::createWriteStream(bool atomic) {
-	return StdioStream::makeFromPath(getPath(), atomic ? StdioStream::WriteMode_WriteAtomic : StdioStream::WriteMode_Write);
+	return LibRetroStream::makeFromPath(getPath(), atomic ? LibRetroStream::WriteMode_WriteAtomic : LibRetroStream::WriteMode_Write);
 }
 
 bool LibRetroFilesystemNode::createDirectory() {
@@ -201,11 +305,13 @@ bool assureDirectoryExists(const Common::String &dir, const char *prefix) {
 		path = dir;
 	}
 
-	path = Common::normalizePath(path, '/');
+	path = normalizeRetroPath(path);
 
 	const Common::String::iterator end = path.end();
-	Common::String::iterator cur = path.begin();
-	if (*cur == '/')
+	// Skip the root: neither "/" nor a frontend VFS location (whose scheme
+	// would be mangled by the loop below) can be created
+	Common::String::iterator cur = path.begin() + rootLength(path);
+	if (cur < end && *cur == '/')
 		++cur;
 
 	do {

@@ -271,6 +271,8 @@ MODULE_PATHS += $(CORE_PATH)
 
 LIBRETRO_OBJS := $(CORE_PATH)/libretro-core.o \
 	$(CORE_PATH)/libretro-fs.o \
+	$(CORE_PATH)/libretro-stream.o \
+	$(CORE_PATH)/libretro-vfs.o \
 	$(CORE_PATH)/libretro-fs-factory.o \
 	$(CORE_PATH)/libretro-os-base.o \
 	$(CORE_PATH)/libretro-os-events.o \

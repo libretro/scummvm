@@ -24,6 +24,8 @@
 
 #include "backends/fs/abstract-fs.h"
 
+#include <file/file_path.h>
+
 #ifdef MACOSX
 #include <sys/types.h>
 #endif
@@ -61,7 +63,7 @@ public:
 	LibRetroFilesystemNode(const Common::String &path);
 
 	virtual bool exists() const {
-		return access(_path.c_str(), F_OK) == 0;
+		return path_is_valid(_path.c_str());
 	}
 	virtual Common::U32String getDisplayName() const {
 		return _displayName;
@@ -96,6 +98,12 @@ private:
 	 * Tests and sets the _isValid and _isDirectory flags, using the stat() function.
 	 */
 	virtual void setFlags();
+
+	/**
+	 * Appends the locations the frontend granted access to (which are not
+	 * reachable from the local file system root) to the given list.
+	 */
+	void addAuthorizedLocations(AbstractFSList &myList) const;
 };
 
 #endif

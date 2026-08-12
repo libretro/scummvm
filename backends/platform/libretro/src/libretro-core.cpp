@@ -55,6 +55,7 @@
 #include "backends/platform/libretro/include/libretro-core-options.h"
 #include "backends/platform/libretro/include/libretro-os.h"
 #include "backends/platform/libretro/include/libretro-mapper.h"
+#include "backends/platform/libretro/include/libretro-vfs.h"
 
 static struct retro_game_info game_buf;
 static struct retro_game_info *game_buf_ptr;
@@ -797,6 +798,8 @@ void retro_set_environment(retro_environment_t cb) {
 	bool tmp = true;
 	bool has_categories;
 	environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &tmp);
+	/* Has to be set up before the file system factory is instantiated */
+	retro_init_vfs(environ_cb);
 	libretro_fill_options_mapper_data(environ_cb);
 	libretro_set_core_options(environ_cb, &has_categories);
 
