@@ -435,7 +435,7 @@ bool LibRetroFilesystemNode::getChildren(AbstractFSList &myList, ListMode mode, 
 	}
 
 	if (hasAuthorizedLocations() && mode != Common::FSNode::kListFilesOnly &&
-			libretroFsSamePath(_path, libretroFsPosixDefaultDir())) {
+			(libretroFsSamePath(_path, libretroFsPosixDefaultDir()) || _path == "/")) {
 		LibRetroFilesystemNode *storageNode = new LibRetroFilesystemNode(getAuthorizedRootPath());
 		storageNode->_displayName = Common::String(kLibRetroSwitchToStorageLabel);
 		myList.push_back(storageNode);
