@@ -48,8 +48,8 @@
 
 static const char *kLibRetroAuthorizedRootPath = "libretro-authorized:///";
 static const char *kLibRetroAuthorizedRootLabel = "Authorized storage";
-static const char *kLibRetroSwitchToLocalLabel = "\x01<Local filesystem>";
-static const char *kLibRetroSwitchToStorageLabel = "\x01<Authorized storage>";
+static const char *kLibRetroSwitchToLocalLabel = "\x01<Switch to local filesystem>";
+static const char *kLibRetroSwitchToStorageLabel = "\x01<Switch to authorized storage>";
 
 struct LibRetroAuthorizedLocation {
 	Common::String path;
