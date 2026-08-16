@@ -40,6 +40,11 @@ enum {
 	kHooksLocationGame,
 };
 
+enum {
+	kBrowserRootLocal = 0,
+	kBrowserRootAuthorized,
+};
+
 LibretroOptionsWidget::LibretroOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain) :
 	OptionsContainerWidget(boss, name, "LibretroOptionsDialog", domain) {
 
@@ -65,6 +70,12 @@ LibretroOptionsWidget::LibretroOptionsWidget(GuiObject *boss, const Common::Stri
 
 	new GUI::StaticTextWidget(widgetsBoss(), "LibretroOptionsDialog.PlaylistStatusText", _("Status: "));
 	_playlistStatus = new GUI::StaticTextWidget(widgetsBoss(), "LibretroOptionsDialog.PlaylistStatus", Common::String("-"));
+
+	new GUI::StaticTextWidget(widgetsBoss(), "LibretroOptionsDialog.BrowserHeader", _("BROWSER"));
+	new GUI::StaticTextWidget(widgetsBoss(), "LibretroOptionsDialog.BrowserRootText", _("Default browser root:"));
+	_browserRoot = new GUI::PopUpWidget(widgetsBoss(), "LibretroOptionsDialog.BrowserRoot");
+	_browserRoot->appendEntry(_("Local filesystem"), kBrowserRootLocal);
+	_browserRoot->appendEntry(_("Authorized storage"), kBrowserRootAuthorized);
 }
 
 LibretroOptionsWidget::~LibretroOptionsWidget() {
@@ -106,6 +117,19 @@ void LibretroOptionsWidget::defineLayout(GUI::ThemeEval &layouts, const Common::
 	.addSpace(layouts.getVar("Globals.Line.Height") * 2)
 	.addWidget("PlaylistStatusText", "", -1, layouts.getVar("Globals.Line.Height"))
 	.addWidget("PlaylistStatus", "", -1, layouts.getVar("Globals.Line.Height"))
+	.closeLayout()
+
+	.closeLayout()
+
+	.addLayout(GUI::ThemeLayout::kLayoutHorizontal)
+	.addPadding(0, 0, 0, 0)
+	.addWidget("BrowserHeader", "", -1, layouts.getVar("Globals.Line.Height"))
+	.closeLayout()
+
+	.addLayout(GUI::ThemeLayout::kLayoutHorizontal)
+	.addPadding(0, 0, 0, 0)
+	.addWidget("BrowserRootText", "OptionsLabel")
+	.addWidget("BrowserRoot", "PopUp")
 	.closeLayout()
 
 	.closeLayout()
@@ -303,6 +327,14 @@ void LibretroOptionsWidget::load() {
 		_hooksLocation->setSelected(kHooksLocationSave);
 
 	_hooksClear->setState(ConfMan.getBool("libretro_hooks_clear", _domain));
+
+#ifdef ANDROID
+	int defBrowserRoot = kBrowserRootAuthorized;
+#else
+	int defBrowserRoot = kBrowserRootLocal;
+#endif
+	int browserRoot = ConfMan.hasKey("libretro_browser_root", _domain) ? ConfMan.getInt("libretro_browser_root", _domain) : defBrowserRoot;
+	_browserRoot->setSelected(browserRoot == kBrowserRootAuthorized ? kBrowserRootAuthorized : kBrowserRootLocal);
 }
 
 bool LibretroOptionsWidget::save() {
@@ -323,6 +355,8 @@ bool LibretroOptionsWidget::save() {
 		ConfMan.setInt("libretro_hooks_location", kHooksLocationSave, _domain);
 
 	ConfMan.setBool("libretro_hooks_clear", _hooksClear->getState(), _domain);
+
+	ConfMan.setInt("libretro_browser_root", _browserRoot->getSelected() == kBrowserRootAuthorized ? kBrowserRootAuthorized : kBrowserRootLocal, _domain);
 
 	/* Always return true to call applyBackendSettings every time settings are applied */
 	return true;

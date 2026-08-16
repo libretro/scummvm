@@ -45,11 +45,10 @@
 #include "common/algorithm.h"
 #include "common/array.h"
 #include "common/stream.h"
+#include "common/config-manager.h"
 
 static const char *kLibRetroAuthorizedRootPath = "libretro-authorized:///";
 static const char *kLibRetroAuthorizedRootLabel = "Authorized storage";
-static const char *kLibRetroSwitchToLocalLabel = "\x01<Switch to local filesystem>";
-static const char *kLibRetroSwitchToStorageLabel = "\x01<Switch to authorized storage>";
 
 struct LibRetroAuthorizedLocation {
 	Common::String path;
@@ -403,20 +402,6 @@ bool LibRetroFilesystemNode::getChildren(AbstractFSList &myList, ListMode mode, 
 		if (mode == Common::FSNode::kListFilesOnly)
 			return true;
 
-		{
-			Common::String posixDir = libretroFsPosixDefaultDir();
-
-			if (!posixDir.empty()) {
-				LibRetroFilesystemNode *localNode = new LibRetroFilesystemNode(posixDir);
-
-				if (localNode->isDirectory()) {
-					localNode->_displayName = Common::String(kLibRetroSwitchToLocalLabel);
-					myList.push_back(localNode);
-				} else {
-					delete localNode;
-				}
-			}
-		}
 		for (uint i = 0; i < s_libretroAuthorizedLocations.size(); ++i) {
 			LibRetroFilesystemNode *node = new LibRetroFilesystemNode(s_libretroAuthorizedLocations[i].path);
 
@@ -432,13 +417,6 @@ bool LibRetroFilesystemNode::getChildren(AbstractFSList &myList, ListMode mode, 
 		}
 
 		return true;
-	}
-
-	if (hasAuthorizedLocations() && mode != Common::FSNode::kListFilesOnly &&
-			(libretroFsSamePath(_path, libretroFsPosixDefaultDir()) || _path == "/")) {
-		LibRetroFilesystemNode *storageNode = new LibRetroFilesystemNode(getAuthorizedRootPath());
-		storageNode->_displayName = Common::String(kLibRetroSwitchToStorageLabel);
-		myList.push_back(storageNode);
 	}
 
 	struct RDIR *dirp = retro_opendir(_path.c_str());
@@ -736,8 +714,23 @@ static Common::String libretroFsPosixDefaultDir() {
 	return Common::String("/");
 }
 
+bool LibRetroFilesystemNode::useAuthorizedRoot(void) {
+	if (!hasAuthorizedLocations())
+		return false;
+
+	if (!ConfMan.hasKey("libretro_browser_root", Common::ConfigManager::kApplicationDomain)) {
+#ifdef ANDROID
+		return true;
+#else
+		return false;
+#endif
+	}
+
+	return ConfMan.getInt("libretro_browser_root", Common::ConfigManager::kApplicationDomain) == 1;
+}
+
 Common::String LibRetroFilesystemNode::getDefaultDir(void) {
-	if (hasAuthorizedLocations())
+	if (useAuthorizedRoot())
 		return getAuthorizedRootPath();
 
 	return libretroFsPosixDefaultDir();
