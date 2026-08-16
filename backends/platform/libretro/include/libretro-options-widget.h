@@ -43,5 +43,4 @@ private:
 	GUI::PopUpWidget *_playlistVersion;
 	GUI::PopUpWidget *_hooksLocation;
 	GUI::CheckboxWidget *_hooksClear;
-	GUI::PopUpWidget *_browserRoot;
 };

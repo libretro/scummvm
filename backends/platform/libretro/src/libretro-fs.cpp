@@ -718,15 +718,7 @@ bool LibRetroFilesystemNode::useAuthorizedRoot(void) {
 	if (!hasAuthorizedLocations())
 		return false;
 
-	if (!ConfMan.hasKey("libretro_browser_root", Common::ConfigManager::kApplicationDomain)) {
-#ifdef ANDROID
-		return true;
-#else
-		return false;
-#endif
-	}
-
-	return ConfMan.getInt("libretro_browser_root", Common::ConfigManager::kApplicationDomain) == 1;
+	return retro_setting_get_browsing_mode_authorized();
 }
 
 Common::String LibRetroFilesystemNode::getDefaultDir(void) {
