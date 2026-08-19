@@ -5,6 +5,12 @@ HAVE_OPENGLES2 := 1
 USE_IMGUI := 0
 USE_LIBRETRO_SAF := 1
 
+# ART validates JNI transition-frame references against the managed stack it
+# recorded for the calling thread. A libco cothread runs on a memalign()'d
+# stack the runtime never saw, so once the core reaches the frontend's SAF
+# path the process aborts.
+USE_LIBCO := 0
+
 # Reset flags not reset to Makefile.common
 DEFINES   :=
 
