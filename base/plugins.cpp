@@ -139,9 +139,7 @@ public:
 		LINK_PLUGIN(FLUIDSYNTH)
 		#endif
 
-		#ifdef EMSCRIPTEN
-		LINK_PLUGIN(WEBMIDI)
-		#endif
+		// WEBMIDI is deliberately not linked here; see backends/module.mk.
 		#ifdef USE_MT32EMU
 		LINK_PLUGIN(MT32)
 		#endif

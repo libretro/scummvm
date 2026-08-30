@@ -103,9 +103,14 @@ MODULE_OBJS += \
 	fs/emscripten/emscripten-fs-factory.o \
 	fs/emscripten/emscripten-posix-fs.o \
 	fs/emscripten/http-fs.o \
-	midi/webmidi.o \
 	mixer/emscriptensdl/emscriptensdl-mixer.o \
 	timer/emscripten/emscripten-timer.o
+# midi/webmidi.o intentionally excluded: its EM_JS glue calls Module.setValue
+# and expects a midiOutputMap global from ScummVM's own standalone-Emscripten
+# shell (dists/emscripten/custom_shell-pre.js), neither of which this
+# RetroArch/EmulatorJS-based libretro-core build provides. Real MIDI hardware
+# output isn't needed here; ScummVM's other built-in music drivers are
+# unaffected.
 ifdef USE_CLOUD
 MODULE_OBJS += \
 	fs/emscripten/cloud-fs.o
