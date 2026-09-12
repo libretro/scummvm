@@ -1162,7 +1162,14 @@ bool retro_load_game(const struct retro_game_info *game) {
 		game_buf.path = game_buf_path;
 		// Retrieve the game path.
 		Common::FSNode detect_target = Common::FSNode(game->path);
+#ifdef EMSCRIPTEN
+		// EmulatorJS extracts the ROM's whole content tree under "/",
+		// so the root is the scan target; game->path is an arbitrary
+		// file within it.
+		Common::FSNode parent_dir = Common::FSNode(Common::Path("/"));
+#else
 		Common::FSNode parent_dir = detect_target.getParent();
+#endif
 		char target_id[400] = {0};
 		char buffer[400] = {0};
 		int test_game_status = TEST_GAME_KO_NOT_FOUND;
