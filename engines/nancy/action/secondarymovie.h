@@ -60,11 +60,25 @@ public:
 		FlagDescription flagDesc;
 	};
 
+	// What makes a next-sequence entry the one picked once the current sequence
+	// finishes. Entries carry a percent weight, unless the chunk tags them with
+	// one of the negative "special flag" values below; a tagged entry is picked
+	// whenever its condition holds, ahead of the weighted roll.
+	enum NextCondition {
+		kNextWeighted		= 0,	// ordinary percent weight
+		kNextEqualChance,			// -1: uniform share among the entries
+		kNextIfHovered,				// -2: the mouse is over the movie
+		kNextIfNotHovered,			// -3: it isn't
+		kNextIfChannel13Playing,	// -4
+		kNextIfChannel12Playing		// -5
+	};
+
 	// Name of the next sequence to chain to once the current one finishes,
-	// plus its selection weight in the weighted random pick.
+	// plus what makes it the one picked.
 	struct NextSequenceRef {
 		Common::Path name;
 		uint16 weight = 0;
+		NextCondition condition = kNextWeighted;
 	};
 
 	// `name` is both the sequence id and the movie filename.
@@ -76,9 +90,11 @@ public:
 		int32 maxPauseMs = 0;
 		// Weight assigned to "stay on this sequence" in the weighted random
 		// pick. A roll inside [0, stayWeight) means "don't transition";
-		// instead pause for [minPauseMs, maxPauseMs] and re-roll.
+		// instead pause for [minPauseMs, maxPauseMs] before moving on.
 		uint16 stayWeight = 0;
 		Common::Array<NextSequenceRef> nextSequences;
+		// Every weighted entry takes an equal share of the pick.
+		bool equalChanceNext = false;
 	};
 
 	// Which of the action record types sharing this class is being played.
@@ -95,6 +111,7 @@ public:
 
 	void init() override;
 	void onPause(bool pause) override;
+	void registerGraphics() override;
 
 	void readData(Common::SeekableReadStream &stream) override;
 	void execute() override;
@@ -140,8 +157,11 @@ public:
 	// frame and tags each one with a set ID. The record itself carries the name
 	// of that file and the table below, which turns a set ID into the event flag
 	// a click sets and the cursor shown while the mouse is over the area.
+	// From Nancy14 the sets are named instead of numbered; setID is then the
+	// index of that name in the .iv file's own set list, resolved at load.
 	struct InteractiveSet {
-		int16 setID = 0;
+		Common::String name;
+		int32 setID = 0;
 		FlagDescription flagDesc;
 		int16 cursorID = -1;
 	};
@@ -173,24 +193,43 @@ public:
 	// character's recognition animation, played while the mouse hovers it.
 	RandomSequence _secondaryMovie;
 
-	// Nancy13 talkable characters: the scene to open when the character is
+	// Nancy14 replaced that slot with a foreground mask: a still image blitted
+	// over the movie, so scenery standing in front of the character (a table,
+	// a counter) covers the lower part of it.
+	class ForegroundMask : public RenderObject {
+	public:
+		ForegroundMask() : RenderObject(9) {}
+		bool isViewportRelative() const override { return true; }
+	};
+
+	Common::Path _maskName;
+	Common::Array<SecondaryVideoDescription> _maskDescs;
+
+	// Talkable characters (Nancy13+): the scene to open when the character is
 	// clicked (its conversation). kNoScene means the character isn't clickable.
 	uint16 _talkSceneID = kNoScene;
-	// Hover cursor for the character (a raw Nancy13 cursor id from the chunk).
-	uint16 _talkCursorType = 0;
+	// Hover cursor for the character (a raw cursor id from the chunk), or -1
+	// when the record doesn't name one.
+	int16 _talkCursorType = -1;
 
 	// Chain state. After a sequence's movie finishes the engine rolls a
 	// weighted pick: "stay" -> enter pause for a random duration and
 	// re-roll; valid next-sequence -> swap to that sequence's movie.
 	enum RandomChainState { kRandomPlaying, kRandomPaused };
+	// What ends the pause: its duration running out, or the mouse entering or
+	// leaving the movie (minPauseMs -2 / -3). A sequence waiting on the mouse
+	// holds its last frame on screen instead of hiding.
+	enum RandomPauseMode { kPauseTimed, kPauseUntilHovered, kPauseUntilNotHovered };
 	int _activeSequenceIndex = -1;
 	RandomChainState _randomChainState = kRandomPlaying;
+	RandomPauseMode _randomPauseMode = kPauseTimed;
 	uint32 _randomPauseEndTime = 0;
 	bool _randomStopRequested = false;
 	bool _randomPaused = false;
 
-	// Talkable-character hover state: whether the mouse is over the character,
-	// and whether the recognition (secondary) movie is currently playing.
+	// Whether the mouse is over the movie (which drives both the hover-based
+	// sequence chain and the click that opens a character's conversation), and
+	// whether the recognition (secondary) movie is currently playing.
 	bool _isHovered = false;
 	bool _playingSecondary = false;
 
@@ -224,7 +263,7 @@ public:
 	// hovering plays the recognition ("turn around") movie.
 	void handleInput(NancyInput &input) override;
 	CursorManager::CursorType getHoverCursor() const override;
-	bool cursorSetFromScript() const override { return isRandom() && _talkSceneID != kNoScene; }
+	bool cursorSetFromScript() const override { return isRandom() && _talkSceneID != kNoScene && _talkCursorType >= 0; }
 
 	Common::String getRecordExtraInfo() const override {
 		return Common::String::format("Scene %d, file %s", _sceneChange.sceneID, _videoName.baseName().c_str());
@@ -260,6 +299,7 @@ protected:
 
 	// AR 47 appends the name of its .iv file and the set table to the movie data.
 	void readInteractiveData(Common::Serializer &ser);
+	void resolveInteractiveSets();
 
 	// The set a hotspot belongs to, or nullptr if the record doesn't describe it.
 	const InteractiveSet *getInteractiveSet(int32 setID) const;
@@ -290,9 +330,18 @@ protected:
 	// or the chosen sequence index otherwise.
 	int rollNextSequence();
 
+	// Pick the sequence to chain to, without rolling for "stay" first: the
+	// special-flag entries take priority over the weighted random pick.
+	// Returns the chosen sequence index, or -1 if nothing was picked.
+	int pickNextSequence();
+
 	// Enter the paused chain state for a random duration in the sequence's
-	// [minPauseMs, maxPauseMs] range. Always returns -1.
+	// [minPauseMs, maxPauseMs] range, or until the mouse enters or leaves the
+	// movie. Always returns -1.
 	int beginRandomPause(const RandomSequence &seq);
+
+	// Whether whatever the current pause is waiting for has happened.
+	bool randomPauseElapsed() const;
 
 	// Find a sequence by name, warning and returning -1 if it isn't present.
 	int lookupSequence(const Common::Path &name) const;
@@ -301,7 +350,13 @@ protected:
 	// against the loaded decoder's frame count. Random sequences only.
 	void resolveSentinelFrames();
 
+	// Show the foreground mask blit belonging to the given background frame,
+	// or hide it when the record doesn't describe one for that frame.
+	void updateMask(int viewportFrame);
+
 	Graphics::ManagedSurface _fullFrame;
+	Graphics::ManagedSurface _maskImage;
+	ForegroundMask _mask;
 	int _curViewportFrame = -1;
 	bool _isFinished = false;
 };

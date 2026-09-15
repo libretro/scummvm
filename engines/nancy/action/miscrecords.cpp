@@ -971,13 +971,11 @@ void ResourceUse::init() {
 	}
 
 	if (haveItem && _drawResourceValue) {
-		// The value is rendered with a '$' prefix and `unknown2` decimal places
-		// (Old Clock tracks cents), using the font selected by `unknown1`.
 		const UIRC::ItemRecord &item = uirc->items[_resourceIndex];
-		const Font *font = g_nancy->_graphics->getFont(item.unknown1);
-		if (font && item.unknown2 > 0) {
-			const int32 value = NancySceneState.getUIResource(_resourceIndex);
-			const Common::String text = Common::String::format("$%d.%02d", value / 100, value % 100);
+		const Font *font = g_nancy->_graphics->getFont(item.fontID);
+		if (font && item.numDecimals >= 0) {
+			const Common::String text =
+				formatUIResourceValue(item, NancySceneState.getUIResource(_resourceIndex));
 			font->drawString(&_drawSurface, text, _valueDest.x, _valueDest.y, screenBounds.width() - _valueDest.x, 0);
 		}
 	}
@@ -1083,6 +1081,44 @@ void ResourceUse::execute() {
 		finishExecution();
 		break;
 	}
+}
+
+void PlayChar::readData(Common::SeekableReadStream &stream) {
+	_characterIndex = stream.readByte();
+	readFilename(stream, _videoFile);
+}
+
+void PlayChar::execute() {
+	const PCUI *pcui = GetEngineData(PCUI);
+	if (!pcui || _characterIndex >= pcui->characters.size()) {
+		warning("PlayChar: no player character %u", _characterIndex);
+		finishExecution();
+		return;
+	}
+
+	// Every character owns an event flag that marks them as the one being
+	// played; conditions elsewhere in the game branch on those
+	for (uint i = 0; i < pcui->characters.size(); ++i) {
+		const uint16 flagLabel = pcui->characters[i].id;
+		if (flagLabel != 0) {
+			NancySceneState.setEventFlag(flagLabel, i == _characterIndex ? g_nancy->_true : g_nancy->_false);
+		}
+	}
+
+	NancySceneState.changePlayerCharacter(_characterIndex);
+
+	auto *playerChar = (PlayerCharacterData *)NancySceneState.getPuzzleData(PlayerCharacterData::getTag());
+	if (playerChar) {
+		playerChar->characterIndex = _characterIndex;
+	}
+
+	// The scene itself doesn't change; only the video showing it does, so that
+	// the location is seen through the incoming character's eyes
+	if (!_videoFile.empty()) {
+		NancySceneState.changeSceneVideo(_videoFile);
+	}
+
+	finishExecution();
 }
 
 } // End of namespace Action

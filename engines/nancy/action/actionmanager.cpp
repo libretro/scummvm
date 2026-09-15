@@ -30,6 +30,8 @@
 #include "engines/nancy/font.h"
 #include "engines/nancy/graphics.h"
 
+#include "engines/nancy/puzzledata.h"
+
 #include "engines/nancy/action/actionmanager.h"
 #include "engines/nancy/action/actionrecord.h"
 
@@ -271,6 +273,63 @@ void ActionManager::processActionRecords() {
 	debugDrawHotspots();
 }
 
+// How a value-table test dependency (see below) compares the value against its
+// threshold. Matches the Nancy14 comparator's condition encoding.
+enum ValueTestComparison {
+	kValueEqual				= 0,
+	kValueGreater			= 1,
+	kValueGreaterOrEqual	= 2,
+	kValueLess				= 3,
+	kValueLessOrEqual		= 4
+};
+
+// Nancy14 repurposed dependency type 13 as a value-table test: the label is a
+// value index, the milliseconds field the threshold, and the condition the
+// comparison (value OP threshold). The rooftop fight's win/lose scene changes use
+// it against the fighters' health. Type 13 was Nancy11's software-timer less-than
+// check; Nancy12 moved the timer checks to types 22-25, freeing it. Type 14 is
+// unused from Nancy12 on (the original aborts on it).
+static bool evaluateValueTestDependency(const DependencyRecord &dep) {
+	TableData *table = (TableData *)NancySceneState.getPuzzleData(TableData::getTag());
+	if (!table) {
+		return false;
+	}
+
+	int32 value = table->getValue(dep.label);
+	if (value == kNoTableValue) {
+		return false;
+	}
+
+	// The threshold is the raw milliseconds field, matching the type-10 resource
+	// test (kElapsedPlayerDay) that shares this layout.
+	int32 threshold = dep.milliseconds;
+	switch (dep.condition) {
+	case kValueEqual:
+		return value == threshold;
+	case kValueGreater:
+		return value > threshold;
+	case kValueGreaterOrEqual:
+		return value >= threshold;
+	case kValueLess:
+		return value < threshold;
+	case kValueLessOrEqual:
+		return value <= threshold;
+	default:
+		return false;
+	}
+}
+
+// Nancy15+ dependencies that act on a player character name them in the
+// otherwise unused hours field, with kPlayerCharacterActive standing for
+// whoever is being played at the time.
+static uint dependencyCharacter(const DependencyRecord &dep) {
+	if (g_nancy->getGameType() >= kGameTypeNancy15 && dep.hours >= 0 && dep.hours != kPlayerCharacterActive) {
+		return dep.hours;
+	}
+
+	return g_nancy->getPlayerCharacter();
+}
+
 void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &record, bool doNotCheckCursor) {
 	if (dep.children.size()) {
 		// Recursively process child dependencies
@@ -324,7 +383,7 @@ void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &recor
 			dep.satisfied = true;
 			break;
 		case DependencyType::kInventory:
-			dep.satisfied = NancySceneState.hasItem(dep.label) == dep.condition;
+			dep.satisfied = NancySceneState.hasCharacterItem(dependencyCharacter(dep), dep.label) == dep.condition;
 
 			break;
 		case DependencyType::kEvent:
@@ -431,7 +490,7 @@ void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &recor
 			if (g_nancy->getGameType() >= kGameTypeNancy12) {
 				// Nancy12 repurposed dependency type 10 as a resource check (e.g. the
 				// car's gas gauge): resource value vs. threshold, by condition modifier.
-				int32 resVal = NancySceneState.getUIResource(dep.label);
+				int32 resVal = NancySceneState.getCharacterUIResource(dependencyCharacter(dep), dep.label);
 				int32 threshold = dep.milliseconds;
 				switch (dep.condition) {
 				case 0:	// equal
@@ -525,7 +584,9 @@ void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &recor
 
 			break;
 		case DependencyType::kTimerLessThanDependencyTime:
-			if (g_nancy->getGameType() >= kGameTypeNancy11) {
+			if (g_nancy->getGameType() >= kGameTypeNancy14) {
+				dep.satisfied = evaluateValueTestDependency(dep);
+			} else if (g_nancy->getGameType() >= kGameTypeNancy11) {
 				// Nancy11+ checks a software-timer slot (label = slot index)
 				dep.satisfied = NancySceneState.isSoftwareTimerActive(dep.label) &&
 					NancySceneState.getSoftwareTimerElapsed(dep.label) <= (uint32)dep.timeData;
@@ -548,6 +609,27 @@ void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &recor
 			dep.satisfied = NancySceneState.isSoftwareTimerActive(dep.label);
 
 			break;
+		case DependencyType::kTimerEqualsDependencyTime:
+		case DependencyType::kTimerBelowDependencyTime:
+		case DependencyType::kTimerAboveDependencyTime: {
+			// A stopped slot leaves the dependency as it was rather than
+			// failing it, so a record armed while the timer ran stays armed
+			if (!NancySceneState.isSoftwareTimerActive(dep.label)) {
+				break;
+			}
+
+			uint32 elapsed = NancySceneState.getSoftwareTimerElapsed(dep.label);
+
+			if (dep.type == DependencyType::kTimerEqualsDependencyTime) {
+				dep.satisfied = elapsed == (uint32)dep.timeData;
+			} else if (dep.type == DependencyType::kTimerBelowDependencyTime) {
+				dep.satisfied = elapsed < (uint32)dep.timeData;
+			} else {
+				dep.satisfied = (uint32)dep.timeData < elapsed;
+			}
+
+			break;
+		}
 		case DependencyType::kDifficultyLevel:
 			if (dep.condition == NancySceneState.getDifficulty()) {
 				dep.satisfied = true;
@@ -596,6 +678,12 @@ void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &recor
 			break;
 		case DependencyType::kDefaultAR:
 			dep.satisfied = !_previousRecordWasExecuted;
+			break;
+		case DependencyType::kPlayerCharacter:
+			// Nancy15+ only: gates a record on who is being played, so the
+			// three protagonists can share a scene and each get their own ARs
+			dep.satisfied = (g_nancy->getPlayerCharacter() == (uint)dep.label) == (dep.condition != 0);
+
 			break;
 		default:
 			warning("Unimplemented Dependency type %i", (int)dep.type);

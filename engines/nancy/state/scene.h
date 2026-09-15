@@ -143,6 +143,13 @@ public:
 
 	void addItemToInventory(int16 id);
 	void removeItemFromInventory(int16 id, bool pickUp = true);
+
+	// Nancy15+ inventory action records and dependencies pick the character to
+	// act on, which needn't be the one being played. Anyone else is served from
+	// their parked inventory instead of the live one.
+	void removeItemFromCharacterInventory(uint characterIndex, int16 id);
+	byte hasCharacterItem(uint characterIndex, int16 id);
+	int32 getCharacterUIResource(uint characterIndex, uint index);
 	int16 getHeldItem() const { return _flags.heldItem; }
 	void setHeldItem(int16 id);
 	void setNoHeldItem();
@@ -200,6 +207,21 @@ public:
 	bool getPlayerScrolling() const;
 
 	void registerGraphics();
+
+	// Nancy15+ AR 134. Hands the game over to another protagonist: swaps in that
+	// character's own copy of the popup UI data and rebuilds every widget built
+	// from it, then swaps the inventories. Returns whether the character
+	// actually changed.
+	bool changePlayerCharacter(uint characterIndex);
+
+	// Nancy15+ Design Select screen. Records the look a character wears; the UI
+	// is rebuilt from it the next time the scene is entered.
+	void setPlayerCharacterDesign(uint characterIndex, const Common::String &designName);
+
+	// Replaces the current scene's background video without leaving the scene.
+	// Nancy15+ uses this to show the same location from the newly selected
+	// player character's point of view.
+	void changeSceneVideo(const Common::Path &videoFile);
 
 	void synchronize(Common::Serializer &serializer);
 
@@ -291,6 +313,22 @@ private:
 
 	// Maps an event flag label to its index in the eventFlags array
 	int16 eventFlagToIndex(int16 label) const;
+
+	// Rebuilds the popup UI from a Nancy15+ player character's own data files,
+	// without touching the inventory. Returns whether the character changed.
+	bool applyPlayerCharacter(uint characterIndex);
+
+	// Nancy15+ per-character inventories and UI resources. The active
+	// character's are the live ones (_flags plus the inventory box order, and
+	// UIResourceData::values); the others are parked in the same puzzle data.
+	void storeCharacterInventory(uint characterIndex);
+	void loadCharacterInventory(uint characterIndex);
+	void storeCharacterResources(uint characterIndex);
+	void loadCharacterResources(uint characterIndex);
+
+	// Seeds a Hardy boy's journal and UI resources from his brother's the first
+	// time he is played.
+	void inheritBrotherProgress(uint characterIndex);
 
 	struct SceneState {
 		SceneSummary summary;

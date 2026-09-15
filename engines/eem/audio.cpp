@@ -27,7 +27,6 @@
 #include "common/debug.h"
 #include "common/endian.h"
 #include "common/events.h"
-#include "common/memstream.h"
 #include "common/substream.h"
 #include "common/system.h"
 #include "common/textconsole.h"
@@ -50,6 +49,7 @@ struct MacSndResource {
 };
 
 const MacSndResource kMacSndResources[] = {
+	{ "JAKE",     8001 }, { "JEN",      8002 },
 	{ "B-0003SL", 7022 }, { "B-0004SL", 7023 }, { "B-0006SL", 7021 },
 	{ "DING",     7000 }, { "F-0013SL", 8018 }, { "F-0016SL", 8017 },
 	{ "F-0061SL", 8015 }, { "F-0067SL", 8016 }, { "F-0140SL", 8020 },
@@ -64,6 +64,7 @@ const MacSndResource kMacSndResources[] = {
 	{ "M-0107SL", 7011 }, { "M-0113SL", 7013 }, { "M-0115SL", 7014 },
 	{ "M-0163SL", 7024 }, { "NEWSCAN",  7003 }, { "NEWSSHRT", 7007 },
 	{ "PHONESL",  7012 }, { "SQUAK2SL", 7019 }, { "THUNDER",  7025 },
+	{ "PHONE1",   1399 },
 };
 
 Common::String macSndNameFromPath(const Common::Path &path) {
@@ -86,93 +87,6 @@ uint16 macSndResourceIdForPath(const Common::Path &path) {
 			return kMacSndResources[i].id;
 	}
 	return 0;
-}
-
-Audio::SeekableAudioStream *makeMacCsndStream(Common::SeekableReadStream *stream,
-											  DisposeAfterUse::Flag disposeAfterUse) {
-	if (!stream)
-		return nullptr;
-
-	if (stream->size() < 4) {
-		if (disposeAfterUse == DisposeAfterUse::YES)
-			delete stream;
-		warning("makeMacCsndStream: resource too short");
-		return nullptr;
-	}
-
-	const uint32 decodedSize = stream->readUint32BE();
-	const uint32 packedSize = (uint32)(stream->size() - stream->pos());
-	Common::Array<byte> packed;
-	packed.resize(packedSize);
-	if (stream->read(packed.data(), packedSize) != packedSize) {
-		if (disposeAfterUse == DisposeAfterUse::YES)
-			delete stream;
-		warning("makeMacCsndStream: short packed read (%u bytes)", packedSize);
-		return nullptr;
-	}
-	if (disposeAfterUse == DisposeAfterUse::YES)
-		delete stream;
-
-	byte *decoded = (byte *)malloc(decodedSize);
-	if (!decoded) {
-		warning("makeMacCsndStream: oom (%u bytes)", decodedSize);
-		return nullptr;
-	}
-
-	uint32 src = 0;
-	uint32 dst = 0;
-	bool ok = true;
-	while (ok && dst < decodedSize && src < packedSize) {
-		byte flags = packed[src++];
-		for (uint bit = 0; bit < 8 && dst < decodedSize; bit++, flags >>= 1) {
-			if (flags & 1) {
-				if (src >= packedSize) {
-					ok = false;
-					break;
-				}
-				decoded[dst++] = packed[src++];
-			} else {
-				if (src + 1 >= packedSize) {
-					ok = false;
-					break;
-				}
-				const uint16 token = ((uint16)packed[src] << 8) | packed[src + 1];
-				src += 2;
-				int32 copyPos = (int32)dst + (int32)(token & 0x0fff) - 0x1000;
-				uint count = ((token >> 12) & 0x0f) + 3;
-				while (count-- && dst < decodedSize) {
-					if (copyPos < 0 || (uint32)copyPos >= dst) {
-						ok = false;
-						break;
-					}
-					decoded[dst++] = decoded[copyPos++];
-				}
-			}
-		}
-	}
-
-	if (!ok || dst != decodedSize) {
-		warning("makeMacCsndStream: decoded %u of %u bytes", dst, decodedSize);
-		free(decoded);
-		return nullptr;
-	}
-
-	if (decodedSize != 0) {
-		byte acc = decoded[0];
-		for (uint32 i = 1; i < decodedSize; i++) {
-			acc = (byte)(acc + decoded[i]);
-			decoded[i] = acc;
-		}
-	}
-
-	Common::MemoryReadStream *sndStream =
-		new Common::MemoryReadStream(decoded, decodedSize,
-									 DisposeAfterUse::YES);
-	Audio::SeekableAudioStream *audioStream =
-		Audio::makeMacSndStream(sndStream, DisposeAfterUse::YES);
-	if (!audioStream)
-		delete sndStream;
-	return audioStream;
 }
 
 AudioPlayer::~AudioPlayer() {
@@ -313,8 +227,10 @@ void AudioPlayer::cleanMysterySounds() {
 
 bool AudioPlayer::initMacMysterySounds(uint mysteryNum) {
 	const uint16 firstResourceId = 1001;
-	const Common::Path candidates[2] = {
+	const Common::Path candidates[] = {
+		Common::Path(Common::String::format("M%u.DBD", mysteryNum)),
 		Common::Path(Common::String::format("M%02u.DBD", mysteryNum)),
+		Common::Path(Common::String::format("M%u.CPD", mysteryNum)),
 		Common::Path(Common::String::format("M%02u.CPD", mysteryNum))
 	};
 
@@ -347,6 +263,12 @@ void AudioPlayer::playMacSnd(uint16 resourceId, Audio::SoundHandle &handle,
 	Common::SeekableReadStream *stream =
 		openMacResource(Common::Path("EEM Sound&Music"),
 						MKTAG('s', 'n', 'd', ' '), resourceId);
+	if (!stream)
+		stream = openMacResource(Common::Path("Eagle Eye Mysteries CD"),
+								 MKTAG('s', 'n', 'd', ' '), resourceId);
+	if (!stream && _vm->isLondon())
+		stream = openMacResource(Common::Path("EEM London CD"),
+			MKTAG('s', 'n', 'd', ' '), resourceId);
 	if (!stream) {
 		warning("AudioPlayer: Mac snd resource %u missing", resourceId);
 		return;
@@ -546,14 +468,23 @@ bool AudioPlayer::playMacMysterySound(uint num) {
 
 	stopSpool();
 
-	Audio::SeekableAudioStream *audioStream = compressed
-		? makeMacCsndStream(stream, DisposeAfterUse::YES)
-		: Audio::makeMacSndStream(stream, DisposeAfterUse::YES);
+	if (compressed) {
+		Common::SeekableReadStream *decoded = decompressMacSound(*stream);
+		delete stream;
+		stream = decoded;
+	}
+
+	Audio::SeekableAudioStream *audioStream = stream
+		? Audio::makeMacSndStream(stream, DisposeAfterUse::YES) : nullptr;
 	if (!audioStream) {
-		if (!compressed)
-			delete stream;
+		delete stream;
 		warning("AudioPlayer: Mac mystery sound resource %u is not playable",
 				resourceId);
+		return false;
+	}
+	// Some unused speech resources contain only a two-sample placeholder.
+	if (audioStream->getLength().msecs() == 0) {
+		delete audioStream;
 		return false;
 	}
 

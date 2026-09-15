@@ -172,10 +172,31 @@ void ConversationSound::readTerseData(Common::SeekableReadStream &stream) {
 	}
 }
 
+// Conversation captions live in the CONVO text chunk, but Nancy14 keeps a few of
+// them in AUTOTEXT instead. A key that CONVO does have, but maps to no text, is a
+// deliberately silent line, so only fall back when the key is missing altogether.
+static Common::String resolveConversationText(const Common::String &key) {
+	return resolveSubtitleText(key, resolveSubtitleText(key), "CONVO");
+}
+
 void ConversationSound::readDataNancy13(Common::SeekableReadStream &stream) {
 	readFilename(stream, _sound.name);
 	_sound.channelID = 12;	// hardcoded, as in the terse variants
 	_sound.numLoops = 1;
+
+	// A sound name of "CONCAT" (Nancy14+) means the line is split across several
+	// sound files, which follow after their count. The original allows 5 at most.
+	if (_sound.name.equalsIgnoreCase("CONCAT")) {
+		const uint16 numSounds = stream.readUint16LE();
+		_concatSounds.resize(numSounds);
+		for (uint i = 0; i < numSounds; ++i) {
+			readFilename(stream, _concatSounds[i]);
+		}
+
+		if (numSounds) {
+			_sound.name = _concatSounds[0];
+		}
+	}
 
 	readCelDataNancy13(stream);
 
@@ -186,10 +207,16 @@ void ConversationSound::readDataNancy13(Common::SeekableReadStream &stream) {
 	_sceneChange.frameID = stream.readUint16LE();
 	_sceneChange.continueSceneSound = kContinueSceneSound;
 
-	// Caption and response texts are external, keyed by sound name in CONVO.
-	const CVTX *convo = (const CVTX *)g_nancy->getEngineData("CONVO");
-	assert(convo);
-	_text = convo->texts.getValOrDefault(_sound.name, "");
+	// Caption and response texts are external, keyed by sound name.
+	// Each part of a concatenated line has its own caption; they make up one
+	// exchange, so they are shown together.
+	if (_concatSounds.empty()) {
+		_text = resolveConversationText(_sound.name);
+	} else {
+		for (uint i = 0; i < _concatSounds.size(); ++i) {
+			_text += resolveConversationText(_concatSounds[i]);
+		}
+	}
 
 	uint16 numResponses = stream.readUint16LE();
 	_responses.resize(numResponses);
@@ -199,7 +226,7 @@ void ConversationSound::readDataNancy13(Common::SeekableReadStream &stream) {
 		response.sceneChange.sceneID = stream.readUint16LE();
 		response.sceneChange.continueSceneSound = kContinueSceneSound;
 		response.conditionFlags.read(stream);
-		response.text = convo->texts.getValOrDefault(response.soundName, "");
+		response.text = resolveConversationText(response.soundName);
 	}
 
 	uint16 numFlagsStructs = stream.readUint16LE();
@@ -269,6 +296,12 @@ void ConversationSound::execute() {
 	switch (_state) {
 	case kBegin: {
 		init();
+
+		_curConcatSound = 0;
+		if (!_concatSounds.empty()) {
+			_sound.name = _concatSounds[0];
+		}
+
 		g_nancy->_sound->loadSound(_sound);
 
 		if (!ConfMan.getBool("speech_mute") && ConfMan.getBool("character_speech")) {
@@ -393,6 +426,21 @@ void ConversationSound::execute() {
 		}
 
 		if (!g_nancy->_sound->isSoundPlaying(_sound) && (_isSkipped || isVideoDonePlaying())) {
+			// The parts of a concatenated line play back to back, so start the
+			// next one instead of ending the line. Skipping cuts the whole line,
+			// not just the part that happens to be playing.
+			if (!_isSkipped && _curConcatSound + 1 < _concatSounds.size()) {
+				++_curConcatSound;
+				_sound.name = _concatSounds[_curConcatSound];
+				g_nancy->_sound->loadSound(_sound);
+
+				if (!ConfMan.getBool("speech_mute") && ConfMan.getBool("character_speech")) {
+					g_nancy->_sound->playSound(_sound);
+				}
+
+				break;
+			}
+
 			g_nancy->_sound->stopSound(_sound);
 
 			bool hasResponses = false;

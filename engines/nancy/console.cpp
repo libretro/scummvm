@@ -565,7 +565,15 @@ void NancyConsole::recursePrintDependencies(const Action::DependencyRecord &reco
 				dep.label == 0 ? "kPlayerDay" : dep.label == 1 ? "kPLayerNight" : "kPLayerDuskDawn");
 			break;
 		case DependencyType::kTimerLessThanDependencyTime:
-			debugPrintf("kTimerLessThanDependencyTime");
+			if (g_nancy->getGameType() >= kGameTypeNancy14) {
+				// Repurposed as a value-table test in Nancy14
+				static const char *const comparisons[] = { "==", ">", ">=", "<", "<=" };
+				debugPrintf("kValueTest, value %u %s %i", dep.label,
+					dep.condition < ARRAYSIZE(comparisons) ? comparisons[dep.condition] : "?",
+					dep.milliseconds);
+			} else {
+				debugPrintf("kTimerLessThanDependencyTime");
+			}
 			break;
 		case DependencyType::kTimerGreaterThanDependencyTime:
 			debugPrintf("kTimerGreaterThanDependencyTime");
@@ -928,22 +936,22 @@ bool NancyConsole::Cmd_getInventory(int argc, const char **argv) {
 			debugPrintf("\nItem %u, %s, %s, %s",
 				i,
 				inventoryData->itemDescriptions[i].name.c_str(),
-				keep == 0 ? "UseThenLose" : keep == 1 ? "KeepAlways" : "ReturnToInventory",
+				keep == 0 ? "UseThenLose" : keep == 1 ? "KeepAlways" : keep == 2 ? "ReturnToInventory" : "NewSceneView",
 				NancySceneState.hasItem(i) == g_nancy->_true ? "true" : "false");
 		}
 	} else {
 		for (int i = 1; i < argc; ++i) {
-			byte keep = inventoryData->itemDescriptions[i].keepItem;
 			int flagID = atoi(argv[i]);
 			if (flagID < 0 || flagID >= (int)numItems) {
 				debugPrintf("\nInvalid flag %s", argv[i]);
 				continue;
 			}
+			byte keep = inventoryData->itemDescriptions[flagID].keepItem;
 			debugPrintf("\nItem %u, %s, %s, %s",
 				flagID,
 				inventoryData->itemDescriptions[flagID].name.c_str(),
-				keep == 0 ? "UseThenLose" : keep == 1 ? "KeepAlways" : "ReturnToInventory",
-				NancySceneState.hasItem(i) == g_nancy->_true ? "true" : "false");
+				keep == 0 ? "UseThenLose" : keep == 1 ? "KeepAlways" : keep == 2 ? "ReturnToInventory" : "NewSceneView",
+				NancySceneState.hasItem(flagID) == g_nancy->_true ? "true" : "false");
 
 		}
 	}

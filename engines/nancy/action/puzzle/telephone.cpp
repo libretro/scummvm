@@ -128,6 +128,11 @@ void Telephone::readData(Common::SeekableReadStream &stream) {
 	stream.skip(1);
 	readRect(stream, _exitHotspot);
 
+	if (_phoneType == kTelephone && g_nancy->getGameType() >= kGameTypeNancy14) {
+		_numberLength = stream.readUint16LE();
+		_longDistanceNumberLength = stream.readUint16LE();
+	}
+
 	uint numCalls = stream.readUint16LE();
 
 	_calls.resize(numCalls);
@@ -193,12 +198,22 @@ void Telephone::execute() {
 				// Pressed a new button, check all numbers for match
 				// We do this before going to the ringing state to support nancy4's voice mail system,
 				// where call numbers can be 1 digit long
+				// Phones without automatic dialing leave it to the dial button to decide when
+				// to place a call, so the whole number gets matched, with digits that were
+				// never entered counting as zeroes
+				bool matchWholeNumber = !_dialAutomatically;
+				uint numberLength = (_calledNumber.size() && _calledNumber[0] == 1) ? _longDistanceNumberLength : _numberLength;
+				bool isNumberComplete = matchWholeNumber || _calledNumber.size() >= numberLength;
+
 				for (uint i = 0; i < _calls.size(); ++i) {
 					auto &call = _calls[i];
 					bool invalid = false;
+					uint numDigits = matchWholeNumber ? call.phoneNumber.size() : _calledNumber.size();
 
-					for (uint j = 0; j < _calledNumber.size(); ++j) {
-						if (_calledNumber[j] != call.phoneNumber[j]) {
+					for (uint j = 0; j < numDigits; ++j) {
+						byte dialedDigit = j < _calledNumber.size() ? _calledNumber[j] : 0;
+
+						if (dialedDigit != call.phoneNumber[j]) {
 							// Invalid number, move onto next
 							invalid = true;
 							break;
@@ -206,13 +221,8 @@ void Telephone::execute() {
 					}
 
 					// We do not want to check for a terminator if the dialed number is of
-					// appropriate size (7 digits, or 11 when the number starts with '1')
-					bool checkNextDigit = true;
-					if (_calledNumber.size() >= 11 || (_calledNumber.size() >= 7 && (_calledNumber[0] != 1))) {
-						checkNextDigit = false;
-					}
-
-					if (!invalid && checkNextDigit) {
+					// appropriate size
+					if (!invalid && !isNumberComplete) {
 						// Check if the next digit in the phone number is '10' (star). Presumably, that will never
 						// be contained in a valid phone number
 						if (_calls[i].phoneNumber[_calledNumber.size()] != 10) {
@@ -230,7 +240,7 @@ void Telephone::execute() {
 
 				if (_selected == -1) {
 					// Did not find a suitable match, check if the dialed number is above allowed size
-					if (_calledNumber.size() >= 11 || (_calledNumber.size() >= 7 && (_calledNumber[0] != 1))) {
+					if (isNumberComplete) {
 						shouldRing = true;
 					}
 				} else {
@@ -411,6 +421,11 @@ void Telephone::handleInput(NancyInput &input) {
 			continue;
 		}
 
+		// So are the directory buttons when there is only a single entry to show
+		if ((i == _upDirButtonID || i == _downDirButtonID) && _calls.size() == 1) {
+			continue;
+		}
+
 		if (NancySceneState.getViewport().convertViewportToScreen(_destRects[i]).contains(input.mousePos)) {
 			g_nancy->_cursor->setCursorType(CursorManager::kHotspot);
 			buttonNr = i;
@@ -418,16 +433,21 @@ void Telephone::handleInput(NancyInput &input) {
 		}
 	}
 
-	if (_callState != kWaiting && _callState != kRinging) {
-		return;
-	}
-
+	// The exit hotspot stays active for as long as the record is running, even
+	// while ringing, talking, or playing the bad number message. Only the
+	// buttons are limited to the states where the phone accepts input.
 	if (NancySceneState.getViewport().convertViewportToScreen(_exitHotspot).contains(input.mousePos)) {
 		g_nancy->_cursor->setCursorType(g_nancy->_cursor->_puzzleExitCursor);
 
 		if (input.input & NancyInput::kLeftMouseButtonUp) {
-			g_nancy->_sound->loadSound(_hangUpSound);
-			g_nancy->_sound->playSound(_hangUpSound);
+			if (_phoneType == kTelephone) {
+				g_nancy->_sound->loadSound(_hangUpSound);
+				g_nancy->_sound->playSound(_hangUpSound);
+			} else {
+				// The new phone hangs up without a sound, and without waiting for
+				// whatever is currently playing to finish
+				_state = kActionTrigger;
+			}
 
 			_callState = kHangUp;
 		}

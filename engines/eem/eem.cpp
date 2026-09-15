@@ -30,16 +30,19 @@
 #include "common/path.h"
 #include "common/system.h"
 #include "common/textconsole.h"
+#include "common/macresman.h"
 
 #include "engines/util.h"
 
 #include "graphics/cursorman.h"
 #include "graphics/maccursor.h"
+#include "graphics/macgui/macwindowmanager.h"
 #include "graphics/paletteman.h"
 
 #include "video/flic_decoder.h"
 
 #include "eem/audio.h"
+#include "eem/console.h"
 #include "eem/detection.h"
 #include "eem/eem.h"
 #include "eem/installer.h"
@@ -223,15 +226,22 @@ void setInteractiveCursorPalette(const Picture &cursor, byte transparent) {
 	CursorMan.replaceCursorPalette(palette, 0, 256);
 }
 
-bool installMacLondonCursor(uint16 resourceId) {
-	static const char *const kAppForks[] = {
+bool installMacCursor(uint16 resourceId, bool london) {
+	static const char *const kMacCDAppForks[] = {
+		"Eagle Eye Mysteries CD",
+		"rsrc/Eagle Eye Mysteries CD",
+		nullptr
+	};
+	static const char *const kLondonAppForks[] = {
 		"EEM London CD",
-		"rsrc/EEM London CD"
+		"rsrc/EEM London CD",
+		nullptr
 	};
 
-	for (uint i = 0; i < ARRAYSIZE(kAppForks); i++) {
+	const char *const *appForks = london ? kLondonAppForks : kMacCDAppForks;
+	for (uint i = 0; appForks[i]; i++) {
 		Common::ScopedPtr<Common::SeekableReadStream> crsrStream(
-			openMacResource(Common::Path(kAppForks[i]),
+			openMacResource(Common::Path(appForks[i]),
 							MKTAG('c', 'r', 's', 'r'), resourceId));
 		if (crsrStream) {
 			Graphics::MacCursor macCursor;
@@ -247,12 +257,26 @@ bool installMacLondonCursor(uint16 resourceId) {
 }
 
 void installMouseCursor(DBDArchive &pics, bool interactive, bool mac,
-						bool london) {
-	if (mac && london) {
-		// EEM2 (London) Mac keeps pointers as 'crsr' colour cursors in the
-		// application resource fork; the DOS cursor PIC ids are mostly 1x1
-		// stubs or unrelated full-screen pictures in this release.
-		if (installMacLondonCursor(kLondonMacCursorCrsrs[0]))
+						bool london, bool macCD) {
+	if (mac && !london && !macCD) {
+		// Mac floppy CODE 2:484c selects QuickDraw's standard arrow.
+		const byte *data, *palette, *mask;
+		int width, height, hotspotX, hotspotY, transparent;
+		if (Graphics::MacWindowManager::getBuiltInCursorData(Graphics::kMacCursorArrow,
+				data, palette, mask, width, height, hotspotX, hotspotY, transparent)) {
+			CursorMan.replaceCursor(data, width, height, hotspotX, hotspotY,
+				transparent, nullptr, mask);
+			byte colors[6];
+			memcpy(colors, palette, sizeof(colors));
+			if (interactive)
+				colors[0] = 0xff;
+			CursorMan.replaceCursorPalette(colors, 0, 2);
+			return;
+		}
+	}
+	if (mac && (london || macCD)) {
+		// Mac CD CODE 2:3aea selects the same native arrow as Mac London.
+		if (installMacCursor(kLondonMacCursorCrsrs[0], london))
 			return;
 	}
 
@@ -294,12 +318,14 @@ EEMEngine::EEMEngine(OSystem *syst, const ADGameDescription *gameDesc)
 		Common::String(gameDesc->extra).contains("Floppy"))
 		_variant = kVariantFloppy;
 	if (gameDesc && gameDesc->platform == Common::kPlatformMacintosh)
-		_variant = kVariantMac;
+		_variant = gameDesc->extra && Common::String(gameDesc->extra).contains("CD")
+			? kVariantMacCD : kVariantMacFloppy;
 	if (gameDesc && gameDesc->gameId &&
 		Common::String(gameDesc->gameId) == "eem2")
 		_variant = kVariantLondonCD;
-	setLondonAnimScripts(isLondon());
+	setAnimScripts(isLondon(), isMacTalkie());
 	_language = gameDesc ? gameDesc->language : Common::EN_ANY;
+	setDebugger(new Debugger(this));
 }
 
 EEMEngine::~EEMEngine() {
@@ -431,26 +457,26 @@ Common::FSNode findChildDirectoryIgnoreCase(const Common::FSNode &dir,
 	return Common::FSNode();
 }
 
-void addMacLondonDirectoryIfPresent(const Common::FSNode &dir,
-									const char *archiveName,
-									int depth = 1) {
+void addMacDirectoryIfPresent(const Common::FSNode &dir,
+							 const char *archiveName, int depth = 1) {
 	if (dir.exists() && dir.isDirectory() &&
 		!SearchMan.hasArchive(archiveName))
 		SearchMan.addDirectory(archiveName, dir, 0, depth);
 }
 
-void addMacLondonSearchPathsFrom(const Common::FSNode &base,
-								 const char *archivePrefix) {
+void addMacCDSearchPathsFrom(const Common::FSNode &base,
+							 const char *archivePrefix, bool london) {
 	if (!base.exists() || !base.isDirectory())
 		return;
 
-	Common::FSNode cd = findChildDirectoryIgnoreCase(base, "EEM2 CD");
-	if (!cd.exists()) {
+	const char *cdName = london ? "EEM2 CD" : "EEM CD";
+	Common::FSNode cd = findChildDirectoryIgnoreCase(base, cdName);
+	if (!cd.exists() && london) {
 		Common::FSNode wrapper = findChildDirectoryIgnoreCase(base, "EEM_London");
 		if (wrapper.exists())
 			cd = findChildDirectoryIgnoreCase(wrapper, "EEM2 CD");
 	}
-	if (!cd.exists() && base.getName().equalsIgnoreCase("EEM2 CD"))
+	if (!cd.exists() && base.getName().equalsIgnoreCase(cdName))
 		cd = base;
 	if (!cd.exists()) {
 		const Common::String baseName = base.getName();
@@ -475,32 +501,33 @@ void addMacLondonSearchPathsFrom(const Common::FSNode &base,
 	const Common::FSNode scriptsDir = findChildDirectoryIgnoreCase(cd, "Mac Scripts");
 	const Common::FSNode animDir = findChildDirectoryIgnoreCase(cd, "Anim Files");
 
-	addMacLondonDirectoryIfPresent(dataDir, dataArchive.c_str(), 2);
-	addMacLondonDirectoryIfPresent(scriptsDir, scriptsArchive.c_str(), 3);
-	addMacLondonDirectoryIfPresent(animDir, animArchive.c_str(), 2);
+	addMacDirectoryIfPresent(dataDir, dataArchive.c_str(), 2);
+	addMacDirectoryIfPresent(scriptsDir, scriptsArchive.c_str(), 3);
+	addMacDirectoryIfPresent(animDir, animArchive.c_str(), 2);
 
 	if (scriptsDir.exists()) {
 		Common::String approachesArchive = Common::String::format(
 			"%s-approaches", archivePrefix);
-		addMacLondonDirectoryIfPresent(
+		addMacDirectoryIfPresent(
 			findChildDirectoryIgnoreCase(scriptsDir, "Approaches"),
 			approachesArchive.c_str());
 	}
 
 	const Common::FSNode app =
-		findChildDirectoryIgnoreCase(cd.getParent(), "EEM London CD");
-	addMacLondonDirectoryIfPresent(app, appArchive.c_str(), 2);
+		findChildDirectoryIgnoreCase(cd.getParent(),
+			london ? "EEM London CD" : "Eagle Eye Mysteries CD");
+	addMacDirectoryIfPresent(app, appArchive.c_str(), 2);
 }
 
 static bool loadMacFontResource(EEMFont &font, uint16 resourceId, int size) {
 	addMacResourceSearchPaths();
 
-	// The Eagle Eye fonts live in the game application's resource fork. EEM1 Mac
-	// ships it as "Eagle Eye Mysteries"; EEM2 (London) Mac ships it as
-	// "EEM London CD" but reuses the same FONT resource ids (3214/3209).
+	// The Mac applications share FONT resource IDs 3214/3209.
 	static const char *const kAppForks[] = {
 		"Eagle Eye Mysteries",
 		"rsrc/Eagle Eye Mysteries",
+		"Eagle Eye Mysteries CD",
+		"rsrc/Eagle Eye Mysteries CD",
 		"EEM London CD",
 	};
 	for (uint i = 0; i < ARRAYSIZE(kAppForks); i++) {
@@ -551,21 +578,23 @@ Common::Error EEMEngine::run() {
 			warning("Mac FONT resource failed to load; text will not render");
 		if (!loadMacDialogFont(_dialogFont))
 			warning("Mac dialog FONT resource failed to load");
+		if (isMacTalkie() && !loadMacFontResource(_newspaperFont, kMacSmallFontResource, 9))
+			warning("Mac newspaper FONT resource failed to load");
 	} else if (!_font.load(Common::Path("FONT.FNT"))) {
 		warning("FONT.FNT failed to load; text will not render");
 	}
 
-	// _InitMIDI @ 20a2:013a. The demo ships no music. The Mac release stores
-	// SMF MIDI resources in EEM Sound&Music instead of loose DOS XMIDI files.
+	// _InitMIDI @ 20a2:013a. The demo ships no music. Mac releases use
+	// Halestorm song and instrument resources instead of loose DOS XMIDI files.
 	if (!isDemo())
-		_music = new MusicPlayer(isFloppy(), isMacintosh());
+		_music = new MusicPlayer(isFloppy(), isMacintosh(), isLondon(), isMacCD());
 
 	// _InitDrivers @ 1ff1:0368 (SBDIG.ADV / PASDIG.ADV).
 	_audio = new AudioPlayer(this);
 	_audio->setVoiceEnabled(_voiceOn);
 	syncSoundSettings();
 
-	installMouseCursor(_picsArchive, false, isMacintosh(), isLondon());
+	installMouseCursor(_picsArchive, false, isMacintosh(), isLondon(), isMacCD());
 	CursorMan.showMouse(false);
 
 	// _AllBlack @ 172b:0d4b.
@@ -867,7 +896,13 @@ void EEMEngine::setInteractiveMouseCursor(bool active) {
 		return;
 
 	_interactiveMouseCursor = active;
-	installMouseCursor(_picsArchive, active, isMacintosh(), isLondon());
+	if (isMacCD()) {
+		// Native arrow 132 uses white (0) and black (1); only recolour its fill.
+		const byte palette[] = { 0xff, 0xff, 0xff, (byte)(active ? 0xff : 0), 0, 0 };
+		CursorMan.replaceCursorPalette(palette, 0, 2);
+		return;
+	}
+	installMouseCursor(_picsArchive, active, isMacintosh(), isLondon(), isMacCD());
 	// The red-outline highlight replaced any London cursor shape; force the
 	// next setSiteHotspotCursorId to reinstall.
 	_siteCursorId = -1;
@@ -894,7 +929,7 @@ void EEMEngine::setSiteHotspotCursorId(int cursorId) {
 		uint16 resourceId = kLondonMacCursorCrsrs[cursorId];
 		if (cursorId == 4 || cursorId == 5)
 			resourceId = (_partner == kPartnerJenny) ? 139 : 138;
-		if (!installMacLondonCursor(resourceId)) {
+		if (!installMacCursor(resourceId, true)) {
 			warning("EEM2 Mac: cursor %d ('crsr' %u) missing",
 					cursorId, resourceId);
 			return;
@@ -927,40 +962,22 @@ void EEMEngine::setSiteHotspotCursorId(int cursorId) {
 bool EEMEngine::openArchives() {
 	const bool mac = isMacintosh();
 
-	// EEM2 (London) Mac is played straight from the CD, whose data lives in
-	// subfolders ("Data Files", "Mac Scripts") with the Mac app in "EEM London
-	// CD". Register them so the bare-name opens below -- and the later script,
-	// mystery and palette loaders -- resolve whether the user points ScummVM at
-	// the disc root or at the "EEM2 CD" folder.
-	if (mac && isLondon()) {
+	// Accept either the disc root or its data folder.
+	if (mac) {
 		const Common::FSNode gameDir(ConfMan.getPath("path"));
-		addMacLondonSearchPathsFrom(gameDir, "eem-london-game");
-		addMacLondonSearchPathsFrom(gameDir.getParent(), "eem-london-parent");
-		// Disc-root layout (recommended -- this also reaches the "EEM London
-		// CD" app that holds the Mac fonts/sound). The "/"-separated names
-		// descend two levels (see Common::addSubDirectoryMatching).
-		SearchMan.addSubDirectoryMatching(gameDir, "EEM2 CD/Data Files", 0, 2);
-		SearchMan.addSubDirectoryMatching(gameDir, "EEM2 CD/Mac Scripts", 0, 3);
-		SearchMan.addSubDirectoryMatching(gameDir, "EEM2 CD/Anim Files", 0, 2);
-		SearchMan.addSubDirectoryMatching(gameDir, "EEM London CD", 0, 2);
-		// ...or the user pointed ScummVM straight at the "EEM2 CD" folder.
-		SearchMan.addSubDirectoryMatching(gameDir, "Data Files", 0, 2);
-		SearchMan.addSubDirectoryMatching(gameDir, "Mac Scripts", 0, 3);
-		SearchMan.addSubDirectoryMatching(gameDir, "Anim Files", 0, 2);
+		addMacCDSearchPathsFrom(gameDir, "eem-mac-game", isLondon());
+		addMacCDSearchPathsFrom(gameDir.getParent(), "eem-mac-parent", isLondon());
 	}
 
-	// The EEM1 Mac release can be played straight from its floppy installer.
-	// When those files are present, mount a virtual archive that decompresses
-	// the game data (PICS.DBD, MysteryData, fonts, ...) on demand, so the opens
-	// below and the Mac resource-fork lookups resolve transparently. (EEM2 Mac
-	// ships loose on the CD and has no such installer.)
+	// EEM1 installers provide the application resources, and floppy game data.
 	if (mac && !isLondon() && !SearchMan.hasArchive("eem-installer")) {
 		const Common::FSNode gameDir(ConfMan.getPath("path"));
-		if (Common::Archive *installer = createInstallerArchive(gameDir)) {
+		Common::Archive *installer = createInstallerArchive(gameDir);
+		if (!installer)
+			installer = createInstallerArchive(gameDir.getParent());
+		if (installer) {
 			SearchMan.add("eem-installer", installer);
 			debugC(1, kDebugGeneral, "Mounted Eagle Eye Mysteries Mac installer archive");
-		} else {
-			warning("EEMTEST: createInstallerArchive returned null");
 		}
 	}
 
@@ -985,7 +1002,7 @@ bool EEMEngine::loadSitePalettes() {
 	Common::File f;
 	// EEM2 DOS uses "SITEPALS." (8.3); EEM1 and both Mac releases use "SITEPALS".
 	const char *palFile = (isLondon() && !isMacintosh()) ? "SITEPALS." : "SITEPALS";
-	if (!f.open(Common::Path(palFile))) {
+	if (!openDataFile(f, Common::Path(palFile))) {
 		warning("%s missing", palFile);
 		return false;
 	}
@@ -1066,7 +1083,9 @@ void EEMEngine::interruptAudio(bool stopMusicToo) {
 void EEMEngine::playFlc(const Common::Path &path, bool fadeIn,
 						bool holdLastFrame) {
 	Video::FlicDecoder flic;
-	if (!flic.loadFile(path)) {
+	Common::ScopedPtr<Common::SeekableReadStream> stream(
+		Common::MacResManager::openFileOrDataFork(path));
+	if (!stream || !flic.loadStream(stream.release())) {
 		warning("playFlc: %s missing", path.toString().c_str());
 		return;
 	}
@@ -1657,6 +1676,64 @@ void EEMEngine::showMacTitleIntro() {
 	waitIntroDelay(0xFFFFFFFFu);
 }
 
+void EEMEngine::playMacCDIntro() {
+	// CODE 2:5884 uses one-based frame numbers and pauses for each line.
+	static const uint16 kVoiceFrames[] = {
+		11, 15, 17, 19, 63, 64, 97, 98, 103, 104,
+		105, 125, 126, 127, 219, 220, 311, 312, 313
+	};
+	const uint32 kFrameDelayMs = 9 * 1000 / 60;
+	Video::FlicDecoder flic;
+	Common::ScopedPtr<Common::SeekableReadStream> stream(
+		Common::MacResManager::openFileOrDataFork(Common::Path("FIN07.FLC")));
+	if (!stream || !flic.loadStream(stream.get())) {
+		warning("Mac CD intro FIN07.FLC failed to load");
+		return;
+	}
+	stream.release();
+
+	if (_audio)
+		_audio->initMysterySounds(60);
+	if (_music)
+		_music->playFile(Common::Path("THEME.XMI"), false);
+
+	uint cue = 0;
+	bool aborted = false;
+	uint32 lastFrameMs = g_system->getMillis();
+	flic.start();
+	while (!flic.endOfVideo() && !shouldQuit() && !aborted && !_skipIntro) {
+		const Graphics::Surface *frame = flic.decodeNextFrame();
+		if (!frame)
+			break;
+		// The Mac player ignores the FLC header's frame delay.
+		const uint32 elapsed = g_system->getMillis() - lastFrameMs;
+		if (waitIntroDelay(elapsed < kFrameDelayMs ? kFrameDelayMs - elapsed : 1))
+			break;
+		g_system->copyRectToScreen(frame->getPixels(), frame->pitch, 0, 0,
+			MIN<int>(frame->w, screenWidth()), MIN<int>(frame->h, screenHeight()));
+		if (flic.hasDirtyPalette())
+			g_system->getPaletteManager()->setPalette(flic.getPalette(), 0, 256);
+		g_system->updateScreen();
+		lastFrameMs = g_system->getMillis();
+
+		const uint frameNumber = flic.getCurFrame() + 1;
+		if (frameNumber == 219 && _music)
+			_music->playFile(Common::Path("THEME.XMI"), false);
+		if (cue < ARRAYSIZE(kVoiceFrames) && frameNumber == kVoiceFrames[cue]) {
+			if (_audio) {
+				_audio->spoolSound(cue);
+				while (_audio->isSpoolPlaying() && !shouldQuit() && !aborted)
+					aborted = waitIntroDelay(10);
+				_audio->stopSpool();
+			}
+			cue++;
+		}
+	}
+	if (_audio)
+		_audio->cleanMysterySounds();
+	fadeCurrentPaletteToBlack();
+}
+
 void EEMEngine::runMacStartup() {
 	CursorMan.showMouse(false);
 	_skipIntro = false;
@@ -1671,6 +1748,8 @@ void EEMEngine::runMacStartup() {
 		showMacStillLogo(kPicStormLogo, kPalStormLogo, 3000,
 						 /* playThunder= */ true);
 
+	if (!shouldQuit() && !_skipIntro && isMacCD())
+		playMacCDIntro();
 	if (!shouldQuit() && !_skipIntro && _music)
 		_music->playFile(Common::Path("THEME.XMI"), /* loop= */ true);
 	if (!shouldQuit() && !_skipIntro)
@@ -1728,22 +1807,26 @@ void EEMEngine::showLondonEAKidsLogo() {
 	fadeCurrentPaletteToBlack();
 }
 
-void EEMEngine::showLondonLogo(uint picId, uint palId, uint holdMs,
-							   bool playThunder) {
+void EEMEngine::showStillPicture(uint picId, uint palId, uint holdMs,
+							   bool playThunder, bool holdLastFrame) {
 	Picture pic;
 	if (!_picsArchive.getPicture(picId, pic) || pic.surface.empty()) {
-		warning("London logo PIC 0x%x load failed", picId);
+		warning("PIC 0x%x load failed", picId);
 		return;
 	}
-	blitAt(pic, 0, 0);
-
 	byte target[kPalSize];
 	if (!getSitePalette(palId, target)) {
-		warning("London palette 0x%x load failed", palId);
+		warning("Palette 0x%x load failed", palId);
 		return;
+	}
+	// Mac _LoadPalette puts white at 0 and black at 255.
+	if (isMacintosh() && target[0] == 0 && target[1] == 0 && target[2] == 0) {
+		for (uint i = 0; i < 3; i++)
+			SWAP(target[i], target[255 * 3 + i]);
 	}
 	byte black[kPalSize] = {};
 	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	blitAt(pic, 0, 0);
 	g_system->updateScreen();
 	fadePaletteFromBlack(target);
 
@@ -1753,11 +1836,12 @@ void EEMEngine::showLondonLogo(uint picId, uint palId, uint holdMs,
 	waitForInput(holdMs);
 	if (_audio)
 		_audio->stopVoice();
-	fadeCurrentPaletteToBlack();
+	if (!holdLastFrame)
+		fadeCurrentPaletteToBlack();
 }
 
 bool EEMEngine::startLondonTrainingMystery() {
-	if (_mystery.load(0, &_rng, isMacintosh())) {
+	if (_mystery.load(0, &_rng, isMacintosh(), isLondon())) {
 		resetSiteArrivalState();
 		if (_audio)
 			_audio->initMysterySounds(0);
@@ -1785,9 +1869,9 @@ void EEMEngine::runLondonStartup() {
 
 	if (isMacintosh()) {
 		if (!shouldQuit() && !_skipIntro)
-			showLondonLogo(0x20c, 0x3e, 3000);  // publisher logo (FUN_00009074)
+			showStillPicture(0x20c, 0x3e, 3000);  // publisher logo (FUN_00009074)
 		if (!shouldQuit() && !_skipIntro)
-			showLondonLogo(0x20b, 0x3d, 3000, /* playThunder= */ true);
+			showStillPicture(0x20b, 0x3d, 3000, /* playThunder= */ true);
 
 		// The Mac CD ships the post-logo intro as Flic movies where DOS uses
 		// bolt/movie/wave .ANM. KDCDINTR is the centered intro; BOOK54 is the
@@ -1811,7 +1895,7 @@ void EEMEngine::runLondonStartup() {
 			fadeCurrentPaletteToBlack();
 		}
 		if (!shouldQuit() && !_skipIntro)
-			showLondonLogo(kDosLondonPicHighScoreLogo,
+			showStillPicture(kDosLondonPicHighScoreLogo,
 						   kDosLondonPalHighScoreLogo, 3000);
 
 		// Intro movie with its theme (MUS00101.XMI).
@@ -2136,12 +2220,49 @@ void EEMEngine::startLondonTravelMusic(uint8 travelKind) {
 		{ 7, 23, 17 },
 		{ 10, 21, 24 },
 	};
+	static const uint16 kMacLondonTravelMusic[4][3] = {
+		{ 0, 0, 0 },
+		{ 22, 25, 7 },
+		{ 23, 17, 10 },
+		{ 21, 24, 35 },
+	};
 	if (!_music || !_musicOn || travelKind == 0 ||
 		travelKind >= ARRAYSIZE(kLondonTravelMusic))
 		return;
 
-	const uint track = kLondonTravelMusic[travelKind][_rng.getRandomNumber(2)];
+	const uint choice = _rng.getRandomNumber(2);
+	const uint track = isMacintosh() ? kMacLondonTravelMusic[travelKind][choice]
+								   : kLondonTravelMusic[travelKind][choice];
 	_music->playMus(track, /* loop= */ false);
+}
+
+void EEMEngine::finishTravelMusic(bool skipped) {
+	// Mac talkies fade after the animation; EEM1 DOS lets the tune finish.
+	if (isMacTalkie()) {
+		if (_music && _music->isPlaying() && !shouldQuit()) {
+			_music->fadeOut();
+			const uint32 startMs = g_system->getMillis();
+			while (_music->isFading() && !shouldQuit() &&
+				   g_system->getMillis() - startMs < 5000) {
+				Common::Event event;
+				while (g_system->getEventManager()->pollEvent(event)) {
+					if (event.type == Common::EVENT_QUIT ||
+						event.type == Common::EVENT_RETURN_TO_LAUNCHER) {
+						stopMusic();
+						return;
+					}
+				}
+				g_system->updateScreen();
+				g_system->delayMillis(10);
+			}
+		}
+		stopMusic();
+	} else if (!isFloppy() && !isLondon()) {
+		if (skipped || shouldQuit())
+			stopMusic();
+		else
+			waitForMusicDone();
+	}
 }
 
 void EEMEngine::waitForMusicDone(uint32 maxMs) {
@@ -2278,7 +2399,7 @@ Common::Error EEMEngine::loadGameStream(Common::SeekableReadStream *stream) {
 	if (hasMystery) {
 		uint16 mysteryNum = 0;
 		s.syncAsUint16LE(mysteryNum);
-		if (!_mystery.load(mysteryNum, &_rng, isMacintosh())) {
+		if (!_mystery.load(mysteryNum, &_rng, isMacintosh(), isLondon())) {
 			_mystery.clear();
 			resetSiteArrivalState();
 			return Common::kReadingFailed;

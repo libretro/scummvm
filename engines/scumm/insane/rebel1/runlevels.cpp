@@ -72,59 +72,6 @@ int32 findAnimFrameChunkOffset(ScummEngine_v7 *vm, const char *filename, int32 t
 	return result;
 }
 
-int32 findAnimFrameChunkOffsetByGameCounter(ScummEngine_v7 *vm, const char *filename, int32 targetCounter, int32 &localFrame) {
-	localFrame = 0;
-	if (targetCounter <= 0)
-		return 0;
-
-	ScummFile *file = vm->instantiateScummFile();
-	if (!vm->openFile(*file, Common::Path(filename))) {
-		delete file;
-		return -1;
-	}
-
-	int32 result = -1;
-	if (file->size() >= 8) {
-		file->readUint32BE();
-		const uint32 animSize = file->readUint32BE();
-		const int64 animEnd = MIN<int64>((int64)file->pos() + animSize, file->size());
-
-		int32 frameIndex = 0;
-		RA1AnimStreamChunkIterator chunks(*file, animEnd);
-		RA1AnimChunk chunk;
-		while (chunks.next(chunk)) {
-			if (chunk.tag == MKTAG('F', 'R', 'M', 'E')) {
-				RA1AnimStreamChunkIterator subChunks(*file, chunk.endOffset);
-				RA1AnimChunk subChunk;
-				while (subChunks.next(subChunk)) {
-					if (subChunk.tag == MKTAG('G', 'A', 'M', 'E') && subChunk.size >= 8) {
-						const uint32 opcode = file->readUint32BE();
-						const int32 counter = (int32)file->readUint32BE();
-						if (opcode == 0x0B && counter >= targetCounter) {
-							localFrame = frameIndex;
-							result = (int32)chunk.offset;
-							break;
-						}
-					}
-
-					subChunks.skip(subChunk);
-				}
-
-				if (result >= 0)
-					break;
-
-				frameIndex++;
-			}
-
-			chunks.skip(chunk);
-		}
-	}
-
-	file->close();
-	delete file;
-	return result;
-}
-
 void InsaneRebel1::formatTargetAccuracy(char *dst, size_t dstSize, int kills, int targetCount, bool perfectText) const {
 	if (perfectText && kills >= targetCount)
 		Common::sprintf_s(dst, dstSize, "%s", uiStr(kR1StrAccuracyPerfect));
@@ -340,10 +287,10 @@ bool InsaneRebel1::runLevel1() {
 		if (shouldAbortGameFlow())
 			return false;
 
-		if (_rightPathSelected && _health >= 0) {
+		if (_rightPathSelected && !_interactiveVideoCheatSkipped && _health >= 0) {
 			_pathBranchEnabled = false;
 			_flyControlMode = 1;
-			playInteractiveVideo("LVL1/L1PLAY1R.ANM", 0x187);
+			playInteractiveVideo("LVL1/L1PLAY1R.ANM", 1);
 			if (shouldAbortGameFlow())
 				return false;
 		}
@@ -816,7 +763,7 @@ bool InsaneRebel1::runLevel8() {
 			if (_walkerHealth <= 0)
 				break;
 
-			if (_pendingRouteIndex >= 0 && _pendingRouteIndex != route) {
+			if (_pendingRouteIndex >= 0) {
 				// Branch to the next walker route while preserving active state.
 				routeStartFrame = _pendingRouteStartFrame;
 				route = _pendingRouteIndex;
@@ -1596,22 +1543,20 @@ void InsaneRebel1::resolveSeek(const char *filename, int32 startFrame, int32 &vi
 				_levelRouteIndex, (int)_pendingRouteStartFrame,
 				(int)videoStartFrame, (unsigned)videoOffset);
 		}
-	} else if (_currentLevel == 7 && resumingRoute) {
-		videoOffset = findAnimFrameChunkOffsetByGameCounter(_vm, filename, startFrame, videoStartFrame);
+	} else if ((_currentLevel == 0 || _currentLevel == 7) && resumingRoute) {
+		// Route continuations use destination-local frames. In L1 this skips
+		// both the overlapping frame and the GAME reset at the start of the
+		// right-hand clip. L8 can also branch back to the same ANM.
+		videoStartFrame = startFrame;
+		videoOffset = findAnimFrameChunkOffset(_vm, filename, videoStartFrame);
 		if (videoOffset < 0) {
-			debugC(DEBUG_INSANE, "L8 resume: route=%d timelineFrame=%d GAME counter lookup failed",
-				_levelRouteIndex, (int)startFrame);
-			videoStartFrame = startFrame;
-			videoOffset = findAnimFrameChunkOffset(_vm, filename, videoStartFrame);
-		}
-		if (videoOffset < 0) {
-			debugC(DEBUG_INSANE, "L8 resume: route=%d timelineFrame=%d localFrame=%d offset lookup failed",
-				_levelRouteIndex, (int)startFrame, (int)videoStartFrame);
+			debugC(DEBUG_INSANE, "L%d resume: localFrame=%d offset lookup failed",
+				_currentLevel + 1, (int)videoStartFrame);
 			videoStartFrame = 0;
 			videoOffset = 0;
 		} else {
-			debugC(DEBUG_INSANE, "L8 resume: route=%d timelineFrame=%d -> localFrame=%d offset=0x%x",
-				_levelRouteIndex, (int)startFrame, (int)videoStartFrame, (unsigned)videoOffset);
+			debugC(DEBUG_INSANE, "L%d resume: localFrame=%d offset=0x%x",
+				_currentLevel + 1, (int)videoStartFrame, (unsigned)videoOffset);
 		}
 	} else if (_currentLevel == 13 && resumingRoute) {
 		// L14PLY2B is already the continuation clip. Preserve state, but do not seek.
@@ -1620,11 +1565,7 @@ void InsaneRebel1::resolveSeek(const char *filename, int32 startFrame, int32 &vi
 	}
 }
 
-void InsaneRebel1::captureInteractiveVideoInput() {
-	const bool level7RouteSplice = (_currentLevel == 6 && _levelRouteIndex > 0);
-	const bool walkerRouteReplay = (_currentLevel == 7 && _walkerRoundReplay);
-	const bool preserveInputState = _preserveInteractiveRuntimeState || level7RouteSplice || walkerRouteReplay;
-
+void InsaneRebel1::captureInteractiveVideoInput(bool preserveInputState) {
 	enableIOSGamepadController();
 
 	// Center mouse, hide system cursor, and lock mouse to window.
@@ -1680,7 +1621,7 @@ void InsaneRebel1::playInteractiveVideo(const char *filename, int32 startFrame) 
 		resetInteractiveVideoAudio();
 	setupInteractiveVideoState(startFrame);
 	resolveSeek(filename, startFrame, videoOffset, videoStartFrame);
-	captureInteractiveVideoInput();
+	captureInteractiveVideoInput(preserveRuntimeState);
 	playInteractiveVideoFile(filename, videoOffset, videoStartFrame);
 	releaseInteractiveVideoInput();
 	_preserveInteractiveRuntimeState = false;

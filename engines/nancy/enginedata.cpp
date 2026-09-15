@@ -479,11 +479,39 @@ SET::SET(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	}
 
 	readRectArray(*chunkStream, _scrollbarBounds, 3);
+
+	if (g_nancy->getGameType() >= kGameTypeNancy15) {
+		// Nancy15 added a button to the setup screen. Nothing in the chunk says
+		// how many there are, so take the count from the space left over once
+		// everything that follows them is accounted for: the Done button's
+		// highlight (16), three scrollbar sources (48), the scrollbars' centre
+		// positions (18) and three menu sound descriptions (141).
+		static const int32 kBytesAfterButtons = 16 + 48 + 18 + 141;
+		static const int32 kBytesPerButton = 2 * 16;	// one dest and one source
+
+		// The extra button brings a second highlight source with it
+		const int32 remaining = (int32)chunkStream->size() - (int32)chunkStream->pos() - kBytesAfterButtons - 16;
+		if (remaining >= kBytesPerButton) {
+			numButtons = remaining / kBytesPerButton;
+
+			if (remaining % kBytesPerButton > 1) {
+				warning("SET chunk has %d bytes left over after %u buttons, the setup screen may be misread",
+					remaining % kBytesPerButton, numButtons);
+			}
+		} else {
+			warning("Unexpected SET chunk size %d, the setup screen will be misread", (int)chunkStream->size());
+		}
+	}
+
 	readRectArray(*chunkStream, _buttonDests, numButtons);
 	readRectArray(*chunkStream, _buttonDownSrcs, numButtons);
 
 	if (g_nancy->getGameType() >= kGameTypeNancy2) {
 		readRect(*chunkStream, _doneButtonHighlightSrc);
+	}
+
+	if (g_nancy->getGameType() >= kGameTypeNancy15) {
+		readRect(*chunkStream, _extraButtonHighlightSrc);
 	}
 
 	readRectArray(*chunkStream, _scrollbarSrcs, 3);
@@ -1252,11 +1280,11 @@ UIIV::UIIV(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	if (g_nancy->getGameType() >= kGameTypeNancy13)
 		readRect(*chunkStream, slotsHotspot);
 
-	// Two byte flags. The first controls where items added while the popup is
-	// open land in the inventory order (see appendItemsWhileOpen); the second
-	// is unused here.
+	// Two byte flags: where items added while the popup is open land in the
+	// inventory order (see appendItemsWhileOpen), and whether picking up an item
+	// closes the popup.
 	appendItemsWhileOpen = chunkStream->readByte();
-	chunkStream->skip(1);
+	closeOnPickup = chunkStream->readByte();
 
 	for (uint i = 0; i < kNumFilters; ++i) {
 		readUIButtonSlot(*chunkStream, filters[i]);
@@ -1320,13 +1348,20 @@ EVNT::EVNT(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 }
 
 UIRC::UIRC(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
-	while (chunkStream->size() - chunkStream->pos() >= (int64)kItemRecordSize) {
+	// Nancy 14 added the maximum value field, growing each record by 2 bytes
+	const bool hasMaxValue = g_nancy->getGameType() >= kGameTypeNancy14;
+	const uint recordSize = hasMaxValue ? 259 : 257;
+
+	while (chunkStream->size() - chunkStream->pos() >= (int64)recordSize) {
 		ItemRecord rec;
-		rec.id = chunkStream->readUint16LE();
+		rec.startingValue = chunkStream->readUint16LE();
+		if (hasMaxValue) {
+			rec.maxValue = chunkStream->readUint16LE();
+		}
 		readFilename(*chunkStream, rec.overlayName);
 		readRect(*chunkStream, rec.rect);
-		rec.unknown1 = chunkStream->readSint16LE();
-		rec.unknown2 = chunkStream->readSint16LE();
+		rec.fontID = chunkStream->readSint16LE();
+		rec.numDecimals = chunkStream->readSint16LE();
 		rec.soundChannel = chunkStream->readSint16LE();
 		rec.soundVolume = chunkStream->readSint16LE();
 		for (uint i = 0; i < kNumSounds; ++i) {
@@ -1334,6 +1369,29 @@ UIRC::UIRC(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 		}
 		items.push_back(rec);
 	}
+}
+
+Common::String formatUIResourceValue(const UIRC::ItemRecord &item, int32 value) {
+	// Nancy 12 counts cents and shows a dollar amount, Nancy 14 counts whole
+	// euros. 0x80 is the euro sign in the games' extended ASCII character set.
+	const char currencySymbol = g_nancy->getGameType() >= kGameTypeNancy14 ? '\x80' : '$';
+
+	int32 divisor = 1;
+	for (int16 i = 0; i < item.numDecimals; ++i) {
+		divisor *= 10;
+	}
+
+	Common::String ret = Common::String::format("%c%d", currencySymbol, value / divisor);
+
+	if (item.numDecimals > 0) {
+		Common::String decimals = Common::String::format("%d", value % divisor);
+		while ((int16)decimals.size() < item.numDecimals) {
+			decimals = "0" + decimals;
+		}
+		ret += "." + decimals;
+	}
+
+	return ret;
 }
 
 MMIX::MMIX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
@@ -1389,13 +1447,13 @@ LDSN::LDSN(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	readFilename(*chunkStream, backgroundImageName);
 	readFilename(*chunkStream, overlayImageName);
 
-	// The remainder is a run of button/selection rects (16 bytes each),
-	// followed by a short trailer whose fields aren't fully understood yet.
-	while (chunkStream->pos() + 16 <= chunkStream->size()) {
-		Common::Rect rect;
-		readRect(*chunkStream, rect);
-		rects.push_back(rect);
-	}
+	readRectArray(*chunkStream, buttonDownSrcs, kNumButtons);
+	readRectArray(*chunkStream, buttonHighlightSrcs, kNumButtons);
+	readRectArray(*chunkStream, buttonDests, kNumButtons);
+	readRectArray(*chunkStream, designRowDests, kNumDesignRows);
+
+	fontID = chunkStream->readSint16LE();
+	highlightFontID = chunkStream->readSint16LE();
 }
 
 PUIH::PUIH(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {

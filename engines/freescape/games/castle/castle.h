@@ -105,6 +105,31 @@ public:
 
 	void loadAssetsC64FullGame() override;
 	void drawC64UI(Graphics::Surface *surface) override;
+	void drawC64InfoMenu(Graphics::Surface *surface);
+	void toggleC64AudioMode();
+	void updateC64SpiritPalette();
+	void updateC64BackgroundPalette();
+	void resetC64Lightning();
+	void updateC64Lightning();
+	void drawC64Background();
+	void drawC64HudSurface(Graphics::Surface *surface, const Graphics::Surface &frame, const Common::Point &origin);
+	void liftC64Gate();
+	void dropC64Gate();
+	void drawC64Gate(Graphics::Surface *surface);
+	Graphics::ManagedSurface _c64KeysBackground;
+	Graphics::ManagedSurface _c64Gate;
+	Graphics::ManagedSurface _c64MountainBackground;
+	Graphics::ManagedSurface _c64Lightning;
+	Common::Array<uint32> _c64UIColors;
+	Common::Array<byte> _c64GateDropHeights;
+	int _c64LiftingGateStartTicks;
+	bool _c64MusicEnabled;
+	byte _c64SpiritAttackColors[2];
+	int _c64SpiritAttackStartTicks;
+	int _c64NextLightningTicks;
+	int _c64LightningPhase;
+	int _c64LightningPhaseTicks;
+	int _c64LightningX;
 
 	void drawDOSUI(Graphics::Surface *surface) override;
 	void drawZXUI(Graphics::Surface *surface) override;

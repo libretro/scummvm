@@ -694,8 +694,8 @@ void InsaneRebel1::checkDynamicLevelBranch(int32 curFrame) {
 		return;
 
 	if ((_currentLevel == 6 || _currentLevel == 7) && _pendingRouteIndex >= 0) {
-		const uint32 routeFrame = (_currentLevel == 6 && curFrame >= 0) ?
-			(uint32)curFrame : (uint32)_gameCounter;
+		const uint32 routeFrame = (curFrame >= 0) ?
+			(uint32)curFrame : (uint32)_currentSmushFrame;
 		if (!_vm->_smushVideoShouldFinish &&
 			_pendingRouteCutoverFrame >= 0 &&
 			routeFrame >= (uint32)_pendingRouteCutoverFrame) {
@@ -707,9 +707,8 @@ void InsaneRebel1::checkDynamicLevelBranch(int32 curFrame) {
 			_vm->_smushVideoShouldFinish = true;
 			const int32 resumeFrame = (_currentLevel == 6 && _pendingRouteStartFrame < 0) ?
 				0 : _pendingRouteStartFrame;
-			debugC(DEBUG_INSANE, "L%d cutover: route=%d -> %d at %s=%u (resumeFrame=%d)",
+			debugC(DEBUG_INSANE, "L%d cutover: route=%d -> %d at localFrame=%u (resumeFrame=%d)",
 				_currentLevel + 1, _levelRouteIndex, _pendingRouteIndex,
-				_currentLevel == 6 ? "localFrame" : "frame",
 				(unsigned)routeFrame, (int)resumeFrame);
 		}
 		return;
@@ -763,8 +762,8 @@ void InsaneRebel1::checkDynamicLevelBranch(int32 curFrame) {
 		}
 	}
 
-	// Level 8 owns its branch choice in updateLevel8WalkerState(), where the
-	// choice variable. This function only performs the delayed route cutover.
+	// Level 8 schedules its branch in updateLevel8WalkerState() and commits it
+	// after rendering the following frame.
 }
 
 void InsaneRebel1::projectGameplayPoint(int16 &x, int16 &y) const {
@@ -1229,17 +1228,21 @@ void InsaneRebel1::updateShipPhysics() {
 
 	_damageFlags = 0;
 
-	// After this point, drift goes strongly negative (pushing ship left for the hard path).
-	if (_pathBranchEnabled && _gameCounter >= kPathBranchCounter) {
-		if (_shipPosX > kRA1CenterX) {
-			_rightPathSelected = true;
+	// The original chooses at frame 386, then keeps the source through frame
+	// 391. The right-hand clip resumes at local frame 1 after that shared frame.
+	if (_pathBranchEnabled && _currentSmushFrame >= kLevel1BranchDecisionFrame) {
+		if (!_rightPathSelected) {
+			_rightPathSelected = _shipPosX > kRA1CenterX;
+			if (!_rightPathSelected)
+				_pathBranchEnabled = false;
+			debugC(DEBUG_INSANE, "L1 path selected: right=%d localFrame=%d shipX=%d",
+				_rightPathSelected ? 1 : 0, (int)_currentSmushFrame, _shipPosX);
+		}
+		if (_rightPathSelected && _currentSmushFrame >= kLevel1BranchCutoverFrame) {
+			_pathBranchEnabled = false;
 			preserveInteractiveVideoAudioState();
 			_vm->_smushVideoShouldFinish = true;
-			debugC(DEBUG_INSANE, "Right path selected (counter=%d, shipX=%d)", _gameCounter, _shipPosX);
-		} else {
-			debugC(DEBUG_INSANE, "Left path retained (counter=%d, shipX=%d)", _gameCounter, _shipPosX);
 		}
-		_pathBranchEnabled = false;
 	}
 
 	if (_currentLevel != 6)
@@ -1512,7 +1515,7 @@ void InsaneRebel1::updateGameOp0BPhysics() {
 
 	bool level8WalkerPlayerHit = false;
 	if (_currentLevel == 7) {
-		const uint16 walkerFrame = (uint16)_gameCounter;
+		const uint16 walkerFrame = (uint16)_currentSmushFrame;
 		level8WalkerPlayerHit = hasLevel8WalkerPlayerHit(_levelRouteIndex, walkerFrame,
 			_perspectiveX, _perspectiveY);
 		// Player collision and boss damage are tracked separately.

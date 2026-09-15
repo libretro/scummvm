@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ScummVM 2026.3.1git\n"
 "Report-Msgid-Bugs-To: scummvm-devel@lists.scummvm.org\n"
-"POT-Creation-Date: 2026-09-01 10:07+0000\n"
+"POT-Creation-Date: 2026-09-14 18:29+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1054,7 +1054,7 @@ msgstr ""
 #: engines/awe/metaengine.cpp:57 engines/bagel/metaengine.cpp:66
 #: engines/crab/input/input.cpp:95 engines/crab/input/input.cpp:145
 #: engines/dragons/metaengine.cpp:158 engines/fool/metaengine.cpp:159
-#: engines/freescape/movement.cpp:35 engines/got/metaengine.cpp:70
+#: engines/freescape/movement.cpp:36 engines/got/metaengine.cpp:70
 #: engines/griffon/metaengine.cpp:121 engines/grim/grim.cpp:481
 #: engines/grim/grim.cpp:563 engines/icb/icb.cpp:68 engines/icb/icb.cpp:152
 #: engines/scumm/metaengine.cpp:1139 engines/supernova/metaengine.cpp:273
@@ -1076,7 +1076,7 @@ msgstr ""
 #: engines/awe/metaengine.cpp:58 engines/bagel/metaengine.cpp:67
 #: engines/crab/input/input.cpp:101 engines/crab/input/input.cpp:151
 #: engines/dragons/metaengine.cpp:164 engines/fool/metaengine.cpp:165
-#: engines/freescape/movement.cpp:44 engines/got/metaengine.cpp:71
+#: engines/freescape/movement.cpp:45 engines/got/metaengine.cpp:71
 #: engines/griffon/metaengine.cpp:127 engines/grim/grim.cpp:486
 #: engines/grim/grim.cpp:568 engines/icb/icb.cpp:73 engines/icb/icb.cpp:157
 #: engines/scumm/metaengine.cpp:1106 engines/supernova/metaengine.cpp:279
@@ -2682,7 +2682,7 @@ msgid "Fit to page"
 msgstr ""
 
 #: gui/printing-dialog.cpp:60 backends/graphics/opengl/opengl-graphics.cpp:315
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:127
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:125
 #: engines/glk/dialogs.cpp:372 engines/twine/metaengine.cpp:312
 msgid "Center"
 msgstr ""
@@ -2747,7 +2747,7 @@ msgstr ""
 msgid "Restore game:"
 msgstr ""
 
-#: gui/saveload.cpp:37 engines/fool/fool_game.cpp:102
+#: gui/saveload.cpp:37 engines/fool/fool_game.cpp:107
 #: engines/groovie/script.cpp:853 engines/lab/savegame.cpp:237
 #: engines/nancy/state/loadsave.cpp:108 engines/parallaction/metaengine.cpp:157
 #: engines/saga/metaengine.cpp:469 engines/tinsel/metaengine.cpp:323
@@ -2846,28 +2846,28 @@ msgstr ""
 msgid "Select a Theme"
 msgstr ""
 
-#: gui/ThemeEngine.cpp:256
+#: gui/ThemeEngine.cpp:260
 msgid "Disabled GFX"
 msgstr ""
 
-#: gui/ThemeEngine.cpp:256
+#: gui/ThemeEngine.cpp:260
 msgctxt "lowres"
 msgid "Disabled GFX"
 msgstr ""
 
-#: gui/ThemeEngine.cpp:257
+#: gui/ThemeEngine.cpp:261
 msgid "Standard renderer"
 msgstr ""
 
-#: gui/ThemeEngine.cpp:257 engines/scumm/dialogs.cpp:1054
+#: gui/ThemeEngine.cpp:261 engines/scumm/dialogs.cpp:1054
 msgid "Standard"
 msgstr ""
 
-#: gui/ThemeEngine.cpp:259
+#: gui/ThemeEngine.cpp:263
 msgid "Antialiased renderer"
 msgstr ""
 
-#: gui/ThemeEngine.cpp:259
+#: gui/ThemeEngine.cpp:263
 msgid "Antialiased"
 msgstr ""
 
@@ -2915,7 +2915,7 @@ msgid ""
 "in the Options dialog."
 msgstr ""
 
-#: gui/widget.cpp:475 gui/widget.cpp:477 gui/widget.cpp:482 gui/widget.cpp:484
+#: gui/widget.cpp:446 gui/widget.cpp:448 gui/widget.cpp:453 gui/widget.cpp:455
 msgid "Clear value"
 msgstr ""
 
@@ -3655,7 +3655,7 @@ msgstr ""
 #: engines/hopkins/metaengine.cpp:213 engines/hugo/metaengine.cpp:134
 #: engines/illusions/metaengine.cpp:94 engines/kyra/engine/eobcommon.cpp:377
 #: engines/kyra/engine/lol.cpp:505 engines/lure/metaengine.cpp:177
-#: engines/made/metaengine.cpp:137 engines/mads/metaengine.cpp:258
+#: engines/made/metaengine.cpp:141 engines/mads/metaengine.cpp:270
 #: engines/mm/metaengine.cpp:186 engines/mtropolis/metaengine.cpp:161
 #: engines/nancy/input.cpp:189 engines/parallaction/metaengine.cpp:138
 #: engines/saga/metaengine.cpp:278 engines/sludge/keymapper_tables.h:561
@@ -3688,8 +3688,8 @@ msgstr ""
 #: engines/groovie/metaengine.cpp:211 engines/hopkins/metaengine.cpp:219
 #: engines/hugo/metaengine.cpp:141 engines/illusions/metaengine.cpp:101
 #: engines/kyra/engine/eobcommon.cpp:378 engines/kyra/engine/lol.cpp:506
-#: engines/lure/metaengine.cpp:183 engines/made/metaengine.cpp:144
-#: engines/mads/metaengine.cpp:264 engines/mm/metaengine.cpp:192
+#: engines/lure/metaengine.cpp:183 engines/made/metaengine.cpp:148
+#: engines/mads/metaengine.cpp:276 engines/mm/metaengine.cpp:192
 #: engines/mtropolis/metaengine.cpp:167 engines/nancy/input.cpp:196
 #: engines/parallaction/metaengine.cpp:144 engines/saga/metaengine.cpp:289
 #: engines/sludge/keymapper_tables.h:567 engines/sludge/keymapper_tables.h:586
@@ -3733,10 +3733,10 @@ msgstr ""
 #. I18N: Skipping cutscene playback
 #: engines/metaengine.cpp:112 engines/access/metaengine.cpp:246
 #: engines/composer/metaengine.cpp:126 engines/drascula/metaengine.cpp:224
-#: engines/efh/metaengine.cpp:379 engines/freescape/movement.cpp:93
+#: engines/efh/metaengine.cpp:379 engines/freescape/movement.cpp:94
 #: engines/grim/grim.cpp:533 engines/grim/grim.cpp:633
 #: engines/illusions/metaengine.cpp:142 engines/macs2/metaengine.cpp:58
-#: engines/made/metaengine.cpp:151 engines/mohawk/myst.cpp:566
+#: engines/made/metaengine.cpp:155 engines/mohawk/myst.cpp:566
 #: engines/mohawk/riven.cpp:847 engines/prince/metaengine.cpp:269
 #: engines/sherlock/metaengine.cpp:384
 #: engines/wintermute/keymapper_tables.h:254
@@ -4060,7 +4060,7 @@ msgid "Toggle aspect ratio correction"
 msgstr ""
 
 #: backends/graphics/opengl/opengl-graphics.cpp:316
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:128
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:126
 msgid "Pixel-perfect scaling"
 msgstr ""
 
@@ -4069,57 +4069,57 @@ msgid "Even pixels scaling"
 msgstr ""
 
 #: backends/graphics/opengl/opengl-graphics.cpp:318
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:129
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:127
 msgid "Fit to window"
 msgstr ""
 
 #: backends/graphics/opengl/opengl-graphics.cpp:319
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:130
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:128
 msgid "Stretch to window"
 msgstr ""
 
 #: backends/graphics/opengl/opengl-graphics.cpp:320
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:131
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:129
 msgid "Fit to window (4:3)"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:966
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1035
 #, c-format
 msgid "Resolution: %dx%d"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1010
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2868
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1079
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2876
 msgid "Active graphics filter:"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1031
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2902
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1100
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2910
 msgid "Enabled aspect ratio correction"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1033
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2908
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1102
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2916
 msgid "Disabled aspect ratio correction"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1046
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2924
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1115
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2932
 msgid "Filtering enabled"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1048
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2926
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1117
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2934
 msgid "Filtering disabled"
 msgstr ""
 
-#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1074
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2953
+#: backends/graphics/openglsdl/openglsdl-graphics.cpp:1143
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:2961
 msgid "Stretch mode"
 msgstr ""
 
 #: backends/graphics/riscossdl/riscossdl-graphics.cpp:30
-#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:121
+#: backends/graphics/surfacesdl/surfacesdl-graphics.cpp:119
 msgid "SDL Surface"
 msgstr ""
 
@@ -4384,6 +4384,10 @@ msgstr ""
 
 #: backends/midi/windows.cpp:168
 msgid "Windows MIDI"
+msgstr ""
+
+#: backends/midi/android.cpp:179
+msgid "Can't connect MIDI port: no sound will be produced"
 msgstr ""
 
 #: backends/networking/sdl_net/handlers/createdirectoryhandler.cpp:58
@@ -5576,7 +5580,7 @@ msgstr ""
 #: backends/platform/sdl/miyoo/miyoo.cpp:114
 #: engines/alcachofa/metaengine.cpp:110 engines/grim/grim.cpp:545
 #: engines/grim/grim.cpp:645 engines/hdb/metaengine.cpp:264
-#: engines/macs2/metaengine.cpp:70 engines/made/metaengine.cpp:186
+#: engines/macs2/metaengine.cpp:70 engines/made/metaengine.cpp:190
 #: engines/phoenixvr/metaengine.cpp:110 engines/scumm/metaengine.cpp:1247
 #: engines/toltecs/metaengine.cpp:252
 msgid "Menu"
@@ -5779,8 +5783,8 @@ msgstr ""
 #: engines/efh/metaengine.cpp:256 engines/hopkins/metaengine.cpp:206
 #: engines/hugo/metaengine.cpp:129 engines/hypno/metaengine.cpp:128
 #: engines/illusions/metaengine.cpp:89 engines/lab/metaengine.cpp:149
-#: engines/lure/metaengine.cpp:168 engines/made/metaengine.cpp:132
-#: engines/mads/metaengine.cpp:252 engines/neverhood/metaengine.cpp:185
+#: engines/lure/metaengine.cpp:168 engines/made/metaengine.cpp:136
+#: engines/mads/metaengine.cpp:264 engines/neverhood/metaengine.cpp:185
 #: engines/ngi/metaengine.cpp:115 engines/petka/metaengine.cpp:113
 #: engines/prince/metaengine.cpp:227 engines/private/metaengine.cpp:138
 #: engines/queen/metaengine.cpp:146 engines/sherlock/metaengine.cpp:313
@@ -5886,7 +5890,7 @@ msgid "Look"
 msgstr ""
 
 #: engines/access/metaengine.cpp:314 engines/drascula/metaengine.cpp:240
-#: engines/fool/fool_game.cpp:102 engines/queen/metaengine.cpp:259
+#: engines/fool/fool_game.cpp:107 engines/queen/metaengine.cpp:259
 #: engines/saga/metaengine.cpp:369 engines/scumm/help.cpp:125
 #: engines/scumm/help.cpp:140 engines/scumm/help.cpp:165
 #: engines/scumm/help.cpp:193 engines/scumm/help.cpp:211
@@ -5973,7 +5977,7 @@ msgid "Climb"
 msgstr ""
 
 #: engines/access/metaengine.cpp:375 engines/bbvs/metaengine.cpp:142
-#: engines/freescape/games/castle/castle.cpp:576
+#: engines/freescape/games/castle/castle.cpp:577
 #: engines/petka/metaengine.cpp:137 engines/scumm/help.cpp:225
 #: engines/tsage/metaengine.cpp:201
 msgid "Walk"
@@ -6311,8 +6315,8 @@ msgstr ""
 #: engines/hugo/metaengine.cpp:130 engines/hypno/metaengine.cpp:225
 #: engines/hypno/metaengine.cpp:324 engines/hypno/metaengine.cpp:372
 #: engines/illusions/metaengine.cpp:90 engines/lab/metaengine.cpp:152
-#: engines/lure/metaengine.cpp:169 engines/made/metaengine.cpp:133
-#: engines/mads/metaengine.cpp:253 engines/neverhood/metaengine.cpp:186
+#: engines/lure/metaengine.cpp:169 engines/made/metaengine.cpp:137
+#: engines/mads/metaengine.cpp:265 engines/neverhood/metaengine.cpp:186
 #: engines/queen/metaengine.cpp:147 engines/saga/metaengine.cpp:268
 #: engines/sludge/keymapper_tables.h:33 engines/stark/metaengine.cpp:185
 #: engines/sword1/metaengine.cpp:267 engines/tinsel/metaengine.cpp:241
@@ -6613,7 +6617,7 @@ msgid "Whether textures should be linearly filtered"
 msgstr ""
 
 #: engines/alcachofa/metaengine.cpp:98 engines/cine/metaengine.cpp:347
-#: engines/freescape/games/castle/castle.cpp:593
+#: engines/freescape/games/castle/castle.cpp:594
 msgid "Activate"
 msgstr ""
 
@@ -6761,9 +6765,9 @@ msgstr ""
 #. I18N: ESC key
 #: engines/bagel/metaengine.cpp:59 engines/bagel/metaengine.cpp:65
 #: engines/bbvs/metaengine.cpp:111 engines/cruise/metaengine.cpp:223
-#: engines/freescape/movement.cpp:107 engines/got/metaengine.cpp:78
+#: engines/freescape/movement.cpp:117 engines/got/metaengine.cpp:78
 #: engines/hugo/metaengine.cpp:197 engines/lure/metaengine.cpp:209
-#: engines/mads/metaengine.cpp:270 engines/mm/mm1/metaengine.cpp:42
+#: engines/mads/metaengine.cpp:282 engines/mm/mm1/metaengine.cpp:42
 #: engines/mm/mm1/metaengine.cpp:48 engines/saga/metaengine.cpp:328
 #: engines/tinsel/metaengine.cpp:258 engines/tsage/metaengine.cpp:190
 #: engines/tucker/metaengine.cpp:221 engines/twine/metaengine.cpp:388
@@ -7044,13 +7048,13 @@ msgstr ""
 #: engines/cge/metaengine.cpp:221 engines/cge2/metaengine.cpp:235
 #: engines/dgds/metaengine.cpp:75 engines/dm/metaengine.cpp:120
 #: engines/drascula/metaengine.cpp:285 engines/efh/metaengine.cpp:272
-#: engines/freescape/games/castle/castle.cpp:538
+#: engines/freescape/games/castle/castle.cpp:539
 #: engines/freescape/games/dark/dark.cpp:231
-#: engines/freescape/games/driller/driller.cpp:120
+#: engines/freescape/games/driller/driller.cpp:121
 #: engines/freescape/games/eclipse/eclipse.cpp:337
 #: engines/hopkins/metaengine.cpp:238 engines/hugo/metaengine.cpp:165
-#: engines/lure/metaengine.cpp:191 engines/made/metaengine.cpp:192
-#: engines/mads/metaengine.cpp:283 engines/mohawk/myst.cpp:583
+#: engines/lure/metaengine.cpp:191 engines/made/metaengine.cpp:196
+#: engines/mads/metaengine.cpp:295 engines/mohawk/myst.cpp:583
 #: engines/mohawk/riven.cpp:864 engines/pegasus/pegasus.cpp:2825
 #: engines/petka/metaengine.cpp:198 engines/prince/metaengine.cpp:243
 #: engines/saga/metaengine.cpp:442 engines/sherlock/metaengine.cpp:462
@@ -7072,11 +7076,11 @@ msgstr ""
 #: engines/cge/metaengine.cpp:227 engines/cge2/metaengine.cpp:241
 #: engines/dgds/metaengine.cpp:74 engines/drascula/metaengine.cpp:260
 #: engines/efh/metaengine.cpp:279 engines/efh/metaengine.cpp:613
-#: engines/freescape/games/castle/castle.cpp:543
+#: engines/freescape/games/castle/castle.cpp:544
 #: engines/freescape/games/dark/dark.cpp:236
-#: engines/freescape/games/driller/driller.cpp:125
+#: engines/freescape/games/driller/driller.cpp:126
 #: engines/freescape/games/eclipse/eclipse.cpp:342
-#: engines/hopkins/metaengine.cpp:244 engines/made/metaengine.cpp:198
+#: engines/hopkins/metaengine.cpp:244 engines/made/metaengine.cpp:202
 #: engines/mohawk/myst_stacks/menu.cpp:283
 #: engines/mohawk/riven_stacks/aspit.cpp:349 engines/pegasus/pegasus.cpp:2831
 #: engines/petka/metaengine.cpp:203 engines/prince/metaengine.cpp:249
@@ -7122,11 +7126,11 @@ msgstr ""
 #: engines/bladerunner/metaengine.cpp:375 engines/cruise/metaengine.cpp:229
 #: engines/darkseed/metaengine.cpp:60 engines/dragons/metaengine.cpp:223
 #: engines/efh/metaengine.cpp:373 engines/efh/metaengine.cpp:619
-#: engines/freescape/games/castle/castle.cpp:551
+#: engines/freescape/games/castle/castle.cpp:552
 #: engines/freescape/games/dark/dark.cpp:241
-#: engines/freescape/games/driller/driller.cpp:130
+#: engines/freescape/games/driller/driller.cpp:131
 #: engines/freescape/games/eclipse/eclipse.cpp:347
-#: engines/mads/metaengine.cpp:339 engines/phoenixvr/metaengine.cpp:89
+#: engines/mads/metaengine.cpp:351 engines/phoenixvr/metaengine.cpp:89
 #: engines/saga/metaengine.cpp:437 engines/sherlock/metaengine.cpp:359
 #: engines/sherlock/metaengine.cpp:618 engines/sherlock/metaengine.cpp:852
 #: engines/stark/metaengine.cpp:280 engines/sword1/metaengine.cpp:295
@@ -7287,7 +7291,7 @@ msgid ""
 msgstr ""
 
 #: engines/buried/saveload.cpp:179 engines/mtropolis/saveload.cpp:158
-#: engines/nancy/nancy.cpp:886 engines/tot/saveload.cpp:269
+#: engines/nancy/nancy.cpp:965 engines/tot/saveload.cpp:269
 #: engines/vcruise/vcruise.cpp:356
 msgid "Saved game was created with a newer version of ScummVM. Unable to load."
 msgstr ""
@@ -7388,7 +7392,7 @@ msgstr ""
 
 #: engines/cge2/metaengine.cpp:60 engines/draci/metaengine.cpp:45
 #: engines/dreamweb/metaengine.cpp:74 engines/griffon/metaengine.cpp:41
-#: engines/lure/metaengine.cpp:54 engines/mads/metaengine.cpp:149
+#: engines/lure/metaengine.cpp:54 engines/mads/metaengine.cpp:161
 #: engines/parallaction/metaengine.cpp:53 engines/prince/metaengine.cpp:41
 #: engines/sci/detection_options.h:222 engines/sherlock/metaengine.cpp:121
 #: engines/supernova/metaengine.cpp:54 engines/teenagent/metaengine.cpp:50
@@ -7535,11 +7539,11 @@ msgstr ""
 msgid "Enable widescreen rendering in fullscreen mode."
 msgstr ""
 
-#: engines/colony/metaengine.cpp:56 engines/freescape/metaengine.cpp:107
+#: engines/colony/metaengine.cpp:56 engines/freescape/metaengine.cpp:109
 msgid "Invert Y-axis on mouse"
 msgstr ""
 
-#: engines/colony/metaengine.cpp:57 engines/freescape/metaengine.cpp:108
+#: engines/colony/metaengine.cpp:57 engines/freescape/metaengine.cpp:110
 msgid "Use alternative camera controls"
 msgstr ""
 
@@ -7548,29 +7552,29 @@ msgid "Move backward"
 msgstr ""
 
 #: engines/colony/metaengine.cpp:124 engines/dm/metaengine.cpp:162
-#: engines/freescape/movement.cpp:53 engines/hpl1/metaengine.cpp:78
+#: engines/freescape/movement.cpp:54 engines/hpl1/metaengine.cpp:78
 #: engines/mm/mm1/metaengine.cpp:104
 msgid "Strafe left"
 msgstr ""
 
 #: engines/colony/metaengine.cpp:131 engines/dm/metaengine.cpp:182
-#: engines/freescape/movement.cpp:61 engines/hpl1/metaengine.cpp:79
+#: engines/freescape/movement.cpp:62 engines/hpl1/metaengine.cpp:79
 #: engines/mm/mm1/metaengine.cpp:105
 msgid "Strafe right"
 msgstr ""
 
 #: engines/colony/metaengine.cpp:138
-#: engines/freescape/games/castle/castle.cpp:561
+#: engines/freescape/games/castle/castle.cpp:562
 #: engines/freescape/games/dark/dark.cpp:257
-#: engines/freescape/games/driller/driller.cpp:144
+#: engines/freescape/games/driller/driller.cpp:145
 #: engines/freescape/games/eclipse/eclipse.cpp:360
 msgid "Rotate left"
 msgstr ""
 
 #: engines/colony/metaengine.cpp:143
-#: engines/freescape/games/castle/castle.cpp:566
+#: engines/freescape/games/castle/castle.cpp:567
 #: engines/freescape/games/dark/dark.cpp:262
-#: engines/freescape/games/driller/driller.cpp:149
+#: engines/freescape/games/driller/driller.cpp:150
 #: engines/freescape/games/eclipse/eclipse.cpp:365
 msgid "Rotate right"
 msgstr ""
@@ -7580,7 +7584,7 @@ msgid "Look behind"
 msgstr ""
 
 #: engines/colony/metaengine.cpp:163
-#: engines/freescape/games/castle/castle.cpp:588
+#: engines/freescape/games/castle/castle.cpp:589
 #: engines/freescape/games/eclipse/eclipse.cpp:403
 msgid "Face forward"
 msgstr ""
@@ -8249,7 +8253,7 @@ msgstr ""
 
 #. I18N: Run is a movement type
 #. I18N: Action in In Cold Blood
-#: engines/efh/metaengine.cpp:530 engines/freescape/games/castle/castle.cpp:571
+#: engines/efh/metaengine.cpp:530 engines/freescape/games/castle/castle.cpp:572
 #: engines/grim/grim.cpp:501 engines/grim/grim.cpp:596
 #: engines/hpl1/metaengine.cpp:82 engines/icb/icb.cpp:131
 #: engines/icb/icb.cpp:197 engines/ultima/ultima8/metaengine.cpp:56
@@ -8341,203 +8345,212 @@ msgstr ""
 msgid "Fool's Errand keymappings"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:41
+#: engines/freescape/metaengine.cpp:43
 msgid "Prerecorded sounds"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:42
+#: engines/freescape/metaengine.cpp:44
 msgid "Use high-quality pre-recorded sounds instead of pc speaker emulation"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:52
+#: engines/freescape/metaengine.cpp:54
 msgid "Extended timer"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:53
+#: engines/freescape/metaengine.cpp:55
 msgid "Start the game timer at 99:59:59"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:63
+#: engines/freescape/metaengine.cpp:65
 msgid "Automatic drilling"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:64
+#: engines/freescape/metaengine.cpp:66
 msgid "Allow to successfully drill in any part of the area in Driller"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:74
+#: engines/freescape/metaengine.cpp:76
 msgid "Disable demo mode"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:75
+#: engines/freescape/metaengine.cpp:77
 msgid "Never activate demo mode"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:85
+#: engines/freescape/metaengine.cpp:87
 msgid "Disable sensors"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:86
+#: engines/freescape/metaengine.cpp:88
 msgid "Sensors will not shoot the player"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:96
+#: engines/freescape/metaengine.cpp:98
 msgid "Disable falling"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:97
+#: engines/freescape/metaengine.cpp:99
 msgid "Player cannot fall over edges"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:118
+#: engines/freescape/metaengine.cpp:120
 msgid "Authentic graphics"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:119
+#: engines/freescape/metaengine.cpp:121
 msgid "Keep graphics as close as possible to the original"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:129
+#: engines/freescape/metaengine.cpp:131
 msgid "Enable rock travel"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:130
+#: engines/freescape/metaengine.cpp:132
 msgid "Enable traveling using a rock shoot at start"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:140
+#: engines/freescape/metaengine.cpp:142
 msgid "Smoother movement"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:141
+#: engines/freescape/metaengine.cpp:143
 msgid "Use smoother movements instead of discrete steps"
 msgstr ""
 
 #. I18N: Use modern FPS-style controls: WASD for movement, Shift to run
-#: engines/freescape/metaengine.cpp:152
+#: engines/freescape/metaengine.cpp:154
 msgid "WASD controls"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:153
+#: engines/freescape/metaengine.cpp:155
 msgid "Use WASD keys for movement and Shift to run"
 msgstr ""
 
 #. I18N: Enable background music using AdLib/OPL2 FM synthesis
-#: engines/freescape/metaengine.cpp:164
+#: engines/freescape/metaengine.cpp:166
 msgid "Backported music from C64 releases (AdLib)"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:165
+#: engines/freescape/metaengine.cpp:167
 msgid ""
 "Enable background music ported from the C64 version using AdLib FM synthesis"
 msgstr ""
 
 #. I18N: Enable background music using AY chip emulation
-#: engines/freescape/metaengine.cpp:176
+#: engines/freescape/metaengine.cpp:178
 msgid "Backported music from C64 releases"
 msgstr ""
 
-#: engines/freescape/metaengine.cpp:177
+#: engines/freescape/metaengine.cpp:179
 msgid "Enable background music ported from the C64 version"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/freescape/movement.cpp:69 engines/mm/mm1/metaengine.cpp:84
+#: engines/freescape/movement.cpp:70 engines/mm/mm1/metaengine.cpp:84
 msgid "Shoot"
 msgstr ""
 
-#: engines/freescape/movement.cpp:78
+#: engines/freescape/movement.cpp:79
 msgid "Rotate up"
 msgstr ""
 
-#: engines/freescape/movement.cpp:83
+#: engines/freescape/movement.cpp:84
 msgid "Rotate down"
 msgstr ""
 
-#: engines/freescape/movement.cpp:88
+#: engines/freescape/movement.cpp:89
 msgid "Turn back"
 msgstr ""
 
+#. I18N: Return refers to return/enter key
+#: engines/freescape/movement.cpp:103 engines/tsage/metaengine.cpp:196
+msgid "Return"
+msgstr ""
+
 #. I18N: Toggles between cursor lock modes, switching between free cursor movement and camera/head movement.
-#: engines/freescape/movement.cpp:101
+#: engines/freescape/movement.cpp:111
 msgid "Change mode"
 msgstr ""
 
-#: engines/freescape/movement.cpp:112
+#: engines/freescape/movement.cpp:122
 msgid "Info menu"
 msgstr ""
 
 #. I18N: Toggles the red/blue stereoscopic 3D effect (anaglyph glasses).
-#: engines/freescape/movement.cpp:119
+#: engines/freescape/movement.cpp:129
 msgid "Toggle red/blue 3D"
 msgstr ""
 
-#: engines/freescape/games/castle/castle.cpp:528
+#: engines/freescape/games/castle/castle.cpp:529
 msgid "Select prince"
 msgstr ""
 
-#: engines/freescape/games/castle/castle.cpp:533
+#: engines/freescape/games/castle/castle.cpp:534
 msgid "Select princess"
 msgstr ""
 
-#: engines/freescape/games/castle/castle.cpp:556
+#: engines/freescape/games/castle/castle.cpp:557
+msgid "Toggle music/sound effects"
+msgstr ""
+
+#: engines/freescape/games/castle/castle.cpp:557
 #: engines/freescape/games/dark/dark.cpp:251
-#: engines/freescape/games/driller/driller.cpp:138
+#: engines/freescape/games/driller/driller.cpp:139
 #: engines/freescape/games/eclipse/eclipse.cpp:355
 #: engines/hugo/metaengine.cpp:154
 msgid "Toggle sound"
 msgstr ""
 
-#: engines/freescape/games/castle/castle.cpp:582
+#: engines/freescape/games/castle/castle.cpp:583
 msgid "Crawl"
 msgstr ""
 
-#: engines/freescape/games/castle/castle.cpp:599
+#: engines/freescape/games/castle/castle.cpp:600
 msgid "Run (hold)"
 msgstr ""
 
 #: engines/freescape/games/dark/dark.cpp:267
-#: engines/freescape/games/driller/driller.cpp:183
+#: engines/freescape/games/driller/driller.cpp:184
 #: engines/ultima/ultima8/metaengine.cpp:97
 msgid "Roll left"
 msgstr ""
 
 #: engines/freescape/games/dark/dark.cpp:272
-#: engines/freescape/games/driller/driller.cpp:188
+#: engines/freescape/games/driller/driller.cpp:189
 #: engines/ultima/ultima8/metaengine.cpp:98
 msgid "Roll right"
 msgstr ""
 
 #. I18N: Illustrates the angle at which you turn left or right.
 #: engines/freescape/games/dark/dark.cpp:278
-#: engines/freescape/games/driller/driller.cpp:155
+#: engines/freescape/games/driller/driller.cpp:156
 msgid "Increase turn angle"
 msgstr ""
 
 #: engines/freescape/games/dark/dark.cpp:283
-#: engines/freescape/games/driller/driller.cpp:160
+#: engines/freescape/games/driller/driller.cpp:161
 msgid "Decrease turn angle"
 msgstr ""
 
 #. I18N: STEP SIZE: Measures the size of one movement in the direction you are facing (1-250 standard distance units (SDUs))
 #: engines/freescape/games/dark/dark.cpp:289
-#: engines/freescape/games/driller/driller.cpp:166
+#: engines/freescape/games/driller/driller.cpp:167
 msgid "Increase step size"
 msgstr ""
 
 #. I18N: STEP SIZE: Measures the size of one movement in the direction you are facing (1-250 standard distance units (SDUs))
 #: engines/freescape/games/dark/dark.cpp:295
-#: engines/freescape/games/driller/driller.cpp:172
+#: engines/freescape/games/driller/driller.cpp:173
 msgid "Decrease step size"
 msgstr ""
 
 #: engines/freescape/games/dark/dark.cpp:300
-#: engines/freescape/games/driller/driller.cpp:177
+#: engines/freescape/games/driller/driller.cpp:178
 msgid "Rise / Fly up"
 msgstr ""
 
 #: engines/freescape/games/dark/dark.cpp:306
-#: engines/freescape/games/driller/driller.cpp:193
+#: engines/freescape/games/driller/driller.cpp:194
 msgid "Lower / Fly down"
 msgstr ""
 
@@ -8546,12 +8559,12 @@ msgid "Enable / Disable jetpack"
 msgstr ""
 
 #. I18N: drilling rig is an in game item
-#: engines/freescape/games/driller/driller.cpp:200
+#: engines/freescape/games/driller/driller.cpp:201
 msgid "Deploy drilling rig"
 msgstr ""
 
 #. I18N: drilling rig is an in game item
-#: engines/freescape/games/driller/driller.cpp:207
+#: engines/freescape/games/driller/driller.cpp:208
 msgid "Collect drilling rig"
 msgstr ""
 
@@ -9489,7 +9502,7 @@ msgid "Repeat last line"
 msgstr ""
 
 #: engines/hugo/metaengine.cpp:172 engines/lure/metaengine.cpp:197
-#: engines/mads/metaengine.cpp:289 engines/tsage/metaengine.cpp:247
+#: engines/mads/metaengine.cpp:301 engines/tsage/metaengine.cpp:247
 msgid "Restore game"
 msgstr ""
 
@@ -9714,7 +9727,7 @@ msgstr ""
 msgid "Direction keymappings"
 msgstr ""
 
-#: engines/hypno/metaengine.cpp:377 engines/mads/metaengine.cpp:327
+#: engines/hypno/metaengine.cpp:377 engines/mads/metaengine.cpp:339
 #: engines/tsage/metaengine.cpp:259
 msgid "Show credits"
 msgstr ""
@@ -10208,7 +10221,7 @@ msgstr ""
 msgid "This puzzle is not available in the trial version of the game"
 msgstr ""
 
-#: engines/lure/metaengine.cpp:53 engines/mads/metaengine.cpp:148
+#: engines/lure/metaengine.cpp:53 engines/mads/metaengine.cpp:160
 #: engines/sherlock/metaengine.cpp:120 engines/twine/metaengine.cpp:144
 msgid "TTS Narrator"
 msgstr ""
@@ -10356,23 +10369,23 @@ msgid ""
 "data files."
 msgstr ""
 
-#: engines/made/metaengine.cpp:158
+#: engines/made/metaengine.cpp:162
 msgid "Cursor up"
 msgstr ""
 
-#: engines/made/metaengine.cpp:165
+#: engines/made/metaengine.cpp:169
 msgid "Cursor down"
 msgstr ""
 
-#: engines/made/metaengine.cpp:172
+#: engines/made/metaengine.cpp:176
 msgid "Cursor left"
 msgstr ""
 
-#: engines/made/metaengine.cpp:179
+#: engines/made/metaengine.cpp:183
 msgid "Cursor right"
 msgstr ""
 
-#: engines/made/metaengine.cpp:204
+#: engines/made/metaengine.cpp:208
 msgid "Repeat last message"
 msgstr ""
 
@@ -10414,39 +10427,47 @@ msgid ""
 "the AdLib driver."
 msgstr ""
 
-#: engines/mads/metaengine.cpp:254
+#: engines/mads/metaengine.cpp:147
+msgid "Enable restored main menu content"
+msgstr ""
+
+#: engines/mads/metaengine.cpp:148
+msgid "Restore unused content in the main menu."
+msgstr ""
+
+#: engines/mads/metaengine.cpp:266
 msgid "Start menu keymappings"
 msgstr ""
 
-#: engines/mads/metaengine.cpp:277
+#: engines/mads/metaengine.cpp:289
 msgid "Open game menu"
 msgstr ""
 
-#: engines/mads/metaengine.cpp:295
+#: engines/mads/metaengine.cpp:307
 msgid "Scroll bar up"
 msgstr ""
 
-#: engines/mads/metaengine.cpp:301
+#: engines/mads/metaengine.cpp:313
 msgid "Scroll bar down"
 msgstr ""
 
-#: engines/mads/metaengine.cpp:309
+#: engines/mads/metaengine.cpp:321
 msgid "Start game"
 msgstr ""
 
-#: engines/mads/metaengine.cpp:315
+#: engines/mads/metaengine.cpp:327
 msgid "Resume game"
 msgstr ""
 
-#: engines/mads/metaengine.cpp:321
+#: engines/mads/metaengine.cpp:333
 msgid "Show intro"
 msgstr ""
 
-#: engines/mads/metaengine.cpp:333
+#: engines/mads/metaengine.cpp:345
 msgid "Show quotes"
 msgstr ""
 
-#: engines/mads/metaengine.cpp:346
+#: engines/mads/metaengine.cpp:358
 msgid "Restart animation"
 msgstr ""
 
@@ -14125,11 +14146,6 @@ msgstr ""
 
 #: engines/trecision/metaengine.cpp:163
 msgid "Open system menu"
-msgstr ""
-
-#. I18N: Return refers to return/enter key
-#: engines/tsage/metaengine.cpp:196
-msgid "Return"
 msgstr ""
 
 #: engines/tsage/metaengine.cpp:221

@@ -185,6 +185,9 @@ void Scene::process() {
 
 void Scene::onStateEnter(const NancyState::NancyState prevState) {
 	if (_state != kInit) {
+		// Picks up a look chosen on the Design Select screen while we were away
+		applyPlayerCharacter(g_nancy->getPlayerCharacter());
+
 		registerGraphics();
 
 		if (prevState != NancyState::kPause) {
@@ -462,6 +465,42 @@ void Scene::removeItemFromInventory(int16 id, bool pickUp) {
 	}
 }
 
+void Scene::removeItemFromCharacterInventory(uint characterIndex, int16 id) {
+	if (characterIndex == g_nancy->getPlayerCharacter()) {
+		if (hasItem(id) == g_nancy->_true) {
+			removeItemFromInventory(id, false);
+		}
+
+		return;
+	}
+
+	auto *playerChar = (PlayerCharacterData *)getPuzzleData(PlayerCharacterData::getTag());
+	if (!playerChar) {
+		return;
+	}
+
+	// A character who hasn't been played yet owns nothing to take away
+	PlayerCharacterData::Inventory &inventory = playerChar->getInventory(characterIndex);
+	if (!inventory.isValid) {
+		return;
+	}
+
+	if ((uint)id < inventory.items.size()) {
+		inventory.items[id] = g_nancy->_false;
+	}
+
+	for (uint i = 0; i < inventory.order.size(); ++i) {
+		if (inventory.order[i] == id) {
+			inventory.order.remove_at(i);
+			break;
+		}
+	}
+
+	if (inventory.heldItem == id) {
+		inventory.heldItem = -1;
+	}
+}
+
 void Scene::setHeldItem(int16 id) {
 	_flags.heldItem = id; g_nancy->_cursor->setCursorItemID(id);
 }
@@ -485,6 +524,43 @@ byte Scene::hasItem(int16 id) const {
 			  (uint)_flags.items.size());
 		return g_nancy->_false;
 	}
+}
+
+byte Scene::hasCharacterItem(uint characterIndex, int16 id) {
+	if (characterIndex == g_nancy->getPlayerCharacter()) {
+		return hasItem(id);
+	}
+
+	auto *playerChar = (PlayerCharacterData *)getPuzzleData(PlayerCharacterData::getTag());
+	if (!playerChar) {
+		return g_nancy->_false;
+	}
+
+	const PlayerCharacterData::Inventory &inventory = playerChar->getInventory(characterIndex);
+	if (inventory.heldItem == id) {
+		return g_nancy->_true;
+	}
+
+	if (id >= 0 && (uint)id < inventory.items.size()) {
+		return inventory.items[id];
+	}
+
+	return g_nancy->_false;
+}
+
+int32 Scene::getCharacterUIResource(uint characterIndex, uint index) {
+	if (characterIndex == g_nancy->getPlayerCharacter()) {
+		return getUIResource(index);
+	}
+
+	auto *resourceData = (UIResourceData *)getPuzzleData(UIResourceData::getTag());
+	if (!resourceData) {
+		return 0;
+	}
+
+	// A character who hasn't been played yet has no resources of their own yet
+	const Common::Array<int32> &characterSet = resourceData->getCharacterValues(characterIndex);
+	return index < characterSet.size() ? characterSet[index] : 0;
 }
 
 void Scene::installInventorySoundOverride(byte command, const SoundDescription &sound, const Common::String &caption, uint16 itemID) {
@@ -715,9 +791,8 @@ bool Scene::getEventFlag(FlagDescription eventFlag) const {
 	return getEventFlag(eventFlag.label, eventFlag.flag);
 }
 
-// On first use, seed each resource value from the UIRC boot chunk (record id =
-// initial value). After a save is loaded `seeded` is already true, so the
-// restored values are kept.
+// On first use, seed each resource value from the UIRC boot chunk. After a save
+// is loaded `seeded` is already true, so the restored values are kept.
 static void seedUIResourceData(UIResourceData *data) {
 	if (!data || data->seeded) {
 		return;
@@ -729,7 +804,7 @@ static void seedUIResourceData(UIResourceData *data) {
 	if (uirc) {
 		data->values.resize(uirc->items.size());
 		for (uint i = 0; i < uirc->items.size(); ++i) {
-			data->values[i] = uirc->items[i].id;
+			data->values[i] = uirc->items[i].startingValue;
 		}
 	}
 }
@@ -746,9 +821,21 @@ int32 Scene::getUIResource(uint index) {
 void Scene::setUIResource(uint index, int32 value) {
 	UIResourceData *data = (UIResourceData *)getPuzzleData(UIResourceData::getTag());
 	seedUIResourceData(data);
-	if (data && index < data->values.size()) {
-		data->values[index] = value;
+	if (!data || index >= data->values.size()) {
+		return;
 	}
+
+	// Nancy 14 added a per-resource maximum. It guards the fixed-width display
+	// rather than capping the resource: a value above it empties the resource
+	// outright instead of being clamped to it.
+	if (g_nancy->getGameType() >= kGameTypeNancy14) {
+		const UIRC *uirc = GetEngineData(UIRC)
+		if (uirc && index < uirc->items.size() && value > (int32)uirc->items[index].maxValue) {
+			value = 0;
+		}
+	}
+
+	data->values[index] = MAX<int32>(value, 0);
 }
 
 // Nancy 11+ AR 30/31 store the "player scrolling disabled" state in an event
@@ -867,6 +954,197 @@ void Scene::registerGraphics() {
 	}
 }
 
+bool Scene::changePlayerCharacter(uint characterIndex) {
+	uint previousCharacter = g_nancy->getPlayerCharacter();
+
+	if (!applyPlayerCharacter(characterIndex)) {
+		return false;
+	}
+
+	// Each protagonist carries their own items and resources, so the outgoing
+	// character's are parked and the incoming character's are made live
+	storeCharacterInventory(previousCharacter);
+	storeCharacterResources(previousCharacter);
+	inheritBrotherProgress(characterIndex);
+	loadCharacterInventory(characterIndex);
+	loadCharacterResources(characterIndex);
+
+	return true;
+}
+
+void Scene::inheritBrotherProgress(uint characterIndex) {
+	if (characterIndex != kPlayerCharacterFrank && characterIndex != kPlayerCharacterJoe) {
+		return;
+	}
+
+	auto *playerChar = (PlayerCharacterData *)getPuzzleData(PlayerCharacterData::getTag());
+	auto *journalData = (JournalData *)getPuzzleData(JournalData::getTag());
+	if (!playerChar || !journalData) {
+		return;
+	}
+
+	// The Hardy boys work the case as a team, so whichever brother is played
+	// second takes over the notes the other has already made instead of
+	// starting a fresh journal. Nancy always keeps her own. Their resources
+	// (the money they carry) pass over the same way; their items don't.
+	const uint brother = characterIndex == kPlayerCharacterFrank ? kPlayerCharacterJoe : kPlayerCharacterFrank;
+	if (!playerChar->getInventory(characterIndex).isValid && playerChar->getInventory(brother).isValid) {
+		journalData->inheritEntries(brother, characterIndex);
+
+		auto *resourceData = (UIResourceData *)getPuzzleData(UIResourceData::getTag());
+		if (resourceData) {
+			resourceData->getCharacterValues(characterIndex) = resourceData->getCharacterValues(brother);
+		}
+	}
+}
+
+void Scene::storeCharacterInventory(uint characterIndex) {
+	auto *playerChar = (PlayerCharacterData *)getPuzzleData(PlayerCharacterData::getTag());
+	if (!playerChar) {
+		return;
+	}
+
+	PlayerCharacterData::Inventory &inventory = playerChar->getInventory(characterIndex);
+	inventory.isValid = true;
+	inventory.heldItem = _flags.heldItem;
+	inventory.items = _flags.items;
+	inventory.disabledItems = _flags.disabledItems;
+	inventory.order = _inventoryBox.getOrder();
+}
+
+void Scene::loadCharacterInventory(uint characterIndex) {
+	auto *playerChar = (PlayerCharacterData *)getPuzzleData(PlayerCharacterData::getTag());
+	if (!playerChar) {
+		return;
+	}
+
+	const uint numItems = g_nancy->getStaticData().numItems;
+	PlayerCharacterData::Inventory &inventory = playerChar->getInventory(characterIndex);
+
+	if (inventory.isValid) {
+		_flags.items = inventory.items;
+		_flags.disabledItems = inventory.disabledItems;
+		_inventoryBox.getOrder() = inventory.order;
+		setHeldItem(inventory.heldItem);
+	} else {
+		// A character that hasn't been played yet starts out empty-handed
+		_flags.items.clear();
+		_flags.disabledItems.clear();
+		_inventoryBox.getOrder().clear();
+		setHeldItem(-1);
+	}
+
+	_flags.items.resize(numItems, g_nancy->_false);
+	_flags.disabledItems.resize(numItems, 0);
+
+	if (_inventoryPopup.isOpen()) {
+		_inventoryPopup.refreshGrid();
+	}
+}
+
+void Scene::storeCharacterResources(uint characterIndex) {
+	auto *resourceData = (UIResourceData *)getPuzzleData(UIResourceData::getTag());
+	if (!resourceData || !resourceData->seeded) {
+		return;
+	}
+
+	resourceData->getCharacterValues(characterIndex) = resourceData->values;
+}
+
+void Scene::loadCharacterResources(uint characterIndex) {
+	auto *resourceData = (UIResourceData *)getPuzzleData(UIResourceData::getTag());
+	if (!resourceData) {
+		return;
+	}
+
+	Common::Array<int32> &characterSet = resourceData->getCharacterValues(characterIndex);
+	resourceData->values = characterSet;
+
+	// A character who hasn't been played yet starts from the resource values in
+	// their own UIRC, which the switch has just loaded
+	resourceData->seeded = !characterSet.empty();
+}
+
+void Scene::setPlayerCharacterDesign(uint characterIndex, const Common::String &designName) {
+	g_nancy->setPlayerCharacterDesign(characterIndex, designName);
+
+	auto *playerChar = (PlayerCharacterData *)getPuzzleData(PlayerCharacterData::getTag());
+	if (playerChar && characterIndex < kMaxPlayerCharacters) {
+		playerChar->designs[characterIndex] = designName;
+	}
+
+	// The rebuild is left to onStateEnter(). The Design Select screen is a
+	// different state, and tearing the scene's widgets down from underneath it
+	// would draw them over that screen for a frame.
+}
+
+bool Scene::applyPlayerCharacter(uint characterIndex) {
+	if (g_nancy->getGameType() < kGameTypeNancy15 || !g_nancy->playerCharacterNeedsReload(characterIndex)) {
+		return false;
+	}
+
+	// The open popups describe the outgoing character, so get them off the
+	// screen while the data they were built from is still around
+	closeActivePopups();
+
+	if (!g_nancy->setPlayerCharacter(characterIndex)) {
+		return false;
+	}
+
+	auto *taskData = GetEngineData(TASK);
+	assert(taskData);
+	_frame.init(taskData->imageName);
+
+	_textbox.init();
+	_inventoryPopup.init();
+	_notebookPopup.init();
+	_cellPhonePopup.init();
+	_conversationPopup.init();
+
+	delete _taskbar;
+	_taskbar = new UI::Taskbar();
+	_taskbar->init();
+	_taskbar->syncFromPuzzleData();
+	_taskbar->updateNotificationStates(_sceneState.currentScene.sceneID);
+
+	if (_camera) {
+		_camera->init();
+	}
+
+	registerGraphics();
+	g_nancy->_graphics->redrawAll();
+
+	return true;
+}
+
+void Scene::changeSceneVideo(const Common::Path &videoFile) {
+	_sceneState.summary.videoFile = videoFile;
+
+	const Common::Path palettePath = !_sceneState.summary.palettes.empty() ?
+		_sceneState.summary.palettes[(byte)_sceneState.currentScene.paletteID] :
+		Common::Path();
+
+	// The replacement covers the same location, so the vertical scroll carries
+	// over, but panning restarts from the video's first frame
+	_sceneState.currentScene.frameID = 0;
+	_viewport.loadVideo(videoFile,
+						0,
+						_viewport.getCurVerticalScroll(),
+						_sceneState.summary.panningType,
+						_sceneState.summary.videoFormat,
+						palettePath);
+
+	// loadVideo() re-enables every edge, so the scene's own restrictions
+	// have to be reapplied on top of the new video
+	if (_viewport.getFrameCount() <= 1) {
+		_viewport.disableEdges(kLeft | kRight);
+	}
+
+	if (_viewport.getMaxScroll() == 0) {
+		_viewport.disableEdges(kUp | kDown);
+	}
+}
+
 void Scene::synchronize(Common::Serializer &ser) {
 	if (_flags.eventFlags.empty())
 		init();
@@ -915,9 +1193,17 @@ void Scene::synchronize(Common::Serializer &ser) {
 		ser.syncAsUint32LE((uint32 &)_flags.logicConditions[i].timestamp);
 	}
 
+	const uint numItems = g_nancy->getStaticData().numItems;
+	uint numSavedItems = numItems;
+	if (ser.getVersion() < 10 && (g_nancy->getGameType() == kGameTypeNancy14 || g_nancy->getGameType() == kGameTypeNancy15)) {
+		// Nancy14/15 saves made before version 10 were written with an item
+		// count of 50, before the correct count of 49 was established.
+		numSavedItems = 50;
+	}
+
 	auto &order = getInventoryBox().getOrder();
 	uint prevSize = order.size();
-	order.resize(g_nancy->getStaticData().numItems);
+	order.resize(numSavedItems);
 
 	if (ser.isSaving()) {
 		for (uint i = prevSize; i < order.size(); ++i) {
@@ -925,7 +1211,7 @@ void Scene::synchronize(Common::Serializer &ser) {
 		}
 	}
 
-	ser.syncArray(order.data(), g_nancy->getStaticData().numItems, Common::Serializer::Sint16LE);
+	ser.syncArray(order.data(), numSavedItems, Common::Serializer::Sint16LE);
 
 	while (order.size() && order.back() == -1) {
 		order.pop_back();
@@ -936,12 +1222,16 @@ void Scene::synchronize(Common::Serializer &ser) {
 		getInventoryBox().onReorder();
 	}
 
-	ser.syncArray(_flags.items.data(), g_nancy->getStaticData().numItems, Common::Serializer::Byte);
+	_flags.items.resize(numSavedItems, g_nancy->_false);
+	ser.syncArray(_flags.items.data(), numSavedItems, Common::Serializer::Byte);
+	_flags.items.resize(numItems);
 	ser.syncAsSint16LE(_flags.heldItem);
 	g_nancy->_cursor->setCursorItemID(_flags.heldItem);
 
 	if (g_nancy->getGameType() >= kGameTypeNancy7) {
-		ser.syncArray(_flags.disabledItems.data(), g_nancy->getStaticData().numItems, Common::Serializer::Byte);
+		_flags.disabledItems.resize(numSavedItems, 0);
+		ser.syncArray(_flags.disabledItems.data(), numSavedItems, Common::Serializer::Byte);
+		_flags.disabledItems.resize(numItems);
 	}
 
 	ser.syncAsUint32LE((uint32 &)_timers.lastTotalTime);
@@ -1042,6 +1332,22 @@ void Scene::synchronize(Common::Serializer &ser) {
 			_taskbar->syncFromPuzzleData();
 			_taskbar->updateNotificationStates(_sceneState.currentScene.sceneID);
 		}
+
+		// Nancy15+ builds its popup UI out of the active player character's own
+		// data files, so bring that data back before the widgets are used again.
+		// Only the UI is swapped: the inventory restored above already is the
+		// saved character's own, while the other characters' stay parked in the
+		// PlayerCharacterData.
+		if (g_nancy->getGameType() >= kGameTypeNancy15) {
+			auto *playerChar = (PlayerCharacterData *)getPuzzleData(PlayerCharacterData::getTag());
+			if (playerChar) {
+				for (uint i = 0; i < kMaxPlayerCharacters; ++i) {
+					g_nancy->setPlayerCharacterDesign(i, playerChar->designs[i]);
+				}
+
+				applyPlayerCharacter(playerChar->characterIndex);
+			}
+		}
 	}
 
 	_isRunningAd = false;
@@ -1060,6 +1366,12 @@ UI::Clock *Scene::getClock() {
 }
 
 void Scene::init() {
+	// A design may have been picked before the game itself started, so refresh
+	// the engine data the widgets below are built from
+	if (g_nancy->getGameType() >= kGameTypeNancy15) {
+		g_nancy->setPlayerCharacter(g_nancy->getPlayerCharacter());
+	}
+
 	auto *bootSummary = GetEngineData(BSUM)
 	auto *hintData = GetEngineData(HINT)
 	assert(bootSummary);

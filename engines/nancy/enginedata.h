@@ -267,6 +267,8 @@ struct SET : public EngineData {
 	Common::Array<Common::Rect> _buttonDests;
 	Common::Array<Common::Rect> _buttonDownSrcs;
 	Common::Rect _doneButtonHighlightSrc;
+	// Nancy15's extra (Design Select) button has a highlight of its own
+	Common::Rect _extraButtonHighlightSrc;
 	Common::Array<Common::Rect> _scrollbarSrcs;
 
 	Common::Array<uint16> _scrollbarsCenterYPos;
@@ -803,6 +805,8 @@ struct UIIV : public EngineData {
 	// of the inventory order instead of being inserted at the front (so the most
 	// recently dropped item ends up last). See Scene::addItemToInventory.
 	byte appendItemsWhileOpen = 0;
+	// When nonzero, picking up an item closes the popup so it can be used on the scene.
+	byte closeOnPickup = 0;
 	UIButtonSlot filters[kNumFilters];              // 6 entries
 	Common::Array<Common::Rect> tabCaptionSrcRects; // 6 entries
 	Common::Rect tabCaptionDestRect;                // on-screen target
@@ -841,16 +845,18 @@ struct EVNT : public EngineData {
 };
 
 // UI overlay element table. Introduced in Nancy 12. Each record describes one UI
-// element: the shared overlay image it belongs to, its on-screen rect and up to
-// six associated sound cues. Unused slots use the name "NO_UI_ITEM", and slots
-// without a given sound use "NO SOUND".
+// element: its starting value, the shared overlay image it belongs to, its
+// on-screen rect and up to six associated sound cues. Unused slots use the name
+// "NO_UI_ITEM", and slots without a given sound use "NO SOUND".
 struct UIRC : public EngineData {
 	struct ItemRecord {
-		uint16 id = 0;
+		uint16 startingValue = 0;
+		// Nancy 14 added an upper bound: a value that goes above it is reset to 0
+		uint16 maxValue = 0;
 		Common::Path overlayName;
 		Common::Rect rect;
-		int16 unknown1 = 0;
-		int16 unknown2 = 0;
+		int16 fontID = 0;
+		int16 numDecimals = 0;
 		int16 soundChannel = 0;
 		int16 soundVolume = 0;
 		Common::String soundNames[6];
@@ -859,10 +865,13 @@ struct UIRC : public EngineData {
 	UIRC(Common::SeekableReadStream *chunkStream);
 
 	static const uint kNumSounds = 6;
-	static const uint kItemRecordSize = 257;
 
 	Common::Array<ItemRecord> items;
 };
+
+// Renders a UI resource's value the way the games' UI does: a currency symbol
+// followed by the value, split into whole units and decimals as the record asks.
+Common::String formatUIResourceValue(const UIRC::ItemRecord &item, int32 value);
 
 // Music mix table. Introduced in Nancy 13. Each record maps a short location
 // code (e.g. "BRI", "CAM", "TUT") to the set of music / ambience tracks that
@@ -904,15 +913,28 @@ struct PCUI : public EngineData {
 	Common::Array<Character> characters;	// indexed by the on-disk slot byte
 };
 
-// Fixed layout/graphics block for the Nancy 15 player-character ("Design
-// Select") switcher screen. Companion to PCUI. Supplies the background and
-// overlay image names plus the on-screen button/selection rects.
+// Fixed 314-byte layout block for the Nancy 15 "Design Select" screen, which
+// picks the look (outfit) the player character's UI and cutscenes use. Reached
+// from the in-game setup menu. Companion to PCUI.
 struct LDSN : public EngineData {
+	static const uint kNumButtons = 2;
+	// The screen lists the available designs in a fixed column of rows
+	static const uint kNumDesignRows = 9;
+
 	LDSN(Common::SeekableReadStream *chunkStream);
 
-	Common::String backgroundImageName;	// "UI_DesignSelectBG"
-	Common::String overlayImageName;	// "UI_DesignSelect_OVL"
-	Common::Array<Common::Rect> rects;	// button + per-character selection rects
+	Common::Path backgroundImageName;	// "UI_DesignSelectBG", fills the screen
+	Common::Path overlayImageName;		// "UI_DesignSelect_OVL", the buttons' sprite sheet
+
+	// The two buttons' artwork, cut from the overlay image. [0] applies the
+	// highlighted design, [1] leaves without applying.
+	Common::Array<Common::Rect> buttonDownSrcs;
+	Common::Array<Common::Rect> buttonHighlightSrcs;
+	Common::Array<Common::Rect> buttonDests;
+
+	Common::Array<Common::Rect> designRowDests;	// where each design's name is drawn
+	int16 fontID = 0;							// design names
+	int16 highlightFontID = 0;					// ...and the selected one
 };
 
 // Player-UI header. Introduced in Nancy 15, first chunk of each character's

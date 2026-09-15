@@ -54,7 +54,18 @@ class Serializer;
  */
 namespace Nancy {
 
-static const int kSavegameVersion = 9;
+// Save game version history:
+// - 1: Initial version
+// - 2: Conditional dialogue and hints moved to nancy.dat
+// - 3: Puzzle data stored as lazily initialized PuzzleData objects
+// - 4: Journal entries sync their scene ID (Nancy9+)
+// - 5: Nancy10 taskbar notification badges persisted
+// - 6: Nancy12 timers reworked
+// - 7: Nancy10 unnamed notebook task event flags added
+// - 8: Nancy12 DrivingPuzzle fuel state persisted
+// - 9: RippedLetterPuzzle stores its scene ID and tried flag
+// - 10: Nancy14/15 inventory arrays hold 49 items instead of 50
+static const int kSavegameVersion = 10;
 
 struct NancyGameDescription;
 
@@ -101,8 +112,25 @@ public:
 	const EngineData *getEngineData(const Common::String &name) const;
 	const Common::String getEventFlagName(uint flagID) const;
 
+	// Nancy15+ lets the player alternate between several protagonists, each of whom
+	// carries their own copy of the popup UI. Swaps the engine data describing it to
+	// the given PCUI character's, and returns whether anything actually changed.
+	// Scene::reloadPlayerCharacterUI() rebuilds the widgets themselves.
+	bool setPlayerCharacter(uint characterIndex);
+	uint getPlayerCharacter() const { return _playerCharacter; }
+
+	// A character's "design" is the look their UI wears; it names the CIF tree
+	// everything is loaded from. Nancy's can be changed on the Design Select
+	// screen, and defaults to the character's PCUI entry.
+	Common::String getPlayerCharacterDesign(uint characterIndex) const;
+	void setPlayerCharacterDesign(uint characterIndex, const Common::String &designName);
+
+	// Whether setPlayerCharacter() would actually have to load anything
+	bool playerCharacterNeedsReload(uint characterIndex) const;
+
 	void setState(NancyState::NancyState state, NancyState::NancyState overridePrevious = NancyState::kNone);
 	NancyState::NancyState getState() { return _gameFlow.curState; }
+	NancyState::NancyState getPreviousState() const { return _gameFlow.prevState; }
 	void setToPreviousState();
 
 	void setMouseEnabled(bool enabled);
@@ -154,10 +182,14 @@ private:
 
 	Common::Error synchronize(Common::Serializer &serializer);
 
-	bool isCompressed();
-
 	StaticData _staticData;
 	Common::HashMap<Common::String, EngineData *> _engineData;
+
+	// Nancy15+ active player character, the CIF tree their UI came from, and
+	// each character's chosen design (empty = their PCUI default)
+	uint _playerCharacter = 0;
+	Common::String _playerCharacterTree;
+	Common::String _playerCharacterDesigns[kMaxPlayerCharacters];
 
 	const byte _datFileMajorVersion;
 	const byte _datFileMinorVersion;

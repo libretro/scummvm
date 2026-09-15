@@ -75,6 +75,11 @@ int ra1GameplayWindowOffsetY(const InsaneRebel1 *rebel1) {
 	}
 }
 
+int getBankGlyphIndex(byte ch) {
+	// Localized RA1 fonts store the DOS sharp-s glyph at 0x7F.
+	return (ch == 0xE1 ? 0x7F : ch) - 0x21;
+}
+
 void drawBankString(const RA1SpriteBank &bank, byte *dst, int pitch, int width, int height,
 	int x, int y, const char *text) {
 	if (!dst || !text || bank.numSprites <= 0)
@@ -93,7 +98,7 @@ void drawBankString(const RA1SpriteBank &bank, byte *dst, int pitch, int width, 
 			x += 4;
 			continue;
 		}
-		const int fontIdx = (int)ch - 0x21;
+		const int fontIdx = getBankGlyphIndex(ch);
 		if (fontIdx < 0 || fontIdx >= bank.numSprites) {
 			x += 4;
 			continue;
@@ -144,7 +149,7 @@ const RA1Sprite *lookupBankGlyph(const RA1SpriteBank &bank, char ch) {
 	if ((byte)ch < 0x21)
 		return nullptr;
 
-	const int fontIdx = (int)(byte)ch - 0x21;
+	const int fontIdx = getBankGlyphIndex((byte)ch);
 	if (fontIdx < 0 || fontIdx >= bank.numSprites)
 		return nullptr;
 
@@ -186,7 +191,7 @@ int getBankStringWidth(const RA1SpriteBank &bank, const char *text) {
 			w += 4;
 			continue;
 		}
-		const int fontIdx = (int)ch - 0x21;
+		const int fontIdx = getBankGlyphIndex(ch);
 		if (fontIdx < 0 || fontIdx >= bank.numSprites) {
 			w += 4;
 			continue;
@@ -776,6 +781,7 @@ void InsaneRebel1::procPostRendering(byte *renderBitmap, int32 codecparam, int32
 
 	if (_currentLevel == 7) {
 		updateLevel8WalkerState();
+		checkDynamicLevelBranch(curFrame);
 		const int viewportX = _player ? ra1Player()->_ra1ViewportOffsetX : 0;
 		const int viewportY = _player ? ra1Player()->_ra1ViewportOffsetY : 0;
 		renderLevel8Overlay(renderBitmap, pitch, width, height, viewportX, viewportY);
@@ -1773,7 +1779,7 @@ void InsaneRebel1::renderHUD(byte *dst, int pitch, int width, int height) {
 	_hudDirtyFlag = 0xFF;
 }
 
-// Each route has up to 3 attack windows. -2 means disabled.
+// Each route has up to 3 attack windows, indexed by ANM-local frame. -2 means disabled.
 const int16 InsaneRebel1::kWalkerAttackWindow1[3] = { 2588, 2323, 877 };
 const int16 InsaneRebel1::kWalkerAttackWindow2[3] = { 1709, 1444, -2 };
 const int16 InsaneRebel1::kWalkerAttackWindow3[3] = { 262, -2, -2 };
@@ -1781,7 +1787,7 @@ const int16 InsaneRebel1::kWalkerAttackWindow3[3] = { 262, -2, -2 };
 void InsaneRebel1::updateLevel8WalkerState() {
 	if (_walkerHealth >= 11) {
 		_walkerHealth = (int16)(100 - (_killCount + (_killCount >> 2)));
-	} else if (_walkerHealth > 0 && (_gameCounter & 3) == 0) {
+	} else if (_walkerHealth > 0 && (_currentSmushFrame & 3) == 0) {
 		_walkerHealth--;
 	}
 
@@ -1791,7 +1797,7 @@ void InsaneRebel1::updateLevel8WalkerState() {
 	}
 
 	int route = CLIP(_levelRouteIndex, 0, 2);
-	uint16 fc = (uint16)_gameCounter;
+	uint16 fc = (uint16)_currentSmushFrame;
 
 	const int16 *windows[3] = {
 		&kWalkerAttackWindow1[route],
@@ -1831,7 +1837,7 @@ void InsaneRebel1::updateLevel8WalkerState() {
 				_walkerBranchChoice = (_shipPosX < 0xA0) ? 1 : 2;
 			}
 		} else {
-			if ((_gameCounter & 7) == 0)
+			if ((fc & 7) == 0)
 				playSfx(kSfxLockOn, 127, 0);
 		}
 	}
@@ -1853,12 +1859,15 @@ void InsaneRebel1::updateLevel8WalkerState() {
 				newRoute = 2;
 		}
 
-		if (newRoute != 0 && newRoute != route) {
+		if (newRoute != 0) {
 			_pendingRouteIndex = newRoute;
-			_pendingRouteCutoverFrame = _gameCounter + 7;
-			_pendingRouteStartFrame = _pendingRouteCutoverFrame;
-			debugC(DEBUG_INSANE, "L8 branch: route=%d -> %d at frame=%u shipX=%d resumeTimelineFrame=%d cutoverFrame=%d",
-				route, newRoute, (unsigned)_gameCounter, _shipPosX,
+			// The original makes this choice in the post-frame callback, after
+			// that frame's splice check. It renders one more source frame before
+			// switching, advancing the destination's frame-1 start by that frame.
+			_pendingRouteCutoverFrame = _currentSmushFrame + 1;
+			_pendingRouteStartFrame = 2;
+			debugC(DEBUG_INSANE, "L8 branch: route=%d -> %d at localFrame=%u shipX=%d resumeLocalFrame=%d cutoverFrame=%d",
+				route, newRoute, (unsigned)fc, _shipPosX,
 				(int)_pendingRouteStartFrame, (int)_pendingRouteCutoverFrame);
 		}
 		_walkerBranchChoice = 0;
@@ -1871,7 +1880,7 @@ void InsaneRebel1::renderLevel8Overlay(byte *dst, int pitch, int width, int heig
 	if (_currentLevel != 7)
 		return;
 
-	if (_walkerHealth > 0 && (_walkerHealth >= 16 || (_gameCounter & 2) != 0)) {
+	if (_walkerHealth > 0 && (_walkerHealth >= 16 || (_currentSmushFrame & 2) != 0)) {
 		int16 projX = 0x61, projY = 0x8D;
 		projectGameplayPoint(projX, projY);
 		projX = (int16)(0x61 - ((projX - 0x61) >> 2));
@@ -1889,7 +1898,7 @@ void InsaneRebel1::renderLevel8Overlay(byte *dst, int pitch, int width, int heig
 		&kWalkerAttackWindow2[route],
 		&kWalkerAttackWindow3[route]
 	};
-	int16 frameNum = (int16)(uint16)_gameCounter;
+	int16 frameNum = (int16)(uint16)_currentSmushFrame;
 
 	bool inWindow = false;
 	bool inDirectionalPhase = false;
@@ -1933,7 +1942,7 @@ void InsaneRebel1::renderLevel8Overlay(byte *dst, int pitch, int width, int heig
 				viewportX + 0xA8 - parallaxX, viewportY + 0x93 - parallaxY, "<<u");
 		}
 	} else {
-		if ((_gameCounter & 4) == 0) {
+		if ((frameNum & 4) == 0) {
 			int16 projX = 0, projY = 0;
 			projectGameplayPoint(projX, projY);
 			int16 drawX = (int16)(0xA9 - (projX >> 2));

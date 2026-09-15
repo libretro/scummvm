@@ -39,7 +39,7 @@
 #include "engines/nancy/action/puzzle/assemblypuzzle.h"
 #include "engines/nancy/action/puzzle/bballpuzzle.h"
 #include "engines/nancy/action/puzzle/beadpuzzle.h"
-//#include "engines/nancy/action/puzzle/blockingpuzzle.h"
+#include "engines/nancy/action/puzzle/blockingpuzzle.h"
 #include "engines/nancy/action/puzzle/blockspuzzle.h"
 #include "engines/nancy/action/puzzle/boardgamepuzzle.h"
 #include "engines/nancy/action/puzzle/buildpuzzle.h"
@@ -408,10 +408,8 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 		return new CameraAction();
 	case 134:	// Nancy15
 		// Switches the active player character (Nancy / Frank / Joe), the
-		// dual-protagonist mechanic new to The Creature of Kapu Cave.
-		// TODO: not yet implemented (depends on the PCUI/LDSN player-char UI)
-		// return new PlayCharAR();
-		return nullptr;	// TODO
+		// dual-protagonist mechanic new to The Creature of Kapu Cave
+		return new PlayChar();
 	case 140:
 		if (g_nancy->getGameType() <= kGameTypeNancy11)
 			return new SetVolume();			// Moved to 149 in Nancy9, empty slot in Nancy9-11
@@ -530,8 +528,7 @@ ActionRecord *ActionManager::createActionRecord(uint16 type, Common::SeekableRea
 	case 179:
 		return new MeterPuzzle();
 	case 180:
-		//return new BlockingPuzzle();
-		return nullptr;	// TODO
+		return new BlockingPuzzle();
 	case 181:
 		return new PaintPuzzle();
 	case 182:

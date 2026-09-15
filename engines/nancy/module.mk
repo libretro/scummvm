@@ -23,6 +23,7 @@ MODULE_OBJS = \
   action/puzzle/assemblypuzzle.o \
   action/puzzle/bballpuzzle.o \
   action/puzzle/beadpuzzle.o \
+  action/puzzle/blockingpuzzle.o \
   action/puzzle/blockspuzzle.o \
   action/puzzle/boardgamepuzzle.o \
   action/puzzle/buildpuzzle.o \
@@ -98,6 +99,7 @@ MODULE_OBJS = \
   ui/textbox.o \
   ui/viewport.o \
   state/credits.o \
+  state/designselect.o \
   state/logo.o \
   state/loadsave.o \
   state/help.o \

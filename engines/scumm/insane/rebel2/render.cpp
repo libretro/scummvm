@@ -374,6 +374,17 @@ void InsaneRebel2::loadEmbeddedSan(int userId, byte *animData, int32 size, byte 
 					}
 
 					EmbeddedSanFrame &frame = _rebelEmbeddedHud[userId];
+					// Transparent background patches update the existing scene in place.
+					if (_rebelHandler == 25 && userId == 4 && codec == SMUSH_CODEC_RLE &&
+							isValidEmbeddedFrame(frame) && left >= 0 && top >= 0 &&
+							width > 0 && height > 0 && left + width <= frame.width &&
+							top + height <= frame.height && stream.pos() < subDataEnd) {
+						smushDecodeRLE(frame.pixels, animData + stream.pos(), left, top,
+							width, height, frame.width);
+						renderEmbeddedFrame(renderBitmap, frame, userId);
+						return;
+					}
+
 					frame.valid = false;
 
 					if (width > 0 && height > 0 && width <= 800 && height <= 480) {
@@ -2476,7 +2487,7 @@ void InsaneRebel2::procPostRendering(byte *renderBitmap, int32 codecparam, int32
 	// End the looping attack-run segment once the shield/reactor is destroyed.
 	if (_rebelShieldGateActive) {
 		// Level 13: the finale (continuation segment, flag 0x40) ends when the last armed
-		// group (the reactor) is depleted; the approach segment plays fully.
+		// group (the reactor) is depleted.
 		if (_rebelReactorMode && _rebelGaugeArmed && _rebelLastArmedSlot >= 0 &&
 		    (_player->_curVideoFlags & 0x40) != 0) {
 			const int slot = _rebelLastArmedSlot;
@@ -2486,6 +2497,15 @@ void InsaneRebel2::procPostRendering(byte *renderBitmap, int32 codecparam, int32
 		}
 		if (_rebelShieldDestroyed)
 			_vm->_smushVideoShouldFinish = true;
+
+		// The original level 13 switches at frame count - 10. The remaining
+		// nine frames overlap the cached LOAD bridge that precedes 13PLAY_B.
+		if (_rebelReactorMode && maxFrame >= 9 && curFrame == maxFrame - 9 &&
+				!static_cast<SmushPlayerRebel2 *>(_player)->isPlayingLoadBuffer() &&
+				!_vm->_smushVideoShouldFinish) {
+			// Use normal EOF handling so queued audio survives the handoff.
+			_player->_endOfFile = true;
+		}
 	}
 
 	const int hudScale = isHiRes() ? 2 : getRebel2IndicatorScale(width, height);
@@ -3495,9 +3515,12 @@ void InsaneRebel2::renderHandler25ShipPre(byte *renderBitmap, int pitch, int wid
 			int overlayDrawX = renderHiRes ? (nativeOverlayX - nativeViewX) * renderScale : nativeOverlayX;
 			int overlayDrawY = renderHiRes ? (nativeOverlayY - nativeViewY) * renderScale : nativeOverlayY;
 
-			renderNutSpriteScaledClipped(renderBitmap, pitch, width, renderHeight,
-				0, 0, width, renderHeight,
-				overlayDrawX, overlayDrawY, _grd005Sprite, overlayIdx, false, renderScale, false);
+			if (!drawRebel2Codec45Sprite(_grd005Sprite, renderBitmap, pitch, width, height,
+					Common::Rect(0, 0, width, renderHeight), overlayDrawX, overlayDrawY, overlayIdx, renderScale)) {
+				renderNutSpriteScaledClipped(renderBitmap, pitch, width, renderHeight,
+					0, 0, width, renderHeight,
+					overlayDrawX, overlayDrawY, _grd005Sprite, overlayIdx, false, renderScale, false);
+			}
 
 			debugC(DEBUG_INSANE, "Handler25 PRE: GRD005 at (%d,%d) nutOff(%d,%d) viewOff(%d,%d) size(%d,%d) mode=%d scale=%d",
 				overlayDrawX, overlayDrawY, overlayXOffset, overlayYOffset,
