@@ -231,12 +231,19 @@ struct TableData : public PuzzleData {
 	float getComboValue(uint16 index) const;
 
 	// The number of single (non-combo) values, i.e. the boundary between the
-	// single-value and combo-value index ranges: 20 up to nancy8, 30 afterwards.
+	// single-value and combo-value index ranges.
 	uint getNumSingleValues() const;
+	uint getNumComboValues() const;
+
+	// Index markers used inside SetValueCombo and ValueTest records: an entry
+	// to skip, and an entry whose payload is used as a literal number.
+	byte getNoIndex() const;
+	byte getLiteralIndex() const;
 
 	// Reads a value by its combined index (single values come first, then combos).
 	// Combo (float) values are rounded to the nearest integer.
 	int16 getValue(uint16 index) const;
+	void setValue(uint16 index, int16 value);
 
 	Common::Array<int16> singleValues;
 	Common::Array<float> comboValues;
@@ -485,6 +492,24 @@ struct DrivingData : public PuzzleData {
 	bool flatTire = false;
 	double fuelBurnAccum = 0.0;	// fractional fuel drained but not yet a whole unit
 	bool infiniteFuel = false;	// cheat toggle, kept across building visits
+};
+
+// Nancy14 BuildPuzzle (AR 166). The board as it was after the last drop. A puzzle
+// scene that re-runs picks it back up, as long as it is still the last build
+// puzzle entered and its resume flag is set; otherwise the puzzle starts over.
+struct BuildPuzzleData : public PuzzleData {
+	BuildPuzzleData() {}
+	virtual ~BuildPuzzleData() {}
+
+	static constexpr uint32 getTag() { return MKTAG('B', 'L', 'D', 'P'); }
+	virtual void synchronize(Common::Serializer &ser);
+
+	uint16 sceneID = kNoScene;
+	int16 placedCount = 0;
+	bool solved = false;
+	bool wrongIngredient = false;
+	Common::Array<int16> pieces;	// 6 per piece: sourceID, assignedZone, left, top, right, bottom
+	Common::Array<int16> zones;		// per zone: numWrong, then one count per ingredient
 };
 
 PuzzleData *makePuzzleData(const uint32 tag);
