@@ -40,12 +40,7 @@ void SafeDialPuzzle::init() {
 	g_nancy->_resource->loadImage(_imageName2, _image2);
 	g_nancy->_resource->loadImage(_resetImageName, _resetImage);
 
-	Common::Rect screenBounds = NancySceneState.getViewport().getBounds();
-	_drawSurface.create(screenBounds.width(), screenBounds.height(), g_nancy->_graphics->getInputPixelFormat());
-	_drawSurface.clear(g_nancy->_graphics->getTransColor());
-	setTransparent(true);
-	setVisible(true);
-	moveTo(screenBounds);
+	initViewportSurface();
 
 	registerGraphics();
 }
@@ -192,13 +187,12 @@ void SafeDialPuzzle::execute() {
 	case kActionTrigger :
 		if (_solved) {
 			if (_nextAnim == 0) {
-				if (g_nancy->_sound->isSoundPlaying(_solveSound)) {
+				if (isSolveSoundPlaying()) {
 					break;
 				}
 			} else {
 				if (_nextAnim < g_nancy->getTotalPlayTime()) {
-					g_nancy->_sound->loadSound(_solveSound);
-					g_nancy->_sound->playSound(_solveSound);
+					playSolveSound();
 					_nextAnim = 0;
 				}
 				break;
@@ -225,9 +219,7 @@ void SafeDialPuzzle::handleInput(NancyInput &input) {
 		return;
 	}
 
-	if (NancySceneState.getViewport().convertViewportToScreen(_exitHotspot).contains(input.mousePos)) {
-		g_nancy->_cursor->setCursorType(g_nancy->_cursor->_puzzleExitCursor);
-
+	if (hoverExitHotspot(input)) {
 		if (input.input & NancyInput::kLeftMouseButtonUp) {
 			_state = kActionTrigger;
 		}
@@ -327,6 +319,11 @@ void SafeDialPuzzle::turnDial(bool forwards) {
 }
 
 void SafeDialPuzzle::drawDialFrame(uint frame) {
+	// Some dials have no in-between frames, and leave their slots empty
+	if (_dialSrcs[frame].isEmpty()) {
+		return;
+	}
+
 	if (frame >= _dialSrcs.size() / 2 && !_imageName2.empty()) {
 		_drawSurface.blitFrom(_image2, _dialSrcs[frame], _dialDest);
 	} else {

@@ -22,8 +22,8 @@
 #ifndef NANCY_ACTION_ASSEMBLYPUZZLE_H
 #define NANCY_ACTION_ASSEMBLYPUZZLE_H
 
-#include "engines/nancy/action/actionrecord.h"
-#include "engines/nancy/misc/mousefollow.h"
+#include "engines/nancy/action/puzzlerecord.h"
+#include "engines/nancy/action/mousefollow.h"
 
 namespace Nancy {
 
@@ -33,12 +33,10 @@ namespace Action {
 
 // Minigame where the player is provided with the broken pieces of something
 // (a piece of pottery in nancy6), and has to assemble it.
-class AssemblyPuzzle : public RenderActionRecord {
+class AssemblyPuzzle : public PuzzleRecord {
 public:
-	AssemblyPuzzle() : RenderActionRecord(7) {}
+	AssemblyPuzzle() : PuzzleRecord(7) {}
 	virtual ~AssemblyPuzzle() {}
-
-	AssemblyPuzzle(AssemblyPuzzle &&) = default;
 
 	void init() override;
 	void registerGraphics() override;
@@ -54,7 +52,7 @@ protected:
 
 	void rotateBase(bool ccw);
 
-	struct Piece : Misc::MouseFollowObject {
+	struct Piece : MouseFollowObject {
 		Common::Array<Common::Rect> srcRects;
 		Common::Array<Common::Rect> destRects;
 
@@ -65,8 +63,6 @@ protected:
 
 		int curRotation = 0;
 	};
-
-	Common::Path _imageName;
 
 	uint16 _height = 0;
 
@@ -84,14 +80,7 @@ protected:
 	Common::Array<SoundDescription> _wrongPieceSounds;
 	Common::Array<Common::String> _wrongPieceTexts;
 
-	SceneChangeWithFlag _solveScene; // has 9999 in nancy6, so the puzzle doesn't auto-exit
-	SoundDescription _solveSound;
 	Common::String _solveText;
-
-	SceneChangeWithFlag _exitScene;
-	Common::Rect _exitHotspot;
-
-	Graphics::ManagedSurface _image;
 
 	int _pickedUpPiece = -1;
 	int _curRotation = 0;

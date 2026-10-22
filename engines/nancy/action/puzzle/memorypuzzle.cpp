@@ -83,12 +83,12 @@ void MemoryPuzzle::readData(Common::SeekableReadStream &stream) {
 	_noMatchSound.readNormal(stream);
 
 	// 0x521: win scene + flag
-	_winScene.readData(stream);
+	_solveScene.readData(stream);
 
 	stream.skip(1); // 0x53a: unknown
 
 	// 0x53b: win sound
-	_winSound.readNormal(stream);
+	_solveSound.readNormal(stream);
 }
 
 // Nancy 11 reworked the layout: fewer (12) face rects, a configurable grid/page count,
@@ -149,14 +149,14 @@ void MemoryPuzzle::readDataNancy11(Common::SeekableReadStream &stream) {
 	stream.skip(16 * 0xb6 - 0x31);                 // advance to block 17 @ 0xf72
 	_matchSound.readNormal(stream);                // block 17
 	stream.skip((27 - 17) * 0xb6 - 0x31);          // advance to the scenes @ 0x168e
-	// Nancy 11 has no win sound; _winSound keeps its default "NO SOUND".
+	// Nancy 11 has no win sound; _solveSound keeps its default "NO SOUND".
 
 	// Solve scene (0x168e), then an alternate-outcome scene (0x16a8, unused). The event flags
 	// store a 16-bit value rather than a simple on/off.
-	_winScene._sceneChange.readData(stream);
-	_winScene._sceneChange.continueSceneSound = stream.readUint16LE();
-	_winScene._flag.label = stream.readSint16LE();
-	_winScene._flag.flag = stream.readSint16LE() ? g_nancy->_true : g_nancy->_false;
+	_solveScene._sceneChange.readData(stream);
+	_solveScene._sceneChange.continueSceneSound = stream.readUint16LE();
+	_solveScene._flag.label = stream.readSint16LE();
+	_solveScene._flag.flag = stream.readSint16LE() ? g_nancy->_true : g_nancy->_false;
 	stream.skip(g_nancy->getGameType() >= kGameTypeNancy12 ? 24 : 26);	// alternate scene
 }
 
@@ -254,8 +254,7 @@ void MemoryPuzzle::init() {
 	setVisible(true);
 	moveTo(vpBounds);
 
-	g_nancy->_resource->loadImage(_imageName, _image);
-	_image.setTransparentColor(_drawSurface.getTransparentColor());
+	loadImage();
 
 	_currentTab = 0;
 	initCards();
@@ -267,6 +266,7 @@ void MemoryPuzzle::execute() {
 	case kBegin:
 		init();
 		registerGraphics();
+		NancySceneState.setNoHeldItem();
 		if (_firstFlipSound.name != "NO SOUND")
 			g_nancy->_sound->loadSound(_firstFlipSound);
 		if (_secondFlipSound.name != "NO SOUND")
@@ -290,9 +290,8 @@ void MemoryPuzzle::execute() {
 			break;
 
 		case kPlayWinSound:
-			if (_winSound.name != "NO SOUND") {
-				g_nancy->_sound->loadSound(_winSound);
-				g_nancy->_sound->playSound(_winSound);
+			if (hasSolveSound()) {
+				playSolveSound();
 				_solveSubState = kWaitWinSound;
 			} else {
 				_state = kActionTrigger;
@@ -300,8 +299,8 @@ void MemoryPuzzle::execute() {
 			break;
 
 		case kWaitWinSound:
-			if (!g_nancy->_sound->isSoundPlaying(_winSound)) {
-				g_nancy->_sound->stopSound(_winSound);
+			if (!isSolveSoundPlaying()) {
+				g_nancy->_sound->stopSound(_solveSound);
 				_state = kActionTrigger;
 			}
 			break;
@@ -313,8 +312,8 @@ void MemoryPuzzle::execute() {
 		g_nancy->_sound->stopSound(_secondFlipSound);
 		g_nancy->_sound->stopSound(_matchSound);
 		g_nancy->_sound->stopSound(_noMatchSound);
-		g_nancy->_sound->stopSound(_winSound);
-		_winScene.execute();
+		g_nancy->_sound->stopSound(_solveSound);
+		_solveScene.execute();
 		finishExecution();
 		break;
 	}

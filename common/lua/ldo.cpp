@@ -34,6 +34,7 @@
 #include "lstring.h"
 #include "ltable.h"
 #include "ltm.h"
+#include "lundump.h"
 #include "lvm.h"
 #include "lzio.h"
 #include "common/textconsole.h"
@@ -242,6 +243,7 @@ static StkId adjust_varargs (lua_State *L, Proto *p, int actual) {
     int nvar = actual - nfixargs;  /* number of extra arguments */
     lua_assert(p->is_vararg & VARARG_HASARG);
     luaC_checkGC(L);
+    luaD_checkstack(L, p->maxstacksize);
     htab = luaH_new(L, nvar, 1);  /* create `arg' table */
     for (i=0; i<nvar; i++)  /* put extra arguments into `arg' table */
       setobj2n(L, luaH_setnum(L, htab, i+1), L->top - nvar + i);
@@ -519,9 +521,8 @@ static void f_parser (lua_State *L, void *ud) {
   struct SParser *p = cast(struct SParser *, ud);
   int c = luaZ_lookahead(p->z);
   luaC_checkGC(L);
-  if (c == LUA_SIGNATURE[0])
-	  error("Handling of precompiled LUA scripts has been removed in ScummVM");
-  tf = luaY_parser(L, p->z, &p->buff, p->name);
+  tf = ((c == LUA_SIGNATURE[0]) ? luaU_undump : luaY_parser)(L, p->z,
+                                                             &p->buff, p->name);
   cl = luaF_newLclosure(L, tf->nups, hvalue(gt(L)));
   cl->l.p = tf;
   for (i = 0; i < tf->nups; i++)  /* initialize eventual upvalues */

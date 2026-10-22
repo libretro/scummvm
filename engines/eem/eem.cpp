@@ -36,8 +36,11 @@
 
 #include "graphics/cursorman.h"
 #include "graphics/maccursor.h"
+#include "graphics/macgamma.h"
 #include "graphics/macgui/macwindowmanager.h"
 #include "graphics/paletteman.h"
+
+#include "image/pict.h"
 
 #include "video/flic_decoder.h"
 
@@ -67,7 +70,7 @@ const uint kPalStormLogo       = 0x26;  // Floppy FUN_23d2_0605
 const uint kMacPicEAKidsLogo   = 0x213; // FUN_000092be
 // PIC 0x20d is the clubhouse scene; the title sequence (FUN_000096fa) omits it.
 const uint kMacPicTitleDark    = 0x20e;
-const uint kMacPicTitleFinal   = 0x20f;
+const uint kMacPicTitleLit     = 0x20f;
 const uint kMacPicTitleIn0     = 0x210;
 const uint kMacPicTitleIn1     = 0x211;
 const uint kMacPicTitleIn2     = 0x212;
@@ -155,12 +158,12 @@ Common::String londonProfileKeyFromDisplayName(const Common::String &name) {
 void fadeCurrentPaletteToBlack(uint delayMs) {
 	byte start[kPalSize];
 	byte stepPal[kPalSize];
-	g_system->getPaletteManager()->grabPalette(start, 0, 256);
+	getPaletteManager()->grabPalette(start, 0, 256);
 
 	for (int step = 15; step >= 0; step--) {
 		for (uint i = 0; i < kPalSize; i++)
 			stepPal[i] = (byte)((uint)start[i] * step / 16);
-		g_system->getPaletteManager()->setPalette(stepPal, 0, 256);
+		getPaletteManager()->setPalette(stepPal, 0, 256);
 		g_system->updateScreen();
 		if (delayMs)
 			g_system->delayMillis(delayMs);
@@ -173,7 +176,7 @@ void fadePaletteFromBlack(const byte *target, uint delayMs) {
 	for (uint step = 1; step <= 16; step++) {
 		for (uint i = 0; i < kPalSize; i++)
 			stepPal[i] = (byte)((uint)target[i] * step / 16);
-		g_system->getPaletteManager()->setPalette(stepPal, 0, 256);
+		getPaletteManager()->setPalette(stepPal, 0, 256);
 		g_system->updateScreen();
 		if (delayMs)
 			g_system->delayMillis(delayMs);
@@ -247,7 +250,10 @@ bool installMacCursor(uint16 resourceId, bool london) {
 			Graphics::MacCursor macCursor;
 			if (macCursor.readFromStream(*crsrStream)) {
 				CursorMan.replaceCursor(&macCursor);
-				CursorMan.replaceCursorPalette(macCursor.getPalette(), 0, 256);
+				byte palette[kPalSize];
+				for (uint color = 0; color < kPalSize; ++color)
+					palette[color] = Graphics::macGammaCorrectionLookUp[macCursor.getPalette()[color]];
+				CursorMan.replaceCursorPalette(palette, 0, 256);
 				return true;
 			}
 		}
@@ -599,7 +605,7 @@ Common::Error EEMEngine::run() {
 
 	// _AllBlack @ 172b:0d4b.
 	byte black[3 * 256] = { 0 };
-	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	getPaletteManager()->setPalette(black, 0, 256);
 
 	debugC(1, kDebugGeneral, "EEM engine starting");
 
@@ -694,9 +700,9 @@ Common::Error EEMEngine::run() {
 		if (!shouldQuit() && !_skipIntro) {
 			if (_audio)
 				_audio->playVoc(Common::Path("THUNDER.VOC"));
-			playAnm(Common::Path("BOLT.ANM"), 120,
-					/* holdLastFrame= */ false, /* fadeIn= */ true);
-			waitForInput(1800);
+			if (playAnm(Common::Path("BOLT.ANM"), 120,
+						/* holdLastFrame= */ false, /* fadeIn= */ true))
+				waitForInput(1800);
 			fadeCurrentPaletteToBlack();
 			if (_audio)
 				_audio->stopVoice();
@@ -712,10 +718,15 @@ Common::Error EEMEngine::run() {
 				fadeCurrentPaletteToBlack();
 			Common::String name = Common::String::format("ANIM%02d.A", i);
 			playAnm(Common::Path(name), 120,
-					/* holdLastFrame= */ false, fadeIn);
+					/* holdLastFrame= */ false, fadeIn,
+					/* setSkipIntroOnEsc= */ true, /* showLastFrameOnSkip= */ true);
 			if (!shouldQuit() && !_skipIntro && i != 20 && _audio) {
 				_audio->spoolSound((uint)(i - 1));
-				_audio->waitForSpoolDone();
+				while (_audio->isSpoolPlaying() && !shouldQuit()) {
+					if (waitIntroDelay(10))
+						break;
+				}
+				_audio->stopSpool();
 			}
 		}
 		if (_audio)
@@ -1000,10 +1011,10 @@ bool EEMEngine::openArchives() {
 
 bool EEMEngine::loadSitePalettes() {
 	Common::File f;
-	// EEM2 DOS uses "SITEPALS." (8.3); EEM1 and both Mac releases use "SITEPALS".
-	const char *palFile = (isLondon() && !isMacintosh()) ? "SITEPALS." : "SITEPALS";
-	if (!openDataFile(f, Common::Path(palFile))) {
-		warning("%s missing", palFile);
+	// Also accept the trailing dot found in some DOS EEM2 game data.
+	if (!openDataFile(f, Common::Path("SITEPALS")) &&
+		!openDataFile(f, Common::Path("SITEPALS."))) {
+		warning("SITEPALS missing");
 		return false;
 	}
 	_sitePals.resize(f.size());
@@ -1050,7 +1061,7 @@ void EEMEngine::setSitePalette(uint num) {
 		warning("setSitePalette: index %u out of range", num);
 		return;
 	}
-	g_system->getPaletteManager()->setPalette(expanded, 0, 256);
+	getPaletteManager()->setPalette(expanded, 0, 256);
 }
 
 bool EEMEngine::setAnmPalette(const Common::Path &anmPath) {
@@ -1067,7 +1078,7 @@ bool EEMEngine::setAnmPalette(const Common::Path &anmPath) {
 	byte expanded[kPalSize];
 	for (uint i = 0; i < kPalSize; i++)
 		expanded[i] = (byte)(raw[i] << 2);
-	g_system->getPaletteManager()->setPalette(expanded, 0, 256);
+	getPaletteManager()->setPalette(expanded, 0, 256);
 	return true;
 }
 
@@ -1081,7 +1092,7 @@ void EEMEngine::interruptAudio(bool stopMusicToo) {
 }
 
 void EEMEngine::playFlc(const Common::Path &path, bool fadeIn,
-						bool holdLastFrame) {
+						bool holdLastFrame, uint16 backgroundPict) {
 	Video::FlicDecoder flic;
 	Common::ScopedPtr<Common::SeekableReadStream> stream(
 		Common::MacResManager::openFileOrDataFork(path));
@@ -1090,36 +1101,64 @@ void EEMEngine::playFlc(const Common::Path &path, bool fadeIn,
 		return;
 	}
 
+	Image::PICTDecoder background;
+	if (backgroundPict) {
+		Common::ScopedPtr<Common::SeekableReadStream> picture(
+			openMacResource(Common::Path("EEM London CD"), MKTAG('P', 'I', 'C', 'T'), backgroundPict));
+		if (!picture || !background.loadStream(*picture) || !background.getSurface()) {
+			warning("playFlc: background PICT %u missing", backgroundPict);
+			background.destroy();
+		} else {
+			initGraphics(background.getSurface()->w, background.getSurface()->h);
+		}
+	}
+
 	const int fw = flic.getWidth();
 	const int fh = flic.getHeight();
-	// Centre the movie on the (larger) Mac screen with a black letterbox.
-	const int ox = MAX(0, (screenWidth() - fw) / 2);
-	const int oy = MAX(0, (screenHeight() - fh) / 2);
-	const int w = MIN(fw, screenWidth() - ox);
-	const int h = MIN(fh, screenHeight() - oy);
+	const int screenW = g_system->getWidth();
+	const int screenH = g_system->getHeight();
+	const int ox = MAX(0, (screenW - fw) / 2);
+	const int oy = MAX(0, (screenH - fh) / 2);
+	const int w = MIN(fw, screenW - ox);
+	const int h = MIN(fh, screenH - oy);
 
 	byte black[3 * 256] = { 0 };
-	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	getPaletteManager()->setPalette(black, 0, 256);
 	if (Graphics::Surface *screen = g_system->lockScreen()) {
 		screen->fillRect(Common::Rect(screen->w, screen->h), 0);
 		g_system->unlockScreen();
 	}
 
 	flic.start();
+	// Mac London CODE 6:1f38 advances after nine 60 Hz ticks, regardless
+	// of the FLC header's frame delay (71 ms for KDCDINTR).
+	if (isMacintosh())
+		flic.setRate(Common::Rational(flic.getCurFrameDelay(), 9 * 1000 / 60));
 	bool paletteApplied = false;
 	bool aborted = false;
-	while (!flic.endOfVideo() && !shouldQuit() && !_skipIntro) {
+	while (!flic.endOfVideo() && !shouldQuit() && !_skipIntro && !aborted) {
 		if (flic.needsUpdate()) {
 			const Graphics::Surface *frame = flic.decodeNextFrame();
 			if (frame) {
+				const byte *palette = flic.hasDirtyPalette() ? flic.getPalette() : nullptr;
+				if (palette && background.getSurface()) {
+					// QuickDraw remaps the backdrop to the movie's palette. In
+					// particular, the two resources use different black entries.
+					Graphics::Surface *converted = background.getSurface()->convertTo(
+						frame->format, background.getPalette().data(), background.getPalette().size(),
+						palette, 256);
+					g_system->copyRectToScreen(converted->getPixels(), converted->pitch,
+						0, 0, converted->w, converted->h);
+					converted->free();
+					delete converted;
+				}
 				g_system->copyRectToScreen(frame->getPixels(), frame->pitch,
 										   ox, oy, w, h);
-				if (flic.hasDirtyPalette()) {
+				if (palette) {
 					if (fadeIn && !paletteApplied)
-						fadePaletteFromBlack(flic.getPalette());
+						fadePaletteFromBlack(palette);
 					else
-						g_system->getPaletteManager()->setPalette(
-							flic.getPalette(), 0, 256);
+						getPaletteManager()->setPalette(palette, 0, 256);
 					paletteApplied = true;
 				}
 			}
@@ -1132,13 +1171,13 @@ void EEMEngine::playFlc(const Common::Path &path, bool fadeIn,
 				event.type == Common::EVENT_RETURN_TO_LAUNCHER ||
 				event.type == Common::EVENT_LBUTTONDOWN) {
 				aborted = true;
-				return;
+				break;
 			}
 			if (event.type == Common::EVENT_KEYDOWN) {
 				if (event.kbd.keycode == Common::KEYCODE_ESCAPE)
 					_skipIntro = true;
 				aborted = true;
-				return;
+				break;
 			}
 		}
 		g_system->delayMillis(10);
@@ -1146,15 +1185,17 @@ void EEMEngine::playFlc(const Common::Path &path, bool fadeIn,
 
 	if (holdLastFrame && !aborted && !shouldQuit() && !_skipIntro)
 		waitForInput(0xFFFFFFFFu);
+	if (background.getSurface())
+		initGraphics(screenWidth(), screenHeight());
 }
 
-void EEMEngine::playAnm(const Common::Path &path, uint frameDelayMs,
+bool EEMEngine::playAnm(const Common::Path &path, uint frameDelayMs,
 						bool holdLastFrame, bool fadeIn,
-						bool setSkipIntroOnEsc) {
+						bool setSkipIntroOnEsc, bool showLastFrameOnSkip) {
 	ANMDecoder anm;
 	if (!anm.open(path)) {
 		warning("playAnm: %s missing", path.toString().c_str());
-		return;
+		return false;
 	}
 
 	byte palette[768];
@@ -1172,6 +1213,7 @@ void EEMEngine::playAnm(const Common::Path &path, uint frameDelayMs,
 	}
 
 	bool paletteApplied = false;
+	bool aborted = false;
 	while (!shouldQuit()) {
 		const byte *frame = anm.nextFrame();
 		if (!frame)
@@ -1182,13 +1224,12 @@ void EEMEngine::playAnm(const Common::Path &path, uint frameDelayMs,
 			if (fadeIn)
 				fadePaletteFromBlack(palette);
 			else
-				g_system->getPaletteManager()->setPalette(palette, 0, 256);
+				getPaletteManager()->setPalette(palette, 0, 256);
 			paletteApplied = true;
 		}
 		g_system->updateScreen();
 
 		const uint32 frameStart = g_system->getMillis();
-		bool aborted = false;
 		while (g_system->getMillis() - frameStart < frameDelayMs && !aborted) {
 			Common::Event event;
 			while (g_system->getEventManager()->pollEvent(event)) {
@@ -1212,12 +1253,22 @@ void EEMEngine::playAnm(const Common::Path &path, uint frameDelayMs,
 			g_system->updateScreen();
 			g_system->delayMillis(5);
 		}
-		if (aborted)
+		if (aborted) {
+			if (showLastFrameOnSkip && !shouldQuit() && !_skipIntro) {
+				// Dialogue may be drawn only in the final frame. Decode all
+				// remaining deltas before starting the accompanying speech.
+				while (const byte *nextFrame = anm.nextFrame())
+					frame = nextFrame;
+				g_system->copyRectToScreen(frame, w, 0, 0, w, h);
+				g_system->updateScreen();
+			}
 			break;
+		}
 	}
 
 	if (holdLastFrame && !shouldQuit() && !_skipIntro) {
-		while (!shouldQuit()) {
+		// A skip during playback also dismisses the final-frame wait.
+		while (!aborted && !shouldQuit()) {
 			Common::Event ev;
 			bool clicked = false;
 			while (g_system->getEventManager()->pollEvent(ev)) {
@@ -1246,6 +1297,7 @@ void EEMEngine::playAnm(const Common::Path &path, uint frameDelayMs,
 		if (_music)
 			_music->stop();
 	}
+	return !aborted && !shouldQuit();
 }
 
 void EEMEngine::blitAt(const Picture &pic, int x, int y) {
@@ -1337,8 +1389,7 @@ void openColorCycle(byte *fpal, uint8 start, uint8 end, bool show) {
 	fpal[start * 3 + 1] = savedG;
 	fpal[start * 3 + 2] = savedB;
 	if (show) {
-		g_system->getPaletteManager()->setPalette(fpal + start * 3, start,
-												   end - start);
+		getPaletteManager()->setPalette(fpal + start * 3, start, end - start);
 	}
 }
 // _ShowEAKids @ 2520:05f0:
@@ -1428,7 +1479,7 @@ void EEMEngine::showHighScoreLogo() {
 		return;
 	}
 	byte black[kPalSize] = {};
-	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	getPaletteManager()->setPalette(black, 0, 256);
 	g_system->updateScreen();
 	fadePaletteFromBlack(target);
 
@@ -1461,6 +1512,27 @@ static void blitNativeTransparent(Graphics::ManagedSurface &dst,
 		return;
 	const byte transparent = (byte)(pic.flags >> 8);
 	dst.transBlitFrom(pic.surface, Common::Point(x, y), transparent);
+}
+
+static void blitMacTitleSpotlight(Graphics::ManagedSurface &dst,
+		const Graphics::ManagedSurface &lit, const Graphics::ManagedSurface &mask,
+		int x, int y) {
+	Common::Rect area(x, y, x + mask.w, y + mask.h);
+	area.clip(Common::Rect(dst.w, dst.h));
+	area.clip(Common::Rect(lit.w, lit.h));
+	if (area.isEmpty())
+		return;
+
+	// Mac CD CODE 6:3d1c copies the lit background wherever the mask is zero.
+	for (int row = area.top; row < area.bottom; row++) {
+		byte *out = (byte *)dst.getBasePtr(area.left, row);
+		const byte *src = (const byte *)lit.getBasePtr(area.left, row);
+		const byte *maskRow = (const byte *)mask.getBasePtr(area.left - x, row - y);
+		for (int col = 0; col < area.width(); col++) {
+			if (maskRow[col] == 0)
+				out[col] = src[col];
+		}
+	}
 }
 
 bool EEMEngine::waitIntroDelay(uint32 maxMs) {
@@ -1549,7 +1621,7 @@ void EEMEngine::showMacStillLogo(uint picId, uint palId, uint holdMs,
 	}
 
 	byte black[kPalSize] = {};
-	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	getPaletteManager()->setPalette(black, 0, 256);
 	g_system->updateScreen();
 	fadePaletteFromBlack(target);
 
@@ -1569,12 +1641,20 @@ void EEMEngine::showMacTitleIntro() {
 		return;
 	}
 
-	// FUN_000096fa uses only the dark-eye (0x20e) and lit-eye (0x20f) frames; the
-	// eye "powers up" from one to the other (PIC 0x20d, the clubhouse, isn't used).
-	Picture titleDark, titleFinal;
+	// Mac CD CODE 6:3ff2 moves a spotlight over the dark title, revealing
+	// the lit picture through the mask stored in BIGMAP's second entry.
+	Picture titleDark, titleLit;
 	if (!_picsArchive.getPicture(kMacPicTitleDark, titleDark) ||
-		!_picsArchive.getPicture(kMacPicTitleFinal, titleFinal)) {
+		!_picsArchive.getPicture(kMacPicTitleLit, titleLit)) {
 		warning("Mac title base pictures failed to load");
+		return;
+	}
+
+	DBDArchive bigMapArchive;
+	Picture spotlight;
+	if (!bigMapArchive.open(Common::Path("BIGMAP.DBD"), Common::Path("BIGMAP.DBX"), true) ||
+		!bigMapArchive.loadEntry(1, spotlight)) {
+		warning("Mac title spotlight mask failed to load");
 		return;
 	}
 
@@ -1603,77 +1683,80 @@ void EEMEngine::showMacTitleIntro() {
 	copyNativeSurfaceToScreen(frame);
 
 	byte black[kPalSize] = {};
-	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	getPaletteManager()->setPalette(black, 0, 256);
 	g_system->updateScreen();
 	fadePaletteFromBlack(target);
 
-	for (int i = 0; i < 0x2c && !shouldQuit() && !_skipIntro; i++) {
-		frame.blitFrom(titleDark.surface, Common::Point(0, 0));
-		const int revealW = (i + 1) * kMacScreenWidth / 0x2c;
-		if (revealW > 0) {
-			const Common::Rect src(0, 0, revealW, kMacScreenHeight);
-			frame.blitFrom(titleFinal.surface, src, Common::Point(0, 0));
+	// The original repeats both sweeps, waiting four TickCount ticks per frame.
+	const uint32 frameDelayMs = 4 * 1000 / 60;
+	while (!shouldQuit() && !_skipIntro) {
+		for (int i = 0; i < 0x2c && !shouldQuit() && !_skipIntro; i++) {
+			const uint32 startMs = g_system->getMillis();
+			frame.blitFrom(titleDark.surface, Common::Point(0, 0));
+			blitMacTitleSpotlight(frame, titleLit.surface, spotlight.surface,
+							  -110 + i * 15, 60 - i * 3);
+
+			switch (i) {
+			case 15:
+			case 19:
+				blitNativeTransparent(frame, in[0], 0xb9, 0x29);
+				break;
+			case 16:
+			case 18:
+				blitNativeTransparent(frame, in[1], 0xb9, 0x29);
+				break;
+			case 17:
+				blitNativeTransparent(frame, in[2], 0xb9, 0x29);
+				break;
+			default:
+				break;
+			}
+
+			copyNativeSurfaceToScreen(frame);
+			const uint32 elapsed = g_system->getMillis() - startMs;
+			if (waitIntroDelay(elapsed < frameDelayMs ? frameDelayMs - elapsed : 1))
+				return;
 		}
 
-		switch (i) {
-		case 15:
-		case 19:
-			blitNativeTransparent(frame, in[0], 0xb9, 0x29);
-			break;
-		case 16:
-		case 18:
-			blitNativeTransparent(frame, in[1], 0xb9, 0x29);
-			break;
-		case 17:
-			blitNativeTransparent(frame, in[2], 0xb9, 0x29);
-			break;
-		default:
-			break;
-		}
+		for (int i = 0x2a; i >= -1 && !shouldQuit() && !_skipIntro; i--) {
+			const uint32 startMs = g_system->getMillis();
+			frame.blitFrom(titleDark.surface, Common::Point(0, 0));
+			blitMacTitleSpotlight(frame, titleLit.surface, spotlight.surface,
+							  512 - (0x2a - i) * 15, 145);
 
-		copyNativeSurfaceToScreen(frame);
-		if (waitIntroDelay(40))
-			return;
+			switch (i) {
+			case 7:
+			case 11:
+				blitNativeTransparent(frame, left[0], 0x39, 0xb1);
+				break;
+			case 8:
+			case 10:
+				blitNativeTransparent(frame, left[1], 0x39, 0xb1);
+				break;
+			case 9:
+				blitNativeTransparent(frame, left[2], 0x39, 0xb1);
+				break;
+			case 24:
+			case 28:
+				blitNativeTransparent(frame, right[0], 0x131, 0xb1);
+				break;
+			case 25:
+			case 27:
+				blitNativeTransparent(frame, right[1], 0x131, 0xb1);
+				break;
+			case 26:
+				blitNativeTransparent(frame, right[2], 0x131, 0xb1);
+				break;
+			default:
+				break;
+			}
+
+			copyNativeSurfaceToScreen(frame);
+			const uint32 elapsed = g_system->getMillis() - startMs;
+			if (waitIntroDelay(elapsed < frameDelayMs ? frameDelayMs - elapsed : 1))
+				return;
+		}
 	}
-
-	for (int i = 0x2a; i >= 0 && !shouldQuit() && !_skipIntro; i--) {
-		frame.blitFrom(titleFinal.surface, Common::Point(0, 0));
-
-		switch (i) {
-		case 7:
-		case 11:
-			blitNativeTransparent(frame, left[0], 0x39, 0xb1);
-			break;
-		case 8:
-		case 10:
-			blitNativeTransparent(frame, left[1], 0x39, 0xb1);
-			break;
-		case 9:
-			blitNativeTransparent(frame, left[2], 0x39, 0xb1);
-			break;
-		case 24:
-		case 28:
-			blitNativeTransparent(frame, right[0], 0x131, 0xb1);
-			break;
-		case 25:
-		case 27:
-			blitNativeTransparent(frame, right[1], 0x131, 0xb1);
-			break;
-		case 26:
-			blitNativeTransparent(frame, right[2], 0x131, 0xb1);
-			break;
-		default:
-			break;
-		}
-
-		copyNativeSurfaceToScreen(frame);
-		if (waitIntroDelay(40))
-			return;
-	}
-
-	frame.blitFrom(titleFinal.surface, Common::Point(0, 0));
-	copyNativeSurfaceToScreen(frame);
-	waitIntroDelay(0xFFFFFFFFu);
 }
 
 void EEMEngine::playMacCDIntro() {
@@ -1712,7 +1795,7 @@ void EEMEngine::playMacCDIntro() {
 		g_system->copyRectToScreen(frame->getPixels(), frame->pitch, 0, 0,
 			MIN<int>(frame->w, screenWidth()), MIN<int>(frame->h, screenHeight()));
 		if (flic.hasDirtyPalette())
-			g_system->getPaletteManager()->setPalette(flic.getPalette(), 0, 256);
+			getPaletteManager()->setPalette(flic.getPalette(), 0, 256);
 		g_system->updateScreen();
 		lastFrameMs = g_system->getMillis();
 
@@ -1825,7 +1908,7 @@ void EEMEngine::showStillPicture(uint picId, uint palId, uint holdMs,
 			SWAP(target[i], target[255 * 3 + i]);
 	}
 	byte black[kPalSize] = {};
-	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	getPaletteManager()->setPalette(black, 0, 256);
 	blitAt(pic, 0, 0);
 	g_system->updateScreen();
 	fadePaletteFromBlack(target);
@@ -1855,14 +1938,63 @@ bool EEMEngine::startLondonTrainingMystery() {
 	return false;
 }
 
+void EEMEngine::showMacLondonTitle() {
+	// Mac London CODE 7:290e uses PIC 702 and ANI 37 with sequence 116.
+	Picture title;
+	byte palette[kPalSize];
+	if (!_picsArchive.getPicture(702, title) || !getSitePalette(66, palette)) {
+		warning("Mac London title picture or palette missing");
+		return;
+	}
+	Animation waving;
+	if (!_aniArchive.loadAnimation(37, waving))
+		waving.clear();
+
+	Image::PICTDecoder border;
+	Common::ScopedPtr<Common::SeekableReadStream> picture(
+		openMacResource(Common::Path("EEM London CD"), MKTAG('P', 'I', 'C', 'T'), 166));
+	if (!picture || !border.loadStream(*picture) || !border.getSurface()) {
+		warning("Mac London title border PICT 166 missing");
+		border.destroy();
+	} else {
+		initGraphics(border.getSurface()->w, border.getSurface()->h);
+		Graphics::Surface *converted = border.getSurface()->convertTo(
+			title.surface.format, border.getPalette().data(), border.getPalette().size(),
+			palette, 256);
+		g_system->copyRectToScreen(converted->getPixels(), converted->pitch,
+			0, 0, converted->w, converted->h);
+		converted->free();
+		delete converted;
+	}
+
+	const int x = (g_system->getWidth() - title.surface.w) / 2;
+	const int y = (g_system->getHeight() - title.surface.h) / 2;
+	Graphics::ManagedSurface frame(title.surface.w, title.surface.h, title.surface.format);
+	getPaletteManager()->setPalette(palette, 0, 256);
+	CursorMan.showMouse(true);
+	const uint32 startMs = g_system->getMillis();
+	while (!shouldQuit() && !_skipIntro) {
+		frame.blitFrom(title.surface);
+		if (!waving.empty()) {
+			const uint cell = partnerFrameAtTick(116, waving.size(), g_system->getMillis() - startMs);
+			blitMacAnimFrameAnchored(frame.surfacePtr(), waving[cell], 240, 44);
+		}
+		g_system->copyRectToScreen(frame.getPixels(), frame.pitch, x, y, frame.w, frame.h);
+		if (waitIntroDelay(animationFramePeriodMs()))
+			break;
+	}
+	CursorMan.showMouse(false);
+	if (border.getSurface())
+		initGraphics(screenWidth(), screenHeight());
+}
+
 void EEMEngine::runLondonStartup() {
-	const uint32 kHoldForever = 0xFFFFFFFFu;
 	CursorMan.showMouse(false);
 	_skipIntro = false;
 	debugC(1, kDebugGeneral, "EEM2 (London): opening sequence");
 
 	// Opening logos. Mac London mirrors FUN_00009256: EA Kids colour-cycle,
-	// publisher still, Storm still, then the FLC intro/title pair. DOS London
+	// publisher still, Storm still, then the FLC intro and title. DOS London
 	// uses the original ANM sequence after EA Kids instead.
 	if (!shouldQuit() && !_skipIntro)
 		showLondonEAKidsLogo();
@@ -1874,15 +2006,16 @@ void EEMEngine::runLondonStartup() {
 			showStillPicture(0x20b, 0x3d, 3000, /* playThunder= */ true);
 
 		// The Mac CD ships the post-logo intro as Flic movies where DOS uses
-		// bolt/movie/wave .ANM. KDCDINTR is the centered intro; BOOK54 is the
-		// full-screen animated title, held for the profile click/key.
+		// bolt/movie .ANM. KDCDINTR is centered over the London map (PICT 158).
+		if (!shouldQuit() && !_skipIntro && _music)
+			_music->playFile(Common::Path("MUS00101.XMI"), /* loop= */ false);
 		if (!shouldQuit() && !_skipIntro)
-			playFlc(Common::Path("KDCDINTR.FLC"), /* fadeIn= */ true);
+			playFlc(Common::Path("KDCDINTR.FLC"), /* fadeIn= */ true,
+					/* holdLastFrame= */ false, /* backgroundPict= */ 158);
 		if (!shouldQuit() && !_skipIntro && _music)
 			_music->playFile(Common::Path("MUS00102.XMI"), /* loop= */ true);
 		if (!shouldQuit() && !_skipIntro)
-			playFlc(Common::Path("BOOK54.FLC"), /* fadeIn= */ true,
-					/* holdLastFrame= */ true);
+			showMacLondonTitle();
 	} else {
 		// Storm Software — bolt.anm with the thunder roar.
 		if (!shouldQuit() && !_skipIntro) {
@@ -1913,8 +2046,6 @@ void EEMEngine::runLondonStartup() {
 		if (!shouldQuit() && !_skipIntro)
 			playAnm(Common::Path("WAVE.ANM"), 120, /* holdLastFrame= */ true,
 					/* fadeIn= */ true);
-		if (!shouldQuit() && !_skipIntro)
-			waitForInput(kHoldForever);
 	}
 	if (_music)
 		_music->stop();
@@ -1964,7 +2095,7 @@ void EEMEngine::showLondonCharSelect() {
 
 	byte pal[kPalSize];
 	byte black[kPalSize] = {};
-	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	getPaletteManager()->setPalette(black, 0, 256);
 	g_system->updateScreen();
 	const bool havePal = getSitePalette(0, pal);
 	if (!havePal)
@@ -2184,7 +2315,7 @@ void EEMEngine::showFloppyStormLogo() {
 		return;
 	}
 	byte black[kPalSize] = {};
-	g_system->getPaletteManager()->setPalette(black, 0, 256);
+	getPaletteManager()->setPalette(black, 0, 256);
 	g_system->updateScreen();
 
 	if (_audio && !isDemo())

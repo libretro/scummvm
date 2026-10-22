@@ -33,15 +33,17 @@ namespace Nancy {
 // Data types corresponding to chunks found inside BOOT
 
 struct EngineData {
+	EngineData() {}
 	EngineData(Common::SeekableReadStream *chunkStream);
 	virtual ~EngineData() {}
 };
 
 // Boot summary. Contains data for the UI, game clock, starting a new game.
 struct BSUM : public EngineData {
+	BSUM() {}
 	BSUM(Common::SeekableReadStream *chunkStream);
 
-	byte header[90];
+	byte header[90] = {};
 
 	Common::Path conversationTextsFilename;
 	Common::Path autotextFilename;
@@ -50,10 +52,13 @@ struct BSUM : public EngineData {
 	Common::Path fontFilename;
 	Common::Path flagsFilename;
 
+	// Nancy17+
+	Common::Path inventoryFilename;
+
 	// Game start section
 	SceneChangeDescription firstScene;
-	uint16 startTimeHours;
-	uint16 startTimeMinutes;
+	uint16 startTimeHours = 0;
+	uint16 startTimeMinutes = 0;
 
 	// Nancy11-13: on the day after the game starts, once the clock reaches
 	// lateNightHour, lateNightFlag gets raised
@@ -64,6 +69,7 @@ struct BSUM : public EngineData {
 	// is raised so the scripts can send the player to bed. Writing to the value
 	// at dayValueIndex puts the player to sleep: the next day starts at
 	// wakeUpHour, and the new day number gets copied into that value.
+	// Nancy16 only keeps the day value, which goes up by one at midnight.
 	byte dayValueIndex = 0;
 	int16 endOfDayFlag = kEvNoEvent;
 	uint16 endOfDayHour = 0;
@@ -91,27 +97,29 @@ struct BSUM : public EngineData {
 	byte gTrans = 0;
 	byte bTrans = 0;
 
-	uint16 horizontalEdgesSize;
-	uint16 verticalEdgesSize;
+	uint16 horizontalEdgesSize = 0;
+	uint16 verticalEdgesSize = 0;
 
 	// Nancy16 switched to system fonts, and no longer stores a count here
 	uint16 numFonts = 0;
 
-	uint16 playerTimeMinuteLength;
-	uint16 buttonPressTimeDelay;
+	uint16 playerTimeMinuteLength = 0;
+	uint16 buttonPressTimeDelay = 0;
 	uint16 dayStartMinutes = 0;
 	uint16 dayEndMinutes = 0;
-	byte overrideMovementTimeDeltas;
-	uint16 slowMovementTimeDelta;
-	uint16 fastMovementTimeDelta;
+	byte overrideMovementTimeDeltas = 0;
+	uint16 slowMovementTimeDelta = 0;
+	uint16 fastMovementTimeDelta = 0;
 
 	// Nancy9-11: timer dependencies with a seconds value of kTimerDurationIndexBase
-	// or above take their seconds from this table instead
+	// or above take their seconds from this table instead. Nancy12+ timer
+	// triggers (AR 104) use it for seconds values above kTimerDurationIndexBase
 	Common::Array<uint16> timerDurations;
 };
 
 // Contains rects defining the in-game viewport
 struct VIEW : public EngineData {
+	VIEW() {}
 	VIEW(Common::SeekableReadStream *chunkStream);
 
 	Common::Rect screenPosition;
@@ -147,6 +155,7 @@ struct INV : public EngineData {
 	};
 
 	INV(Common::SeekableReadStream *chunkStream);
+	void readNancy15(Common::SeekableReadStream &stream);
 
 	Common::Rect scrollbarSrcBounds;
 	Common::Point scrollbarDefaultPos;
@@ -258,6 +267,7 @@ struct CRED : public EngineData {
 
 	Common::Path imageName;
 	Common::Array<Common::Path> textNames;
+	Common::String textKey;
 	Common::Rect textScreenPosition;
 	uint16 updateTime;
 	uint16 pixelsToScroll;
@@ -495,11 +505,22 @@ struct ImageChunk : public EngineData {
 	uint16 height;
 };
 
+// Nancy16 logo screen, one per LGx chunk: an image, with an optional movie on top.
+// The screens are shown one after another before the game starts.
+struct LogoScreen : public EngineData {
+	LogoScreen(Common::SeekableReadStream *chunkStream);
+
+	Common::Path imageName;
+	Common::Path movieName;
+	Common::Point position;
+};
+
 // Contains text data. Every string is tagged with a key via which
 // it can be accessed. Used to store dialogue and journal (autotext) strings.
 // NOT found inside BOOT; these are stored in their own cifs, the names of which
 // can be found inside BSUM. Introduced in nancy6.
 struct CVTX : public EngineData {
+	CVTX() {}
 	CVTX(Common::SeekableReadStream *chunkStream);
 
 	Common::HashMap<Common::String, Common::String, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> texts;
@@ -543,10 +564,11 @@ enum TaskButton {
 	kTaskButtonInventory = 1,
 	kTaskButtonNotebook = 2,
 	kTaskButtonCellphone = 3,
-	// Nancy12 only: a non-clickable coin purse that shows Nancy's money on
-	// hover, inserted before HELP. HELP is therefore always the last taskbar
-	// button (index 4 in games without the coin purse, index 5 in Nancy12) and
-	// has no fixed constant.
+	// Nancy12, Nancy14 and Nancy15: a non-clickable coin purse (a wallet for
+	// the Hardy boys) that shows the played character's money on hover,
+	// inserted before HELP. HELP is therefore always the last taskbar button
+	// (index 4 in games without the coin purse, index 5 in the others) and has
+	// no fixed constant.
 	kTaskButtonCoinPurse = 4
 };
 
@@ -855,11 +877,23 @@ struct UINB : public EngineData {
 // Event flags table. Introduced in Nancy 12, and replaces the event flag names
 // that were hardcoded in the executable. Each record is a name followed by an id.
 struct EVNT : public EngineData {
+	EVNT() {}
 	EVNT(Common::SeekableReadStream *chunkStream);
 
 	static const uint kEventRecordSize = 35;
 
+	// The first flag listed in the chunk; the lower ids are the engine's own flags
+	static const uint16 kFirstEventFlag = 2000;
+
+	uint16 numRecords = 0;
+
+	// Indexed by flag id, counting from kFirstEventFlag, since the records don't
+	// always follow the ids: Nancy13 and up list some flags twice or out of order,
+	// and Nancy16 starts with the inventory items, which have ids of their own.
 	Common::Array<Common::String> eventFlagNames;
+
+	// Nancy16: the names of the inventory items, indexed by item id
+	Common::Array<Common::String> itemNames;
 };
 
 // UI overlay element table. Introduced in Nancy 12. Each record describes one UI
@@ -891,6 +925,10 @@ struct UIRC : public EngineData {
 // followed by the value, split into whole units and decimals as the record asks.
 Common::String formatUIResourceValue(const UIRC::ItemRecord &item, int32 value);
 
+// True in the games that keep the played character's money in UI resource 0 and
+// show it on the taskbar's coin purse (a wallet for the Hardy boys).
+bool hasMoneyResource();
+
 // Music mix table. Introduced in Nancy 13. Each record maps a short location
 // code (e.g. "BRI", "CAM", "TUT") to the set of music / ambience tracks that
 // may play there ("TacitA"/"TacitB" are the silence variants).
@@ -903,6 +941,44 @@ struct MMIX : public EngineData {
 	MMIX(Common::SeekableReadStream *chunkStream);
 
 	Common::Array<Record> records;
+};
+
+// Environment table. Introduced in Nancy 17, where it replaces both the music
+// mix table and the level name table. Each record describes one location code
+// (e.g. "CUR"): its name ("Curio Shop"), the script with its ambient sounds
+// ("CUR_Amb_Sfx") and the music tracks that may play there.
+struct ENVS : public EngineData {
+	struct Environment {
+		Common::String code;
+		Common::String name;
+		Common::Path ambientScriptName;
+		Common::Path leaveScriptName;	// only used from Nancy18 on
+		Common::Array<Common::String> musicNames;
+	};
+
+	ENVS() {}
+	ENVS(Common::SeekableReadStream *chunkStream);
+
+	Common::Array<Environment> environments;
+};
+
+// Inventory item table. Introduced in Nancy 17, in the file named by the boot
+// summary. The inventory panel creates one button per item out of it.
+struct INVD : public EngineData {
+	struct Item {
+		int16 id = -1;
+		Common::String name;
+		int32 kind = 0;				// what clicking the item does
+		Common::Path sceneName;		// e.g. "s6200", for the kinds that open a scene
+		int16 valueIndex = 0;
+		Common::String valueName;	// Nancy19+ names the value instead
+		Common::Rect sourceRect;
+	};
+
+	INVD() {}
+	INVD(Common::SeekableReadStream *chunkStream);
+
+	Common::Array<Item> items;
 };
 
 // Level name table. Introduced in Nancy 15. Maps a short scene-prefix
@@ -919,14 +995,17 @@ struct LVLN : public EngineData {
 // Each entry supplies the image names for one selectable character.
 struct PCUI : public EngineData {
 	struct Character {
+		Common::String name;				// Nancy 17+, e.g. "Nancy"
 		Common::String imageName;			// e.g. "PUI_CRE_Nancy"
 		Common::String defaultImageName;	// e.g. "PUI_CRE_Nancy_Default"
 		uint16 id = 0;
 	};
 
+	PCUI() {}
 	PCUI(Common::SeekableReadStream *chunkStream);
 
 	byte flag = 0;
+	Common::String startCharacterName;		// Nancy 17+, e.g. "Tutor"
 	Common::Path uiName;					// Nancy 16+, e.g. "UI_Main"
 	Common::Array<Character> characters;	// indexed by the on-disk slot byte
 };
@@ -964,9 +1043,15 @@ struct PUIH : public EngineData {
 	Common::String themeName;	// e.g. "Nancy Classic Look (Default)"
 	Common::String swatchImageName;	// e.g. "UI_Swatch_ND"
 
-	// Nancy 16+. Names of the IFFs describing the journal and task list popups
+	// Nancy 16. Names of the IFFs describing the journal and task list popups
 	Common::Path journalPrepName;	// e.g. "Journal_Prep"
 	Common::Path tasklistPrepName;	// e.g. "Tasklist_Prep"
+
+	// Nancy 17+. Scripts run when switching to and away from the character,
+	// and the character's UI texts
+	Common::Path becomeScriptName;	// e.g. "OnBecomeNancy"
+	Common::Path leaveScriptName;	// e.g. "OnLeaveNancy"
+	Common::Path textsName;			// e.g. "UI_Text"
 };
 
 // Task list sounds. Introduced in Nancy 16 (per-character boot). Holds two
@@ -1002,6 +1087,87 @@ struct PUIV : public EngineData {
 	uint16 volume = 0;			// shared volume (inferred)
 	Common::Array<SoundGroup> soundGroups;
 };
+
+// Nancy19 and up keep their data in Lua scripts instead of chunks. The boot
+// scripts fill the tables that came from the chunks of Nancy17 and Nancy18
+// (EVNT, INVD, ENVS, PCUI, VIEW and the texts); this holds everything else
+// they describe.
+struct ScriptBootData : public EngineData {
+	enum CursorVariant { kCursorRegular = 0, kCursorHot = 1, kNumCursorVariants = 2 };
+
+	struct Cursor {
+		Common::String name;	// the name of the item, for the cursors of the inventory
+		Common::Rect sources[kNumCursorVariants];
+		Common::Point hotspots[kNumCursorVariants];
+		bool overridesItem = false;	// shown even while an item is held
+	};
+
+	struct SystemFont {
+		int id = 0;
+		Common::String name;
+		Common::String faceName;
+		int height = 0;
+		bool isBold = false;
+		bool isScaled = false;	// follows the font scale of the options
+	};
+
+	struct FontColor {
+		int id = 0;
+		uint32 normal = 0;
+		uint32 disabled = 0;
+		uint32 mouseOver = 0;
+		uint32 pressed = 0;
+	};
+
+	// What the boot script in a player character's own tree holds
+	struct Player {
+		Common::Path becomeSceneName;	// run when the character starts being played
+		Common::Path leaveSceneName;
+		Common::Path autotextName;
+		Common::Array<Common::String> taskDoneSounds;
+		Common::Array<Common::String> taskUndoneSounds;
+	};
+
+	ScriptBootData() {}
+
+	Common::String windowName;
+	Common::String saveFolderName;	// Nancy19
+	double playerTimeScale = 1.0;
+	int diagnosticFontID = 0;
+
+	// Nancy20 names the scripts holding the texts, and the scripts that get
+	// run in front of every scene
+	Common::Array<Common::String> textFileNames;
+	Common::Array<Common::String> includeFileNames;
+
+	Common::String cheatSavePrefix;
+	Common::String saveExtension;
+	Common::String defaultSaveName;
+	Common::String savePromptFlag;
+	bool savePromptFlagState = false;
+
+	Common::Rect leftNodeHotspot;	// in the viewport
+	Common::Rect rightNodeHotspot;
+	Common::Rect uturnNodeHotspot;
+
+	Common::Path cursorImageName;
+	Common::String defaultCursorName;
+	Common::String rightNodeCursorName;
+	Common::String leftNodeCursorName;
+	Common::String uturnNodeCursorName;
+	Common::Array<Cursor> cursors;
+
+	Common::Path itemCursorImageName;
+	Common::Array<Cursor> itemCursors;
+
+	Common::Path inventoryImageName;
+
+	Common::Array<SystemFont> fonts;
+	Common::Array<FontColor> fontColors;
+
+	Common::Array<Player> players;	// in the order of PCUI::characters
+};
+
 } // End of namespace Nancy
 
 #endif // NANCY_ENGINEDATA_H

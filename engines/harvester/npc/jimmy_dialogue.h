@@ -33,7 +33,6 @@ public:
 		bool paperHandoffStateSet = false;
 	};
 
-	bool matchesNpc(const Common::String &npcName) const override;
 	void resetState() override { _state = JimmyRoomDialogueState(); }
 	void syncState(Common::Serializer &s) override {
 		syncDialogueBool(s, _state.firstNoItemLinePending);
@@ -43,6 +42,11 @@ public:
 		const Common::String &usedItemName, DialogueSharedState &sharedState) override;
 
 private:
+	Common::Error playPaperHandoffPreludeIfNeeded(DialogueRuntime &runtime);
+	Common::Error runSneakersOfferMenu(DialogueRuntime &runtime);
+	Common::Error runJimmySneakersPrompt(DialogueRuntime &runtime, int responseLineIndex);
+	Common::Error playJimmyNoItemFallback(DialogueRuntime &runtime);
+
 	JimmyRoomDialogueState _state;
 };
 

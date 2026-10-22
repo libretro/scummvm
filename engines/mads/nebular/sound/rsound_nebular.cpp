@@ -25,79 +25,6 @@ namespace MADS {
 namespace RexNebular {
 namespace Sound {
 
-RSoundDemo::RSoundDemo(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver, const Common::Path &filename,
-		int dataOffset, int dataSize, int sysExOffset,
-		int firstEffectChannel) :
-		RSound(mixer, midiDriver, filename, dataOffset, dataSize, sysExOffset,
-				kRSoundFadeCheckAlternating),
-		_firstEffectChannel(firstEffectChannel) {
-}
-
-void RSoundDemo::startVoice(int channelIndex, int sequenceOffset) {
-	assert(channelIndex >= 0 && channelIndex < RSOUND_CHANNEL_COUNT);
-	_channels[channelIndex].playData(loadData(sequenceOffset));
-}
-
-int RSoundDemo::startVoiceInRange(int sequenceOffset, int firstChannel,
-		int lastChannel) {
-	assert(firstChannel >= 0 && firstChannel <= lastChannel && lastChannel < 8);
-
-	for (int channel = firstChannel; channel <= lastChannel; ++channel) {
-		if (!_channels[channel]._deltaCounter) {
-			startVoice(channel, sequenceOffset);
-			return channel;
-		}
-	}
-
-	for (int channel = lastChannel; channel >= firstChannel; --channel) {
-		if (_channels[channel]._fadeOutActive) {
-			startVoice(channel, sequenceOffset);
-			return channel;
-		}
-	}
-
-	return -1;
-}
-
-int RSoundDemo::startAnyVoice(int sequenceOffset) {
-	// Both demo overlays exclude rhythm channel 9 from their melodic pools.
-	return startVoiceInRange(sequenceOffset, 0, 7);
-}
-
-int RSoundDemo::startEffectVoice(int sequenceOffset) {
-	return startVoiceInRange(sequenceOffset, _firstEffectChannel, 7);
-}
-
-void RSoundDemo::requestStopRange(int firstChannel, int channelCount) {
-	assert(firstChannel >= 0 && channelCount >= 0 &&
-			firstChannel + channelCount <= RSOUND_CHANNEL_COUNT);
-	for (int channel = firstChannel;
-			channel < firstChannel + channelCount; ++channel)
-		_channels[channel].setFadeOut(true);
-}
-
-void RSoundDemo::requestStopAll() {
-	requestStopRange(0, RSOUND_CHANNEL_COUNT);
-}
-
-void RSoundDemo::stopAndResetRange(int firstChannel, int channelCount) {
-	assert(firstChannel >= 0 && channelCount > 0 &&
-			firstChannel + channelCount <= RSOUND_CHANNEL_COUNT);
-	resetChannelRange(firstChannel + 1, firstChannel + channelCount);
-	clearActiveNotesRange(firstChannel + 1, firstChannel + channelCount);
-	sendMidiChannelReset(firstChannel + 1, firstChannel + channelCount);
-}
-
-void RSoundDemo::setVoiceVolume(int channelIndex, byte volume) {
-	assert(channelIndex >= 0 && channelIndex < RSOUND_CHANNEL_COUNT);
-	_channels[channelIndex]._volume = volume;
-	sendVolume(channelIndex + 1, volume);
-}
-
-bool RSoundDemo::isSequenceActive(int sequenceOffset) {
-	return isSoundPlaying(loadData(sequenceOffset));
-}
-
 const RSound1::CommandPtr RSound1::_commandList[42] = {
 	&RSound1::command0, &RSound1::command1, &RSound1::command2, &RSound1::command3,
 	&RSound1::command4, &RSound1::command5, &RSound1::command6, &RSound1::command7,
@@ -113,11 +40,19 @@ const RSound1::CommandPtr RSound1::_commandList[42] = {
 };
 
 RSound1::RSound1(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) : 
-	RSound(mixer, midiDriver, "rsound.001", 0x1350, 0x1A90, 0x67, kRSoundFadeCheckAlternating) {
+		RSound(mixer, midiDriver, "rsound.001", 0x1350, 0x1A90, 0x67, kRSoundFadeCheckAlternating) {
+	// Rex full game RSOUND.001 includes channel 9 with the dynamic channel
+	// commands 4 and 5.
+	// The original code actually uses channels 4-8 instead of 5-8 for
+	// playSoundDynamic, which is inconsistent with command 2-5. This
+	// inconsistency has not been replicated in this reimplementation for now.
+	_dynamicStartChannel = 5;
+	_dynamicIncludeChannel9 = true;
+	_staticIncludeChannel9 = false;
 }
 
 int RSound1::command(int commandId, int param) {
-	if (commandId > 41)
+	if (commandId < 0 || commandId > 41)
 		return 0;
 
 	_commandParam = param;
@@ -129,62 +64,56 @@ int RSound1::clampParam() {
 	return (_commandParam > 0x40) ? _commandParam - 0x40 : 0;
 }
 
-void RSound1::method1() {
+void RSound1::playCommand11_12_13SharedChannels() {
 	byte *pData = loadData(0x1166);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[0].playData(pData);
-		_channels[1].playData(loadData(0x13BC));
-		_channels[2].playData(loadData(0x155C));
-		_channels[3].playData(loadData(0x15D8));
+		playSoundStatic(pData, 1);
+		playSoundStatic(0x13BC, 2);
+		playSoundStatic(0x155C, 3);
+		playSoundStatic(0x15D8, 4);
 	}
 }
 
 int RSound1::command9() {
-	playSoundCh5To8(0xAD4);
+	playSoundDynamic(0xAD4);
 	return 0;
 }
 
 int RSound1::command10() {
 	byte *pData = loadData(0xCE4);
 	if (!isSoundPlaying(pData)) {
-		_channels[0].playData(pData);
-		_channels[1].playData(loadData(0xD18));
-		_channels[2].playData(loadData(0xE9C));
-		_channels[3].playData(loadData(0xEE8));
+		playSoundStatic(pData, 1);
+		playSoundStatic(0xD18, 2);
+		playSoundStatic(0xE9C, 3);
+		playSoundStatic(0xEE8, 4);
 	}
 	return 0;
 }
 
 int RSound1::command11() {
-	method1();
-	_channels[0]._volume = 0;
-	sendVolume(1, _channels[0]._volume);
-	_channels[1]._volume = 0;
-	sendVolume(2, _channels[1]._volume);
+	playCommand11_12_13SharedChannels();
+	setChannelVolume(1, 0);
+	setChannelVolume(2, 0);
 	return 0;
 }
 
 int RSound1::command12() {
-	method1();
-	_channels[0]._volume = 80;
-	sendVolume(1, _channels[0]._volume);
-	_channels[1]._volume = 0;
-	sendVolume(2, _channels[1]._volume);
+	playCommand11_12_13SharedChannels();
+	setChannelVolume(1, 80);
+	setChannelVolume(2, 0);
 	return 0;
 }
 
 int RSound1::command13() {
-	method1();
-	_channels[0]._volume = 80;
-	sendVolume(1, _channels[0]._volume);
-	_channels[1]._volume = 80;
-	sendVolume(2, _channels[1]._volume);
+	playCommand11_12_13SharedChannels();
+	setChannelVolume(1, 80);
+	setChannelVolume(2, 80);
 	return 0;
 }
 
 int RSound1::command14() {
-	playSoundCh5To8(0x16C2);
+	playSoundDynamic(0x16C2, 0);
 	return 0;
 }
 
@@ -192,63 +121,63 @@ int RSound1::command15() {
 	byte *pData = loadData(0xF3A);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[4].playData(pData);
-		_channels[5].playData(loadData(0x102A));
-		_channels[6].playData(loadData(0x110E));
+		playSoundStatic(pData, 5);
+		playSoundStatic(0x102A, 6);
+		playSoundStatic(0x110E, 7);
 	}
 	return 0;
 }
 
 int RSound1::command16() {
-	playSoundCh5To8(0xADE);
+	playSoundDynamic(0xADE);
 	return 0;
 }
 
 int RSound1::command17() {
-	playSoundCh5To8(0xAE8);
+	playSoundDynamic(0xAE8);
 	return 0;
 }
 
 int RSound1::command18() {
-	playSoundCh5To8(0xAF2);
+	playSoundDynamic(0xAF2);
 	return 0;
 }
 
 int RSound1::command19() {
 	command1();
-	playSoundCh5To8(0xB04);
+	playSoundDynamic(0xB04);
 	return 0;
 }
 
 int RSound1::command20() {
-	playSoundCh5To8(0xB5E);
+	playSoundDynamic(0xB5E);
 	return 0;
 }
 
 int RSound1::command21() {
-	playSoundCh5To8(0xB4C);
+	playSoundDynamic(0xB4C);
 	return 0;
 }
 
 int RSound1::command22() {
-	playSoundCh5To8(0xB6E);
+	playSoundDynamic(0xB6E);
 	return 0;
 }
 
 int RSound1::command23() {
 	byte *pData = loadData(0xB7A);
 	pData[6] ^= 0x1F;
-	playSoundCh5To8(0xB7A);
+	playSoundDynamic(0xB7A);
 	return 0;
 }
 
 int RSound1::command24() {
-	playSoundCh5To8(0xB84);
+	playSoundDynamic(0xB84);
 	return 0;
 }
 
 int RSound1::command25() {
-	playSoundCh5To8(0xB8E);
+	playSoundDynamic(0xB8E);
 	return 0;
 }
 
@@ -258,7 +187,7 @@ int RSound1::command26() {
 	pData[8] = v1;
 	int v2 = clampParam() + 64;
 	pData[5] = v2;
-	_channels[7].playData(pData);
+	playSoundStatic(pData, 8, 1);
 	return 0;
 }
 
@@ -268,12 +197,12 @@ int RSound1::command27() {
 	pData[8] = v1;
 	int v2 = clampParam() + 64;
 	pData[5] = v2;
-	_channels[7].playData(pData);
+	playSoundStatic(pData, 8, 1);
 	return 0;
 }
 
 int RSound1::command28() {
-	playSoundCh5To8(0xB9E);
+	playSoundDynamic(0xB9E);
 	return 0;
 }
 
@@ -282,7 +211,7 @@ int RSound1::command29() {
 	int v = (clampParam() >> 1) + 32;
 	pData[0xB] = v;
 	if (!isSoundPlaying(pData))
-		playSoundCh5To8(0xC6C);
+		playSoundDynamic(0xC6C);
 	return 0;
 }
 
@@ -291,12 +220,12 @@ int RSound1::command30() {
 	int v = clampParam() + 63;
 	pData[0xB] = v;
 	if (!isSoundPlaying(pData))
-		playSoundCh1To8(0xC80);
+		playSoundAnyChannel(0xC80);
 	return 0;
 }
 
 int RSound1::command31() {
-	playSoundCh5To8(0xBBE);
+	playSoundDynamic(0xBBE);
 	return 0;
 }
 
@@ -306,13 +235,13 @@ int RSound1::command32() {
 	pData[0xB] = pData[0x17] = half + 68;
 	pData[0x11] = pData[0x1D] = half + 20;
 	if (!isSoundPlaying(pData))
-		playSoundCh1To8(0xC96);
+		playSoundAnyChannel(0xC96);
 	return 0;
 }
 
 int RSound1::command33() {
-	playSoundCh5To8(0xBD0);
-	playSoundCh5To8(0xBDA);
+	playSoundDynamic(0xBD0);
+	playSoundDynamic(0xBDA);
 	return 0;
 }
 
@@ -321,19 +250,19 @@ int RSound1::command34() {
 	int v = (generateRandomNumber() & 12) + 45;
 	pData[9] = v;
 	pData[0x10] = v + 36;
-	playSoundCh5To8(0xBE8);
+	playSoundDynamic(0xBE8);
 	return 0;
 }
 
 int RSound1::command35() {
-	playSoundCh5To8(0xBFC);
-	playSoundCh5To8(0xC0E);
-	playSoundCh5To8(0xC20);
+	playSoundDynamic(0xBFC);
+	playSoundDynamic(0xC0E);
+	playSoundDynamic(0xC20);
 	return 0;
 }
 
 int RSound1::command36() {
-	playSoundCh5To8(0xC3E);
+	playSoundDynamic(0xC3E);
 	return 0;
 }
 
@@ -342,43 +271,70 @@ int RSound1::command37() {
 	int r = generateRandomNumber() & 15;
 	pData[6] = r + 42;
 	pData[3] = 62 - (r << 1);
-	playSoundCh5To8(0xC4C);
+	playSoundDynamic(0xC4C);
 	return 0;
 }
 
 int RSound1::command38() {
-	playSoundCh1To8(0xC56);
-	playSoundCh5To8(0xC60);
+	playSoundAnyChannel(0xC56);
+	playSoundDynamic(0xC60);
 	return 0;
 }
 
 int RSound1::command39() {
 	byte *pData = loadData(0x1818);
 	if (!isSoundPlaying(pData)) {
-		_channels[4].playData(pData);
-		_channels[5].playData(loadData(0x1848));
-		_channels[6].playData(loadData(0x1874));
-		_channels[7].playData(loadData(0x18B4));
-		_channels[8].playData(loadData(0x18CE));
+		playSoundStatic(pData, 5);
+		playSoundStatic(0x1848, 6);
+		playSoundStatic(0x1874, 7);
+		playSoundStatic(0x18B4, 8);
+		playSoundStatic(0x18CE, 9);
 	}
 	return 0;
 }
 
 int RSound1::command40() {
-	playSoundCh5To8(0xC34);
+	playSoundDynamic(0xC34);
 	return 0;
 }
 
 int RSound1::command41() {
-	playSoundCh5To8(0xCD6);
+	playSoundDynamic(0xCD6);
 	return 0;
 }
 
 /*-----------------------------------------------------------------------*/
 
+const RSoundDemo1::CommandPtr RSoundDemo1::_commandList[41] = {
+	&RSoundDemo1::command0, &RSoundDemo1::command1, &RSoundDemo1::command2, &RSoundDemo1::command3,
+	&RSoundDemo1::command4, &RSoundDemo1::command5, &RSoundDemo1::command6, &RSoundDemo1::command7,
+	&RSoundDemo1::command8, &RSoundDemo1::command9, &RSoundDemo1::command10, &RSoundDemo1::command11,
+	&RSoundDemo1::command12, &RSoundDemo1::command13, &RSoundDemo1::command14, &RSoundDemo1::command15,
+	&RSoundDemo1::command16, &RSoundDemo1::command17, &RSoundDemo1::command18, &RSoundDemo1::command19,
+	&RSoundDemo1::command20, &RSoundDemo1::command21, &RSoundDemo1::command22, &RSoundDemo1::command23,
+	&RSoundDemo1::command24, &RSoundDemo1::command25, &RSoundDemo1::command26, &RSoundDemo1::command27,
+	&RSoundDemo1::command28, &RSoundDemo1::command29, &RSoundDemo1::command30, &RSoundDemo1::command31,
+	&RSoundDemo1::command32, &RSoundDemo1::command33, &RSoundDemo1::command34, &RSoundDemo1::command35,
+	&RSoundDemo1::command36, &RSoundDemo1::command37, &RSoundDemo1::command38, &RSoundDemo1::command39,
+	&RSoundDemo1::command40
+};
+
 RSoundDemo1::RSoundDemo1(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
-		RSoundDemo(mixer, midiDriver, "rsound.001", 0x12E0, 0x1D28, 0x67, 0),
+		RSound(mixer, midiDriver, "rsound.001", 0x12E0, 0x1D28, 0x67, kRSoundFadeCheckAlternating),
 		_command23Toggle(false) {
+	// Like the full game RSOUND.001, the demo RSOUND.001 driver includes
+	// channel 9 with the dynamic commands 4 and 5.
+	// Command 2 includes channel 5 when stopping playback, but command 2 and 3
+	// do not include channel 5 when initializing MIDI channels and fading
+	// channels to stop. Instead, command 4 includes channel 5 when stopping
+	// playback, but command 4 and 5 do not include channel 5 when initializing
+	// MIDI channels and fading channels to stop.
+	// This inconsistency is not replicated in this reimplementation.
+	// Interestingly, the demo RSOUND.001 does not include the playSoundDynamic
+	// function. All dynamically allocated sound data uses playSoundAnyChannel.
+	_dynamicStartChannel = 5;
+	_dynamicIncludeChannel9 = true;
+	_staticIncludeChannel9 = false;
 }
 
 byte RSoundDemo1::adjustedCommandParam() const {
@@ -386,45 +342,15 @@ byte RSoundDemo1::adjustedCommandParam() const {
 	return value > 0x40 ? value - 0x40 : 0;
 }
 
-void RSoundDemo1::startCommand111213() {
-	if (isSequenceActive(0x1586))
+void RSoundDemo1::playCommand11_12_13CommonChannels() {
+	if (isSoundPlaying(0x1586))
 		return;
 
-	requestStopAll();
-	startVoice(0, 0x1586);
-	startVoice(1, 0x17DC);
-	startVoice(2, 0x197C);
-	startVoice(3, 0x19F8);
-}
-
-int RSoundDemo1::executeDemoCommonCommand(int commandId) {
-	switch (commandId) {
-	case 0:
-		return RSound::command0();
-	case 1:
-		requestStopAll();
-		return 0;
-	case 2:
-		stopAndResetRange(0, 4);
-		return 0;
-	case 3:
-		requestStopRange(0, 4);
-		return 0;
-	case 4:
-		stopAndResetRange(4, 5);
-		return 0;
-	case 5:
-		requestStopRange(4, 5);
-		return 0;
-	case 6:
-		return RSound::command6();
-	case 7:
-		return RSound::command7();
-	case 8:
-		return RSound::command8();
-	default:
-		return 0;
-	}
+	command1();
+	playSoundStatic(0x1586, 1);
+	playSoundStatic(0x17DC, 2);
+	playSoundStatic(0x197C, 3);
+	playSoundStatic(0x19F8, 4);
 }
 
 int RSoundDemo1::command(int commandId, int param) {
@@ -433,164 +359,220 @@ int RSoundDemo1::command(int commandId, int param) {
 
 	_commandParam = param;
 	_ticksSinceLastCommand = 0;
-	if (commandId <= 8)
-		return executeDemoCommonCommand(commandId);
+	return (this->*_commandList[commandId])();
+}
 
-	switch (commandId) {
-	case 9:
-		startAnyVoice(0x0F34);
-		break;
-	case 10:
-		if (!isSequenceActive(0x1104)) {
-			requestStopAll();
-			startVoice(4, 0x1104);
-			startVoice(5, 0x1138);
-			startVoice(6, 0x12BC);
-			startVoice(7, 0x1308);
-		}
-		break;
-	case 11:
-		startCommand111213();
-		setVoiceVolume(0, 0x00);
-		setVoiceVolume(1, 0x00);
-		break;
-	case 12:
-		startCommand111213();
-		setVoiceVolume(0, 0x50);
-		setVoiceVolume(1, 0x00);
-		break;
-	case 13:
-		startCommand111213();
-		setVoiceVolume(0, 0x50);
-		setVoiceVolume(1, 0x50);
-		break;
-	case 14:
-		startAnyVoice(0x1AE2);
-		break;
-	case 15:
-		if (!isSequenceActive(0x135A)) {
-			requestStopAll();
-			startVoice(4, 0x135A);
-			startVoice(5, 0x144A);
-			startVoice(6, 0x152E);
-		}
-		break;
-	case 16:
-		startAnyVoice(0x0F3E);
-		break;
-	case 17:
-		startAnyVoice(0x0F48);
-		break;
-	case 18:
-		startAnyVoice(0x0F52);
-		break;
-	case 19:
-		requestStopAll();
-		startAnyVoice(0x0F64);
-		break;
-	case 20:
-		startAnyVoice(0x0FBE);
-		break;
-	case 21:
-		startAnyVoice(0x0FAC);
-		break;
-	case 22: {
-		byte *data = sequenceData(0x0FCE);
-		data[6] = (generateRandomNumber() & 0x07) + 0x73;
-		startAnyVoice(0x0FCE);
-		break;
-	}
-	case 23:
-		_command23Toggle = !_command23Toggle;
-		startAnyVoice(_command23Toggle ? 0x0FD8 : 0x0FE0);
-		break;
-	case 24:
-		startAnyVoice(0x0FE8);
-		break;
-	case 25:
-		startAnyVoice(0x0FF2);
-		break;
-	case 26:
-	case 27: {
-		const int sequenceOffset = commandId == 26 ? 0x10F8 : 0x10EC;
-		byte *data = sequenceData(sequenceOffset);
-		data[8] = (generateRandomNumber() & 0x18) + 0x2D;
-		data[5] = adjustedCommandParam() + 0x40;
-		startVoice(7, sequenceOffset);
-		break;
-	}
-	case 28:
-		startAnyVoice(0x1002);
-		break;
-	case 29: {
-		byte *data = sequenceData(0x109A);
-		data[11] = (adjustedCommandParam() >> 1) + 0x20;
-		if (!isSequenceActive(0x109A))
-			startAnyVoice(0x109A);
-		break;
-	}
-	case 30: {
-		byte *data = sequenceData(0x10AE);
-		data[11] = adjustedCommandParam() + 0x3F;
-		if (!isSequenceActive(0x10AE))
-			startAnyVoice(0x10AE);
-		break;
-	}
-	case 31:
-		startAnyVoice(0x1022);
-		break;
-	case 32: {
-		const byte value = adjustedCommandParam() >> 1;
-		byte *data = sequenceData(0x10C4);
-		data[11] = data[23] = value + 0x44;
-		data[17] = data[29] = value + 0x14;
-		if (!isSequenceActive(0x10C4))
-			startAnyVoice(0x10C4);
-		break;
-	}
-	case 33:
-		startAnyVoice(0x1034);
-		startAnyVoice(0x103E);
-		break;
-	case 34: {
-		byte *data = sequenceData(0x104C);
-		data[9] = (generateRandomNumber() & 0x0C) + 0x2D;
-		data[16] = data[9] + 0x24;
-		startAnyVoice(0x104C);
-		break;
-	}
-	case 35:
-		startAnyVoice(0x1060);
-		break;
-	case 36:
-		startAnyVoice(0x1078);
-		break;
-	case 37:
-		startAnyVoice(0x1086);
-		break;
-	case 38:
-		startAnyVoice(0x1090);
-		break;
-	case 39:
-		if (!isSequenceActive(0x1C38)) {
-			startVoice(4, 0x1C38);
-			startVoice(5, 0x1C68);
-			startVoice(6, 0x1C94);
-			startVoice(7, 0x1CD4);
-			startVoice(8, 0x1CEE);
-		}
-		break;
-	case 40:
-		startAnyVoice(0x106E);
-		break;
-	}
+int RSoundDemo1::command9() {
+	playSoundAnyChannel(0x0F34);
+	return 0;
+}
 
+int RSoundDemo1::command10() {
+	if (!isSoundPlaying(0x1104)) {
+		command1();
+		playSoundStatic(0x1104, 5);
+		playSoundStatic(0x1138, 6);
+		playSoundStatic(0x12BC, 7);
+		playSoundStatic(0x1308, 8);
+	}
+	return 0;
+}
+
+int RSoundDemo1::command11() {
+	playCommand11_12_13CommonChannels();
+	setChannelVolume(1, 0x00);
+	setChannelVolume(2, 0x00);
+	return 0;
+}
+
+int RSoundDemo1::command12() {
+	playCommand11_12_13CommonChannels();
+	setChannelVolume(1, 0x50);
+	setChannelVolume(2, 0x00);
+	return 0;
+}
+
+int RSoundDemo1::command13() {
+	playCommand11_12_13CommonChannels();
+	setChannelVolume(1, 0x50);
+	setChannelVolume(2, 0x50);
+	return 0;
+}
+
+int RSoundDemo1::command14() {
+	playSoundAnyChannel(0x1AE2, 0);
+	return 0;
+}
+
+int RSoundDemo1::command15() {
+	if (!isSoundPlaying(0x135A)) {
+		command1();
+		playSoundStatic(0x135A, 5);
+		playSoundStatic(0x144A, 6);
+		playSoundStatic(0x152E, 7);
+	}
+	return 0;
+}
+
+int RSoundDemo1::command16() {
+	playSoundAnyChannel(0x0F3E);
+	return 0;
+}
+
+int RSoundDemo1::command17() {
+	playSoundAnyChannel(0x0F48);
+	return 0;
+}
+
+int RSoundDemo1::command18() {
+	playSoundAnyChannel(0x0F52);
+	return 0;
+}
+
+int RSoundDemo1::command19() {
+	command1();
+	playSoundAnyChannel(0x0F64);
+	return 0;
+}
+
+int RSoundDemo1::command20() {
+	playSoundAnyChannel(0x0FBE);
+	return 0;
+}
+
+int RSoundDemo1::command21() {
+	playSoundAnyChannel(0x0FAC);
+	return 0;
+}
+
+int RSoundDemo1::command22() {
+	byte *data = loadData(0x0FCE);
+	data[6] = (generateRandomNumber() & 0x07) + 0x73;
+	playSoundAnyChannel(0x0FCE);
+	return 0;
+}
+
+int RSoundDemo1::command23() {
+	_command23Toggle = !_command23Toggle;
+	playSoundAnyChannel(_command23Toggle ? 0x0FD8 : 0x0FE0);
+	return 0;
+}
+
+int RSoundDemo1::command24() {
+	playSoundAnyChannel(0x0FE8);
+	return 0;
+}
+
+int RSoundDemo1::command25() {
+	playSoundAnyChannel(0x0FF2);
+	return 0;
+}
+
+int RSoundDemo1::patchAndPlaySound(int offset) {
+	byte *data = loadData(offset);
+	data[8] = (generateRandomNumber() & 0x18) + 0x2D;
+	data[5] = adjustedCommandParam() + 0x40;
+	playSoundStatic(data, 8, 1);
+	return 0;
+}
+
+int RSoundDemo1::command26() {
+	return patchAndPlaySound(0x10F8);
+}
+
+int RSoundDemo1::command27() {
+	return patchAndPlaySound(0x10EC);
+}
+
+int RSoundDemo1::command28() {
+	playSoundAnyChannel(0x1002);
+	return 0;
+}
+
+int RSoundDemo1::command29() {
+	byte *data = loadData(0x109A);
+	data[11] = (adjustedCommandParam() >> 1) + 0x20;
+	if (!isSoundPlaying(0x109A))
+		playSoundAnyChannel(0x109A);
+	return 0;
+}
+
+int RSoundDemo1::command30() {
+	byte *data = loadData(0x10AE);
+	data[11] = adjustedCommandParam() + 0x3F;
+	if (!isSoundPlaying(0x10AE))
+		playSoundAnyChannel(0x10AE);
+	return 0;
+}
+
+int RSoundDemo1::command31() {
+	playSoundAnyChannel(0x1022);
+	return 0;
+}
+
+int RSoundDemo1::command32() {
+	const byte value = adjustedCommandParam() >> 1;
+	byte *data = loadData(0x10C4);
+	data[11] = data[23] = value + 0x44;
+	data[17] = data[29] = value + 0x14;
+	if (!isSoundPlaying(0x10C4))
+		playSoundAnyChannel(0x10C4);
+	return 0;
+}
+
+int RSoundDemo1::command33() {
+	playSoundAnyChannel(0x1034);
+	playSoundAnyChannel(0x103E);
+	return 0;
+}
+
+int RSoundDemo1::command34() {
+	byte *data = loadData(0x104C);
+	data[9] = (generateRandomNumber() & 0x0C) + 0x2D;
+	data[16] = data[9] + 0x24;
+	playSoundAnyChannel(0x104C);
+	return 0;
+}
+
+int RSoundDemo1::command35() {
+	playSoundAnyChannel(0x1060);
+	return 0;
+}
+
+int RSoundDemo1::command36() {
+	playSoundAnyChannel(0x1078);
+	return 0;
+}
+
+int RSoundDemo1::command37() {
+	playSoundAnyChannel(0x1086);
+	return 0;
+}
+
+int RSoundDemo1::command38() {
+	playSoundAnyChannel(0x1090);
+	return 0;
+}
+
+int RSoundDemo1::command39() {
+	if (!isSoundPlaying(0x1C38)) {
+		playSoundStatic(0x1C38, 5);
+		playSoundStatic(0x1C68, 6);
+		playSoundStatic(0x1C94, 7);
+		playSoundStatic(0x1CD4, 8);
+		playSoundStatic(0x1CEE, 9);
+	}
+	return 0;
+}
+
+int RSoundDemo1::command40() {
+	playSoundAnyChannel(0x106E);
 	return 0;
 }
 
 /*-----------------------------------------------------------------------*/
 
-const uint16 RSound2::_table1[16] = {
+const uint16 RSound2::_command18RandomSfx[16] = {
 	0x3234, 0x3250, 0x326A, 0x3284, 0x329E, 0x32D6, 0x3304, 0x333C,
 	0x3352, 0x3378, 0x33B6, 0x33D0, 0x33EA, 0x3404, 0x341E, 0x343E
 };
@@ -611,10 +593,22 @@ const RSound2::CommandPtr RSound2::_commandList[44] = {
 
 RSound2::RSound2(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) : 
 	RSound(mixer, midiDriver, "rsound.002", 0x1390, 0x42F0, 0x87, kRSoundFadeCheckAlternating) {
+	// RSOUND.002 is a bit of a mess when it comes to dynamic and static
+	// channels.
+	// playSoundDynamic uses channels 4-8. Commands 3 and 5 are consistent with
+	// this, as they fade out channels 1-3 and 9, and 4-8, respectively. These
+	// ranges have been reimplemented in this driver code.
+	// However, the original code commands 2 and 4 are not consistent with this
+	// and not consistent with itself. Playback is stopped on channels 1-5 and
+	// 6-9, while MIDI initialization is done on channels 1-4 and 5-9. These
+	// inconsistencies are not replicated in this reimplementation for now.
+	_dynamicStartChannel = 4;
+	_dynamicIncludeChannel9 = false;
+	_staticIncludeChannel9 = true;
 }
 
 int RSound2::command(int commandId, int param) {
-	if (commandId > 43)
+	if (commandId < 0 || commandId > 43)
 		return 0;
 
 	_commandParam = param;
@@ -622,13 +616,17 @@ int RSound2::command(int commandId, int param) {
 	return (this->*_commandList[commandId])();
 }
 
+int RSound2::command0() {
+	_volumeCycleCounter = 47;
+
+	return RSound::command0();
+}
+
 int RSound2::command5() {
-	_pitchCycleCounter = 47;
-	_channels[3].setFadeOut(true);
-	_channels[4].setFadeOut(true);
-	_channels[5].setFadeOut(true);
-	_channels[6].setFadeOut(true);
-	_channels[7].setFadeOut(true);
+	_volumeCycleCounter = 47;
+	for (int i = 4; i <= 8; i++) {
+		getChannel(i)->setFadeOut(true);
+	}
 	return 0;
 }
 
@@ -636,9 +634,9 @@ int RSound2::command9() {
 	byte *pData = loadData(0x103C);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[0].playData(pData);
-		_channels[1].playData(loadData(0x11B2));
-		_channels[8].playData(loadData(0x127E));
+		playSoundStatic(pData, 1);
+		playSoundStatic(0x11B2, 2);
+		playSoundStatic(0x127E, 9);
 	}
 	return 0;
 }
@@ -647,8 +645,8 @@ int RSound2::command10() {
 	byte *pData = loadData(0x132E);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[2].playData(pData);
-		_channels[8].playData(loadData(0x1384));
+		playSoundStatic(pData, 3);
+		playSoundStatic(0x1384, 9);
 	}
 	return 0;
 }
@@ -657,29 +655,29 @@ int RSound2::command11() {
 	byte *pData = loadData(0x1548);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[2].playData(pData);
-		_channels[8].playData(loadData(0x1648));
+		playSoundStatic(pData, 3);
+		playSoundStatic(0x1648, 9);
 	}
 	return 0;
 }
 
 int RSound2::command12() {
 	byte *pData = loadData(0xE52);
-	_pitchCycleCounter += 16;
-	pData[3] = _pitchCycleCounter & 0x7F;
-	playSoundCh5To8(0xE52);
+	_volumeCycleCounter += 16;
+	pData[3] = _volumeCycleCounter & 0x7F;
+	playSoundDynamic(0xE52);
 	return 0;
 }
 
 int RSound2::command13() {
-	playSoundCh5To8(0xE5C);
-	playSoundCh5To8(0xE66);
+	playSoundDynamic(0xE5C);
+	playSoundDynamic(0xE66);
 	return 0;
 }
 
 int RSound2::command14() {
-	playSoundCh5To8(0xE70);
-	playSoundCh5To8(0xE8A);
+	playSoundDynamic(0xE70);
+	playSoundDynamic(0xE8A);
 	return 0;
 }
 
@@ -687,10 +685,10 @@ int RSound2::command15() {
 	byte *pData = loadData(0x1DFC);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		playSoundCh1To8(0x1DFC);
-		playSoundCh1To8(0x222E);
-		playSoundCh1To8(0x2648);
-		_channels[8].playData(loadData(0x26A2));
+		playSoundAnyChannel(0x1DFC, 0);
+		playSoundAnyChannel(0x222E, 0);
+		playSoundAnyChannel(0x2648, 0);
+		playSoundStatic(0x26A2, 9);
 	}
 	return 0;
 }
@@ -699,12 +697,12 @@ int RSound2::command16() {
 	byte *pData = loadData(0x3456);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		playSoundCh1To8(0x3456);
-		playSoundCh1To8(0x3572);
-		playSoundCh1To8(0x367E);
-		playSoundCh1To8(0x37C6);
-		playSoundCh1To8(0x39AE);
-		playSoundCh1To8(0x3A3A);
+		playSoundAnyChannel(0x3456, 0);
+		playSoundAnyChannel(0x3572, 0);
+		playSoundAnyChannel(0x367E, 0);
+		playSoundAnyChannel(0x37C6, 0);
+		playSoundAnyChannel(0x39AE, 0);
+		playSoundAnyChannel(0x3A3A, 0);
 	}
 	return 0;
 }
@@ -712,20 +710,20 @@ int RSound2::command16() {
 int RSound2::command17() {
 	byte *pData = loadData(0x3AC0);
 	if (!isSoundPlaying(pData)) {
-		playSoundCh5To8(0x3AC0);
-		playSoundCh5To8(0x3C70);
-		playSoundCh5To8(0x3E16);
-		playSoundCh5To8(0x3FBE);
+		playSoundDynamic(0x3AC0, 0);
+		playSoundDynamic(0x3C70, 0);
+		playSoundDynamic(0x3E16, 0);
+		playSoundDynamic(0x3FBE, 0);
 	}
 	return 0;
 }
 
 int RSound2::command18() {
-	if (_channels[7]._deltaCounter)
+	if (getChannel(8)->_deltaCounter > 0)
 		return 0;
 
-	int idx = (generateRandomNumber() & 30) >> 1;
-	_channels[7].playData(loadData(_table1[idx]));
+	int idx = (generateRandomNumber() & 0x1E) >> 1;
+	playSoundStatic(_command18RandomSfx[idx], 8);
 	return 0;
 }
 
@@ -733,64 +731,64 @@ int RSound2::command19() {
 	byte *pData = loadData(0x2A64);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		playSoundCh1To8(0x2A64);
-		playSoundCh1To8(0x2BE2);
-		playSoundCh1To8(0x2DAC);
-		playSoundCh1To8(0x2ECE);
-		playSoundCh1To8(0x3026);
-		playSoundCh1To8(0x30C2);
+		playSoundAnyChannel(0x2A64, 0);
+		playSoundAnyChannel(0x2BE2, 0);
+		playSoundAnyChannel(0x2DAC, 0);
+		playSoundAnyChannel(0x2ECE, 0);
+		playSoundAnyChannel(0x3026, 0);
+		playSoundAnyChannel(0x30C2, 0);
 	}
 	return 0;
 }
 
 int RSound2::command20() {
-	playSoundCh5To8(0xF1E);
-	playSoundCh5To8(0xF1E);
-	playSoundCh5To8(0xF1E);
-	playSoundCh5To8(0xF1E);
+	playSoundDynamic(0xF1E);
+	playSoundDynamic(0xF1E);
+	playSoundDynamic(0xF1E);
+	playSoundDynamic(0xF1E);
 	return 0;
 }
 
 int RSound2::command21() {
-	playSoundCh5To8(0xF58);
+	playSoundDynamic(0xF58);
 	return 0;
 }
 
 int RSound2::command22() {
-	playSoundCh5To8(0xF44);
+	playSoundDynamic(0xF44);
 	return 0;
 }
 
 int RSound2::command23() {
-	playSoundCh5To8(0xEBA);
+	playSoundDynamic(0xEBA);
 	return 0;
 }
 
 int RSound2::command24() {
-	playSoundCh5To8(0xEB0);
+	playSoundDynamic(0xEB0);
 	return 0;
 }
 
 int RSound2::command25() {
-	playSoundCh5To8(0xEA6);
+	playSoundDynamic(0xEA6);
 	return 0;
 }
 
 int RSound2::command26() {
-	playSoundCh5To8(0xF4E);
+	playSoundDynamic(0xF4E);
 	return 0;
 }
 
 int RSound2::command27() {
-	Channel *ch = playSoundCh5To8(0xFAC);
-	if (ch)
+	Channel *ch = playSoundDynamic(0xFAC);
+	if (ch != nullptr)
 		ch->_innerLoopStart = loadData(0xFB8);
 
-	ch = playSoundCh5To8(0xFB2);
-	if (ch)
+	ch = playSoundDynamic(0xFB2);
+	if (ch != nullptr)
 		ch->_innerLoopStart = loadData(0xFB8);
 
-	playSoundCh5To8(0xFB8);
+	playSoundDynamic(0xFB8);
 	return 0;
 }
 
@@ -803,58 +801,58 @@ int RSound2::command28() {
 	pData[8] = v2;
 	int v3 = v2 + 0x0C;
 	pData[0xA] = v3;
-	playSoundCh5To8(0xEDA);
+	playSoundDynamic(0xEDA);
 	return 0;
 }
 
 int RSound2::command29() {
-	playSoundCh1To8(0xF80);
+	playSoundAnyChannel(0xF80);
 	return 0;
 }
 
 int RSound2::command30() {
-	playSoundCh5To8(0xF14);
+	playSoundDynamic(0xF14);
 	byte *pData = loadData(0xF0A);
 	pData[3] = 40;
-	playSoundCh5To8(0xF0A);
+	playSoundDynamic(0xF0A);
 	return 0;
 }
 
 int RSound2::command31() {
 	byte *pData = loadData(0xF0A);
 	pData[3] = 0x18;
-	playSoundCh5To8(0xF0A);
+	playSoundDynamic(0xF0A);
 	return 0;
 }
 
 int RSound2::command32() {
-	playSoundCh5To8(0xEC4);
+	playSoundDynamic(0xEC4);
 	return 0;
 }
 
 int RSound2::command33() {
-	playSoundCh5To8(0xED0);
+	playSoundDynamic(0xED0);
 	return 0;
 }
 
 int RSound2::command34() {
-	playSoundCh5To8(0xEE8);
+	playSoundDynamic(0xEE8);
 	return 0;
 }
 
 int RSound2::command35() {
-	playSoundCh5To8(0xEF8);
+	playSoundDynamic(0xEF8);
 	return 0;
 }
 
 int RSound2::command36() {
-	playSoundCh5To8(0xFF4);
-	playSoundCh5To8(0x1008);
+	playSoundDynamic(0xFF4, 0);
+	playSoundDynamic(0x1008, 0);
 	return 0;
 }
 
 int RSound2::command37() {
-	playSoundCh5To8(0xFCC);
+	playSoundDynamic(0xFCC);
 	return 0;
 }
 
@@ -862,39 +860,39 @@ int RSound2::command38() {
 	byte *pData = loadData(0x2B0E);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		playSoundCh1To8(0x2B0E);
-		playSoundCh1To8(0x2CD0);
-		playSoundCh1To8(0x2E46);
-		playSoundCh1To8(0x2F7C);
-		playSoundCh1To8(0x3074);
-		playSoundCh1To8(0x317E);
+		playSoundAnyChannel(0x2B0E, 0);
+		playSoundAnyChannel(0x2CD0, 0);
+		playSoundAnyChannel(0x2E46, 0);
+		playSoundAnyChannel(0x2F7C, 0);
+		playSoundAnyChannel(0x3074, 0);
+		playSoundAnyChannel(0x317E, 0);
 	}
 	return 0;
 }
 
 int RSound2::command39() {
-	playSoundCh5To8(0xFDA);
+	playSoundDynamic(0xFDA);
 	return 0;
 }
 
 int RSound2::command40() {
-	playSoundCh5To8(0xFE6);
+	playSoundDynamic(0xFE6);
 	return 0;
 }
 
 int RSound2::command41() {
-	playSoundCh1To8(0xF62);
+	playSoundAnyChannel(0xF62);
 	return 0;
 }
 
 int RSound2::command42() {
-	playSoundCh5To8(0xF92);
+	playSoundDynamic(0xF92);
 	return 0;
 }
 
 int RSound2::command43() {
-	playSoundCh5To8(0x1018);
-	playSoundCh5To8(0x102A);
+	playSoundDynamic(0x1018);
+	playSoundDynamic(0x102A);
 	return 0;
 }
 
@@ -907,13 +905,13 @@ const RSound3::CommandPtr RSound3::_commandList[61] = {
 	&RSound3::nullCommand, &RSound3::command13, &RSound3::command14, &RSound3::command15,
 	&RSound3::command16, &RSound3::command17, &RSound3::command18, &RSound3::command19,
 	&RSound3::command20, &RSound3::command21, &RSound3::command22, &RSound3::command23,
-	&RSound3::command24, &RSound3::command25, &RSound3::command26, &RSound3::command27x42,
+	&RSound3::command24, &RSound3::command25, &RSound3::command26, &RSound3::command27_42,
 	&RSound3::command28, &RSound3::command29, &RSound3::command30, &RSound3::command31,
 	&RSound3::command32, &RSound3::command33, &RSound3::command34, &RSound3::command35,
 	&RSound3::command36, &RSound3::command37, &RSound3::command38, &RSound3::command39,
-	&RSound3::command40, &RSound3::command41, &RSound3::command27x42, &RSound3::command43,
-	&RSound3::command44, &RSound3::command45, &RSound3::command46, &RSound3::command47x49,
-	&RSound3::command48, &RSound3::command47x49, &RSound3::command50, &RSound3::command51,
+	&RSound3::command40, &RSound3::command41, &RSound3::command27_42, &RSound3::command43,
+	&RSound3::command44, &RSound3::command45, &RSound3::command46, &RSound3::command47_49,
+	&RSound3::command48, &RSound3::command47_49, &RSound3::command50, &RSound3::command51,
 	&RSound3::nullCommand, &RSound3::nullCommand, &RSound3::nullCommand, &RSound3::nullCommand,
 	&RSound3::nullCommand, &RSound3::command57, &RSound3::nullCommand, &RSound3::command59,
 	&RSound3::command60
@@ -924,7 +922,7 @@ RSound3::RSound3(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
 }
 
 int RSound3::command(int commandId, int param) {
-	if (commandId > 60)
+	if (commandId < 0 || commandId > 60)
 		return 0;
 
 	_commandParam = param;
@@ -932,40 +930,21 @@ int RSound3::command(int commandId, int param) {
 	return (this->*_commandList[commandId])();
 }
 
-Channel *RSound3::method1(int offset, byte value) {
+Channel *RSound3::patchAndPlaySound(int offset, byte value) {
 	byte *pData = loadData(offset);
 	pData[5] = value;
-	return playSoundCh5To8(offset);
-}
-
-void RSound3::resetUpperChannelsTail() {
-	setFadeCheckPeriod(1);
-	_channels[4].setFadeOut(true);
-	_channels[5].setFadeOut(true);
-	_channels[6].setFadeOut(true);
-	_channels[7].setFadeOut(true);
-}
-
-int RSound3::command1() {
-	command3();
-	resetUpperChannelsTail();
-	return 0;
-}
-
-int RSound3::command3() {
-	return RSound::command3();
+	return playSoundDynamic(offset);
 }
 
 int RSound3::command5() {
-	// The native driver performs an unused active-sequence probe before
-	// unconditionally entering the shared upper-channel reset tail.
-	resetUpperChannelsTail();
+	if (!isSoundPlaying(0x1AE6))
+		return RSound::command5();
 	return 0;
 }
 
 int RSound3::command9() {
 	command1();
-	setFadeCheckPeriod((byte)_commandParam);
+	setFadeOutSpeed((byte)_commandParam);
 	return 0;
 }
 
@@ -973,11 +952,11 @@ int RSound3::command10() {
 	byte *pData = loadData(0x14FE);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[0].playData(pData);
-		_channels[1].playData(loadData(0x1630));
-		_channels[2].playData(loadData(0x186E));
-		_channels[3].playData(loadData(0x1A68));
-		_channels[8].playData(loadData(0x1AA6));
+		playSoundStatic(pData, 1);
+		playSoundStatic(0x1630, 2);
+		playSoundStatic(0x186E, 3);
+		playSoundStatic(0x1A68, 4);
+		playSoundStatic(0x1AA6, 9);
 	}
 	return 0;
 }
@@ -992,64 +971,61 @@ void RSound3::setVariantByte(byte value) {
 int RSound3::command11() {
 	if (!isSoundPlaying(loadData(0x1AE6))) {
 		setVariantByte(0x64);
-		_channels[0].playData(loadData(0x1AE6));
-		_channels[1].playData(loadData(0x1E00));
-		_channels[2].playData(loadData(0x1E66));
-		_channels[3].playData(loadData(0x204A));
-		_channels[4].playData(loadData(0x229C));
-		_channels[5].playData(loadData(0x2748));
-		_channels[6].playData(loadData(0x2C56));
+		playSoundStatic(0x1AE6, 1);
+		playSoundStatic(0x1E00, 2);
+		playSoundStatic(0x1E66, 3);
+		playSoundStatic(0x204A, 4);
+		playSoundStatic(0x229C, 5);
+		playSoundStatic(0x2748, 6);
+		playSoundStatic(0x2C56, 7);
 	}
 	return 0;
 }
 
 int RSound3::command13() {
 	command1();
-	playSoundCh1To8(0x1364);
-	playSoundCh1To8(0x1364);
-	playSoundCh1To8(0x1364);
-	playSoundCh1To8(0x1364);
-	playSoundCh1To8(0x1364);
+	playSoundAnyChannel(0x1364);
+	playSoundAnyChannel(0x1364);
+	playSoundAnyChannel(0x1364);
+	playSoundAnyChannel(0x1364);
+	playSoundAnyChannel(0x1364);
 	return 0;
 }
 
 int RSound3::command14() {
-	_channels[0].playData(loadData(0x32DC));
-	_channels[1].playData(loadData(0x32FC));
-	_channels[2].playData(loadData(0x331C));
-	_channels[3].playData(loadData(0x333E));
-	_channels[4].playData(loadData(0x335C));
-	_channels[5].playData(loadData(0x339E));
-	_channels[6].playData(loadData(0x33DE));
-	_channels[7].playData(loadData(0x341E));
+	playSoundStatic(0x32DC, 1);
+	playSoundStatic(0x32FC, 2);
+	playSoundStatic(0x331C, 3);
+	playSoundStatic(0x333E, 4);
+	playSoundStatic(0x335C, 5);
+	playSoundStatic(0x339E, 6);
+	playSoundStatic(0x33DE, 7);
+	playSoundStatic(0x341E, 8);
 	return 0;
 }
 
 void RSound3::sendDualVolume(byte volume) {
-	_channels[0]._volume = volume;
-	sendVolume(1, volume);
-	_channels[0]._volume = volume;
-	sendVolume(2, volume);
+	setChannelVolume(1, volume);
+	// The original code sets volume on the channel data for channel 1 (again),
+	// but sends it to the MT-32 on channel 2. Most likely a bug.
+	setChannelVolume(2, volume);
 }
 
 int RSound3::command15() {
 	setVariantByte(0x60);
 	sendDualVolume(0x60);
 
-	if (_channels[3]._deltaCounter && _channels[3]._soundData == loadData(0x204A)) {
-		_channels[2]._fadeOutActive = true;
-		_channels[3]._fadeOutActive = true;
-		_channels[4]._fadeOutActive = true;
-		_channels[5]._fadeOutActive = true;
-		_channels[6]._fadeOutActive = true;
-		_channels[7]._fadeOutActive = true;
-		setFadeCheckPeriod(1);
+	if (isSoundPlaying(4, loadData(0x204A))) {
+		for (int i = 3; i <= 8; i++) {
+			getChannel(i)->_fadeOutActive = true;
+		}
+		setFadeOutSpeed(1);
 		return 0;
 	}
 
 	command1();
-	_channels[0].playData(loadData(0x1AE6));
-	_channels[1].playData(loadData(0x1E00));
+	playSoundStatic(0x1AE6, 1);
+	playSoundStatic(0x1E00, 2);
 	return 0;
 }
 
@@ -1059,19 +1035,19 @@ int RSound3::command16() {
 	if (_command16AltFlag) {
 		byte *pData = loadData(0x345E);
 		if (!isSoundPlaying(pData)) {
-			_channels[0].playData(pData);
-			_channels[1].playData(loadData(0x364C));
-			_channels[2].playData(loadData(0x3806));
-			_channels[3].playData(loadData(0x399E));
+			playSoundStatic(pData, 1);
+			playSoundStatic(0x364C, 2);
+			playSoundStatic(0x3806, 3);
+			playSoundStatic(0x399E, 4);
 		}
 	} else {
 		byte *pData = loadData(0x3B26);
 		if (!isSoundPlaying(pData)) {
 			command1();
-			_channels[0].playData(pData);
-			_channels[1].playData(loadData(0x3BD8));
-			_channels[2].playData(loadData(0x3CF8));
-			_channels[3].playData(loadData(0x3E46));
+			playSoundStatic(pData, 1);
+			playSoundStatic(0x3BD8, 2);
+			playSoundStatic(0x3CF8, 3);
+			playSoundStatic(0x3E46, 4);
 		}
 	}
 	return 0;
@@ -1081,62 +1057,62 @@ int RSound3::command17() {
 	byte *pData = loadData(0x3F5C);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[0].playData(pData);
-		_channels[1].playData(loadData(0x4022));
-		_channels[2].playData(loadData(0x41F0));
-		_channels[3].playData(loadData(0x42F8));
+		playSoundStatic(pData, 1);
+		playSoundStatic(0x4022, 2);
+		playSoundStatic(0x41F0, 3);
+		playSoundStatic(0x42F8, 4);
 	}
 	return 0;
 }
 
 int RSound3::command18() {
 	command1();
-	_channels[0].playData(loadData(0x4492));
-	_channels[1].playData(loadData(0x45A4));
-	_channels[2].playData(loadData(0x46A2));
-	_channels[3].playData(loadData(0x47DC));
-	_channels[4].playData(loadData(0x49C0));
-	_channels[5].playData(loadData(0x4A4E));
+	playSoundStatic(0x4492, 1);
+	playSoundStatic(0x45A4, 2);
+	playSoundStatic(0x46A2, 3);
+	playSoundStatic(0x47DC, 4);
+	playSoundStatic(0x49C0, 5);
+	playSoundStatic(0x4A4E, 6);
 	return 0;
 }
 
 int RSound3::command19() {
 	if (!isSoundPlaying(loadData(0x1AE6)))
-		playSoundCh5To8(0x12B4);
+		playSoundDynamic(0x12B4);
 	return 0;
 }
 
 int RSound3::command20() {
 	if (!isSoundPlaying(loadData(0x1AE6)))
-		playSoundCh5To8(0x1246);
+		playSoundDynamic(0x1246);
 	return 0;
 }
 
 int RSound3::command21() {
 	if (!isSoundPlaying(loadData(0x1AE6))) {
-		playSoundCh5To8(0x1232);
-		playSoundCh5To8(0x123C);
+		playSoundDynamic(0x1232);
+		playSoundDynamic(0x123C);
 	}
 	return 0;
 }
 
 int RSound3::command22() {
-	playSoundCh5To8(0x126E);
+	playSoundDynamic(0x126E);
 	return 0;
 }
 
 int RSound3::command23() {
 	if (!isSoundPlaying(loadData(0x1AE6))) {
-		playSoundCh5To8(0x12D2);
-		playSoundCh5To8(0x12E0);
+		playSoundDynamic(0x12D2);
+		playSoundDynamic(0x12E0);
 	}
 	return 0;
 }
 
 int RSound3::command24() {
 	if (!isSoundPlaying(loadData(0x1AE6))) {
-		playSoundCh5To8(0x11E2);
-		playSoundCh5To8(0x120A);
+		playSoundDynamic(0x11E2);
+		playSoundDynamic(0x120A);
 	}
 	return 0;
 }
@@ -1144,162 +1120,162 @@ int RSound3::command24() {
 int RSound3::command25() {
 	// The dispatcher's preceding xor leaves ZF set, so the native jz
 	// selects 0x25 for both calls.
-	method1(0x11A6, 0x25);
-	method1(0x11C4, 0x25);
+	patchAndPlaySound(0x11A6, 0x25);
+	patchAndPlaySound(0x11C4, 0x25);
 	return 0;
 }
 
 int RSound3::command26() {
-	playSoundCh5To8(0x1252);
+	playSoundDynamic(0x1252);
 	return 0;
 }
 
-int RSound3::command27x42() {
-	playSoundCh5To8(0x14BE);
+int RSound3::command27_42() {
+	playSoundDynamic(0x14BE);
 	return 0;
 }
 
 int RSound3::command28() {
 	byte *pData = loadData(0x12EE);
-	pData[3] = 0x4D;
-	playSoundCh5To8(0x12EE);
+	pData[3] = 0x4D; // Medium volume
+	playSoundDynamic(0x12EE);
 	return 0;
 }
 
 int RSound3::command29() {
 	byte *pData = loadData(0x12EE);
-	pData[3] = 0x7F;
-	playSoundCh5To8(0x12EE);
+	pData[3] = 0x7F; // High volume
+	playSoundDynamic(0x12EE);
 	return 0;
 }
 
 int RSound3::command30() {
-	playSoundCh5To8(0x14B4);
-	playSoundCh5To8(0x14AA);
+	playSoundDynamic(0x14B4);
+	playSoundDynamic(0x14AA);
 	return 0;
 }
 
 int RSound3::command31() {
-	playSoundCh5To8(0x12F8);
-	playSoundCh5To8(0x130E);
+	playSoundDynamic(0x12F8);
+	playSoundDynamic(0x130E);
 	return 0;
 }
 
 int RSound3::command32() {
-	playSoundCh5To8(0x1472);
+	playSoundDynamic(0x1472);
 	return 0;
 }
 
 int RSound3::command33() {
-	playSoundCh5To8(0x147E);
+	playSoundDynamic(0x147E);
 	return 0;
 }
 
 int RSound3::command34() {
-	playSoundCh5To8(0x1488);
+	playSoundDynamic(0x1488);
 	return 0;
 }
 
 int RSound3::command35() {
-	playSoundCh5To8(0x1498);
+	playSoundDynamic(0x1498);
 	return 0;
 }
 
 int RSound3::command36() {
-	playSoundCh5To8(0x14DA);
-	playSoundCh5To8(0x14EE);
+	playSoundDynamic(0x14DA, 0);
+	playSoundDynamic(0x14EE, 0);
 	return 0;
 }
 
 int RSound3::command37() {
-	playSoundCh5To8(0x14CC);
+	playSoundDynamic(0x14CC);
 	return 0;
 }
 
 int RSound3::command38() {
-	playSoundCh5To8(0x133A);
+	playSoundDynamic(0x133A);
 	return 0;
 }
 
 int RSound3::command39() {
 	byte *pData = loadData(0x1346);
 	pData[3] = 77;
-	_command3940Toggle ^= 4;
-	pData[6] = _command3940Toggle + 0x28;
-	playSoundCh5To8(0x1346);
+	_command39_40NoteToggle ^= 4;
+	pData[6] = _command39_40NoteToggle + 0x28;
+	playSoundDynamic(0x1346);
 	return 0;
 }
 
 int RSound3::command40() {
 	byte *pData = loadData(0x1346);
 	pData[3] = 47;
-	_command3940Toggle ^= 4;
-	pData[6] = _command3940Toggle + 0x28;
-	playSoundCh5To8(0x1346);
+	_command39_40NoteToggle ^= 4;
+	pData[6] = _command39_40NoteToggle + 0x28;
+	playSoundDynamic(0x1346);
 	return 0;
 }
 
 int RSound3::command41() {
-	playSoundCh5To8(0x1184);
+	playSoundDynamic(0x1184);
 	return 0;
 }
 
 int RSound3::command43() {
-	playSoundCh5To8(0x1350);
-	playSoundCh5To8(0x135A);
+	playSoundDynamic(0x1350);
+	playSoundDynamic(0x135A);
 	return 0;
 }
 
 int RSound3::command44() {
-	playSoundCh5To8(0x12A0);
+	playSoundDynamic(0x12A0);
 	return 0;
 }
 
 int RSound3::command45() {
-	playSoundCh5To8(0x12AA);
+	playSoundDynamic(0x12AA);
 	return 0;
 }
 
 int RSound3::command46() {
-	playSoundCh5To8(0x13AA);
-	playSoundCh5To8(0x13C6);
+	playSoundDynamic(0x13AA);
+	playSoundDynamic(0x13C6);
 	return 0;
 }
 
-int RSound3::command47x49() {
-	playSoundCh5To8(0x13E6);
-	playSoundCh5To8(0x13FE);
+int RSound3::command47_49() {
+	playSoundDynamic(0x13E6);
+	playSoundDynamic(0x13FE);
 	return 0;
 }
 
 int RSound3::command48() {
-	playSoundCh5To8(0x141E);
+	playSoundDynamic(0x141E);
 	return 0;
 }
 
 int RSound3::command50() {
-	playSoundCh5To8(0x1436);
-	playSoundCh5To8(0x144C);
+	playSoundDynamic(0x1436);
+	playSoundDynamic(0x144C);
 	return 0;
 }
 
 int RSound3::command51() {
-	playSoundCh5To8(0x125C);
+	playSoundDynamic(0x125C);
 	return 0;
 }
 
 int RSound3::command57() {
-	playSoundCh5To8(0x1466);
+	playSoundDynamic(0x1466);
 	return 0;
 }
 
 int RSound3::command59() {
-	playSoundCh5To8(0x1324);
+	playSoundDynamic(0x1324);
 	return 0;
 }
 
 int RSound3::command60() {
-	playSoundCh5To8(0x132E);
+	playSoundDynamic(0x132E);
 	return 0;
 }
 
@@ -1328,7 +1304,7 @@ RSound4::RSound4(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
 }
 
 int RSound4::command(int commandId, int param) {
-	if (commandId > 59)
+	if (commandId < 0 || commandId > 59)
 		return 0;
 
 	_commandParam = param;
@@ -1337,28 +1313,48 @@ int RSound4::command(int commandId, int param) {
 }
 
 void RSound4::tickCallback() {
-	if (!_callbackPeriod)
-		return;
-	if (--_callbackCounter)
+	if (_callbackPeriod == 0 || --_callbackCounter > 0)
 		return;
 
 	_callbackCounter = _callbackPeriod;
-	if (_callbackFnPtr)
+	if (_callbackFnPtr != nullptr)
 		(this->*_callbackFnPtr)();
+}
+
+void RSound4::stopChannel(byte channel) {
+	getChannel(channel)->_pSrc = loadData(0x1188);
+}
+
+int RSound4::command0() {
+	_callbackCounter = 0;
+	_callbackPeriod = 0;
+	_callbackFnPtr = nullptr;
+
+	return RSound::command0();
 }
 
 int RSound4::command9() {
 	command1();
-	setFadeCheckPeriod((byte)_commandParam);
+	setFadeOutSpeed((byte)_commandParam);
 	return 0;
 }
 
-byte RSound4::paramToVariant() {
-	return (byte)((_commandParam >> 1) + 36);
+void RSound4::playCommand10_58CommonChannels() {
+	playSoundStatic(0x1274, 1);
+	playSoundStatic(0x13A6, 2);
+	playSoundStatic(0x15E4, 3);
+}
+
+int RSound4::command10() {
+	command1();
+	playSoundStatic(0x17DE, 4);
+	playSoundStatic(0x181C, 9);
+	playCommand10_58CommonChannels();
+	return 0;
 }
 
 void RSound4::setCommand12Variant() {
-	byte value = paramToVariant();
+	byte value = (byte)((_commandParam >> 1) + 36);
 	loadData(0x1966)[1] = value;
 	loadData(0x1DC8)[1] = value;
 	loadData(0x1FBA)[1] = value;
@@ -1367,98 +1363,84 @@ void RSound4::setCommand12Variant() {
 }
 
 int RSound4::command12() {
-	if (_channels[4]._soundData == loadData(0x1966) && _channels[4]._deltaCounter) {
+	if (isSoundPlaying(5, loadData(0x1966))) {
 		setCommand12Variant();
 		return 0;
 	}
 
 	setCommand12Variant();
 	command1();
-	_channels[4].playData(loadData(0x1966));
-	_channels[5].playData(loadData(0x1DC8));
-	_channels[6].playData(loadData(0x1FBA));
-	_channels[7].playData(loadData(0x211E));
-	_channels[8].playData(loadData(0x24A8));
-	return 0;
-}
-
-void RSound4::loadIntroChannels() {
-	_channels[0].playData(loadData(0x1274));
-	_channels[1].playData(loadData(0x13A6));
-	_channels[2].playData(loadData(0x15E4));
-}
-
-int RSound4::command10() {
-	command1();
-	_channels[3].playData(loadData(0x17DE));
-	_channels[8].playData(loadData(0x181C));
-	loadIntroChannels();
+	playSoundStatic(0x1966, 5);
+	playSoundStatic(0x1DC8, 6);
+	playSoundStatic(0x1FBA, 7);
+	playSoundStatic(0x211E, 8);
+	playSoundStatic(0x24A8, 9);
 	return 0;
 }
 
 int RSound4::command19() {
-	playSoundCh5To8(0x1196);
+	playSoundDynamic(0x1196);
 	return 0;
 }
 
 int RSound4::command20() {
-	playSoundCh5To8(0x118A);
+	playSoundDynamic(0x118A);
 	return 0;
 }
 
 int RSound4::command21() {
-	playSoundCh5To8(0x1260);
-	playSoundCh5To8(0x126A);
+	playSoundDynamic(0x1260);
+	playSoundDynamic(0x126A);
 	return 0;
 }
 
 int RSound4::command27() {
-	playSoundCh5To8(0x1220);
+	playSoundDynamic(0x1220);
 	return 0;
 }
 
 int RSound4::command30() {
-	playSoundCh5To8(0x1216);
-	playSoundCh5To8(0x120C);
+	playSoundDynamic(0x1216);
+	playSoundDynamic(0x120C);
 	return 0;
 }
 
 int RSound4::command32() {
-	playSoundCh5To8(0x11D4);
+	playSoundDynamic(0x11D4);
 	return 0;
 }
 
 int RSound4::command33() {
-	playSoundCh5To8(0x11E0);
+	playSoundDynamic(0x11E0);
 	return 0;
 }
 
 int RSound4::command34() {
-	playSoundCh5To8(0x11EA);
+	playSoundDynamic(0x11EA);
 	return 0;
 }
 
 int RSound4::command35() {
-	playSoundCh5To8(0x11FA);
+	playSoundDynamic(0x11FA);
 	return 0;
 }
 
 int RSound4::command36() {
-	playSoundCh5To8(0x123C);
-	playSoundCh5To8(0x1250);
+	playSoundDynamic(0x123C, 0);
+	playSoundDynamic(0x1250, 0);
 	return 0;
 }
 
 int RSound4::command37() {
-	playSoundCh5To8(0x122E);
+	playSoundDynamic(0x122E);
 	return 0;
 }
 
 int RSound4::command52() {
-	_channels[0]._pSrc = loadData(0x1188);
-	_channels[1]._pSrc = loadData(0x1188);
-	_channels[2]._pSrc = loadData(0x1188);
-	_channels[4].playData(loadData(0x2A0C));
+	stopChannel(1);
+	stopChannel(2);
+	stopChannel(3);
+	playSoundStatic(0x2A0C, 5);
 	return 0;
 }
 
@@ -1466,55 +1448,58 @@ int RSound4::command53() {
 	command1();
 	_callbackCounter = 56;
 	_callbackPeriod = 56;
-	playSoundCh1To8(0x1888);
-	playSoundCh1To8(0x18DE);
+	playSoundAnyChannel(0x1888, 0);
+	playSoundAnyChannel(0x18DE, 0);
 	return 0;
 }
 
-void RSound4::loadCommand54() {
+void RSound4::command54Callback() {
 	_callbackFnPtr = nullptr;
-	playSoundCh1To8(0x18B2);
-	playSoundCh1To8(0x1904);
+	playSoundAnyChannel(0x18B2, 0);
+	playSoundAnyChannel(0x1904, 0);
 }
 
 int RSound4::command54() {
-	_callbackFnPtr = &RSound4::loadCommand54;
+	// Add an instrument to command 53's music at the start of the next bar.
+	_callbackFnPtr = &RSound4::command54Callback;
 	return 0;
 }
 
-void RSound4::loadCommand55() {
+void RSound4::command55Callback() {
 	_callbackFnPtr = nullptr;
-	playSoundCh1To8(0x191E);
+	playSoundAnyChannel(0x191E, 0);
 }
 
 int RSound4::command55() {
-	_callbackFnPtr = &RSound4::loadCommand55;
+	// Add an instrument to command 53's music at the start of the next bar.
+	_callbackFnPtr = &RSound4::command55Callback;
 	return 0;
 }
 
-void RSound4::loadCommand56() {
+void RSound4::command56Callback() {
 	_callbackFnPtr = nullptr;
-	playSoundCh1To8(0x185C);
+	playSoundAnyChannel(0x185C, 0);
 }
 
 int RSound4::command56() {
-	_callbackFnPtr = &RSound4::loadCommand56;
+	// Add an instrument to command 53's music at the start of the next bar.
+	_callbackFnPtr = &RSound4::command56Callback;
 	return 0;
 }
 
 int RSound4::command57() {
-	playSoundCh5To8(0x11C8);
+	playSoundDynamic(0x11C8);
 	return 0;
 }
 
 int RSound4::command58() {
-	_channels[4]._pSrc = loadData(0x1188);
-	loadIntroChannels();
+	stopChannel(5);
+	playCommand10_58CommonChannels();
 	return 0;
 }
 
 int RSound4::command59() {
-	playSoundCh5To8(0x11BE);
+	playSoundDynamic(0x11BE);
 	return 0;
 }
 
@@ -1523,11 +1508,11 @@ int RSound4::command59() {
 const RSound5::CommandPtr RSound5::_commandList[42] = {
 	&RSound5::command0, &RSound5::command1, &RSound5::command2, &RSound5::command3,
 	&RSound5::command4, &RSound5::command5, &RSound5::command6, &RSound5::command7,
-	&RSound5::command8, &RSound5::command9, &RSound5::command10, &RSound5::command11x24,
-	&RSound5::command12x25, &RSound5::command13, &RSound5::command14, &RSound5::command15,
+	&RSound5::command8, &RSound5::command9, &RSound5::command10, &RSound5::command11_24,
+	&RSound5::command12_25, &RSound5::command13, &RSound5::command14, &RSound5::command15,
 	&RSound5::command16, &RSound5::command17, &RSound5::command18, &RSound5::command19,
 	&RSound5::command20, &RSound5::command21, &RSound5::command22, &RSound5::command23,
-	&RSound5::command11x24, &RSound5::command12x25, &RSound5::command26, &RSound5::command27,
+	&RSound5::command11_24, &RSound5::command12_25, &RSound5::command26, &RSound5::command27,
 	&RSound5::command28, &RSound5::command29, &RSound5::command30, &RSound5::command31,
 	&RSound5::command32, &RSound5::command33, &RSound5::command34, &RSound5::command35,
 	&RSound5::command36, &RSound5::command37, &RSound5::command38, &RSound5::command39,
@@ -1539,7 +1524,7 @@ RSound5::RSound5(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
 }
 
 int RSound5::command(int commandId, int param) {
-	if (commandId > 41)
+	if (commandId < 0 || commandId > 41)
 		return 0;
 
 	_commandParam = param;
@@ -1547,190 +1532,195 @@ int RSound5::command(int commandId, int param) {
 	return (this->*_commandList[commandId])();
 }
 
+void RSound5::stopChannel(byte channel) {
+	getChannel(channel)->_pSrc = loadData(0x1182);
+}
+
 int RSound5::command9() {
-	playSoundCh5To8(0x11C4);
+	playSoundDynamic(0x11C4);
 	return 0;
 }
 
 int RSound5::command10() {
-	playSoundCh5To8(0x1238);
+	playSoundDynamic(0x1238);
 	return 0;
 }
 
-int RSound5::command11x24() {
-	playSoundCh5To8(0x1196);
+int RSound5::command11_24() {
+	playSoundDynamic(0x1196);
 	return 0;
 }
 
-int RSound5::command12x25() {
-	playSoundCh5To8(0x1242);
+int RSound5::command12_25() {
+	playSoundDynamic(0x1242);
 	return 0;
 }
 
 int RSound5::command13() {
-	playSoundCh5To8(0x125E);
-	playSoundCh5To8(0x1268);
+	playSoundDynamic(0x125E);
+	playSoundDynamic(0x1268);
 	return 0;
 }
 
 int RSound5::command14() {
-	_channels[7].playData(loadData(0x1272));
+	playSoundStatic(0x1272, 8, 1);
 	return 0;
 }
 
 int RSound5::command15() {
-	if (_channels[7]._soundData == loadData(0x1272)) {
+	Channel *chan = getChannel(8);
+	if (chan->_soundData == loadData(0x1272)) {
 		byte *pData = loadData(0x1288);
-		_channels[7]._innerLoopStart = pData;
-		_channels[7]._outerLoopStart = pData;
-		_channels[7]._deltaCounter = 1;
+		chan->_innerLoopStart = pData;
+		chan->_outerLoopStart = pData;
+		chan->_deltaCounter = 1;
 	}
 	return 0;
 }
 
 int RSound5::command16() {
-	playSoundCh5To8(0x129A);
-	playSoundCh5To8(0x129A);
-	playSoundCh5To8(0x129A);
-	playSoundCh5To8(0x129A);
+	playSoundDynamic(0x129A);
+	playSoundDynamic(0x129A);
+	playSoundDynamic(0x129A);
+	playSoundDynamic(0x129A);
 	return 0;
 }
 
 int RSound5::command17() {
-	playSoundCh5To8(0x11B4);
+	playSoundDynamic(0x11B4);
 	return 0;
 }
 
 int RSound5::command18() {
-	playSoundCh5To8(0x12E4);
-	playSoundCh5To8(0x12F6);
-	playSoundCh5To8(0x1308);
-	playSoundCh5To8(0x131A);
+	playSoundDynamic(0x12E4);
+	playSoundDynamic(0x12F6);
+	playSoundDynamic(0x1308);
+	playSoundDynamic(0x131A);
 	return 0;
 }
 
 int RSound5::command19() {
-	playSoundCh5To8(0x132C);
+	playSoundDynamic(0x132C);
 	return 0;
 }
 
 int RSound5::command20() {
-	playSoundCh5To8(0x1368);
+	playSoundDynamic(0x1368);
 	return 0;
 }
 
 int RSound5::command21() {
-	playSoundCh5To8(0x1388);
+	playSoundDynamic(0x1388);
 	return 0;
 }
 
 int RSound5::command22() {
-	playSoundCh5To8(0x139A);
+	playSoundDynamic(0x139A);
 	return 0;
 }
 
 int RSound5::command23() {
-	playSoundCh5To8(0x13AA);
-	playSoundCh5To8(0x13AA);
-	playSoundCh5To8(0x13AA);
-	playSoundCh5To8(0x13AA);
+	playSoundDynamic(0x13AA);
+	playSoundDynamic(0x13AA);
+	playSoundDynamic(0x13AA);
+	playSoundDynamic(0x13AA);
 	return 0;
 }
 
 int RSound5::command26() {
-	playSoundCh5To8(0x13D6);
+	playSoundDynamic(0x13D6);
 	return 0;
 }
 
 int RSound5::command27() {
-	playSoundCh5To8(0x13F0);
+	playSoundDynamic(0x13F0);
 	return 0;
 }
 
 int RSound5::command28() {
-	playSoundCh5To8(0x121C);
+	playSoundDynamic(0x121C);
 	return 0;
 }
 
-void RSound5::loadTailChannels() {
-	_channels[3].playData(loadData(0x1688));
-	_channels[8].playData(loadData(0x1882));
+void RSound5::playCommand29_38CommonChannels() {
+	playSoundStatic(0x1688, 4);
+	playSoundStatic(0x1882, 9);
 }
 
 int RSound5::command29() {
 	byte *pData = loadData(0x1488);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[0].playData(pData);
-		_channels[1].playData(loadData(0x1534));
-		_channels[2].playData(loadData(0x15EA));
-		loadTailChannels();
+		playSoundStatic(pData, 1);
+		playSoundStatic(0x1534, 2);
+		playSoundStatic(0x15EA, 3);
+		playCommand29_38CommonChannels();
 	}
 	return 0;
 }
 
 int RSound5::command30() {
-	playSoundCh5To8(0x1212);
-	playSoundCh5To8(0x1208);
+	playSoundDynamic(0x1212);
+	playSoundDynamic(0x1208);
 	return 0;
 }
 
 int RSound5::command31() {
-	playSoundCh5To8(0x140A);
+	playSoundDynamic(0x140A);
 	return 0;
 }
 
 int RSound5::command32() {
-	playSoundCh5To8(0x11D0);
+	playSoundDynamic(0x11D0);
 	return 0;
 }
 
 int RSound5::command33() {
-	playSoundCh5To8(0x11DC);
+	playSoundDynamic(0x11DC);
 	return 0;
 }
 
 int RSound5::command34() {
-	playSoundCh5To8(0x11E6);
+	playSoundDynamic(0x11E6);
 	return 0;
 }
 
 int RSound5::command35() {
-	playSoundCh5To8(0x11F6);
+	playSoundDynamic(0x11F6);
 	return 0;
 }
 
 int RSound5::command36() {
-	playSoundCh5To8(0x1464);
-	playSoundCh5To8(0x1478);
+	playSoundDynamic(0x1464, 0);
+	playSoundDynamic(0x1478, 0);
 	return 0;
 }
 
 int RSound5::command37() {
-	playSoundCh5To8(0x122A);
+	playSoundDynamic(0x122A);
 	return 0;
 }
 
 int RSound5::command38() {
-	_channels[4]._pSrc = loadData(0x1182);
-	loadTailChannels();
+	stopChannel(5);
+	playCommand29_38CommonChannels();
 	return 0;
 }
 
 int RSound5::command39() {
-	playSoundCh5To8(0x141E);
-	playSoundCh5To8(0x1428);
+	playSoundDynamic(0x141E);
+	playSoundDynamic(0x1428);
 	return 0;
 }
 
 int RSound5::command40() {
-	playSoundCh5To8(0x1432);
+	playSoundDynamic(0x1432);
 	return 0;
 }
 
 int RSound5::command41() {
-	_channels[8]._pSrc = loadData(0x1182);
-	_channels[3].playData(loadData(0x1BB6));
+	stopChannel(9);
+	playSoundStatic(0x1BB6, 4);
 	return 0;
 }
 
@@ -1740,11 +1730,11 @@ const RSound6::CommandPtr RSound6::_commandList[30] = {
 	&RSound6::command0, &RSound6::command1, &RSound6::command2, &RSound6::command3,
 	&RSound6::command4, &RSound6::command5, &RSound6::command6, &RSound6::command7,
 	&RSound6::command8, &RSound6::command9, &RSound6::command10, &RSound6::command11,
-	&RSound6::command12, &RSound6::command13x14, &RSound6::command13x14, &RSound6::command15,
+	&RSound6::command12, &RSound6::command13_14, &RSound6::command13_14, &RSound6::command15,
 	&RSound6::command16, &RSound6::command17, &RSound6::command18, &RSound6::command19,
 	&RSound6::command20, &RSound6::command21, &RSound6::command22, &RSound6::command23,
 	&RSound6::command24, &RSound6::command25, &RSound6::nullCommand, &RSound6::nullCommand,
-	&RSound6::nullCommand, &RSound6::command28
+	&RSound6::nullCommand, &RSound6::command29
 };
 
 RSound6::RSound6(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) : 
@@ -1752,7 +1742,7 @@ RSound6::RSound6(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
 }
 
 int RSound6::command(int commandId, int param) {
-	if (commandId > 29)
+	if (commandId < 0 || commandId > 29)
 		return 0;
 
 	_commandParam = param;
@@ -1761,148 +1751,158 @@ int RSound6::command(int commandId, int param) {
 }
 
 void RSound6::tickCallback() {
-	if (!_callbackPeriod)
-		return;
-	if (--_callbackCounter)
+	if (_callbackPeriod == 0 || --_callbackCounter > 0)
 		return;
 
 	_callbackCounter = _callbackPeriod;
-	if (_callbackFnPtr)
+	if (_callbackFnPtr != nullptr)
 		(this->*_callbackFnPtr)();
 }
 
-void RSound6::reloadCommand24() {
+int RSound6::command0() {
+	_callbackCounter = 0;
+	_callbackPeriod = 0;
 	_callbackFnPtr = nullptr;
-	command1();
-	_callbackCounter = 84;
-	_callbackPeriod = 84;
-	_channels[0].playData(loadData(0x1A38));
-	_channels[1].playData(loadData(0x1BBE));
-	_channels[8].playData(loadData(0x1B90));
-}
 
-void RSound6::reloadCommand28() {
-	_callbackFnPtr = nullptr;
-	command1();
-	_callbackCounter = 84;
-	_callbackPeriod = 84;
-	_channels[0].playData(loadData(0x130A));
-	_channels[1].playData(loadData(0x13B6));
-	_channels[2].playData(loadData(0x146C));
-	_channels[3].playData(loadData(0x150A));
-	_channels[8].playData(loadData(0x1704));
+	return RSound::command0();
 }
 
 int RSound6::command9() {
-	playSoundCh5To8(0x111C);
+	playSoundDynamic(0x111C);
 	return 0;
 }
 
 int RSound6::command10() {
-	playSoundCh5To8(0x1190);
+	playSoundDynamic(0x1190);
 	return 0;
 }
 
 int RSound6::command11() {
-	playSoundCh5To8(0x11A4);
-	playSoundCh5To8(0x11A4);
-	playSoundCh5To8(0x11A4);
-	playSoundCh5To8(0x11A4);
+	playSoundDynamic(0x11A4);
+	playSoundDynamic(0x11A4);
+	playSoundDynamic(0x11A4);
+	playSoundDynamic(0x11A4);
 	return 0;
 }
 
 int RSound6::command12() {
-	playSoundCh5To8(0x11C8);
+	playSoundDynamic(0x11C8);
 	return 0;
 }
 
-int RSound6::command13x14() {
-	playSoundCh5To8(0x11E8);
+int RSound6::command13_14() {
+	playSoundDynamic(0x11E8);
 	return 0;
 }
 
 int RSound6::command15() {
-	playSoundCh5To8(0x11F2);
-	playSoundCh5To8(0x11F2);
-	playSoundCh5To8(0x11F2);
-	playSoundCh5To8(0x11F2);
+	playSoundDynamic(0x11F2);
+	playSoundDynamic(0x11F2);
+	playSoundDynamic(0x11F2);
+	playSoundDynamic(0x11F2);
 	return 0;
 }
 
 int RSound6::command16() {
-	playSoundCh5To8(0x121E);
+	playSoundDynamic(0x121E);
 	return 0;
 }
 
 int RSound6::command17() {
-	playSoundCh5To8(0x1228);
-	playSoundCh5To8(0x1228);
-	playSoundCh5To8(0x1228);
-	playSoundCh5To8(0x1228);
+	playSoundDynamic(0x1228);
+	playSoundDynamic(0x1228);
+	playSoundDynamic(0x1228);
+	playSoundDynamic(0x1228);
 	return 0;
 }
 
 int RSound6::command18() {
-	playSoundCh5To8(0x1254);
+	playSoundDynamic(0x1254);
 	return 0;
 }
 
 int RSound6::command19() {
-	playSoundCh5To8(0x1266);
+	playSoundDynamic(0x1266);
 	return 0;
 }
 
 int RSound6::command20() {
-	playSoundCh5To8(0x1278);
+	playSoundDynamic(0x1278);
 	return 0;
 }
 
 int RSound6::command21() {
-	_channels[4].playData(loadData(0x1282));
-	playSoundCh5To8(0x1282);
-	playSoundCh5To8(0x1282);
-	playSoundCh5To8(0x12AA);
+	playSoundStatic(0x1282, 5, 1);
+	playSoundDynamic(0x1282);
+	playSoundDynamic(0x1282);
+	playSoundDynamic(0x12AA);
 	return 0;
 }
 
 int RSound6::command22() {
-	_channels[4].playData(loadData(0x12CE));
-	_channels[5].playData(loadData(0x12CE));
-	_channels[6].playData(loadData(0x12CE));
-	_channels[7].playData(loadData(0x12CE));
+	playSoundStatic(0x12CE, 5, 1);
+	playSoundStatic(0x12CE, 6, 1);
+	playSoundStatic(0x12CE, 7, 1);
+	playSoundStatic(0x12CE, 8, 1);
 	return 0;
 }
 
 int RSound6::command23() {
-	playSoundCh5To8(0x1174);
+	playSoundDynamic(0x1174);
 	return 0;
 }
 
+void RSound6::command24Callback() {
+	_callbackFnPtr = nullptr;
+	command1();
+	_callbackCounter = 84;
+	_callbackPeriod = 84;
+	playSoundStatic(0x1A38, 1);
+	playSoundStatic(0x1BBE, 2);
+	playSoundStatic(0x1B90, 9);
+}
+
 int RSound6::command24() {
-	if (_channels[0]._deltaCounter && _channels[0]._soundData == loadData(0x130A)) {
-		_callbackFnPtr = &RSound6::reloadCommand24;
+	if (isSoundPlaying(1, loadData(0x130A))) {
+		// The music of command 29 is playing. Cut into command 24's music
+		// at the next bar, which is when the callback is invoked.
+		_callbackFnPtr = &RSound6::command24Callback;
 		return 0;
 	}
 
-	reloadCommand24();
+	command24Callback();
 	return 0;
 }
 
 int RSound6::command25() {
-	_channels[4].playData(loadData(0x12FE));
+	playSoundStatic(0x12FE, 5, 1);
 	return 0;
 }
 
-int RSound6::command28() {
+void RSound6::command29Callback() {
+	_callbackFnPtr = nullptr;
+	command1();
+	_callbackCounter = 84;
+	_callbackPeriod = 84;
+	playSoundStatic(0x130A, 1);
+	playSoundStatic(0x13B6, 2);
+	playSoundStatic(0x146C, 3);
+	playSoundStatic(0x150A, 4);
+	playSoundStatic(0x1704, 9);
+}
+
+int RSound6::command29() {
 	if (isSoundPlaying(loadData(0x130A)))
 		return 0;
 
-	if (_channels[0]._deltaCounter && _channels[0]._soundData == loadData(0x1A38)) {
-		_callbackFnPtr = &RSound6::reloadCommand28;
+	if (isSoundPlaying(1, loadData(0x1A38))) {
+		// The music of command 24 is playing. Cut into command 29's music
+		// at the next bar, which is when the callback is invoked.
+		_callbackFnPtr = &RSound6::command29Callback;
 		return 0;
 	}
 
-	reloadCommand28();
+	command29Callback();
 	return 0;
 }
 
@@ -1926,7 +1926,7 @@ RSound7::RSound7(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
 }
 
 int RSound7::command(int commandId, int param) {
-	if (commandId > 37)
+	if (commandId < 0 || commandId > 37)
 		return 0;
 
 	_commandParam = param;
@@ -1936,125 +1936,126 @@ int RSound7::command(int commandId, int param) {
 
 int RSound7::command9() {
 	command1();
-	_channels[0].playData(loadData(0x1C0E));
-	_channels[1].playData(loadData(0x1C88));
-	_channels[2].playData(loadData(0x1CD4));
-	_channels[3].playData(loadData(0x1D4E));
+	playSoundStatic(0x1C0E, 1);
+	playSoundStatic(0x1C88, 2);
+	playSoundStatic(0x1CD4, 3);
+	playSoundStatic(0x1D4E, 4);
 	return 0;
 }
 
 int RSound7::command15() {
-	playSoundCh5To8(0x125C);
+	playSoundDynamic(0x125C);
 	return 0;
 }
 
 int RSound7::command16() {
-	playSoundCh5To8(0x12DE);
+	playSoundDynamic(0x12DE);
 	return 0;
 }
 
 int RSound7::command17() {
-	playSoundCh5To8(0x12C2);
+	playSoundDynamic(0x12C2);
 	return 0;
 }
 
 int RSound7::command18() {
-	_channels[7].playData(loadData(0x12FC));
+	playSoundStatic(0x12FC, 8, 1);
 	return 0;
 }
 
 int RSound7::command19() {
-	if (_channels[7]._soundData == loadData(0x12FC)) {
+	Channel *chan = getChannel(8);
+	if (chan->_soundData == loadData(0x12FC)) {
 		byte *pData = loadData(0x1312);
-		_channels[7]._innerLoopStart = pData;
-		_channels[7]._outerLoopStart = pData;
-		_channels[7]._deltaCounter = 1;
+		chan->_innerLoopStart = pData;
+		chan->_outerLoopStart = pData;
+		chan->_deltaCounter = 1;
 	}
 	return 0;
 }
 
 int RSound7::command20() {
-	playSoundCh5To8(0x1324);
-	playSoundCh5To8(0x1324);
+	playSoundDynamic(0x1324);
+	playSoundDynamic(0x1324);
 	return 0;
 }
 
 int RSound7::command21() {
-	playSoundCh5To8(0x1336);
+	playSoundDynamic(0x1336);
 	return 0;
 }
 
 int RSound7::command22() {
-	playSoundCh5To8(0x1340);
+	playSoundDynamic(0x1340);
 	return 0;
 }
 
 int RSound7::command23() {
-	playSoundCh5To8(0x12B4);
+	playSoundDynamic(0x12B4);
 	return 0;
 }
 
 int RSound7::command24() {
-	_channels[0].playData(loadData(0x137C));
-	_channels[1].playData(loadData(0x1406));
-	_channels[2].playData(loadData(0x1492));
-	_channels[3].playData(loadData(0x1516));
-	_channels[4].playData(loadData(0x1588));
+	playSoundStatic(0x137C, 1);
+	playSoundStatic(0x1406, 2);
+	playSoundStatic(0x1492, 3);
+	playSoundStatic(0x1516, 4);
+	playSoundStatic(0x1588, 5);
 	return 0;
 }
 
 int RSound7::command25() {
 	command1();
-	_channels[0].playData(loadData(0x1612));
-	_channels[1].playData(loadData(0x16C8));
-	_channels[2].playData(loadData(0x177E));
-	_channels[3].playData(loadData(0x1838));
+	playSoundStatic(0x1612, 1);
+	playSoundStatic(0x16C8, 2);
+	playSoundStatic(0x177E, 3);
+	playSoundStatic(0x1838, 4);
 	return 0;
 }
 
 int RSound7::command27() {
-	_channels[0].playData(loadData(0x1932));
-	_channels[1].playData(loadData(0x1986));
-	_channels[2].playData(loadData(0x19EC));
-	_channels[3].playData(loadData(0x1A66));
-	_channels[4].playData(loadData(0x1B3C));
+	playSoundStatic(0x1932, 1);
+	playSoundStatic(0x1986, 2);
+	playSoundStatic(0x19EC, 3);
+	playSoundStatic(0x1A66, 4);
+	playSoundStatic(0x1B3C, 5);
 	return 0;
 }
 
 int RSound7::command30() {
-	playSoundCh5To8(0x12AA);
-	playSoundCh5To8(0x12A0);
+	playSoundDynamic(0x12AA);
+	playSoundDynamic(0x12A0);
 	return 0;
 }
 
 int RSound7::command32() {
-	playSoundCh5To8(0x1268);
+	playSoundDynamic(0x1268);
 	return 0;
 }
 
 int RSound7::command33() {
-	playSoundCh5To8(0x1274);
+	playSoundDynamic(0x1274);
 	return 0;
 }
 
 int RSound7::command34() {
-	playSoundCh5To8(0x127E);
+	playSoundDynamic(0x127E);
 	return 0;
 }
 
 int RSound7::command35() {
-	playSoundCh5To8(0x128E);
+	playSoundDynamic(0x128E);
 	return 0;
 }
 
 int RSound7::command36() {
-	playSoundCh5To8(0x1358);
-	playSoundCh5To8(0x136C);
+	playSoundDynamic(0x1358, 0);
+	playSoundDynamic(0x136C, 0);
 	return 0;
 }
 
 int RSound7::command37() {
-	playSoundCh5To8(0x134A);
+	playSoundDynamic(0x134A);
 	return 0;
 }
 
@@ -2078,7 +2079,7 @@ RSound8::RSound8(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
 }
 
 int RSound8::command(int commandId, int param) {
-	if (commandId > 37)
+	if (commandId < 0 || commandId > 37)
 		return 0;
 
 	_commandParam = param;
@@ -2087,118 +2088,118 @@ int RSound8::command(int commandId, int param) {
 }
 
 int RSound8::command9() {
-	playSoundCh5To8(0x10BA);
+	playSoundDynamic(0x10BA);
 	return 0;
 }
 
 int RSound8::command10() {
-	_channels[0].playData(loadData(0x115A));
-	_channels[1].playData(loadData(0x115A));
-	_channels[2].playData(loadData(0x115A));
-	_channels[3].playData(loadData(0x1150));
+	playSoundStatic(0x115A, 1, 1);
+	playSoundStatic(0x115A, 2, 1);
+	playSoundStatic(0x115A, 3, 1);
+	playSoundStatic(0x1150, 4, 1);
 	return 0;
 }
 
 int RSound8::command11() {
-	playSoundCh5To8(0x1194);
+	playSoundDynamic(0x1194);
 	return 0;
 }
 
 int RSound8::command12() {
-	playSoundCh5To8(0x11B2);
+	playSoundDynamic(0x11B2);
 	return 0;
 }
 
 int RSound8::command13() {
-	playSoundCh5To8(0x11D0);
-	playSoundCh5To8(0x11D0);
-	playSoundCh5To8(0x11D0);
-	playSoundCh5To8(0x11D0);
+	playSoundDynamic(0x11D0);
+	playSoundDynamic(0x11D0);
+	playSoundDynamic(0x11D0);
+	playSoundDynamic(0x11D0);
 	return 0;
 }
 
-void RSound8::setCommand1415Variant(byte v1, byte v2) {
+void RSound8::playCommand14_15Variant(byte v1, byte v2) {
 	byte *pData = loadData(0x1204);
 	pData[3] = v1;
 	pData[6] = v2;
 	pData[9] = v2;
-	playSoundCh5To8(0x1204);
-	playSoundCh5To8(0x1204);
-	playSoundCh5To8(0x1204);
-	playSoundCh5To8(0x1204);
+	playSoundDynamic(0x1204);
+	playSoundDynamic(0x1204);
+	playSoundDynamic(0x1204);
+	playSoundDynamic(0x1204);
 }
 
 int RSound8::command14() {
-	setCommand1415Variant(40, 1);
+	playCommand14_15Variant(40, 1);
 	return 0;
 }
 
 int RSound8::command15() {
-	setCommand1415Variant(100, 255);
+	playCommand14_15Variant(100, 255);
 	return 0;
 }
 
 int RSound8::command16() {
-	playSoundCh5To8(0x112E);
-	playSoundCh5To8(0x112E);
+	playSoundDynamic(0x112E);
+	playSoundDynamic(0x112E);
 	return 0;
 }
 
 int RSound8::command17() {
-	playSoundCh5To8(0x1234);
+	playSoundDynamic(0x1234);
 	return 0;
 }
 
 int RSound8::command18() {
-	playSoundCh5To8(0x1244);
+	playSoundDynamic(0x1244);
 	return 0;
 }
 
 int RSound8::command19() {
-	playSoundCh5To8(0x1254);
+	playSoundDynamic(0x1254);
 	return 0;
 }
 
 int RSound8::command20() {
-	playSoundCh5To8(0x125E);
+	playSoundDynamic(0x125E);
 	return 0;
 }
 
 int RSound8::command21() {
-	playSoundCh5To8(0x126E);
+	playSoundDynamic(0x126E);
 	return 0;
 }
 
 int RSound8::command22() {
-	playSoundCh5To8(0x1278);
+	playSoundDynamic(0x1278);
 	return 0;
 }
 
 int RSound8::command23() {
-	_channels[0].playData(loadData(0x128E));
-	_channels[1].playData(loadData(0x128E));
-	_channels[2].playData(loadData(0x128E));
-	_channels[3].playData(loadData(0x128E));
+	playSoundStatic(0x128E, 1, 1);
+	playSoundStatic(0x128E, 2, 1);
+	playSoundStatic(0x128E, 3, 1);
+	playSoundStatic(0x128E, 4, 1);
 	return 0;
 }
 
 int RSound8::command24() {
-	playSoundCh5To8(0x12B4);
+	playSoundDynamic(0x12B4);
 	return 0;
 }
 
 int RSound8::command25() {
-	playSoundCh5To8(0x12CA);
+	playSoundDynamic(0x12CA);
 	return 0;
 }
 
 int RSound8::command26() {
-	playSoundCh5To8(0x12DC);
+	playSoundDynamic(0x12DC);
 	return 0;
 }
 
 int RSound8::command27() {
-	playSoundCh5To8(0x1112);
+	playSoundDynamic(0x1112);
 	return 0;
 }
 
@@ -2206,9 +2207,9 @@ int RSound8::command28() {
 	byte *pData = loadData(0x130A);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[0].playData(pData);
-		_channels[1].playData(loadData(0x1480));
-		_channels[8].playData(loadData(0x154C));
+		playSoundStatic(pData, 1);
+		playSoundStatic(0x1480, 2);
+		playSoundStatic(0x154C, 9);
 	}
 	return 0;
 }
@@ -2217,51 +2218,51 @@ int RSound8::command29() {
 	byte *pData = loadData(0x15FC);
 	if (!isSoundPlaying(pData)) {
 		command1();
-		_channels[2].playData(pData);
-		_channels[8].playData(loadData(0x1652));
+		playSoundStatic(pData, 3);
+		playSoundStatic(0x1652, 9);
 	}
 	return 0;
 }
 
 int RSound8::command30() {
-	playSoundCh5To8(0x1108);
-	playSoundCh5To8(0x10FE);
+	playSoundDynamic(0x1108);
+	playSoundDynamic(0x10FE);
 	return 0;
 }
 
 int RSound8::command31() {
-	playSoundCh5To8(0x1140);
+	playSoundDynamic(0x1140);
 	return 0;
 }
 
 int RSound8::command32() {
-	playSoundCh5To8(0x10C6);
+	playSoundDynamic(0x10C6);
 	return 0;
 }
 
 int RSound8::command33() {
-	playSoundCh5To8(0x10D2);
+	playSoundDynamic(0x10D2);
 	return 0;
 }
 
 int RSound8::command34() {
-	playSoundCh5To8(0x10DC);
+	playSoundDynamic(0x10DC);
 	return 0;
 }
 
 int RSound8::command35() {
-	playSoundCh5To8(0x10EC);
+	playSoundDynamic(0x10EC);
 	return 0;
 }
 
 int RSound8::command36() {
-	playSoundCh5To8(0x12E6);
-	playSoundCh5To8(0x12FA);
+	playSoundDynamic(0x12E6, 0);
+	playSoundDynamic(0x12FA, 0);
 	return 0;
 }
 
 int RSound8::command37() {
-	playSoundCh5To8(0x1120);
+	playSoundDynamic(0x1120);
 	return 0;
 }
 
@@ -2285,13 +2286,19 @@ const RSound9::CommandPtr RSound9::_commandList[52] = {
 
 RSound9::RSound9(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) : 
 	RSound(mixer, midiDriver, "rsound.009", 0x1520, 0x8920, 0x6F, kRSoundFadeCheckAlternating) {
+	// The full game RSOUND.009 driver uses static channels 1-5 and dynamic
+	// channels 6-9.
+	_dynamicStartChannel = 6;
+	_dynamicIncludeChannel9 = true;
+	_staticIncludeChannel9 = false;
+
 	_callbackCounter = 0;
 	_callbackPeriod = 0;
 	_callbackFnPtr = nullptr;
 }
 
 int RSound9::command(int commandId, int param) {
-	if (commandId > 51)
+	if (commandId < 0 || commandId > 51)
 		return 0;
 
 	_commandParam = param;
@@ -2300,13 +2307,11 @@ int RSound9::command(int commandId, int param) {
 }
 
 void RSound9::tickCallback() {
-	if (!_callbackPeriod)
-		return;
-	if (--_callbackCounter)
+	if (_callbackPeriod == 0 || --_callbackCounter > 0)
 		return;
 
 	_callbackCounter = _callbackPeriod;
-	if (_callbackFnPtr)
+	if (_callbackFnPtr != nullptr)
 		(this->*_callbackFnPtr)();
 }
 
@@ -2314,72 +2319,73 @@ int RSound9::command0() {
 	_callbackCounter = 0;
 	_callbackPeriod = 0;
 	_callbackFnPtr = nullptr;
+
 	return RSound::command0();
 }
 
 int RSound9::command9() {
 	_callbackCounter = 1848;
 	_callbackPeriod = 84;
-	_channels[0].playData(loadData(0x16E4));
-	_channels[1].playData(loadData(0x1E9E));
-	_channels[2].playData(loadData(0x2F9C));
-	_channels[3].playData(loadData(0x2644));
-	_channels[4].playData(loadData(0x1FF4));
-	_channels[5].playData(loadData(0x2382));
-	_channels[6].playData(loadData(0x1AAE));
+	playSoundStatic(0x16E4, 1);
+	playSoundStatic(0x1E9E, 2);
+	playSoundStatic(0x2F9C, 3);
+	playSoundStatic(0x2644, 4);
+	playSoundStatic(0x1FF4, 5);
+	playSoundStatic(0x2382, 6);
+	playSoundStatic(0x1AAE, 7);
 	return 0;
 }
 
 int RSound9::command10() {
-	_channels[0].playData(loadData(0x31E2));
-	_channels[1].playData(loadData(0x31FA));
-	_channels[2].playData(loadData(0x3212));
-	_channels[3].playData(loadData(0x322C));
+	playSoundStatic(0x31E2, 1);
+	playSoundStatic(0x31FA, 2);
+	playSoundStatic(0x3212, 3);
+	playSoundStatic(0x322C, 4);
 	return 0;
 }
 
 int RSound9::command11() {
-	_channels[7].playData(loadData(0x33E2));
+	playSoundStatic(0x33E2, 8, 1);
 	return 0;
 }
 
 int RSound9::command12() {
-	_channels[7].playData(loadData(0x342E));
+	playSoundStatic(0x342E, 8, 1);
 	return 0;
 }
 
 int RSound9::command13() {
-	_channels[7].playData(loadData(0x343A));
+	playSoundStatic(0x343A, 8, 1);
 	return 0;
 }
 
 int RSound9::command14() {
-	_channels[7].playData(loadData(0x3442));
+	playSoundStatic(0x3442, 8, 1);
 	return 0;
 }
 
 int RSound9::command15() {
-	_channels[7].playData(loadData(0x3462));
+	playSoundStatic(0x3462, 8, 1);
 	return 0;
 }
 
 int RSound9::command16() {
-	_channels[7].playData(loadData(0x347A));
+	playSoundStatic(0x347A, 8, 1);
 	return 0;
 }
 
 int RSound9::command17() {
-	_channels[7].playData(loadData(0x3470));
+	playSoundStatic(0x3470, 8, 1);
 	return 0;
 }
 
 int RSound9::command18() {
-	playSoundCh5To8(0x3248);
+	playSoundDynamic(0x3248);
 	return 0;
 }
 
 int RSound9::command19() {
-	playSoundCh5To8(0x3262);
+	playSoundDynamic(0x3262);
 	return 0;
 }
 
@@ -2387,7 +2393,7 @@ int RSound9::command20() {
 	int v = (generateRandomNumber() & 24) + 77;
 	byte *pData = loadData(0x3284);
 	pData[6] = v & 0x7F;
-	playSoundCh5To8(0x3284);
+	playSoundDynamic(0x3284);
 	return 0;
 }
 
@@ -2395,7 +2401,7 @@ int RSound9::command21() {
 	byte *pData = loadData(0x3298);
 	pData[9] = 70;
 	if (!isSoundPlaying(pData))
-		playSoundCh5To8(0x3298);
+		playSoundDynamic(0x3298);
 	return 0;
 }
 
@@ -2403,42 +2409,42 @@ int RSound9::command22() {
 	byte *pData = loadData(0x3298);
 	pData[9] = 45;
 	if (!isSoundPlaying(pData))
-		playSoundCh5To8(0x3298);
+		playSoundDynamic(0x3298);
 	return 0;
 }
 
 int RSound9::command23() {
-	Channel *chan = playSoundCh5To8(0x32B0);
-	if (chan)
+	Channel *chan = playSoundDynamic(0x32B0);
+	if (chan != nullptr)
 		chan->_innerLoopStart = loadData(0x32CE);
 
-	chan = playSoundCh5To8(0x32B6);
-	if (chan)
+	chan = playSoundDynamic(0x32B6);
+	if (chan != nullptr)
 		chan->_innerLoopStart = loadData(0x32CE);
 
-	chan = playSoundCh5To8(0x32C8);
-	if (chan)
+	chan = playSoundDynamic(0x32C8);
+	if (chan != nullptr)
 		chan->_innerLoopStart = loadData(0x32CE);
 	return 0;
 }
 
 int RSound9::command24() {
-	playSoundCh5To8(0x32E0);
+	playSoundDynamic(0x32E0);
 	return 0;
 }
 
 int RSound9::command25() {
-	playSoundCh5To8(0x32F6);
+	playSoundDynamic(0x32F6);
 	return 0;
 }
 
 int RSound9::command26() {
-	playSoundCh5To8(0x331A);
+	playSoundDynamic(0x331A);
 	return 0;
 }
 
 int RSound9::command27() {
-	playSoundCh5To8(0x3332);
+	playSoundDynamic(0x3332);
 	return 0;
 }
 
@@ -2446,7 +2452,7 @@ int RSound9::command28() {
 	int v = (generateRandomNumber() & 28) + 15;
 	byte *pData = loadData(0x334A);
 	pData[6] = v & 0x7F;
-	_channels[7].playData(pData);
+	playSoundStatic(pData, 8, 1);
 	return 0;
 }
 
@@ -2454,29 +2460,29 @@ int RSound9::command29() {
 	int v = (generateRandomNumber() & 12) + 33;
 	byte *pData = loadData(0x335E);
 	pData[6] = v & 0x7F;
-	playSoundCh5To8(0x335E);
+	playSoundDynamic(0x335E);
 	return 0;
 }
 
 int RSound9::command30() {
-	playSoundCh5To8(0x3386);
+	playSoundDynamic(0x3386);
 	return 0;
 }
 
 int RSound9::command31() {
-	playSoundCh5To8(0x3396);
-	playSoundCh5To8(0x33A4);
-	playSoundCh5To8(0x33B2);
+	playSoundDynamic(0x3396);
+	playSoundDynamic(0x33A4);
+	playSoundDynamic(0x33B2);
 	return 0;
 }
 
 int RSound9::command32() {
-	playSoundCh5To8(0x33C0);
+	playSoundDynamic(0x33C0);
 	return 0;
 }
 
 int RSound9::command33() {
-	playSoundCh5To8(0x33CA);
+	playSoundDynamic(0x33CA);
 	return 0;
 }
 
@@ -2489,28 +2495,28 @@ int RSound9::command34() {
 	*loadData(0x7DCD) = 2;
 	*loadData(0x8791) = 2;
 
-	_channels[0].playData(loadData(0x4D2A));
-	_channels[1].playData(loadData(0x51AA));
-	_channels[2].playData(loadData(0x5634));
-	_channels[3].playData(loadData(0x6844));
-	_channels[4].playData(loadData(0x7DD0));
+	playSoundStatic(0x4D2A, 1);
+	playSoundStatic(0x51AA, 2);
+	playSoundStatic(0x5634, 3);
+	playSoundStatic(0x6844, 4);
+	playSoundStatic(0x7DD0, 5);
 	return 0;
 }
 
 int RSound9::command35() {
-	playSoundCh5To8(0x344C);
+	playSoundDynamic(0x344C);
 	return 0;
 }
 
 int RSound9::command36() {
-	playSoundCh5To8(0x334A);
+	playSoundDynamic(0x334A);
 
-	Channel *chan = playSoundCh5To8(0x32C2);
-	if (chan)
+	Channel *chan = playSoundDynamic(0x32C2);
+	if (chan != nullptr)
 		chan->_innerLoopStart = loadData(0x3378);
 
-	chan = playSoundCh5To8(0x32BC);
-	if (chan)
+	chan = playSoundDynamic(0x32BC);
+	if (chan != nullptr)
 		chan->_innerLoopStart = loadData(0x3368);
 	return 0;
 }
@@ -2519,169 +2525,169 @@ int RSound9::command37() {
 	int v = (generateRandomNumber() & 2) + 72;
 	byte *pData = loadData(0x349C);
 	pData[6] = v & 0x7F;
-	playSoundCh5To8(0x349C);
+	playSoundDynamic(0x349C);
 	return 0;
 }
 
 int RSound9::command38() {
-	_callbackFnPtr = &RSound9::loadCommand38;
+	_callbackFnPtr = &RSound9::command38Callback;
 	return 0;
 }
 
-void RSound9::loadCommand38() {
+void RSound9::command38Callback() {
 	_callbackFnPtr = nullptr;
-	_channels[0].playData(loadData(0x1878));
-	_channels[1].playData(loadData(0x1F64));
-	_channels[2].playData(loadData(0x308E));
-	_channels[3].playData(loadData(0x2A10));
-	_channels[4].playData(loadData(0x21C8));
-	_channels[5].playData(loadData(0x2558));
-	_channels[6].playData(loadData(0x1E9A));
+	playSoundStatic(0x1878, 1);
+	playSoundStatic(0x1F64, 2);
+	playSoundStatic(0x308E, 3);
+	playSoundStatic(0x2A10, 4);
+	playSoundStatic(0x21C8, 5);
+	playSoundStatic(0x2558, 6);
+	playSoundStatic(0x1E9A, 7);
 }
 
 int RSound9::command39() {
-	_callbackFnPtr = &RSound9::loadCommand39;
+	_callbackFnPtr = &RSound9::command39Callback;
 	return 0;
 }
 
-void RSound9::loadCommand39() {
+void RSound9::command39Callback() {
 	_callbackFnPtr = nullptr;
-	_channels[0].playData(loadData(0x1A24));
-	_channels[1].playData(loadData(0x1FD0));
-	_channels[2].playData(loadData(0x318A));
-	_channels[3].playData(loadData(0x2E4A));
-	_channels[4].playData(loadData(0x2380));
-	_channels[5].playData(loadData(0x2642));
-	_channels[6].playData(loadData(0x1E9C));
+	playSoundStatic(0x1A24, 1);
+	playSoundStatic(0x1FD0, 2);
+	playSoundStatic(0x318A, 3);
+	playSoundStatic(0x2E4A, 4);
+	playSoundStatic(0x2380, 5);
+	playSoundStatic(0x2642, 6);
+	playSoundStatic(0x1E9C, 7);
 }
 
 int RSound9::command40() {
-	_callbackFnPtr = &RSound9::loadCommand40;
+	_callbackFnPtr = &RSound9::command40Callback;
 	return 0;
 }
 
-void RSound9::loadCommand40() {
+void RSound9::command40Callback() {
 	_callbackFnPtr = nullptr;
-	_channels[0].playData(loadData(0x4F00));
-	_channels[1].playData(loadData(0x534A));
-	_channels[2].playData(loadData(0x5CDE));
-	_channels[3].playData(loadData(0x6F8E));
-	_channels[4].playData(loadData(0x8110));
+	playSoundStatic(0x4F00, 1);
+	playSoundStatic(0x534A, 2);
+	playSoundStatic(0x5CDE, 3);
+	playSoundStatic(0x6F8E, 4);
+	playSoundStatic(0x8110, 5);
 }
 
 int RSound9::command41() {
-	_callbackFnPtr = &RSound9::loadCommand41;
+	_callbackFnPtr = &RSound9::command41Callback;
 	return 0;
 }
 
-void RSound9::loadCommand41() {
+void RSound9::command41Callback() {
 	_callbackFnPtr = nullptr;
-	_channels[0].playData(loadData(0x4F26));
-	_channels[1].playData(loadData(0x53BC));
-	_channels[2].playData(loadData(0x5DFE));
-	_channels[3].playData(loadData(0x747E));
-	_channels[4].playData(loadData(0x8340));
+	playSoundStatic(0x4F26, 1);
+	playSoundStatic(0x53BC, 2);
+	playSoundStatic(0x5DFE, 3);
+	playSoundStatic(0x747E, 4);
+	playSoundStatic(0x8340, 5);
 }
 
 int RSound9::command42() {
-	_callbackFnPtr = &RSound9::loadCommand42;
+	_callbackFnPtr = &RSound9::command42Callback;
 	return 0;
 }
 
-void RSound9::loadCommand42() {
+void RSound9::command42Callback() {
 	_callbackFnPtr = nullptr;
-	_channels[0].playData(loadData(0x4F30));
-	_channels[1].playData(loadData(0x555C));
-	_channels[2].playData(loadData(0x6582));
-	_channels[3].playData(loadData(0x7A2E));
-	_channels[4].playData(loadData(0x8480));
+	playSoundStatic(0x4F30, 1);
+	playSoundStatic(0x555C, 2);
+	playSoundStatic(0x6582, 3);
+	playSoundStatic(0x7A2E, 4);
+	playSoundStatic(0x8480, 5);
 }
 
 int RSound9::command43() {
 	_callbackCounter = 80;
 	_callbackPeriod = 80;
-	_channels[0].playData(loadData(0x34BE));
-	_channels[1].playData(loadData(0x3A46));
-	_channels[2].playData(loadData(0x3F52));
-	_channels[3].playData(loadData(0x439A));
+	playSoundStatic(0x34BE, 1);
+	playSoundStatic(0x3A46, 2);
+	playSoundStatic(0x3F52, 3);
+	playSoundStatic(0x439A, 4);
 	return 0;
 }
 
 int RSound9::command44_46() {
-	_callbackFnPtr = &RSound9::loadCommand44_46;
+	_callbackFnPtr = &RSound9::command44_46Callback;
 	return 0;
 }
 
-void RSound9::loadCommand44_46() {
+void RSound9::command44_46Callback() {
 	_callbackFnPtr = nullptr;
-	_channels[0].playData(loadData(0x3518));
-	_channels[1].playData(loadData(0x3AA2));
-	_channels[2].playData(loadData(0x403A));
-	_channels[3].playData(loadData(0x4486));
+	playSoundStatic(0x3518, 1);
+	playSoundStatic(0x3AA2, 2);
+	playSoundStatic(0x403A, 3);
+	playSoundStatic(0x4486, 4);
 }
 
 int RSound9::command45() {
-	_callbackFnPtr = &RSound9::loadCommand45;
+	_callbackFnPtr = &RSound9::command45Callback;
 	return 0;
 }
 
-void RSound9::loadCommand45() {
+void RSound9::command45Callback() {
 	_callbackFnPtr = nullptr;
-	_channels[0].playData(loadData(0x37AC));
-	_channels[1].playData(loadData(0x3CF8));
-	_channels[2].playData(loadData(0x41E6));
-	_channels[3].playData(loadData(0x4630));
+	playSoundStatic(0x37AC, 1);
+	playSoundStatic(0x3CF8, 2);
+	playSoundStatic(0x41E6, 3);
+	playSoundStatic(0x4630, 4);
 }
 
 int RSound9::command47() {
-	_callbackFnPtr = &RSound9::loadCommand47;
+	_callbackFnPtr = &RSound9::command47Callback;
 	return 0;
 }
 
-void RSound9::loadCommand47() {
+void RSound9::command47Callback() {
 	_callbackFnPtr = nullptr;
-	_channels[0].playData(loadData(0x47D6));
-	_channels[1].playData(loadData(0x48FA));
-	_channels[2].playData(loadData(0x4A20));
-	_channels[3].playData(loadData(0x4BAE));
+	playSoundStatic(0x47D6, 1);
+	playSoundStatic(0x48FA, 2);
+	playSoundStatic(0x4A20, 3);
+	playSoundStatic(0x4BAE, 4);
 }
 
 int RSound9::command48() {
 	byte *pData = loadData(0x34B0);
 	pData[6] ^= 0x1F;
 	pData[0xA] ^= 0x1F;
-	playSoundCh5To8(0x34B0);
+	playSoundDynamic(0x34B0);
 	return 0;
 }
 
 int RSound9::command49() {
-	_channels[0].playData(loadData(0x12CA));
-	_channels[1].playData(loadData(0x132A));
-	_channels[2].playData(loadData(0x1384));
-	_channels[3].playData(loadData(0x1666));
-	_channels[4].playData(loadData(0x1682));
-	_channels[5].playData(loadData(0x16A0));
-	_channels[6].playData(loadData(0x16BE));
+	playSoundStatic(0x12CA, 1);
+	playSoundStatic(0x132A, 2);
+	playSoundStatic(0x1384, 3);
+	playSoundStatic(0x1666, 4);
+	playSoundStatic(0x1682, 5);
+	playSoundStatic(0x16A0, 6);
+	playSoundStatic(0x16BE, 7);
 	return 0;
 }
 
 int RSound9::command50() {
-	_callbackFnPtr = &RSound9::loadCommand50;
+	_callbackFnPtr = &RSound9::command50Callback;
 	return 0;
 }
 
-void RSound9::loadCommand50() {
+void RSound9::command50Callback() {
 	_callbackFnPtr = nullptr;
 
 	*loadData(0x6841) = 0;
 	*loadData(0x7DCD) = 0;
 	*loadData(0x8791) = 0;
 
-	_channels[0].playData(loadData(0x50B8));
-	_channels[1].playData(loadData(0x7DCE));
-	_channels[2].playData(loadData(0x676A));
-	_channels[3].playData(loadData(0x7D08));
-	_channels[4].playData(loadData(0x85C4));
+	playSoundStatic(0x50B8, 1);
+	playSoundStatic(0x7DCE, 2);
+	playSoundStatic(0x676A, 3);
+	playSoundStatic(0x7D08, 4);
+	playSoundStatic(0x85C4, 5);
 }
 
 int RSound9::command51() {
@@ -2693,50 +2699,36 @@ int RSound9::command51() {
 	*loadData(0x7DCD) = 2;
 	*loadData(0x8791) = 2;
 
-	_channels[0].playData(loadData(0x4D3C));
-	_channels[1].playData(loadData(0x51EE));
-	_channels[2].playData(loadData(0x5A62));
-	_channels[3].playData(loadData(0x6986));
-	_channels[4].playData(loadData(0x7E5C));
+	playSoundStatic(0x4D3C, 1);
+	playSoundStatic(0x51EE, 2);
+	playSoundStatic(0x5A62, 3);
+	playSoundStatic(0x6986, 4);
+	playSoundStatic(0x7E5C, 5);
 	return 0;
 }
 
 /*-----------------------------------------------------------------------*/
 
-RSoundDemo9::RSoundDemo9(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
-		RSoundDemo(mixer, midiDriver, "rsound.009", 0x11D0, 0x3664, 0x69, 5) {
-}
+const RSoundDemo9::CommandPtr RSoundDemo9::_commandList[40] = {
+	&RSoundDemo9::command0, &RSoundDemo9::command1, &RSoundDemo9::command2, &RSoundDemo9::command3,
+	&RSoundDemo9::command4, &RSoundDemo9::command5, &RSoundDemo9::command6, &RSoundDemo9::command7,
+	&RSoundDemo9::command8, &RSoundDemo9::nullCommand, &RSoundDemo9::nullCommand, &RSoundDemo9::command11,
+	&RSoundDemo9::command12, &RSoundDemo9::command13, &RSoundDemo9::command14, &RSoundDemo9::command15,
+	&RSoundDemo9::command16, &RSoundDemo9::command17, &RSoundDemo9::command18, &RSoundDemo9::command19,
+	&RSoundDemo9::command20, &RSoundDemo9::command21, &RSoundDemo9::command22, &RSoundDemo9::command23,
+	&RSoundDemo9::command24, &RSoundDemo9::command25, &RSoundDemo9::command26, &RSoundDemo9::command27,
+	&RSoundDemo9::command28, &RSoundDemo9::command29, &RSoundDemo9::command30, &RSoundDemo9::command31,
+	&RSoundDemo9::command32, &RSoundDemo9::command33, &RSoundDemo9::command34_39, &RSoundDemo9::command35,
+	&RSoundDemo9::command36, &RSoundDemo9::command37, &RSoundDemo9::command38, &RSoundDemo9::command34_39
+};
 
-int RSoundDemo9::executeDemoCommonCommand(int commandId) {
-	switch (commandId) {
-	case 0:
-		return RSound::command0();
-	case 1:
-		requestStopRange(0, 9);
-		return 0;
-	case 2:
-		stopAndResetRange(0, 5);
-		// The opening overlay repeats its first embedded DT1 record here.
-		sendSysEx(0x69);
-		return 0;
-	case 3:
-		requestStopRange(0, 5);
-		return 0;
-	case 4:
-		stopAndResetRange(5, 4);
-		return 0;
-	case 5:
-		requestStopRange(5, 4);
-		return 0;
-	case 6:
-		return RSound::command6();
-	case 7:
-		return RSound::command7();
-	case 8:
-		return RSound::command8();
-	default:
-		return 0;
-	}
+RSoundDemo9::RSoundDemo9(Audio::Mixer *mixer, MidiDriver_MT32GM *midiDriver) :
+		RSound(mixer, midiDriver, "rsound.009", 0x11D0, 0x3664, 0x69, kRSoundFadeCheckAlternating) {
+	// Like the full game, the demo RSOUND.009 driver uses static channels 1-5
+	// and dynamic channels 6-9.
+	_dynamicStartChannel = 6;
+	_dynamicIncludeChannel9 = true;
+	_staticIncludeChannel9 = false;
 }
 
 int RSoundDemo9::command(int commandId, int param) {
@@ -2745,138 +2737,182 @@ int RSoundDemo9::command(int commandId, int param) {
 
 	_commandParam = param;
 	_ticksSinceLastCommand = 0;
-	if (commandId <= 8)
-		return executeDemoCommonCommand(commandId);
+	return (this->*_commandList[commandId])();
+}
 
-	switch (commandId) {
-	case 9:
-	case 10:
-		break;
-	case 11:
-		startVoice(7, 0x1454);
-		break;
-	case 12:
-		startVoice(7, 0x14A0);
-		break;
-	case 13:
-		startVoice(7, 0x14AC);
-		break;
-	case 14:
-		startVoice(7, 0x14B4);
-		break;
-	case 15:
-		startVoice(7, 0x14D4);
-		break;
-	case 16:
-		startVoice(7, 0x14EC);
-		break;
-	case 17:
-		startVoice(7, 0x14E2);
-		break;
-	case 18:
-		startEffectVoice(0x12BA);
-		break;
-	case 19:
-		startEffectVoice(0x12D4);
-		break;
-	case 20: {
-		byte *data = sequenceData(0x12F6);
-		data[6] = (byte)(((generateRandomNumber() & 0x38) + 0x4D) & 0x7F);
-		startEffectVoice(0x12F6);
-		break;
-	}
-	case 21:
-	case 22: {
-		byte *data = sequenceData(0x130A);
-		data[9] = commandId == 21 ? 0x46 : 0x2D;
-		if (!isSequenceActive(0x130A))
-			startEffectVoice(0x130A);
-		break;
-	}
-	case 23: {
-		static const int sequences[] = { 0x1322, 0x1328, 0x133A };
-		for (uint index = 0; index < 3; ++index) {
-			const int channel = startEffectVoice(sequences[index]);
-			if (channel >= 0)
-				voice(channel)._innerLoopStart = loadData(0x1340);
-		}
-		break;
-	}
-	case 24:
-		startEffectVoice(0x1352);
-		break;
-	case 25:
-		startEffectVoice(0x1368);
-		break;
-	case 26:
-		startEffectVoice(0x138C);
-		break;
-	case 27:
-		startEffectVoice(0x13A4);
-		break;
-	case 28: {
-		byte *data = sequenceData(0x13BC);
-		data[6] = (byte)(((generateRandomNumber() & 0x1C) + 0x0F) & 0x7F);
-		startEffectVoice(0x13BC);
-		break;
-	}
-	case 29: {
-		byte *data = sequenceData(0x13D0);
-		data[6] = (byte)(((generateRandomNumber() & 0x0C) + 0x21) & 0x7F);
-		startEffectVoice(0x13D0);
-		break;
-	}
-	case 30:
-		startEffectVoice(0x13F8);
-		break;
-	case 31:
-		startEffectVoice(0x1408);
-		startEffectVoice(0x1416);
-		startEffectVoice(0x1424);
-		break;
-	case 32:
-		startEffectVoice(0x1432);
-		break;
-	case 33:
-		startEffectVoice(0x143C);
-		break;
-	case 34:
-	case 39:
-		startVoice(0, 0x1522);
-		startVoice(1, 0x1700);
-		startVoice(2, 0x1892);
-		startVoice(3, 0x21F2);
-		startVoice(4, 0x2E4A);
-		break;
-	case 35:
-		startEffectVoice(0x14BE);
-		break;
-	case 36: {
-		startEffectVoice(0x13BC);
+int RSoundDemo9::command11() {
+	playSoundStatic(0x1454, 8, 1);
+	return 0;
+}
 
-		int channel = startEffectVoice(0x1334);
-		if (channel >= 0)
-			voice(channel)._innerLoopStart = loadData(0x13EA);
+int RSoundDemo9::command12() {
+	playSoundStatic(0x14A0, 8, 1);
+	return 0;
+}
 
-		channel = startEffectVoice(0x132E);
-		if (channel >= 0)
-			voice(channel)._innerLoopStart = loadData(0x13DA);
-		break;
-	}
-	case 37: {
-		byte *data = sequenceData(0x150E);
-		data[6] = (byte)(((generateRandomNumber() & 0x02) + 0x48) & 0x7F);
-		startEffectVoice(0x150E);
-		break;
-	}
-	case 38:
-		startVoice(0, 0x35C4);
-		startVoice(1, 0x35CE);
-		startVoice(2, 0x3612);
-		startVoice(3, 0x3656);
-		break;
-	}
+int RSoundDemo9::command13() {
+	playSoundStatic(0x14AC, 8, 1);
+	return 0;
+}
 
+int RSoundDemo9::command14() {
+	playSoundStatic(0x14B4, 8, 1);
+	return 0;
+}
+
+int RSoundDemo9::command15() {
+	playSoundStatic(0x14D4, 8, 1);
+	return 0;
+}
+
+int RSoundDemo9::command16() {
+	playSoundStatic(0x14EC, 8, 1);
+	return 0;
+}
+
+int RSoundDemo9::command17() {
+	playSoundStatic(0x14E2, 8, 1);
+	return 0;
+}
+
+int RSoundDemo9::command18() {
+	playSoundDynamic(0x12BA);
+	return 0;
+}
+
+int RSoundDemo9::command19() {
+	playSoundDynamic(0x12D4);
+	return 0;
+}
+
+int RSoundDemo9::command20() {
+	byte *data = loadData(0x12F6);
+	data[6] = (byte)(((generateRandomNumber() & 0x38) + 0x4D) & 0x7F);
+	playSoundDynamic(0x12F6);
+	return 0;
+}
+
+int RSoundDemo9::patchAndPlaySound(byte param) {
+	byte *data = loadData(0x130A);
+	data[9] = param;
+	if (!isSoundPlaying(0x130A))
+		playSoundDynamic(0x130A);
+	return 0;
+}
+
+int RSoundDemo9::command21() {
+	return patchAndPlaySound(0x46);
+}
+
+int RSoundDemo9::command22() {
+	return patchAndPlaySound(0x2D);
+}
+
+int RSoundDemo9::command23() {
+	static const int sequences[] = { 0x1322, 0x1328, 0x133A };
+	for (uint index = 0; index < 3; ++index) {
+		Channel *channel = playSoundDynamic(sequences[index]);
+		if (channel != nullptr)
+			channel->_innerLoopStart = loadData(0x1340);
+	}
+	return 0;
+}
+
+int RSoundDemo9::command24() {
+	playSoundDynamic(0x1352);
+	return 0;
+}
+
+int RSoundDemo9::command25() {
+	playSoundDynamic(0x1368);
+	return 0;
+}
+
+int RSoundDemo9::command26() {
+	playSoundDynamic(0x138C);
+	return 0;
+}
+
+int RSoundDemo9::command27() {
+	playSoundDynamic(0x13A4);
+	return 0;
+}
+
+int RSoundDemo9::command28() {
+	byte *data = loadData(0x13BC);
+	data[6] = (byte)(((generateRandomNumber() & 0x1C) + 0x0F) & 0x7F);
+	playSoundDynamic(0x13BC);
+	return 0;
+}
+
+int RSoundDemo9::command29() {
+	byte *data = loadData(0x13D0);
+	data[6] = (byte)(((generateRandomNumber() & 0x0C) + 0x21) & 0x7F);
+	playSoundDynamic(0x13D0);
+	return 0;
+}
+
+int RSoundDemo9::command30() {
+	playSoundDynamic(0x13F8);
+	return 0;
+}
+
+int RSoundDemo9::command31() {
+	playSoundDynamic(0x1408);
+	playSoundDynamic(0x1416);
+	playSoundDynamic(0x1424);
+	return 0;
+}
+
+int RSoundDemo9::command32() {
+	playSoundDynamic(0x1432);
+	return 0;
+}
+
+int RSoundDemo9::command33() {
+	playSoundDynamic(0x143C);
+	return 0;
+}
+
+int RSoundDemo9::command34_39() {
+	playSoundStatic(0x1522, 1);
+	playSoundStatic(0x1700, 2);
+	playSoundStatic(0x1892, 3);
+	playSoundStatic(0x21F2, 4);
+	playSoundStatic(0x2E4A, 5);
+	return 0;
+}
+
+int RSoundDemo9::command35() {
+	playSoundDynamic(0x14BE);
+	return 0;
+}
+
+int RSoundDemo9::command36() {
+	playSoundDynamic(0x13BC);
+
+	Channel *channel = playSoundDynamic(0x1334);
+	if (channel != nullptr)
+		channel->_innerLoopStart = loadData(0x13EA);
+
+	channel = playSoundDynamic(0x132E);
+	if (channel != nullptr)
+		channel->_innerLoopStart = loadData(0x13DA);
+	return 0;
+}
+
+int RSoundDemo9::command37() {
+	byte *data = loadData(0x150E);
+	data[6] = (byte)(((generateRandomNumber() & 0x02) + 0x48) & 0x7F);
+	playSoundDynamic(0x150E);
+	return 0;
+}
+
+int RSoundDemo9::command38() {
+	playSoundStatic(0x35C4, 1);
+	playSoundStatic(0x35CE, 2);
+	playSoundStatic(0x3612, 3);
+	playSoundStatic(0x3656, 4);
 	return 0;
 }
 

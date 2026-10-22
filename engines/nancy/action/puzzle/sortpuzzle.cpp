@@ -103,16 +103,16 @@ void SortPuzzle::readData(Common::SeekableReadStream &stream) {
 	_pickupSound.readNormal(stream);
 	_dropSound.readNormal(stream);
 
-	_winScene.readData(stream);
+	_solveScene._sceneChange.readData(stream);
 	stream.skip(2);
-	_winFlag.label = stream.readSint16LE();
-	_winFlag.flag  = stream.readByte();
-	_winSound.readNormal(stream);
+	_solveScene._flag.label = stream.readSint16LE();
+	_solveScene._flag.flag  = stream.readByte();
+	_solveSound.readNormal(stream);
 
-	_cancelScene.readData(stream);
+	_exitScene._sceneChange.readData(stream);
 	stream.skip(2);
-	_cancelFlag.label = stream.readSint16LE();
-	_cancelFlag.flag  = stream.readByte();
+	_exitScene._flag.label = stream.readSint16LE();
+	_exitScene._flag.flag  = stream.readByte();
 
 	readRect(stream, _exitHotspot);
 	stream.skip(2); // exit cursor type id
@@ -164,16 +164,16 @@ void SortPuzzle::readDataNancy12(Common::SeekableReadStream &stream) {
 	_pickupSound.readNormal(stream);          // 0x842
 	_dropSound.readNormal(stream);            // 0x873
 
-	_winScene.readData(stream);               // 0x8a4
+	_solveScene._sceneChange.readData(stream);               // 0x8a4
 	stream.skip(2);
-	_winFlag.label = stream.readSint16LE();
-	_winFlag.flag  = stream.readByte();
-	_winSound.readNormal(stream);             // 0x8bd
+	_solveScene._flag.label = stream.readSint16LE();
+	_solveScene._flag.flag  = stream.readByte();
+	_solveSound.readNormal(stream);             // 0x8bd
 
-	_cancelScene.readData(stream);            // 0x8ee
+	_exitScene._sceneChange.readData(stream);            // 0x8ee
 	stream.skip(2);
-	_cancelFlag.label = stream.readSint16LE();
-	_cancelFlag.flag  = stream.readByte();
+	_exitScene._flag.label = stream.readSint16LE();
+	_exitScene._flag.flag  = stream.readByte();
 
 	readRect(stream, _exitHotspot);           // 0x907
 	stream.skip(2); // exit cursor type id
@@ -185,11 +185,6 @@ void SortPuzzle::readDataNancy12(Common::SeekableReadStream &stream) {
 
 	_cellWidth  = _valueSrcRects[0].width();
 	_cellHeight = _valueSrcRects[0].height();
-
-	// Cells only react to clicks well inside their own bounds, so that the
-	// near-contiguous grid doesn't drop a piece into the neighboring slot
-	_hotspotInsetX = (_cellWidth  - 1) / 4;
-	_hotspotInsetY = (_cellHeight - 1) / 4;
 }
 
 Common::Rect SortPuzzle::cellSprite(const Cell &cell) const {
@@ -286,8 +281,24 @@ void SortPuzzle::persistState() {
 	SortPuzzleData *spd = (SortPuzzleData *)NancySceneState.getPuzzleData(SortPuzzleData::getTag());
 	if (!spd)
 		return;
+
+	// A piece that is being carried is stored back in the slot it came from,
+	// so that it isn't lost when the puzzle is left or a game is saved
+	Cell *heldSlot = nullptr;
+	Cell emptySlot;
+	if (_hasHeld && _heldFromRow >= 0 && _heldFromCol >= 0) {
+		heldSlot = &_current[_heldFromRow][_heldFromCol];
+		emptySlot = *heldSlot;
+		*heldSlot = _held;
+		heldSlot->isEmpty = false;
+	}
+
 	packGrid(_current, _rows, _cols, spd->currentState);
 	packGrid(_solved,  _rows, _cols, spd->solvedState);
+
+	if (heldSlot) {
+		*heldSlot = emptySlot;
+	}
 }
 
 void SortPuzzle::init() {
@@ -308,6 +319,11 @@ void SortPuzzle::init() {
 		_cursorImage.setTransparentColor(_drawSurface.getTransparentColor());
 	}
 
+	// Cells only react to clicks well inside their own bounds, so that the
+	// near-contiguous grid doesn't drop a piece into the neighboring slot
+	_hotspotInsetX = (_cellWidth  - 1) / 4;
+	_hotspotInsetY = (_cellHeight - 1) / 4;
+
 	initState();
 
 	_hasHeld  = false;
@@ -317,12 +333,19 @@ void SortPuzzle::init() {
 	redraw();
 }
 
+// The held piece has to be registered again too when returning from another
+// state (e.g. the main menu), as that clears all render objects
+void SortPuzzle::registerGraphics() {
+	PuzzleRecord::registerGraphics();
+	_heldObject.registerGraphics();
+}
+
 void SortPuzzle::execute() {
 	switch (_state) {
 	case kBegin:
 		init();
 		registerGraphics();
-		_heldObject.registerGraphics();
+		NancySceneState.setNoHeldItem();
 		_state = kRun;
 		// fall through
 
@@ -331,17 +354,16 @@ void SortPuzzle::execute() {
 		case kPlaying:
 			break;
 		case kPlayWinSound:
-			if (_winSound.name != "NO SOUND") {
-				g_nancy->_sound->loadSound(_winSound);
-				g_nancy->_sound->playSound(_winSound);
+			if (hasSolveSound()) {
+				playSolveSound();
 				_subState = kWaitWinSound;
 			} else {
 				_subState = kExitToWin;
 			}
 			break;
 		case kWaitWinSound:
-			if (!g_nancy->_sound->isSoundPlaying(_winSound)) {
-				g_nancy->_sound->stopSound(_winSound);
+			if (!isSolveSoundPlaying()) {
+				g_nancy->_sound->stopSound(_solveSound);
 				_subState = kExitToWin;
 			}
 			break;
@@ -355,18 +377,16 @@ void SortPuzzle::execute() {
 	case kActionTrigger:
 		g_nancy->_sound->stopSound(_pickupSound);
 		g_nancy->_sound->stopSound(_dropSound);
-		g_nancy->_sound->stopSound(_winSound);
+		g_nancy->_sound->stopSound(_solveSound);
 		if (_subState == kExitToWin) {
 			SortPuzzleData *spd = (SortPuzzleData *)NancySceneState.getPuzzleData(SortPuzzleData::getTag());
 			if (spd) {
 				spd->currentState.clear();
 				spd->solvedState.clear();
 			}
-			NancySceneState.setEventFlag(_winFlag);
-			NancySceneState.changeScene(_winScene);
+			_solveScene.execute();
 		} else {
-			NancySceneState.setEventFlag(_cancelFlag);
-			NancySceneState.changeScene(_cancelScene);
+			_exitScene.execute();
 		}
 		finishExecution();
 		break;
@@ -426,10 +446,10 @@ void SortPuzzle::handleInput(NancyInput &input) {
 
 	_heldObject.handleInput(input);
 
-	// Nancy 12 uses the dedicated puzzle hands: a closed one over a piece that can
-	// be picked up, an open one over a slot the carried piece can go into. Off the
+	// The dedicated puzzle hands are used: a closed one over a piece that can be
+	// picked up, an open one over a slot the carried piece can go into. Off the
 	// grid the cursor goes blank, since the carried piece is drawn at the mouse.
-	const bool useNewCursors = g_nancy->getGameType() >= kGameTypeNancy12;
+	const bool isNancy12 = g_nancy->getGameType() >= kGameTypeNancy12;
 
 	int row, col;
 	bool hitCell = hitTestCell(mouseVP, row, col);
@@ -440,22 +460,23 @@ void SortPuzzle::handleInput(NancyInput &input) {
 	}
 
 	if (!hitCell) {
-		if (!_exitHotspot.isEmpty() && _exitHotspot.contains(mouseVP)) {
-			g_nancy->_cursor->setCursorType(g_nancy->_cursor->_puzzleExitCursor);
+		// Before Nancy 12, the puzzle can't be left while a piece is carried
+		if (_hasHeld && !isNancy12) {
+			g_nancy->_cursor->setCursorType(CursorManager::kNewBlank);
+		} else if (hoverExitHotspot(input)) {
 			if (input.input & NancyInput::kLeftMouseButtonUp)
 				_subState = kExitToCancel;
-		} else if (_hasHeld && useNewCursors) {
+		} else if (_hasHeld) {
 			g_nancy->_cursor->setCursorType(CursorManager::kNewBlank);
 		}
 		return;
 	}
 
-	if (useNewCursors) {
-		g_nancy->_cursor->setCursorType(_hasHeld ? CursorManager::kNewUseHandHotspot
-		                                         : CursorManager::kNewDragHandHotspot);
+	if (!_hasHeld) {
+		g_nancy->_cursor->setCursorType(CursorManager::kNewDragHandHotspot);
 	} else {
-		g_nancy->_cursor->setCursorType(_hasHeld ? CursorManager::kDropHand
-		                                         : CursorManager::kHotspot);
+		g_nancy->_cursor->setCursorType(isNancy12 ? CursorManager::kNewUseHandHotspot
+		                                          : CursorManager::kNewDropHandHotspot);
 	}
 
 	if (!(input.input & NancyInput::kLeftMouseButtonUp))
@@ -464,6 +485,8 @@ void SortPuzzle::handleInput(NancyInput &input) {
 	if (!_hasHeld) {
 		holdCell(_current[row][col], true, input);
 		_current[row][col].isEmpty = true;
+		_heldFromRow = row;
+		_heldFromCol = col;
 		if (_pickupSound.name != "NO SOUND") {
 			g_nancy->_sound->loadSound(_pickupSound);
 			g_nancy->_sound->playSound(_pickupSound);

@@ -23,7 +23,7 @@
 #define NANCY_ACTION_HANGMANPUZZLE_H
 
 #include "engines/nancy/commontypes.h"
-#include "engines/nancy/action/actionrecord.h"
+#include "engines/nancy/action/puzzlerecord.h"
 
 namespace Nancy {
 
@@ -39,9 +39,9 @@ namespace Action {
 // carry a target letter sequence: playing exactly those letters, in order, takes
 // a third outcome regardless of the word. The chosen word is remembered across
 // visits so it is not immediately repeated.
-class HangmanPuzzle : public RenderActionRecord {
+class HangmanPuzzle : public PuzzleRecord {
 public:
-	HangmanPuzzle() : RenderActionRecord(7) {}
+	HangmanPuzzle() : PuzzleRecord(7) {}
 	virtual ~HangmanPuzzle() {}
 
 	void init() override;
@@ -85,7 +85,6 @@ protected:
 	void updateFeedback();
 	void checkOutcome();
 	void redraw();
-	void playSoundBlock(const RandomSoundBlock &block);
 
 	// -- File data --
 	Common::Path _puzzleImageName;		// 0x3d
@@ -112,12 +111,6 @@ protected:
 	SceneOutcome _sequenceScene;	// 0x290
 	SceneOutcome _winScene;			// 0x2f1
 	SceneOutcome _loseScene;		// 0x352
-
-	// Give-up hotspot (count-prefixed 23-byte trailer): click to leave the puzzle.
-	Common::Rect _exitHotspot;
-	uint16 _exitCursorType = 0;
-	SceneChangeDescription _exitScene;
-	FlagDescription _exitFlag;
 
 	// -- Runtime state --
 	Graphics::ManagedSurface _puzzleImage;

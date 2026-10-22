@@ -108,10 +108,12 @@ void OSystem_Wii::deinitGfx() {
 	free(_cursorPalette);
 	_cursorPalette = NULL;
 
-	free(_gamePixels);
-	_gamePixels = NULL;
+	if(_gamePixels != _gamePixelsTexture)
+		free(_gamePixelsTexture);
 
-	free(_gamePixelsTexture);
+	free(_gamePixels);
+
+	_gamePixels = NULL;
 	_gamePixelsTexture = NULL;
 
 	free(_overlayPixels);
@@ -280,12 +282,13 @@ void OSystem_Wii::initSize(uint width, uint height,
 			free(_gamePixels);
 		free(_gamePixelsTexture);
 
-		tex_format = GFX_TF_PALETTE_RGB565;
-
 		if (_pfGame.bytesPerPixel > 1) {
 			// TODO: Support other texture formats?
 			tex_format = GFX_TF_RGB565;
 			_pfGameTexture = _pfRGB565;
+		} else {
+			tex_format = GFX_TF_PALETTE_RGB565;
+			_pfGameTexture = Graphics::PixelFormat::createFormatCLUT8();
 		}
 
 		printf("initSize %u*%u*%u (%s -> %s match: %d)\n",
@@ -719,7 +722,7 @@ void OSystem_Wii::setMouseCursor(const void *buf, uint w, uint h, int hotspotX,
 		if (!Graphics::crossBlit(tmp, (const byte *)buf,
 									tw * _pfRGB3444.bytesPerPixel,
 									w * _pfCursor.bytesPerPixel,
-									tw, th, _pfRGB3444, _pfCursor)) {
+									w, h, _pfRGB3444, _pfCursor)) {
 			printf("crossBlit failed (cursor)\n");
 			::abort();
 		}

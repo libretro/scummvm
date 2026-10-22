@@ -39,6 +39,7 @@
 
 #include "scumm/insane/rebel2/rebel.h"
 #include "scumm/insane/rebel2/shared.h"
+#include "scumm/insane/highscores.h"
 
 namespace Scumm {
 
@@ -69,6 +70,7 @@ bool InsaneRebel2::isMenuTextInputActive() const {
 	return _gameState == kStateChapterSelect &&
 	       _chapterSelection >= 0 &&
 	       _chapterSelection < 16 &&
+	       _release.isChapterAvailable(_chapterSelection + 1) &&
 	       !_chapterUnlocked[_chapterSelection];
 }
 
@@ -90,8 +92,18 @@ void InsaneRebel2::updateMenuVirtualKeyboard() {
 void InsaneRebel2::unlockAllChapters() {
 	debugC(DEBUG_INSANE, "Unlocking all chapters for testing");
 	for (int i = 0; i < 16; i++) {
-		_chapterUnlocked[i] = true;
-		_levelUnlocked[i] = true;
+		_chapterUnlocked[i] = _release.isChapterAvailable(i + 1);
+		_levelUnlocked[i] = _chapterUnlocked[i];
+	}
+}
+
+void InsaneRebel2::updateChapterUnlocks() {
+	for (int i = 0; i < 16; i++) {
+		// 0xFF is PilotData::init()'s "never played" marker.
+		const bool reached = (_activePilot >= 0 && _activePilot < _numPilots) ?
+			_pilots[_activePilot].damage[i] < 0xFF : i + 1 == _release.levels[0];
+		_chapterUnlocked[i] = _release.isChapterAvailable(i + 1) &&
+			(_debugUnlockAll || _release.unlockAvailableLevels || reached);
 	}
 }
 
@@ -664,6 +676,12 @@ int InsaneRebel2::runChapterSelect() {
 		}
 
 		if (_chapterSelection >= 0 && _chapterSelection < 16) {
+			if (!_release.isChapterAvailable(_chapterSelection + 1)) {
+				_passwordInput.clear();
+				playSfx(3, 127, 0);
+				continue;
+			}
+
 			if (_chapterUnlocked[_chapterSelection]) {
 				_selectedChapter = _chapterSelection;
 				debugC(DEBUG_INSANE, "Chapter %d selected (unlocked)", _selectedChapter + 1);
@@ -915,6 +933,8 @@ Common::String InsaneRebel2::getChapterPassword(int level, int difficulty) {
 void InsaneRebel2::drawChapterInfoLine(byte *renderBitmap, int pitch, int width, int height) {
 	if (_chapterSelection < 0 || _chapterSelection >= 16)
 		return;
+	if (!_release.isChapterAvailable(_chapterSelection + 1))
+		return;
 
 	SmushPlayer *splayer = ((ScummEngine_v7 *)_vm)->_splayer;
 	if (!splayer)
@@ -930,7 +950,9 @@ void InsaneRebel2::drawChapterInfoLine(byte *renderBitmap, int pitch, int width,
 		int32 pilotLives = 0;
 		int32 pilotScore = 0;
 		int16 pilotRating = 0;
-		if (_activePilot >= 0 && _activePilot < _numPilots) {
+		if (_release.unlockAvailableLevels) {
+			pilotLives = 3;
+		} else if (_activePilot >= 0 && _activePilot < _numPilots) {
 			pilotLives = _pilots[_activePilot].lives[_chapterSelection];
 			pilotScore = _pilots[_activePilot].score[_chapterSelection];
 			pilotRating = _pilots[_activePilot].rating[_chapterSelection];
@@ -996,7 +1018,7 @@ int InsaneRebel2::runLevelSelect() {
 
 	_levelSelection = 0;
 	_levelItemCount = _numPilots + 4;
-	_selectedLevel = 1;
+	_selectedLevel = _release.levels[0];
 	_menuRepeatDelay = 0;
 	_gameState = kStatePilotSelect;
 	_pilotMenuMode = kPilotModeSelect;
@@ -1032,9 +1054,7 @@ int InsaneRebel2::runLevelSelect() {
 				savePilots();
 				_activePilot = _pilotEditIndex;
 
-				for (int i = 0; i < 16; i++) {
-					_chapterUnlocked[i] = _debugUnlockAll || (_pilots[_activePilot].damage[i] < 0xFF);
-				}
+				updateChapterUnlocks();
 			}
 			_pilotMenuMode = kPilotModeSelect;
 			_levelItemCount = _numPilots + 4;
@@ -1428,10 +1448,7 @@ void InsaneRebel2::insertRanking(const char *name, int32 score, int32 rating,
 	if (score == 0)
 		return;
 
-	int insertPos = 0;
-	while (insertPos < _numRankings && score <= _rankings[insertPos].score) {
-		insertPos++;
-	}
+	int insertPos = findHighScorePosition(_rankings, _numRankings, score);
 	if (insertPos > kMaxRankings - 1)
 		return;
 
@@ -1448,19 +1465,14 @@ void InsaneRebel2::insertRanking(const char *name, int32 score, int32 rating,
 		}
 	}
 
-	int lastIdx = MIN(_numRankings, kMaxRankings - 1);
-	for (int i = lastIdx; i > insertPos; i--)
-		_rankings[i] = _rankings[i - 1];
-
-	RankingEntry &r = _rankings[insertPos];
+	RankingEntry r = {};
 	Common::strlcpy(r.name, name, sizeof(r.name));
 	r.score = score;
 	r.rating = rating;
 	r.difficulty = difficulty;
 	r.chapter = chapter;
 
-	if (_numRankings < kMaxRankings)
-		_numRankings++;
+	_numRankings = insertHighScoreEntry(_rankings, _numRankings, kMaxRankings, insertPos, r);
 }
 
 void InsaneRebel2::showTopPilots() {

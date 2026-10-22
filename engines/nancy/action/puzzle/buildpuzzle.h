@@ -22,12 +22,13 @@
 #ifndef NANCY_ACTION_BUILDPUZZLE_H
 #define NANCY_ACTION_BUILDPUZZLE_H
 
-#include "engines/nancy/action/actionrecord.h"
+#include "engines/nancy/action/puzzlerecord.h"
 #include "engines/nancy/renderobject.h"
 
 namespace Nancy {
 
 struct BuildPuzzleData;
+struct BuildBoardData;
 
 namespace Action {
 
@@ -35,9 +36,13 @@ namespace Action {
 // clothes design). Pieces are dragged into zones, and a zone is satisfied once
 // it holds the quantities its ingredient list asks for; a piece is placed by
 // being assigned a zone index rather than by matching a rect.
-class BuildPuzzle : public RenderActionRecord {
+//
+// Nancy 17 dropped the buttons and the counter. Its zones hold one piece that is
+// swapped for the one dropped on it, pieces can start out in a zone, and a board
+// can be kept under a name for GoldbergPuzzle to look at.
+class BuildPuzzle : public PuzzleRecord {
 public:
-	BuildPuzzle() : RenderActionRecord(7), _buttonPress(98), _cursorItem(99) {}
+	BuildPuzzle() : PuzzleRecord(7), _doneOverlay(0), _counter(97), _buttonPress(98), _cursorItem(99) {}
 	virtual ~BuildPuzzle() {}
 
 	void init() override;
@@ -71,9 +76,29 @@ protected:
 
 	static const byte kConsumedKind = 1;	// this kind is taken by the zone, not copied
 
+	// What a piece's zoneID can be, other than the index of its only zone
+	enum PieceZone {
+		kAnyZone = -1,
+		kAnyZoneOfItsSize = -2	// Nancy17
+	};
+
+	struct ZoneHighlight : RenderObject {
+		ZoneHighlight() : RenderObject(0) {}
+
+		bool isViewportRelative() const override { return true; }
+	};
+
+	// Something drawn over the board, which is placed like the board is
+	struct BoardObject : RenderObject {
+		BoardObject(uint16 zOrder) : RenderObject(zOrder) {}
+
+		bool isViewportRelative() const override { return true; }
+	};
+
 	// A container pieces are dropped into.
 	struct Zone {
 		Common::Rect hotspot;
+		Common::Rect highlightSrc;	// Nancy17: shown on the zone while a piece that fits it is carried
 		uint16 capacity = 0;		// the zone counts as full at this many pieces
 		ZoneFill fill = kFillAbsorb;
 		byte marksPlaced = 0;
@@ -83,6 +108,7 @@ protected:
 		Common::Array<byte> counts;	// how many of each ingredient are in the zone
 		int16 numWrong = 0;			// pieces in here that no ingredient asked for
 		int16 numHeld = 0;
+		ZoneHighlight highlight;
 	};
 
 	// A measuring implement. Scooping with one adds `amount` of an ingredient at
@@ -105,7 +131,9 @@ protected:
 		bool isViewportRelative() const override { return true; }
 
 		Common::Rect srcRect;			// art while the piece sits at home
+		int16 startZone = -1;			// Nancy17: the zone the piece is in when the puzzle starts
 		Common::Rect destRect;			// where the piece is drawn
+		Common::Rect homeHotspot;		// Nancy18: the part of that to click on; empty means all of it
 		Common::Rect dragSrcRect;		// art while the piece is on the cursor; empty means srcRect
 		Common::Rect placedSrcRect;		// art once the piece is in a zone; empty means dragSrcRect
 		Common::Rect closeupSrcRect;
@@ -113,8 +141,11 @@ protected:
 		Common::Rect placedDestRect;	// exact spot in a zone; overrides the zone's fill mode
 		byte kind = 0;
 		Common::String imageName;	// only when kind == 3
-		int16 zoneID = -1;			// the only zone this piece may go in, -1 = any
+		int16 zoneID = kAnyZone;	// the only zone this piece may go in, or a PieceZone
 		int16 itemID = 0;			// index into the shared item state, 255 = none
+		int16 availableFlag = -1;	// Nancy18: the piece is only there while this is set
+		int16 placedFlag = -1;		// Nancy17: set while the piece is in a zone
+		int16 inventoryItem = -1;	// Nancy17: holding this item is holding the piece
 		Common::Array<int16> holds;	// the scoops this piece can be taken with, empty = by hand
 		int16 fillVariant = 0;		// which of a scoop's two full images to show
 
@@ -123,9 +154,9 @@ protected:
 		int16 sourceID = -1;		// index of the definition this piece was cloned from
 		int16 assignedZone = -1;
 		bool inUse = false;			// false for the spare slots kept for clones
+		bool locked = false;		// kept by a zone that marks its pieces placed
 	};
 
-	Common::Path _imageName;
 	Common::Path _altImageName;		// empty means the main image is used for both
 
 	// Selects where a piece that is not in a zone, and any close-up, is drawn
@@ -143,6 +174,20 @@ protected:
 	int16 _pieceCursorType = 0;
 	int16 _heldPieceCursorType = 0;
 
+	// Nancy17 only shows the cursor above while the piece is over a zone it can
+	// go into, and this one everywhere else.
+	int16 _carryCursorType = 0;
+
+	bool _isNancy17 = false;
+
+	// Nancy17: the name the board is kept under. Without one the puzzle starts
+	// over every time.
+	Common::String _saveKey;
+
+	// False when no arrangement counts as a solution
+	bool _isSolvable = true;
+	RandomSoundBlock _solveSoundBlock;
+
 	Common::Array<Zone> _zones;
 	Common::Array<HoldSlot> _holds;
 	Common::Array<Piece> _pieces;
@@ -154,20 +199,24 @@ protected:
 	Common::Point _counterPos;
 	int32 _counterSpacing = 0;
 
-	SoundDescription _pickupSound;
-	SoundDescription _dropSound;
-	SoundDescription _notebookSound;
-	SoundDescription _putDownSound;
-	SoundDescription _holdSound;
+	RandomSoundBlock _pickupSound;
+	RandomSoundBlock _dropSound;
+	RandomSoundBlock _notebookSound;
+	RandomSoundBlock _putDownSound;
+	RandomSoundBlock _holdSound;
 
 	// Two on-screen buttons: one hands the puzzle in, one clears it. Only the
 	// parfait puzzle has them; the rest are handed in through an exit hotspot.
 	Common::Rect _submitSrcRect;
 	Common::Rect _submitHotspot;
-	SoundDescription _submitSound;
+	RandomSoundBlock _submitSound;
 	Common::Rect _startOverSrcRect;
 	Common::Rect _startOverHotspot;
-	SoundDescription _startOverSound;
+	RandomSoundBlock _startOverSound;
+
+	// Drawn over the zones once every one of them is full.
+	Common::Rect _doneSrcRect;
+	Common::Rect _doneDestRect;
 
 	// With _saveState set, the board is saved after every drop. It is restored when
 	// the puzzle's scene runs again while _resumeFlag is set.
@@ -184,16 +233,12 @@ protected:
 	byte _usePlacedGate = 0;
 	uint16 _stateItemID = 255;			// shared item state tracking the placed count
 
-	SceneChangeDescription _solveScene;
-	FlagDescription _solveFlag;
-
 	// Used instead of _solveScene when the player leaves the zones unfinished.
 	SceneChangeDescription _failScene;
 	FlagDescription _failFlag;
 
 	// --- Runtime ---
 
-	Graphics::ManagedSurface _image;
 	Graphics::ManagedSurface _altImage;
 	Graphics::ManagedSurface _pieceImage;	// a kind 3 piece's own close-up art
 	Common::Path _pieceImageName;
@@ -206,12 +251,16 @@ protected:
 	};
 	HeldButton _heldButton = kNoButton;
 	uint32 _buttonTimerEnd = 0;
-	RenderObject _buttonPress;
+	BoardObject _doneOverlay;
+	BoardObject _counter;
+	int16 _shownCounterValue = -1;
+	Common::Rect _closeupDest;
+	BoardObject _buttonPress;
 
 	int16 _placedCount = 0;
 
 	// Whatever is currently on the cursor: a scoop, or an ingredient.
-	RenderObject _cursorItem;
+	BoardObject _cursorItem;
 	int16 _activeHold = -1;
 	int8 _lastWrongFlag = -1;
 	int8 _lastSolvedFlag = -1;
@@ -221,6 +270,22 @@ protected:
 	bool _isSolved = false;
 	bool _isFailed = false;
 	bool _isInitialized = false;
+
+	void readDataNancy17(Common::SeekableReadStream &stream);
+	// Returns whether the mouse was over something of the board
+	bool handleBoardInputNancy17(const Common::Point &mouseVP, bool clicked);
+	void handleExitInput(NancyInput &input, bool clicked);
+	bool zoneAccepts(const Piece &piece, int16 zoneIdx) const;
+	// The piece that stands for the inventory item in hand, -1 if there is none
+	int16 findInventoryPiece() const;
+	// Light up the zones a piece can go into; -1 turns them all off
+	void updateZoneHighlights(int16 pieceIdx);
+	void placeAtStart(int16 pieceIdx);
+	void takeOutOfZone(int16 pieceIdx);
+	// Set the board up the way it was left, or the way it starts
+	void initBoard();
+	void saveBoard();
+	void restoreBoard(const BuildBoardData &boards);
 
 	void setPieceCursor(bool isHeld);
 	// Draw the carried art at the cursor, or hide it when nothing is carried
@@ -255,6 +320,9 @@ protected:
 	void takeOutcome();
 	// Empty every zone and put all the pieces back
 	void resetPuzzle();
+	// Redraw the count when its value changes; a close-up over it hides it
+	void updateCounter();
+	void updateDoneOverlay();
 	// Save the board, and put it back when the puzzle resumes
 	void saveState();
 	void restoreState(const BuildPuzzleData &data);

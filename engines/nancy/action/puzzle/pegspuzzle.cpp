@@ -48,9 +48,9 @@ void PegsPuzzle::readData(Common::SeekableReadStream &stream) {
 	// Win / lose scene changes, each {uint16 sceneID, uint16 frameID, byte}. A frameID of
 	// 0xffff means "no specific frame" (the target scene may be a video, so seeking to
 	// 65535 must be avoided) - keep the default frame 0.
-	_winScene.sceneID = stream.readUint16LE();	// 0x28
+	_solveScene._sceneChange.sceneID = stream.readUint16LE();	// 0x28
 	uint16 winFrame = stream.readUint16LE();	// 0x2a
-	_winScene.frameID = (winFrame == 0xffff) ? 0 : winFrame;
+	_solveScene._sceneChange.frameID = (winFrame == 0xffff) ? 0 : winFrame;
 	stream.skip(1);								// 0x2c
 	_loseScene.sceneID = stream.readUint16LE();	// 0x2d
 	uint16 loseFrame = stream.readUint16LE();	// 0x2f
@@ -76,7 +76,7 @@ void PegsPuzzle::readData(Common::SeekableReadStream &stream) {
 	// A count-prefixed array of fixed 23-byte hotspot records:
 	// {rect, u16 cursorType, u16 sceneID, u16 frameID, byte}. The sample carries one - the
 	// "give up / exit" hotspot (leave the puzzle unsolved), with the exit cursor type.
-	readExitHotspot(stream, _exitHotspot, _exitCursorType, _exitScene, _exitFlag);
+	readExitHotspot(stream);
 
 	// Five random-sound blocks: [0] peg select, [1] jump, [2] selection pulse, [3] win, [4] lose.
 	_sounds.resize(5);
@@ -86,15 +86,9 @@ void PegsPuzzle::readData(Common::SeekableReadStream &stream) {
 }
 
 void PegsPuzzle::init() {
-	Common::Rect vpBounds = NancySceneState.getViewport().getBounds();
-	_drawSurface.create(vpBounds.width(), vpBounds.height(), g_nancy->_graphics->getInputPixelFormat());
-	_drawSurface.clear(g_nancy->_graphics->getTransColor());
-	setTransparent(true);
-	setVisible(true);
-	moveTo(vpBounds);
+	initViewportSurface();
 
-	g_nancy->_resource->loadImage(_imageName, _image);
-	_image.setTransparentColor(_drawSurface.getTransparentColor());
+	loadImage();
 
 	// Build the board: every hole starts with a peg, the cut-out corners are blocked,
 	// and one hole (usually the centre) starts empty.
@@ -250,12 +244,6 @@ void PegsPuzzle::carryPeg(int col, int row, NancyInput &input) {
 	}
 }
 
-void PegsPuzzle::setDataCursor(uint16 cursorType, bool hotspotVariant) const {
-	// The ids in the AR data are raw Nancy13 cursor types, which is exactly what the
-	// "set from script" path expects.
-	g_nancy->_cursor->setCursorType((CursorManager::CursorType)cursorType, true, hotspotVariant);
-}
-
 void PegsPuzzle::redraw() {
 	_drawSurface.clear(g_nancy->_graphics->getTransColor());
 
@@ -279,28 +267,6 @@ void PegsPuzzle::redraw() {
 	}
 
 	_needsRedraw = true;
-}
-
-SoundDescription PegsPuzzle::playSoundBlock(const RandomSoundBlock &block) {
-	SoundDescription desc;
-	if (block.names.empty()) {
-		return desc;
-	}
-
-	uint idx = block.names.size() == 1 ? 0 : g_nancy->_randomSource->getRandomNumber(block.names.size() - 1);
-	const Common::String &name = block.names[idx];
-	if (name.empty() || name == "NO SOUND") {
-		return desc;
-	}
-
-	desc.name = name;
-	desc.channelID = block.channel;
-	desc.numLoops = block.numLoops > 0 ? block.numLoops : 1;
-	desc.volume = block.volume;
-
-	g_nancy->_sound->loadSound(desc);
-	g_nancy->_sound->playSound(desc);
-	return desc;
 }
 
 void PegsPuzzle::execute() {
@@ -337,10 +303,9 @@ void PegsPuzzle::execute() {
 	}
 	case kActionTrigger: {
 		if (_exitRequested) {
-			NancySceneState.setEventFlag(_exitFlag);
-			NancySceneState.changeScene(_exitScene);
+			_exitScene.execute();
 		} else {
-			NancySceneState.changeScene(_solved ? _winScene : _loseScene);
+			NancySceneState.changeScene(_solved ? _solveScene._sceneChange : _loseScene);
 		}
 
 		finishExecution();
@@ -393,9 +358,7 @@ void PegsPuzzle::handleInput(NancyInput &input) {
 		return;
 	}
 
-	if (!_exitHotspot.isEmpty() &&
-			NancySceneState.getViewport().convertViewportToScreen(_exitHotspot).contains(input.mousePos)) {
-		setDataCursor(_exitCursorType, false);
+	if (hoverExitHotspot(input)) {
 		if (click) {
 			_exitRequested = true;
 		}

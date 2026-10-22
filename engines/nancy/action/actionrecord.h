@@ -67,7 +67,7 @@ enum struct DependencyType : int16 {
 	kCloseParenthesis				= 19,
 	kRandom							= 20,
 	kDefaultAR						= 21,
-	kTimerIsActive					= 22,	// Nancy11+ software-timer slot is running/counting
+	kTimerIsActive					= 22,	// Nancy11+ software-timer slot is running (or paused, in Nancy12+)
 	kTimerEqualsDependencyTime		= 23,	// The next three compare a running software
 	kTimerBelowDependencyTime		= 24,	// timer's elapsed time against the dependency's
 	kTimerAboveDependencyTime		= 25,	// own time, and only while that slot is running
@@ -148,6 +148,7 @@ protected:
 
 public:
 	Common::String _description;
+	Common::String _includeSource; // the included file this record came from, empty for the scene's own
 	byte _type;
 	ExecutionType _execType;
 	// 0x32 data

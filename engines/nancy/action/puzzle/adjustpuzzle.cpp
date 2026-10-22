@@ -100,7 +100,7 @@ void AdjustPuzzle::readData(Common::SeekableReadStream &stream) {
 	// Trailing count-prefixed array of 23-byte give-up hotspots
 	// {Rect, uint16 cursorType, uint16 sceneID, int16 flagLabel, byte flagValue}.
 	// The exit always jumps to the scene's first frame.
-	readExitHotspot(stream, _exitHotspot, _exitCursorType, _exitScene, _exitFlag);
+	readExitHotspot(stream);
 }
 
 void AdjustPuzzle::init() {
@@ -112,8 +112,7 @@ void AdjustPuzzle::init() {
 	setVisible(true);
 	moveTo(vpBounds);
 
-	g_nancy->_resource->loadImage(_imageName, _image);
-	_image.setTransparentColor(_drawSurface.getTransparentColor());
+	loadImage();
 
 	_overlayImages.resize(_overlayNames.size());
 	for (uint i = 0; i < _overlayNames.size(); ++i) {
@@ -228,9 +227,7 @@ void AdjustPuzzle::handleInput(NancyInput &input) {
 	const bool click = (input.input & NancyInput::kLeftMouseButtonUp) != 0;
 
 	// Give-up hotspot: leave the puzzle.
-	if (!_exitHotspot.isEmpty() &&
-			NancySceneState.getViewport().convertViewportToScreen(_exitHotspot).contains(input.mousePos)) {
-		g_nancy->_cursor->setCursorType((CursorManager::CursorType)_exitCursorType, true);
+	if (hoverExitHotspot(input)) {
 		if (click) {
 			_exitRequested = true;
 		}
@@ -273,8 +270,7 @@ void AdjustPuzzle::execute() {
 		break;
 	case kRun:
 		if (_exitRequested) {
-			NancySceneState.setEventFlag(_exitFlag);
-			NancySceneState.changeScene(_exitScene);
+			_exitScene.execute();
 			break;
 		}
 		if ((_solved || _lost) && !_outcomeApplied) {

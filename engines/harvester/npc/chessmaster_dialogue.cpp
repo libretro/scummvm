@@ -24,7 +24,6 @@
 
 #include "common/events.h"
 #include "common/system.h"
-#include "graphics/blit.h"
 #include "graphics/framelimiter.h"
 #include "graphics/screen.h"
 #include "harvester/harvester.h"
@@ -36,11 +35,9 @@ namespace Harvester {
 
 namespace {
 
-static const char *const kChessmasterNpc = "CHESSMASTER";
 static const char *const kChessSolvedFlag = "CHESS_SOLVED";
 static const char *const kChessKingMonsterActionTag = "ADD_CHESS_KING_MONSTER";
 static const int kChessmasterSlashDamageType = 2;
-static const byte kTransparentPaletteIndex = 0;
 static const uint32 kChessmasterSuccessHoldMs = 1000;
 
 struct ChessmasterHotspot {
@@ -126,41 +123,6 @@ static bool pointHitsAnyHotspot(const Common::Point &point, const ChessmasterHot
 	}
 
 	return false;
-}
-
-static void blitTransparentFrame(Graphics::Screen &screen, const Graphics::Surface &frame, int x, int y) {
-	if (frame.w <= 0 || frame.h <= 0)
-		return;
-
-	int destX = x;
-	int destY = y;
-	int srcX = 0;
-	int srcY = 0;
-	int width = frame.w;
-	int height = frame.h;
-
-	if (destX < 0) {
-		srcX = -destX;
-		width += destX;
-		destX = 0;
-	}
-	if (destY < 0) {
-		srcY = -destY;
-		height += destY;
-		destY = 0;
-	}
-	if (destX >= screen.w || destY >= screen.h || width <= 0 || height <= 0)
-		return;
-
-	width = MIN<int>(width, screen.w - destX);
-	height = MIN<int>(height, screen.h - destY);
-	if (width <= 0 || height <= 0)
-		return;
-
-	const byte *src = (const byte *)frame.getBasePtr(srcX, srcY);
-	byte *dst = (byte *)screen.getBasePtr(destX, destY);
-	Graphics::keyBlit(dst, src, screen.pitch, frame.pitch, width, height,
-		screen.format.bytesPerPixel, kTransparentPaletteIndex);
 }
 
 static Common::Error decodeInitialFlicFrame(DialogueRuntime &runtime, const char *path,
@@ -333,7 +295,7 @@ static Common::Error runChessmasterChoiceStage(DialogueRuntime &runtime,
 		drawFlicFrame(*screen, background);
 		const ChessmasterFlicState &cursorState = onInteractiveHotspot ? operateCursor : pointer;
 		if (cursorState.frame)
-			blitTransparentFrame(*screen, *cursorState.frame, mousePos.x, mousePos.y);
+			screen->transBlitFrom(*cursorState.frame, mousePos, 0);
 		screen->makeAllDirty();
 		screen->update();
 
@@ -390,13 +352,9 @@ static Common::Error runChessmasterThreeMovePuzzle(DialogueRuntime &runtime, boo
 
 } // End of namespace
 
-bool ChessmasterDialogueHandler::matchesNpc(const Common::String &npcName) const {
-	return npcName.equalsIgnoreCase(kChessmasterNpc);
-}
-
 Common::Error ChessmasterDialogueHandler::handleDialogue(DialogueRuntime &runtime,
 		const Common::String &, DialogueSharedState &) {
-	Common::Error lineError = runtime.playDialogueLine(0x4115, kChessmasterNpc);
+	Common::Error lineError = runtime.playDialogueLine(0x4115, "CHESSMASTER");
 	if (lineError.getCode() != Common::kNoError)
 		return lineError;
 
@@ -407,7 +365,7 @@ Common::Error ChessmasterDialogueHandler::handleDialogue(DialogueRuntime &runtim
 
 	bool solvedPuzzle = false;
 	if (responseIndex == 1) {
-		lineError = runtime.playDialogueLineWithVariant(0x4122, kChessmasterNpc, 1);
+		lineError = runtime.playDialogueLineWithVariant(0x4122, "CHESSMASTER", 1);
 		if (lineError.getCode() != Common::kNoError)
 			return lineError;
 
@@ -419,7 +377,7 @@ Common::Error ChessmasterDialogueHandler::handleDialogue(DialogueRuntime &runtim
 	}
 
 	if (responseIndex != 1 || !solvedPuzzle) {
-		lineError = runtime.playDialogueLineWithVariant(0x4126, kChessmasterNpc, 2);
+		lineError = runtime.playDialogueLineWithVariant(0x4126, "CHESSMASTER", 2);
 		if (lineError.getCode() != Common::kNoError)
 			return lineError;
 
@@ -442,7 +400,7 @@ Common::Error ChessmasterDialogueHandler::handleDialogue(DialogueRuntime &runtim
 	InteractionResult interaction;
 	// C125.FST already shows the chessmaster death; do not queue the room death bank again.
 	if (runtime.startupScript().finalizeRuntimeNpcDeathOrMonsterfy(
-			kChessmasterNpc, kChessmasterSlashDamageType)) {
+			"CHESSMASTER", kChessmasterSlashDamageType)) {
 		interaction.mutatedRuntimeState = true;
 		interaction.visualRuntimeStateChanged = true;
 	}

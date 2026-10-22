@@ -20,7 +20,6 @@
  */
 
 #include "engines/util.h"
-#include "mads/console.h"
 #include "mads/core/attr.h"
 #include "mads/core/conv.h"
 #include "mads/core/env.h"
@@ -38,6 +37,7 @@
 #include "mads/core/sound.h"
 #include "mads/core/text.h"
 #include "mads/forest/forest.h"
+#include "mads/forest/console.h"
 #include "mads/forest/extra.h"
 #include "mads/forest/global.h"
 #include "mads/forest/inventory.h"
@@ -161,7 +161,7 @@ void ForestEngine::global_section_constructor() {
 
 bool ForestEngine::canLoadGameStateCurrently(Common::U32String *msg) {
 	return game.going && !win_status && !kernel.activate_menu && player.commands_allowed &&
-		inter_input_mode == INTER_LIMITED_SENTENCES && section_id != 9;
+		inter_input_mode == INTER_LIMITED_SENTENCES && (section_id != 9 || room_id == 904);
 }
 
 void ForestEngine::syncRoom(Common::Serializer &s) {

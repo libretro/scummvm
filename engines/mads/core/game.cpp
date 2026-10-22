@@ -107,7 +107,6 @@ void (*debugger_update)() = NULL;     /* Debugger update routine */
 int selected_intro = false;
 long correction_clock;
 
-char save_game_key[8];
 char restart_game_key[40];
 char save_game_buf[20];
 
@@ -414,9 +413,8 @@ static void game_fix_save_name() {
 }
 
 void game_save_name(int id) {
-	Common::strcpy_s(save_game_buf, save_game_key);
-	env_catint(save_game_buf, id, 3);
-	game_fix_save_name();
+	Common::String name = g_engine->getSaveStateName(id);
+	Common::strcpy_s(save_game_buf, name.c_str());
 }
 
 static void game_player_status() {
@@ -1548,6 +1546,7 @@ static void game_system_maintenance() {
  * Calls, in proper order, all daemon code for this framing round.
  */
 static void game_daemon_code() {
+	kernel_animations_begin_daemon();
 	kernel.trigger_setup_mode = KERNEL_TRIGGER_DAEMON;
 
 	game_exec_function(room_daemon_code_pointer);
@@ -1817,8 +1816,11 @@ static void game_main_loop() {
 	// Update any active graphics sequences
 	kernel_seq_update_all();
 
-	// Update any active animations
-	kernel_process_all_animations();
+	// Phantom and Dragonsphere scripts use daemon-observed frames for holds and handoffs.
+	// Preserve each newly exposed frame until that daemon can observe it.
+	// Otherwise, update any active animations as before.
+	kernel_process_all_animations(g_engine->getGameID() == GType_Phantom ||
+		g_engine->getGameID() == GType_Dragonsphere);
 
 	// Special mouse cursor update mode
 	if (kernel.mouse_cursor_point) {
@@ -2627,7 +2629,6 @@ void init_game() {
 	debugger_update = NULL;
 	selected_intro = false;
 	correction_clock = 0;
-	memset(save_game_key, 0, sizeof(save_game_key));
 	memset(restart_game_key, 0, sizeof(restart_game_key));
 	memset(save_game_buf, 0, sizeof(save_game_buf));
 	last_keypressed = -1;

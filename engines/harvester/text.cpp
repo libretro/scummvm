@@ -28,11 +28,32 @@
 #include "common/fs.h"
 #include "common/ptr.h"
 #include "common/stream.h"
+#include "graphics/font.h"
 #include "harvester/harvester.h"
 #include "harvester/parse_utils.h"
 #include "harvester/resources.h"
 
 namespace Harvester {
+
+bool appendTextEntryCharacter(Common::String &text, const Graphics::Font &font,
+		uint32 character, uint maxCharacters, int maxWidth) {
+	if (text.size() >= maxCharacters)
+		return false;
+
+	const Common::String candidate = text + (char)character;
+	if (font.getStringWidth(candidate) > maxWidth)
+		return false;
+
+	text = candidate;
+	return true;
+}
+
+bool deleteTextEntryCharacter(Common::String &text) {
+	if (text.empty())
+		return false;
+	text.deleteLastChar();
+	return true;
+}
 
 namespace {
 
@@ -83,7 +104,7 @@ static bool hasNativeHankDialogueResponseLayout(const Common::Array<Common::Stri
 }
 
 static bool loadDialogueResponseLinesFromNode(const Common::FSNode &node,
-		Common::Array<Common::String> &lines) {
+		Common::Array<Common::String> &lines, bool &endsWithNewline) {
 	if (!node.exists() || node.isDirectory())
 		return false;
 
@@ -96,10 +117,12 @@ static bool loadDialogueResponseLinesFromNode(const Common::FSNode &node,
 	if (!responseData.empty())
 		stream->read(responseData.data(), responseData.size());
 	parseDialogueResponseLines(responseData, lines);
+	endsWithNewline = !responseData.empty() && responseData.back() == '\n';
 	return !lines.empty();
 }
 
-static bool tryLoadPreferredDialogueResponsesFromGamePath(Common::Array<Common::String> &lines) {
+static bool tryLoadPreferredDialogueResponsesFromGamePath(Common::Array<Common::String> &lines,
+		bool &endsWithNewline) {
 	if (!ConfMan.hasKey("path"))
 		return false;
 
@@ -110,9 +133,11 @@ static bool tryLoadPreferredDialogueResponsesFromGamePath(Common::Array<Common::
 	for (int depth = 0; depth < 4; ++depth) {
 		const Common::FSNode candidate = current.getChild(kDialogueResponsePath);
 		Common::Array<Common::String> candidateLines;
-		if (loadDialogueResponseLinesFromNode(candidate, candidateLines) &&
+		bool candidateEndsWithNewline = true;
+		if (loadDialogueResponseLinesFromNode(candidate, candidateLines, candidateEndsWithNewline) &&
 				hasNativeHankDialogueResponseLayout(candidateLines)) {
 			lines = Common::move(candidateLines);
+			endsWithNewline = candidateEndsWithNewline;
 			debug(1, "Harvester: using native-compatible DIALOG.RSP from '%s'",
 				candidate.getPath().toString(Common::Path::kNativeSeparator).c_str());
 			return true;
@@ -197,13 +222,14 @@ bool Text::loadDialogueResponses(ResourceManager &resources) {
 	}
 
 	parseDialogueResponseLines(responseData, _dialogueResponseLines);
+	_dialogueResponsesEndWithNewline = responseData.back() == '\n';
 	if (_dialogueResponseLines.empty())
 		return false;
 
-	if ((!g_engine || !g_engine->isDemo()) &&
+	if ((!g_engine || (!g_engine->isDemo() && !g_engine->isEuropeanRelease())) &&
 			!hasNativeHankDialogueResponseLayout(_dialogueResponseLines)) {
 		Common::Array<Common::String> preferredLines;
-		if (tryLoadPreferredDialogueResponsesFromGamePath(preferredLines))
+		if (tryLoadPreferredDialogueResponsesFromGamePath(preferredLines, _dialogueResponsesEndWithNewline))
 			_dialogueResponseLines = Common::move(preferredLines);
 	}
 
@@ -251,6 +277,18 @@ void Text::decodeXorText(Common::Array<byte> &data) const {
 	}
 }
 
+const CftFontResource *Text::findFont(const char *fontName) const {
+	if (!fontName)
+		return nullptr;
+
+	for (const CftFontResource &font : _fonts) {
+		if (font.name.equalsIgnoreCase(fontName))
+			return &font;
+	}
+
+	return nullptr;
+}
+
 bool Text::resolveDialogueSubtitle(int wavId, Common::String &text) const {
 	text.clear();
 	if (wavId <= 0 || _dialogueEntries.empty() || _dialogueData.empty())
@@ -278,10 +316,16 @@ bool Text::resolveDialogueSubtitle(int wavId, Common::String &text) const {
 }
 
 Common::String Text::getDialogueResponseLine(int zeroBasedIndex) const {
-	if (zeroBasedIndex < 0 || (uint)zeroBasedIndex >= _dialogueResponseLines.size())
+	if (zeroBasedIndex < 0 || _dialogueResponseLines.empty())
 		return Common::String();
 
-	return _dialogueResponseLines[(uint)zeroBasedIndex];
+	// load_dialogue_response_line retains the last buffer at EOF and always
+	// removes its final byte, including when the file ends without a newline.
+	const uint index = MIN<uint>((uint)zeroBasedIndex, _dialogueResponseLines.size() - 1);
+	Common::String line = _dialogueResponseLines[index];
+	if (index == _dialogueResponseLines.size() - 1 && !_dialogueResponsesEndWithNewline && !line.empty())
+		line.deleteLastChar();
+	return line;
 }
 
 } // End of namespace Harvester

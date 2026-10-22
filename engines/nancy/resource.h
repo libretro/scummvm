@@ -46,8 +46,17 @@ public:
 	// Loads a single IFF file. These can either be inside standalone .cif files, or embedded inside a ciftree
 	IFF *loadIFF(const Common::Path &name);
 
+	// Loads a Lua script, which is what Nancy19 and up have in place of IFFs. These
+	// can be loose text files, standalone .cif files, or embedded inside a ciftree.
+	// The caller owns the stream.
+	Common::SeekableReadStream *loadScript(const Common::Path &name);
+
 	// Load a new ciftree
 	bool readCifTree(const Common::String &name, const Common::String &ext, int priority);
+
+	// Whether a ciftree of that name has been loaded. Nancy15 conversations use it
+	// to tell a cel archive apart from a movie of the same name (see ConversationCel).
+	bool hasCifTree(const Common::String &name) const;
 
 	// Change the search priority of an already loaded ciftree. Nancy15+ ships one
 	// copy of the popup UI resources per player character, so the tree belonging

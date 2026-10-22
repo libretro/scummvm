@@ -37,12 +37,7 @@ namespace Nancy {
 namespace Action {
 
 void RippedLetterPuzzle::init() {
-	Common::Rect screenBounds = NancySceneState.getViewport().getBounds();
-	_drawSurface.create(screenBounds.width(), screenBounds.height(), g_nancy->_graphics->getInputPixelFormat());
-	_drawSurface.clear(g_nancy->_graphics->getTransColor());
-	setTransparent(true);
-	setVisible(true);
-	moveTo(screenBounds);
+	initViewportSurface();
 
 	g_nancy->_resource->loadImage(_imageName, _image);
 
@@ -193,7 +188,7 @@ void RippedLetterPuzzle::readData(Common::SeekableReadStream &stream) {
 	_dropSound.readNormal(stream);
 	_rotateSound.readNormal(stream);
 
-	_solveExitScene.readData(stream);
+	_solveScene.readData(stream);
 	_solveSound.readNormal(stream);
 
 	_exitScene.readData(stream);
@@ -269,12 +264,11 @@ void RippedLetterPuzzle::execute() {
 				}
 			}
 
-			g_nancy->_sound->loadSound(_solveSound);
-			g_nancy->_sound->playSound(_solveSound);
+			playSolveSound();
 			_solveState = kWaitForSound;
 			break;
 		case kWaitForSound :
-			if (!g_nancy->_sound->isSoundPlaying(_solveSound)) {
+			if (!isSolveSoundPlaying()) {
 				g_nancy->_sound->stopSound(_solveSound);
 				_state = kActionTrigger;
 			}
@@ -289,11 +283,11 @@ void RippedLetterPuzzle::execute() {
 			_exitScene.execute();
 			break;
 		case kWaitForSound:
-			if (_solveExitScene._sceneChange.sceneID == NancySceneState.getSceneInfo().sceneID) {
+			if (_solveScene._sceneChange.sceneID == NancySceneState.getSceneInfo().sceneID) {
 				// nancy9 scene 2484 is auto-solved for you, but has a valid scene change back to itself
 				return;
 			}
-			_solveExitScene.execute();
+			_solveScene.execute();
 			_puzzleState->playerHasTriedPuzzle = false;
 			break;
 		}
@@ -428,7 +422,7 @@ void RippedLetterPuzzle::handleInput(NancyInput &input) {
 
 	if (_puzzleState->pickedUpPieceID == -1) {
 		// No piece picked up, check the exit hotspot
-		if (NancySceneState.getViewport().convertViewportToScreen(_exitHotspot).contains(input.mousePos)) {
+		if (isExitHotspotHovered(input)) {
 			if (_customCursorID != -1)
 				g_nancy->_cursor->setCursorType((CursorManager::CursorType)_customCursorID, true);
 			else
@@ -466,8 +460,11 @@ void RippedLetterPuzzle::copyPieceToPickedUp(const uint pos) {
 }
 
 Common::Rect RippedLetterPuzzle::getPieceHotspot(const Common::Rect &hotspot, const Common::Rect &screenRect) const {
-	// An empty hotspot means the whole piece is interactive
-	Common::Rect ret = hotspot.height() ? hotspot : Common::Rect(screenRect.width(), screenRect.height());
+	// In Nancy14 and up, an empty hotspot means the whole piece is interactive.
+	// Earlier games use empty hotspots to disable an action (e.g. the rotation
+	// in nancy6 scene 2154, where pieces can only be swapped)
+	const bool wholePiece = g_nancy->getGameType() >= kGameTypeNancy14 && !hotspot.height();
+	Common::Rect ret = wholePiece ? Common::Rect(screenRect.width(), screenRect.height()) : hotspot;
 	ret.translate(screenRect.left, screenRect.top);
 	return ret;
 }

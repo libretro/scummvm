@@ -34,6 +34,8 @@ namespace Nancy {
 struct CapturedPicture;
 
 void readRect(Common::SeekableReadStream &stream, Common::Rect &inRect);
+// Nancy16 stores rects whose right and bottom edges are already exclusive
+void readExclusiveRect(Common::SeekableReadStream &stream, Common::Rect &inRect);
 void readRect(Common::Serializer &stream, Common::Rect &inRect, Common::Serializer::Version minVersion = 0, Common::Serializer::Version maxVersion = Common::Serializer::kLastVersion);
 void readRectArray(Common::SeekableReadStream &stream, Common::Array<Common::Rect> &inArray, uint num, uint totalNum = 0);
 void readRectArray(Common::Serializer &stream, Common::Array<Common::Rect> &inArray, uint num, uint totalNum = 0, Common::Serializer::Version minVersion = 0, Common::Serializer::Version maxVersion = Common::Serializer::kLastVersion);
@@ -61,6 +63,11 @@ void readFilenameArray(Common::SeekableReadStream &stream, Common::Array<Common:
 void readFilenameArray(Common::Serializer &stream, Common::Array<Common::Path> &inArray, uint num, Common::Serializer::Version minVersion = 0, Common::Serializer::Version maxVersion = Common::Serializer::kLastVersion);
 
 void assembleTextLine(char *rawCaption, Common::String &output, uint size);
+
+// Scenes of Nancy19 and up that go by number are named "s" and the number, like
+// "s1002". Returns false for the ones that go by a name of their own, like the
+// "s1002a_SC" of Nancy20.
+bool parseSceneName(const Common::String &sceneName, uint16 &sceneID);
 
 // Resolves a subtitle/caption string that may be a key into an engine-data CVTX text
 // table (AUTOTEXT by default, CONVO for some puzzles). Returns the table's entry for

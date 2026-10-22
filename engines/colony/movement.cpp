@@ -704,6 +704,9 @@ bool ColonyEngine::setDoorState(int x, int y, int direction, int state) {
 			_mapData[nx][ny][opposite][1] = (uint8)state;
 	}
 
+	if (wallType == kWallFeatureDoor)
+		saveOpenDoors();
+
 	// Persist airlock state changes across level loads
 	if (wallType == kWallFeatureAirlock) {
 		if (oldState != state && _level >= 1 && _level <= 8) {
@@ -882,16 +885,19 @@ int ColonyEngine::tryPassThroughFeature(int fromX, int fromY, int direction, Loc
 		if (pobject != &_me)
 			return 0; // robots don't use stairs
 
+		// goToDestination() can load another level and overwrite map.
+		const bool goingDown = (map[0] == kWallFeatureDnStairs);
+
 		// UpStairs(): the forklift cannot be driven up a staircase.
-		if (map[0] == kWallFeatureUpStairs && _fl)
+		if (!goingDown && _fl)
 			return 0;
 
 		const int result = goToDestination(map, pobject);
-		if (map[0] == kWallFeatureDnStairs && _fl)
+		if (goingDown && _fl)
 			doDnStairs();
 		if (result == 2) {
 			debugC(1, kColonyDebugMove, "Level change via %s: level=%d pos=(%d,%d)",
-				map[0] == kWallFeatureUpStairs ? "upstairs" : "downstairs",
+				goingDown ? "downstairs" : "upstairs",
 				_level, pobject->xindex, pobject->yindex);
 		}
 		return result;

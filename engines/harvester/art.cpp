@@ -22,8 +22,6 @@
 #include "harvester/art.h"
 
 #include "common/debug.h"
-#include "common/endian.h"
-#include "graphics/blit.h"
 #include "graphics/screen.h"
 #include "harvester/detection.h"
 #include "harvester/palette_utils.h"
@@ -61,7 +59,7 @@ static void logPaletteSummary(const char *label, const Common::String &path, con
 	byte maxValue = 0;
 	getPaletteByteRange(palette, minValue, maxValue);
 
-	debugC(1, kDebugGeneral,
+	debugC(3, kDebugGeneral,
 		"Harvester: %s '%s' bytes=%u range=[%u,%u] hash=%08x idx0=(%u,%u,%u) idx1=(%u,%u,%u) idx127=(%u,%u,%u) idx255=(%u,%u,%u)",
 		label, path.c_str(), 256U * 3U, minValue, maxValue, hashPalette(palette),
 		palette[0], palette[1], palette[2],
@@ -94,6 +92,27 @@ static const char *const kAmmoIconPaths[] = {
 };
 
 } // End of anonymous namespace
+
+bool Art::loadPaletteResource(ResourceManager &resources, const Common::String &path, byte *dest) {
+	Common::Array<byte> data;
+	if (!resources.loadFile(path, data) || data.size() < 256 * 3)
+		return false;
+
+	memcpy(dest, data.data(), 256 * 3);
+
+	byte minValue = 0;
+	byte maxValue = 0;
+	getPaletteByteRange(dest, minValue, maxValue);
+	debugC(3, kDebugRoom,
+		"Harvester: decoded room palette '%s' bytes=%u range=[%u,%u] hash=%08x idx0=(%u,%u,%u) idx1=(%u,%u,%u) idx127=(%u,%u,%u) idx255=(%u,%u,%u)",
+		path.c_str(), (uint)data.size(), minValue, maxValue, hashPalette(dest),
+		dest[0], dest[1], dest[2],
+		dest[3], dest[4], dest[5],
+		dest[127 * 3], dest[127 * 3 + 1], dest[127 * 3 + 2],
+		dest[255 * 3], dest[255 * 3 + 1], dest[255 * 3 + 2]);
+
+	return true;
+}
 
 bool Art::load(ResourceManager &resources) {
 	_waitFrames.clear();
@@ -174,16 +193,10 @@ bool Art::loadBitmap(ResourceManager &resources, const Common::String &path, Ind
 		return false;
 	}
 
-	bitmap.width = READ_LE_UINT32(data.data());
-	bitmap.height = READ_LE_UINT32(data.data() + 4);
-	const uint32 pixelCount = bitmap.width * bitmap.height;
-	if (bitmap.width == 0 || bitmap.height == 0 || data.size() < 12 + pixelCount) {
+	if (!decodeBitmap(data, bitmap)) {
 		warning("Harvester: invalid bitmap '%s'", path.c_str());
 		return false;
 	}
-
-	bitmap.pixels.resize(pixelCount);
-	memcpy(bitmap.pixels.data(), data.data() + 12, pixelCount);
 	return true;
 }
 
@@ -194,107 +207,13 @@ bool Art::loadAnimation(ResourceManager &resources, const Common::String &path, 
 		return false;
 	}
 
-	const uint32 frameCount = READ_LE_UINT32(data.data());
-	uint32 offset = 8;
-	frames.resize(frameCount);
-
-	for (uint32 i = 0; i < frameCount; ++i) {
-		if (data.size() < offset + 25) {
-			warning("Harvester: short ABM header in '%s'", path.c_str());
-			return false;
-		}
-
-		AbmFrame &frame = frames[i];
-		frame.xOffset = (int32)READ_LE_UINT32(data.data() + offset);
-		frame.yOffset = (int32)READ_LE_UINT32(data.data() + offset + 4);
-		frame.width = READ_LE_UINT32(data.data() + offset + 8);
-		frame.height = READ_LE_UINT32(data.data() + offset + 12);
-		const bool compressed = data[offset + 16] != 0;
-		const uint32 sourceSize = READ_LE_UINT32(data.data() + offset + 17);
-		const uint32 pixelCount = frame.width * frame.height;
-		const uint32 payloadOffset = offset + 25;
-
-		if (frame.width == 0 || frame.height == 0 || data.size() < payloadOffset + sourceSize) {
-			warning("Harvester: invalid ABM frame %u in '%s'", i, path.c_str());
-			return false;
-		}
-
-		frame.pixels.resize(pixelCount);
-		if (!decodeAnimationFrame(data.data() + payloadOffset, sourceSize, compressed, frame.pixels))
-			return false;
-
-		offset = payloadOffset + sourceSize;
+	if (!decodeAbm(data, frames)) {
+		warning("Harvester: unable to decode animation '%s'", path.c_str());
+		return false;
 	}
 
 	debug(1, "Harvester: loaded %u frames from '%s'", (uint)frames.size(), path.c_str());
 	return true;
-}
-
-bool Art::decodeAnimationFrame(const byte *source, uint32 sourceSize, bool compressed, Common::Array<byte> &dest) const {
-	if (!compressed) {
-		if (sourceSize < dest.size())
-			return false;
-
-		memcpy(dest.data(), source, dest.size());
-		return true;
-	}
-
-	uint32 srcOffset = 0;
-	uint32 dstOffset = 0;
-
-	while (srcOffset < sourceSize && dstOffset < dest.size()) {
-		const byte control = source[srcOffset++];
-		if ((control & 0x80) == 0) {
-			const uint32 literalCount = MIN<uint32>(control, MIN<uint32>(sourceSize - srcOffset, dest.size() - dstOffset));
-			memcpy(dest.data() + dstOffset, source + srcOffset, literalCount);
-			srcOffset += literalCount;
-			dstOffset += literalCount;
-		} else {
-			if (srcOffset >= sourceSize)
-				return false;
-
-			const uint32 repeatCount = MIN<uint32>(control & 0x7f, dest.size() - dstOffset);
-			memset(dest.data() + dstOffset, source[srcOffset++], repeatCount);
-			dstOffset += repeatCount;
-		}
-	}
-
-	return dstOffset == dest.size();
-}
-
-void Art::blitTransparentBitmap(Graphics::Screen &screen, const IndexedBitmap &bitmap, int x, int y) const {
-	if (!bitmap.isValid())
-		return;
-
-	int srcX = 0;
-	int srcY = 0;
-	int destX = x;
-	int destY = y;
-	int width = (int)bitmap.width;
-	int height = (int)bitmap.height;
-
-	if (destX < 0) {
-		srcX = -destX;
-		width += destX;
-		destX = 0;
-	}
-	if (destY < 0) {
-		srcY = -destY;
-		height += destY;
-		destY = 0;
-	}
-	if (destX >= screen.w || destY >= screen.h || width <= 0 || height <= 0)
-		return;
-
-	width = MIN<int>(width, screen.w - destX);
-	height = MIN<int>(height, screen.h - destY);
-	if (width <= 0 || height <= 0)
-		return;
-
-	const byte *src = bitmap.pixels.data() + srcY * bitmap.width + srcX;
-	byte *dst = (byte *)screen.getBasePtr(destX, destY);
-	Graphics::keyBlit(dst, src, screen.pitch, bitmap.width, width, height,
-		screen.format.bytesPerPixel, kTransparentPaletteIndex);
 }
 
 void Art::blitTransparentAnimationFrame(Graphics::Screen &screen, const Common::Array<AbmFrame> &frames,

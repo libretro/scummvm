@@ -32,7 +32,25 @@ namespace Nancy {
 namespace Action {
 
 void SceneChange::readData(Common::SeekableReadStream &stream) {
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		readDataNancy16(stream);
+		return;
+	}
+
 	_sceneChange.readData(stream);
+}
+
+// Nancy16 dropped the vertical offset, sound continuation flag and listener
+// vector from its scene changes, and widened the frame ID to 32 bits
+void SceneChange::readDataNancy16(Common::SeekableReadStream &stream) {
+	_sceneChange.sceneID = stream.readUint16LE();
+	if (_frameType == kWithFrame) {
+		_sceneChange.frameID = stream.readUint32LE();
+	}
+
+	_sceneChange.continueSceneSound = kContinueSceneSound;
+	_sceneChange.listenerFrontVector.set(0, 0, 1);
+	_sceneChange.frontVectorFrameID = _sceneChange.frameID;
 }
 
 void SceneChange::execute() {
@@ -134,6 +152,13 @@ void HotSingleFrameSceneChange::execute() {
 }
 
 void Hot1FrSceneChange::readData(Common::SeekableReadStream &stream) {
+	if (g_nancy->getGameType() >= kGameTypeNancy16 && !_isTerse) {
+		readDataNancy16(stream);
+		_hoverCursor = (CursorManager::CursorType)stream.readUint32LE();
+		readRect(stream, _hotspotDesc.coords);
+		return;
+	}
+
 	if (_dynamicCursor)
 		_hoverCursor = (CursorManager::CursorType)stream.readUint16LE();
 
@@ -444,6 +469,104 @@ void MapCallHotMultiframe::execute() {
 	case kActionTrigger:
 		MapCall::execute();
 		break;
+	}
+}
+
+void SceneChangeWithExtras::readData(Common::SeekableReadStream &stream) {
+	readDataNancy16(stream);
+
+	if (_extras & kStreamName) {
+		readFilename(stream, _streamName);
+	}
+
+	if (_extras & (kSingleFlag | kFlagList)) {
+		_flags.descs.resize((_extras & kFlagList) ? stream.readUint16LE() : 1);
+		for (FlagDescription &desc : _flags.descs) {
+			desc.label = stream.readSint16LE();
+			desc.flag = stream.readUint16LE();
+		}
+	}
+
+	if (_extras & kHotspots) {
+		_hoverCursor = (CursorManager::CursorType)stream.readUint32LE();
+
+		_hotspots.resize(stream.readUint16LE());
+		for (HotspotDescription &hotspot : _hotspots) {
+			hotspot.readData(stream);
+		}
+	}
+}
+
+void SceneChangeWithExtras::execute() {
+	if ((_extras & kHotspots) && _state != kActionTrigger) {
+		// Wait for a click
+		_state = kRun;
+		_hasHotspot = false;
+
+		for (const HotspotDescription &hotspot : _hotspots) {
+			if (hotspot.frameID == NancySceneState.getSceneInfo().frameID) {
+				_hasHotspot = true;
+				_hotspot = hotspot.coords;
+			}
+		}
+
+		return;
+	}
+
+	_hasHotspot = false;
+
+	if (_extras & kStreamName) {
+		NancySceneState.getStreams().changeScene(_streamName, _sceneChange);
+	} else {
+		NancySceneState.changeScene(_sceneChange);
+	}
+
+	// The flags come with the scene change, and get left alone without one
+	if (_sceneChange.sceneID != kNoScene) {
+		_flags.execute();
+	}
+
+	_isDone = true;
+}
+
+void BeginStream::readData(Common::SeekableReadStream &stream) {
+	readFilename(stream, _sceneName);
+	_frameID = stream.readUint32LE();
+	readFilename(stream, _streamName);
+	_flags.read(stream);
+}
+
+void BeginStream::execute() {
+	NancySceneState.getStreams().begin(_streamName, _sceneName, _frameID, _flags);
+	_isDone = true;
+}
+
+void EndStream::readData(Common::SeekableReadStream &stream) {
+	readFilename(stream, _streamName);
+}
+
+void EndStream::execute() {
+	NancySceneState.getStreams().end(_streamName);
+	_isDone = true;
+}
+
+void OnSceneChange::readData(Common::SeekableReadStream &stream) {
+	readFilename(stream, _streamName);
+	_flag.label = stream.readSint16LE();
+	_flag.flag = stream.readByte();
+}
+
+void OnSceneChange::execute() {
+	const Common::String sceneName = NancySceneState.getStreams().getSceneName(_streamName);
+
+	if (_state == kBegin) {
+		_sceneName = sceneName;
+		_state = kRun;
+	}
+
+	if (!sceneName.equalsIgnoreCase(_sceneName)) {
+		NancySceneState.setEventFlag(_flag);
+		_isDone = true;
 	}
 }
 

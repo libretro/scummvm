@@ -132,7 +132,7 @@ static bool isTimerDurationDependency(DependencyType type) {
 		(type == DependencyType::kTimerLessThanDependencyTime || type == DependencyType::kTimerGreaterThanDependencyTime);
 }
 
-void ActionManager::addNewActionRecord(Common::SeekableReadStream &inputData) {
+void ActionManager::addNewActionRecord(Common::SeekableReadStream &inputData, const Common::String &includeSource) {
 	ActionRecord *newRecord = createAndLoadNewRecord(inputData);
 	if (!newRecord) {
 		inputData.seek(0x30);
@@ -141,6 +141,7 @@ void ActionManager::addNewActionRecord(Common::SeekableReadStream &inputData) {
 		warning("Action Record type %i is unimplemented or invalid!", ARType);
 		return;
 	}
+	newRecord->_includeSource = includeSource;
 	_records.push_back(newRecord);
 }
 
@@ -151,6 +152,36 @@ ActionRecord *ActionManager::createAndLoadNewRecord(Common::SeekableReadStream &
 	descBuf[0x2F] = '\0';
 	byte ARType = inputData.readByte();
 	byte execType = inputData.readByte();
+
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		// Nancy16 moved the dependencies in front of the record data, where they
+		// are preceded by their count and followed by an end marker
+		ActionRecord *newRecord = createActionRecord(ARType, &inputData);
+		if (!newRecord) {
+			newRecord = new Unimplemented();
+		}
+
+		newRecord->_description = descBuf;
+		newRecord->_type = ARType;
+		newRecord->_execType = (ActionRecord::ExecutionType)execType;
+
+		uint32 numDependencies = inputData.readUint32LE();
+		if (numDependencies) {
+			readDependencies(inputData, *newRecord, numDependencies, 16);
+		} else {
+			newRecord->_isActive = true;
+		}
+
+		char endMarker[0x21] = {};
+		inputData.read(endMarker, 0x20);
+		if (Common::String(endMarker) != "EndOfDeps") {
+			warning("Action record type %u has malformed dependency data, description:\n%s", ARType, descBuf);
+		}
+
+		newRecord->readData(inputData);
+		return newRecord;
+	}
+
 	ActionRecord *newRecord = createActionRecord(ARType, &inputData);
 
 	if (!newRecord) {
@@ -187,68 +218,72 @@ ActionRecord *ActionManager::createAndLoadNewRecord(Common::SeekableReadStream &
 			newRecord->_dependencies.satisfied = true;
 		}
 
-		Common::Stack<DependencyRecord *> depStack;
-		depStack.push(&newRecord->_dependencies);
-
-		// Initialize the dependencies data
-		for (uint16 i = 0; i < numDependencies; ++i) {
-			depStack.top()->children.push_back(DependencyRecord());
-			DependencyRecord &dep = depStack.top()->children.back();
-
-			if (singleDepSize == 12) {
-				dep.type = (DependencyType)inputData.readByte();
-				dep.label = inputData.readByte();
-				dep.condition = inputData.readByte();
-				dep.orFlag = inputData.readByte();
-			} else if (singleDepSize == 16) {
-				dep.type = (DependencyType)inputData.readUint16LE();
-				dep.label = inputData.readUint16LE();
-				dep.condition = inputData.readUint16LE();
-				dep.orFlag = inputData.readUint16LE();
-			}
-
-			dep.hours = inputData.readSint16LE();
-			dep.minutes = inputData.readSint16LE();
-			dep.seconds = inputData.readSint16LE();
-			dep.milliseconds = inputData.readSint16LE();
-
-			switch (dep.type) {
-			case DependencyType::kElapsedPlayerTime:
-			case DependencyType::kSceneCount:
-				// These keep their own data in the time fields, which isn't a duration
-				break;
-			case DependencyType::kOpenParenthesis:
-				depStack.push(&dep);
-				break;
-			case DependencyType::kCloseParenthesis:
-				depStack.top()->children.pop_back();
-				depStack.pop();
-				break;
-			default:
-				if (dep.hours != -1 || dep.minutes != -1 || dep.seconds != -1) {
-					int16 seconds = dep.seconds;
-					if (seconds >= kTimerDurationIndexBase && isTimerDurationDependency(dep.type)) {
-						auto *bootSummary = GetEngineData(BSUM);
-						assert(bootSummary);
-
-						uint index = seconds - kTimerDurationIndexBase;
-						if (index < bootSummary->timerDurations.size()) {
-							seconds = bootSummary->timerDurations[index];
-						}
-					}
-
-					dep.timeData = ((dep.hours * 60 + dep.minutes) * 60 + seconds) * 1000 + dep.milliseconds;
-				}
-
-				break;
-			}
-		}
+		readDependencies(inputData, *newRecord, numDependencies, singleDepSize);
 	} else {
 		// Set new record to active if it doesn't depend on anything
 		newRecord->_isActive = true;
 	}
 
 	return newRecord;
+}
+
+void ActionManager::readDependencies(Common::SeekableReadStream &inputData, ActionRecord &record, uint numDependencies, uint singleDepSize) {
+	Common::Stack<DependencyRecord *> depStack;
+	depStack.push(&record._dependencies);
+
+	// Initialize the dependencies data
+	for (uint16 i = 0; i < numDependencies; ++i) {
+		depStack.top()->children.push_back(DependencyRecord());
+		DependencyRecord &dep = depStack.top()->children.back();
+
+		if (singleDepSize == 12) {
+			dep.type = (DependencyType)inputData.readByte();
+			dep.label = inputData.readByte();
+			dep.condition = inputData.readByte();
+			dep.orFlag = inputData.readByte();
+		} else if (singleDepSize == 16) {
+			dep.type = (DependencyType)inputData.readUint16LE();
+			dep.label = inputData.readUint16LE();
+			dep.condition = inputData.readUint16LE();
+			dep.orFlag = inputData.readUint16LE();
+		}
+
+		dep.hours = inputData.readSint16LE();
+		dep.minutes = inputData.readSint16LE();
+		dep.seconds = inputData.readSint16LE();
+		dep.milliseconds = inputData.readSint16LE();
+
+		switch (dep.type) {
+		case DependencyType::kElapsedPlayerTime:
+		case DependencyType::kSceneCount:
+			// These keep their own data in the time fields, which isn't a duration
+			break;
+		case DependencyType::kOpenParenthesis:
+			depStack.push(&dep);
+			break;
+		case DependencyType::kCloseParenthesis:
+			depStack.top()->children.pop_back();
+			depStack.pop();
+			break;
+		default:
+			if (dep.hours != -1 || dep.minutes != -1 || dep.seconds != -1) {
+				int16 seconds = dep.seconds;
+				if (seconds >= kTimerDurationIndexBase && isTimerDurationDependency(dep.type)) {
+					auto *bootSummary = GetEngineData(BSUM);
+					assert(bootSummary);
+
+					uint index = seconds - kTimerDurationIndexBase;
+					if (index < bootSummary->timerDurations.size()) {
+						seconds = bootSummary->timerDurations[index];
+					}
+				}
+
+				dep.timeData = ((dep.hours * 60 + dep.minutes) * 60 + seconds) * 1000 + dep.milliseconds;
+			}
+
+			break;
+		}
+	}
 }
 
 void ActionManager::processActionRecords() {
@@ -260,8 +295,10 @@ void ActionManager::processActionRecords() {
 		}
 
 		// Process dependencies every call. We make sure to ignore cursor dependencies,
-		// as they are only handled when calling from handleInput()
-		processDependency(record->_dependencies, *record, record->canHaveHotspot());
+		// as they are only handled when calling from handleInput(). Nancy16 checks
+		// them every frame, like any other dependency.
+		processDependency(record->_dependencies, *record,
+			record->canHaveHotspot() && g_nancy->getGameType() <= kGameTypeNancy15);
 		record->_isActive = _previousRecordWasExecuted = record->_dependencies.satisfied;
 
 		if (record->_isActive) {
@@ -292,16 +329,6 @@ enum PlayerTimeComparison {
 	kPlayerTimeBefore	= 1,
 	kPlayerTimeEqual	= 2,
 	kPlayerTimeBetween	= 3		// Nancy11+
-};
-
-// How a value-table test dependency (see below) compares the value against its
-// threshold. Matches the Nancy14 comparator's condition encoding.
-enum ValueTestComparison {
-	kValueEqual				= 0,
-	kValueGreater			= 1,
-	kValueGreaterOrEqual	= 2,
-	kValueLess				= 3,
-	kValueLessOrEqual		= 4
 };
 
 // A value-table test dependency with this in its hours field compares against
@@ -340,6 +367,17 @@ static bool evaluateValueTestDependency(const DependencyRecord &dep) {
 	// test (kElapsedPlayerDay) that shares this layout. When the hours field is
 	// kValueTestAgainstValue, the milliseconds field is a value index instead.
 	int32 threshold = dep.milliseconds;
+
+	// Nancy16 indexes every value with a signed byte (-1 is the day), and
+	// reads unset values as 0
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		if (dep.hours == kValueTestAgainstValue) {
+			threshold = table->getValueOrZero((byte)dep.milliseconds);
+		}
+
+		return TableData::compare(table->getValueOrZero((byte)dep.label), threshold, dep.condition);
+	}
+
 	if (dep.hours == kValueTestAgainstValue) {
 		threshold = getValueTestValue(*table, dep.milliseconds, threshold);
 	}
@@ -351,20 +389,7 @@ static bool evaluateValueTestDependency(const DependencyRecord &dep) {
 		return false;
 	}
 
-	switch (dep.condition) {
-	case kValueEqual:
-		return value == threshold;
-	case kValueGreater:
-		return value > threshold;
-	case kValueGreaterOrEqual:
-		return value >= threshold;
-	case kValueLess:
-		return value < threshold;
-	case kValueLessOrEqual:
-		return value <= threshold;
-	default:
-		return false;
-	}
+	return TableData::compare(value, threshold, dep.condition);
 }
 
 // Nancy15+ dependencies that act on a player character name them in the
@@ -534,6 +559,36 @@ void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &recor
 			// This dependency type keeps its data in the time variables
 			// Note: nancy7 completely flipped the meaning of 1 and 2
 			int count = NancySceneState.getSceneCounts(dep.hours);
+
+			if (g_nancy->getGameType() >= kGameTypeNancy16) {
+				// Nancy16 compares the count the same way it compares resources
+				switch (dep.milliseconds) {
+				case 0:
+					dep.satisfied = count == dep.minutes;
+					break;
+				case 1:
+					dep.satisfied = count > dep.minutes;
+					break;
+				case 2:
+					dep.satisfied = count >= dep.minutes;
+					break;
+				case 3:
+					dep.satisfied = count < dep.minutes;
+					break;
+				case 4:
+					dep.satisfied = count <= dep.minutes;
+					break;
+				case 5:
+					dep.satisfied = count != dep.minutes;
+					break;
+				default:
+					dep.satisfied = false;
+					break;
+				}
+
+				break;
+			}
+
 			switch (dep.milliseconds) {
 			case 1:
 				if (	(dep.minutes < count && g_nancy->getGameType() <= kGameTypeNancy6) ||
@@ -602,6 +657,13 @@ void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &recor
 			dep.satisfied = true;
 			break;
 		case DependencyType::kCursorType: {
+			if (g_nancy->getGameType() >= kGameTypeNancy16) {
+				// Holding (condition true) or not holding the item. Nothing plays
+				// a "can't" sound, and using the item never takes it out of the hand.
+				dep.satisfied = (NancySceneState.getHeldItem() == dep.label) == (dep.condition == g_nancy->_true);
+				break;
+			}
+
 			if (doNotCheckCursor) {
 				dep.satisfied = true;
 			} else {
@@ -671,8 +733,13 @@ void ActionManager::processDependency(DependencyRecord &dep, ActionRecord &recor
 
 			break;
 		case DependencyType::kTimerIsActive:
-			// Nancy11+ only: satisfied while the software-timer slot is running/counting
-			dep.satisfied = NancySceneState.isSoftwareTimerActive(dep.label);
+			if (g_nancy->getGameType() >= kGameTypeNancy16) {
+				// Nancy16 compares the slot's state against the one in the hours field
+				dep.satisfied = (NancySceneState.getSoftwareTimerState(dep.label) == dep.hours) == (dep.condition != 0);
+			} else {
+				// Nancy11+ only: satisfied while the software-timer slot is active
+				dep.satisfied = NancySceneState.isSoftwareTimerActive(dep.label);
+			}
 
 			break;
 		case DependencyType::kTimerEqualsDependencyTime:
@@ -793,6 +860,33 @@ void ActionManager::onPause(bool pause) {
 		if (r->_isActive && !r->_isDone) {
 			r->onPause(pause);
 		}
+	}
+}
+
+// A stopped sound lets its record finish on its own, the same way it would at the
+// end of the line
+void ActionManager::stopSpeechSounds() {
+	const Common::Array<byte> &speechChannels = g_nancy->getStaticData().soundChannelInfo.speechChannels;
+	bool stoppedCaptionedSound = false;
+
+	for (ActionRecord *record : _records) {
+		PlaySound *sound = dynamic_cast<PlaySound *>(record);
+		if (!sound || !sound->_isActive || sound->_isDone || sound->_state != ActionRecord::kRun ||
+				sound->_sceneChange.sceneID != kNoScene) {
+			continue;
+		}
+
+		for (byte channel : speechChannels) {
+			if (sound->_sound.channelID == channel) {
+				g_nancy->_sound->stopSound(sound->_sound);
+				stoppedCaptionedSound |= !sound->_ccText.empty();
+				break;
+			}
+		}
+	}
+
+	if (stoppedCaptionedSound) {
+		NancySceneState.getTextbox().clear();
 	}
 }
 

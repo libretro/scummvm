@@ -79,6 +79,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "barbrapunzel",		"Barbie as Rapunzel: A Creative Adventure" },
 	{ "barbswanlake",		"Barbie of Swan Lake: The Enchanted Forest" },
 	{ "barminski",			"Bar-Min-Ski: Consumer Product" },
+	{ "barrowhillcurse",	"Barrow Hill: Curse of the Ancient Circle" },
 	{ "bbbighelpers",		"Little Bears Make Big Helpers: Life's Little Lessons with the Berenstain Bears" },
 	{ "bearfamily",			"A Bear Family Adventure" },
 	{ "beautyorbeast",		"Beauty or the Beast" },
@@ -572,6 +573,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "wallobee4",			"Wallobee Jack: Secret of the Sphinx" },
 	{ "wallobeetemple",		"The temple of Monakumba: Starring Wallobee Jack" },
 	{ "warlock",			"Spaceship Warlock" },
+	{ "whostolehanukkah",	"Who Stole Hanukkah?!" },
 	{ "wiggles1",			"A Day with the Wiggles" },
 	{ "willywabbit",		"Willy Wabbit & His Magical Books" },
 	{ "willywabbit2",		"Around the World With Willy Wabbit" },
@@ -1381,6 +1383,7 @@ static const PlainGameDescriptor directorGames[] = {
 	{ "jmac",				"J-MAC みんなの広場 Vol.1" },
 	{ "keiri",				"経理入門" },										// Introduction to Accounting
 	{ "llla",				"Live Love Life AIDS" },
+	{ "masakanokazoku",		"真逆の家族" }, // Masaka no Kazoku
 	{ "mazebox",			"The Latest Works of MazeBox" },
 	{ "macintosho20",		"村上隆" }, // Macintosho exhibit disk #20 - Takashi Murakami's Hiropon
 	{ "microphonefiend",	"Microphone Fiend" },
@@ -8242,6 +8245,15 @@ static const DirectorGameDescription gameDescriptions[] = {
 	//found on TKKG1 De Schat van de Maya's by Lannoo (Belgium)
 	WINDEMO1_l("welkom", "",  "lannoo/welkom/DEMO.exe",	"t:39126441ec01512d70275280292d7028",  1309296, Common::NL_NLD, 500),
 
+	WINGAME2("whostolehanukkah", "", "WSH.EXE", "t:66e7df5111942df6067305e8a6cd3709", 1410503,
+								   "HGAME/START.DIR", "6e4e09b183e30f9bc1decf776ea91714", 423672, 501),
+	WINGAME2_l("whostolehanukkah", "", "HGAMEW95.EXE", "t:66e7df5111942df6067305e8a6cd3709", 1410503,
+									  "Hgame/Start.dxr", "62aa207f9aa4c8d062c0818d52339e34", 409758, Common::RU_RUS, 501),
+
+	// 1996 Thai release is trilingual (Thai, French, English)
+	MACGAME1t_l("willywabbit", "", "Willy Wabbit  (Click Me!)", "65a01326b96bdf4b7764af0129a6223d", 705415, Common::TH_THA, 505),
+	WINGAME1t_l("willywabbit", "", "WILLY95.EXE", "0fe0b837a9622e4842321cb1d5ed9567", 2322295, Common::TH_THA, 505),
+
 	// Published by Arc Media (1998)
 	MACGAME1("wine", "", "double-click me!",	"rt:c0f42117931db25b431cf7918c774b6d", 719033, 501),
 	WINGAME2("wine", "", "WIN95.EXE",			"t:55b0d7abf1859713f984ee413c7c28d3", 1411337,
@@ -9714,6 +9726,8 @@ static const DirectorGameDescription gameDescriptions[] = {
 	MACGAME1("maisybday", "", "Maisy BDay",		"r:0944b962ebb00f4b5d5149d220f8449b", 113458,  702),
 	WINGAME1("maisybday", "", "Maisy BDay.exe", "t:26fc28194d1991645a9a42794bcb1b36", 2619122, 702),
 
+	MACGAME1t_l("masakanokazoku", "1.22", "xn--v1.22-pd4dq68z44qut9apb4c", "090e49a62eeb56df86525cc3fdcff2f8", 120079, Common::JA_JPN, 702),
+
 	// Korean title is 수학교실
 	WINDEMO2_l("mathsworkshop", "Preview", "Math.exe",	   "t:5e2d026147a09b063a2e8db2dba0ab94", 10146326,
 										   "gorilla1.avi", "f:93c4103cf645bdaaf03df5259cfd17de",   966656, Common::KO_KOR, 702),
@@ -10350,6 +10364,8 @@ static const DirectorGameDescription gameDescriptions[] = {
 	// Advertainment film from Ferrero (chocolates)
 	WINGAME1_l("magicanti", "", "Magicanti.exe", "0c81c84ca4966313ad27d47daba44537", 2158202, Common::IT_ITA, 851),
 
+	WINGAME1t_l("masakanokazoku", "1.23", "mk123.exe", "7463dfe9b4d53843b2b4c4caa721f231", 2668180, Common::JA_JPN, 850),
+
 	WINGAME1_l("mathica", "", "Mathica.exe", "t:9b226694c9f0727b6e2d5025ecdb2187", 2240795, Common::RU_RUS, 851),
 
 	WINGAME1t_l("maus2", "", "InData/Maus2.exe", "7b470c720b74aba9d7ac5d0706141a33", 1779882, Common::DE_DEU, 800),
@@ -10939,6 +10955,9 @@ static const DirectorGameDescription gameDescriptions[] = {
 									  "Files/ba-01_A01.dxr", "d:cb38821091082aeb097e88551b791e05", 9946435, 1010),
 	WINGAME2("babarcoins", "",		  "Start.exe",			 "t:0c40cc1af54fd3c0d06bf5e79bc7075a", 2659300,
 									  "FILES/ba-01_A01.dxr", "d:cb38821091082aeb097e88551b791e05", 9946435, 1010),
+
+	// The sequel (Barrow Hill: The Dark Path) is supported by the Wintermute engine
+	WINGAME1f("barrowhillcurse", "", "Barrow Hill.exe",  "t:419b0b9b1da989ae820d5587c2fc7809", 4077044, 1000, GF_TRUECOLOR),
 
 	WINGAME1_l("bidule4", "", "BAB4.exe", "t:4ff5d572c2555b49d231015883183900", 2689236, Common::FR_FRA, 1010),
 

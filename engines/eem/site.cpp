@@ -111,7 +111,7 @@ static byte findPaletteEndpoint(const byte *palette, bool wantWhite,
 
 MacSpritePaletteMap getMacSpritePaletteMap() {
 	byte palette[256 * 3];
-	g_system->getPaletteManager()->grabPalette(palette, 0, 256);
+	getPaletteManager()->grabPalette(palette, 0, 256);
 
 	MacSpritePaletteMap map;
 	map.white = findPaletteEndpoint(palette, true, 0x00, 0xFF, 0x00);
@@ -242,7 +242,7 @@ void cyclePaletteRange(uint8 start, uint8 end) {
 		return;
 	const uint count = (uint)end - (uint)start + 1;
 	byte buf[256 * 3];
-	g_system->getPaletteManager()->grabPalette(buf, start, count);
+	getPaletteManager()->grabPalette(buf, start, count);
 	const byte savedR = buf[0];
 	const byte savedG = buf[1];
 	const byte savedB = buf[2];
@@ -254,7 +254,7 @@ void cyclePaletteRange(uint8 start, uint8 end) {
 	buf[(count - 1) * 3 + 0] = savedR;
 	buf[(count - 1) * 3 + 1] = savedG;
 	buf[(count - 1) * 3 + 2] = savedB;
-	g_system->getPaletteManager()->setPalette(buf, start, count);
+	getPaletteManager()->setPalette(buf, start, count);
 }
 // `_OpenColorCycle @ 2520:04f7`
 void cyclePaletteRangeReverse(uint8 start, uint8 end) {
@@ -262,7 +262,7 @@ void cyclePaletteRangeReverse(uint8 start, uint8 end) {
 		return;
 	const uint count = (uint)end - (uint)start + 1;
 	byte buf[256 * 3];
-	g_system->getPaletteManager()->grabPalette(buf, start, count);
+	getPaletteManager()->grabPalette(buf, start, count);
 	const uint last = count - 1;
 	const byte savedR = buf[last * 3 + 0];
 	const byte savedG = buf[last * 3 + 1];
@@ -275,18 +275,18 @@ void cyclePaletteRangeReverse(uint8 start, uint8 end) {
 	buf[0] = savedR;
 	buf[1] = savedG;
 	buf[2] = savedB;
-	g_system->getPaletteManager()->setPalette(buf, start, count);
+	getPaletteManager()->setPalette(buf, start, count);
 }
 
 void applyHotspotGlowPalette(bool macCD) {
 	if (macCD) {
-		// Mac CD CODE 2:3d5e, including the searched-hotspot color.
+		// Mac CD CODE 2:3d5e (London CODE 6:419e), including the searched-hotspot color.
 		static const byte kMacGlow[7 * 3] = {
 			0x54, 0xFC, 0xFC, 0x38, 0xDC, 0xE4, 0x20, 0xBC, 0xD0,
 			0x0C, 0x9C, 0xBC, 0x20, 0xBC, 0xD0, 0x38, 0xDC, 0xE4,
 			0x0C, 0x9C, 0xBC
 		};
-		g_system->getPaletteManager()->setPalette(kMacGlow, 0xF8, 7);
+		getPaletteManager()->setPalette(kMacGlow, 0xF8, 7);
 		return;
 	}
 	static const byte kAntsGlow[6 * 3] = {
@@ -297,7 +297,7 @@ void applyHotspotGlowPalette(bool macCD) {
 		0xC0, 0xC0, 0x00, // FD
 		0x80, 0x80, 0x00, // FE
 	};
-	g_system->getPaletteManager()->setPalette(kAntsGlow, 0xF9, 6);
+	getPaletteManager()->setPalette(kAntsGlow, 0xF9, 6);
 }
 
 // `_WaitAnims @ 29be:021c`. 12 bytes per entry, indexed by `siteData[+8]`:
@@ -1443,7 +1443,7 @@ void SiteScreen::enter(uint siteNum, bool resetPartnerMood) {
 	}
 	_vm->setSitePaletteForSite(sitepic);
 
-	applyHotspotGlowPalette(_vm->isMacCD());
+	applyHotspotGlowPalette(_vm->isMacTalkie());
 
 	renderBackground(siteNum);
 
@@ -1759,7 +1759,7 @@ bool SiteScreen::enterMacSiteAnim(const Graphics::ManagedSurface &bg) {
 	};
 
 	byte palette[256 * 3];
-		g_system->getPaletteManager()->grabPalette(palette, 0, 256);
+	getPaletteManager()->grabPalette(palette, 0, 256);
 	_vm->startTravelMusic();
 	fadePaletteFromBlack(palette);
 
@@ -2165,7 +2165,7 @@ void SiteScreen::applyColorCycles() {
 	for (uint i = 0; i < _colorCycles.size(); i++) {
 		cyclePaletteRange(_colorCycles[i].start, _colorCycles[i].end);
 	}
-	if (_vm->isMacCD())
+	if (_vm->isMacTalkie())
 		cyclePaletteRange(0xF8, 0xFD);
 	else
 		cyclePaletteRange(0xF9, 0xFE);
@@ -2374,9 +2374,9 @@ void SiteScreen::renderBackground(uint siteNum) {
 	if (!haveScene)
 		haveScene = _vm->getPics().getPicture(sitepic + 1, scene);
 	if (haveScene) {
-		// `_Rect_Move(0, 0, h, ..., 0x42, 0x14, 48000, h, w)`.
-		const int x = _vm->scaleX(0x42);
-		const int y = _vm->scaleY(0x14);
+		// Mac London CODE 7:63e8 uses native coordinates (105, 39).
+		const int x = mac && _vm->isLondon() ? 105 : _vm->scaleX(0x42);
+		const int y = mac && _vm->isLondon() ? 39 : _vm->scaleY(0x14);
 		const int w = MIN<int>(scene.surface.w, _vm->screenWidth() - x);
 		const int h = MIN<int>(scene.surface.h, _vm->screenHeight() - y);
 		if (w > 0 && h > 0) {
@@ -2395,7 +2395,7 @@ void bumpHotspotEdgeColor(byte &color) {
 
 byte currentWhitePaletteIndex(byte fallback) {
 	byte palette[256 * 3];
-	g_system->getPaletteManager()->grabPalette(palette, 0, 256);
+	getPaletteManager()->grabPalette(palette, 0, 256);
 	for (uint i = 0; i < 256; i++) {
 		const byte *rgb = palette + i * 3;
 		if (rgb[0] >= 0xFC && rgb[1] >= 0xFC && rgb[2] >= 0xFC)
@@ -2405,6 +2405,7 @@ byte currentWhitePaletteIndex(byte fallback) {
 }
 
 static void drawMacSiteHotspot(Graphics::Surface *screen, const Common::Rect &rect, bool seen) {
+	// Mac London CODE 6:439c/446a draws 2x2 pixels around the rectangle.
 	byte color = seen ? 0xFE : 0xF8;
 	auto plot = [&](int x, int y) {
 		Common::Rect pixel(x, y, x + 2, y + 2);
@@ -2476,7 +2477,7 @@ void SiteScreen::renderHotspots(uint siteNum) {
 			seen = seenKey < Mystery::kHotSpotsCap &&
 				   _mystery->_hotSpotsSeen[seenKey];
 		}
-		if (_vm->isMacCD()) {
+		if (_vm->isMacTalkie()) {
 			drawMacSiteHotspot(screen, rect, seen);
 			continue;
 		}

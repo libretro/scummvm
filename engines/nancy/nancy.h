@@ -43,8 +43,18 @@ class Serializer;
  *
  * Status of this engine:
  * The Vampire Diaries and all Nancy Drew games up to and including
- * Nancy Drew: Danger on Deception Island are fully completable.
+ * Nancy Drew: The Creature of Kapu Cave are fully completable.
  * Every other game is untested but definitely unplayable.
+ *
+ * The engine has the following major versions:
+ * - v1: TVD, Nancy1-9
+ * - v2: Nancy10-11 (revamped interface)
+ * - v2a: Nancy12 (moved hardcoded dialog logic)
+ * - v2b: Nancy13-14 (32bpp graphics, scene include scripts)
+ * - v2c: Nancy15 (multiple characters and UI interfaces)
+ * - v3: Nancy16-17 (revamped interface)
+ * - v3a: Nancy18 (PNG graphics)
+ * - v4: Nancy19 and newer (Lua scripting)
  *
  * Games using this engine:
  *	- The Vampire Diaries (1996)
@@ -68,7 +78,9 @@ namespace Nancy {
 // - 11: Nancy12+ TableData holds 100 single values instead of 30, and
 //       the Nancy14/15 player clock only holds the time of the current
 //       day, with the day itself stored separately
-static const int kSavegameVersion = 11;
+// - 12: QuizPuzzle slots are keyed by a 32-bit id, and the Nancy15
+//       protagonists each carry their own cell phone
+static const int kSavegameVersion = 12;
 
 struct NancyGameDescription;
 
@@ -122,6 +134,9 @@ public:
 	bool setPlayerCharacter(uint characterIndex);
 	uint getPlayerCharacter() const { return _playerCharacter; }
 
+	// Adds the texts of a text file to the autotext
+	void addAutotext(const Common::Path &name);
+
 	// A character's "design" is the look their UI wears; it names the CIF tree
 	// everything is loaded from. Nancy's can be changed on the Design Select
 	// screen, and defaults to the character's PCUI entry.
@@ -173,6 +188,9 @@ private:
 	};
 
 	void bootGameEngine();
+#ifdef ENABLE_NANCY_V4
+	void bootScriptedGameEngine();	// Nancy19+
+#endif
 
 	State::State *getStateObject(NancyState::NancyState state) const;
 	void destroyState(NancyState::NancyState state) const;

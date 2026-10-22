@@ -22,9 +22,9 @@
 #ifndef COMMON_WINEXE_NE_H
 #define COMMON_WINEXE_NE_H
 
+#include "common/formats/winexe.h"
 #include "common/list.h"
 #include "common/str.h"
-#include "common/formats/winexe.h"
 
 namespace Common {
 
@@ -37,8 +37,21 @@ namespace Common {
  * @{
  */
 
-template<class T> class Array;
+template<class T>
+class Array;
 class SeekableReadStream;
+
+// NE executable segment
+struct NESegment {
+	static constexpr uint16 kFlagSingleData = 1;
+	static constexpr uint16 kFlagMultipleData = 2;
+	static constexpr uint16 kFlagLinkError = 0x2000u;
+	static constexpr uint16 kFlagLibModule = 0x8000u;
+
+	uint32 offset;
+	uint32 size;
+	uint16 flags;
+};
 
 /**
  * A class able to load resources from a Windows New Executable, such
@@ -50,6 +63,8 @@ class NEResources : public WinResources {
 public:
 	NEResources();
 	~NEResources();
+
+	static constexpr uint32 kInvalidAddress = 0xFFFFFFFF;
 
 	/** Clear all information. */
 	void clear() override;
@@ -69,6 +84,12 @@ public:
 	/** Get a string from a string resource. */
 	String loadString(uint32 stringID) override;
 
+	/** Get all NE segments */
+	const Array<NESegment> &getSegments() const { return _segments; }
+
+	/* Index of NE automatic segment */
+	uint32 getAutomaticSegmentIndex() const { return _autoSegmentIndex; }
+
 protected:
 	VersionInfo *parseVersionInfo(SeekableReadStream *stream) override;
 
@@ -87,8 +108,11 @@ private:
 		uint16 usage;
 	};
 
-	SeekableReadStream *_exe;        ///< Current file.
+	SeekableReadStream *_exe; ///< Current file.
 	DisposeAfterUse::Flag _disposeFileHandle;
+
+	uint32 _autoSegmentIndex = 0;
+	Array<NESegment> _segments;
 
 	/** All resources. */
 	List<Resource> _resources;

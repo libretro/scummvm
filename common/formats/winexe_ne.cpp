@@ -19,10 +19,10 @@
  *
  */
 
+#include "common/formats/winexe_ne.h"
 #include "common/debug.h"
 #include "common/str.h"
 #include "common/stream.h"
-#include "common/formats/winexe_ne.h"
 
 namespace Common {
 
@@ -54,7 +54,7 @@ bool NEResources::loadFromEXE(SeekableReadStream *stream, DisposeAfterUse::Flag 
 	_disposeFileHandle = disposeFileHandle;
 
 	uint32 offsetResourceTable = getResourceTableOffset();
-	if (offsetResourceTable == 0xFFFFFFFF)
+	if (offsetResourceTable == kInvalidAddress)
 		return false;
 	if (offsetResourceTable == 0)
 		return true;
@@ -67,28 +67,62 @@ bool NEResources::loadFromEXE(SeekableReadStream *stream, DisposeAfterUse::Flag 
 
 uint32 NEResources::getResourceTableOffset() {
 	if (!_exe)
-		return 0xFFFFFFFF;
+		return kInvalidAddress;
 
 	if (!_exe->seek(0))
-		return 0xFFFFFFFF;
+		return kInvalidAddress;
 
 	//                          'MZ'
 	if (_exe->readUint16BE() != 0x4D5A)
-		return 0xFFFFFFFF;
+		return kInvalidAddress;
 
 	if (!_exe->seek(60))
-		return 0xFFFFFFFF;
+		return kInvalidAddress;
 
 	uint32 offsetSegmentEXE = _exe->readUint16LE();
 	if (!_exe->seek(offsetSegmentEXE))
-		return 0xFFFFFFFF;
+		return kInvalidAddress;
 
 	//                          'NE'
 	if (_exe->readUint16BE() != 0x4E45)
-		return 0xFFFFFFFF;
+		return kInvalidAddress;
+
+	// Reading automatic segment index
+	if (!_exe->seek(offsetSegmentEXE + 0x0e))
+		return kInvalidAddress;
+	_autoSegmentIndex = _exe->readUint16LE();
+
+	// number of NE segments
+	if (!_exe->seek(offsetSegmentEXE + 0x001c))
+		return kInvalidAddress;
+	auto numSegments = _exe->readUint16LE();
+
+	// segment table offset
+	if (!_exe->seek(offsetSegmentEXE + 0x0022))
+		return kInvalidAddress;
+	auto segmentTableOffset = _exe->readUint16LE();
+
+	// segment address alignment (page size)
+	if (!_exe->seek(offsetSegmentEXE + 0x0032))
+		return kInvalidAddress;
+	auto segmentAddrShift = _exe->readUint16LE();
+
+	if (!_exe->seek(offsetSegmentEXE + segmentTableOffset))
+		return kInvalidAddress;
+	_segments.reserve(numSegments);
+	for (unsigned idx = 0; idx != numSegments; ++idx) {
+		uint32 segmentOffset = _exe->readUint16LE();
+		segmentOffset <<= segmentAddrShift;
+		uint32 segmentSize = _exe->readUint16LE();
+		if (segmentSize == 0)
+			segmentSize = 0x10000;
+		auto segmentFlags = _exe->readUint16LE();
+		_exe->skip(2);
+		_segments.push_back(NESegment{segmentOffset, segmentSize, segmentFlags});
+	}
 
 	if (!_exe->seek(offsetSegmentEXE + 36))
-		return 0xFFFFFFFF;
+		return kInvalidAddress;
 
 	uint32 offsetResourceTable = _exe->readUint16LE();
 	if (offsetResourceTable == 0)
@@ -98,7 +132,7 @@ uint32 NEResources::getResourceTableOffset() {
 	// Offset relative to the segment _exe header
 	offsetResourceTable += offsetSegmentEXE;
 	if (!_exe->seek(offsetResourceTable))
-		return 0xFFFFFFFF;
+		return kInvalidAddress;
 
 	return offsetResourceTable;
 }
@@ -119,7 +153,7 @@ uint32 NEResources::getResourceTableOffset() {
  *  CHAR szName[];           // null-terminated name
  * }
  *
-*/
+ */
 
 bool NEResources::readNameTable(uint32 offset, uint32 size) {
 	if (!_exe)
@@ -138,7 +172,7 @@ bool NEResources::readNameTable(uint32 offset, uint32 size) {
 			break;
 
 		uint16 resourceType = _exe->readUint16LE();
-		uint16 resourceId   = _exe->readUint16LE();
+		uint16 resourceId = _exe->readUint16LE();
 		resourceId &= 0x7FFF;
 		_exe->skip(1); // paddingZero
 
@@ -162,8 +196,7 @@ static const char *const s_resTypeNames[] = {
 	"font_dir", "font", "accelerator", "rc_data", "msg_table",
 	"group_cursor", "", "group_icon", "name_table", "version", "dlg_include",
 	"", "plug_play", "vxd", "ani_cursor", "ani_icon", "html",
-	"manifest"
-};
+	"manifest"};
 
 bool NEResources::readResourceTable(uint32 offset) {
 	if (!_exe)
@@ -199,11 +232,11 @@ bool NEResources::readResourceTable(uint32 offset) {
 
 			// Resource properties
 			res.offset = _exe->readUint16LE() * align;
-			res.size   = _exe->readUint16LE() * align;
-			res.flags  = _exe->readUint16LE();
-			uint16 id  = _exe->readUint16LE();
+			res.size = _exe->readUint16LE() * align;
+			res.flags = _exe->readUint16LE();
+			uint16 id = _exe->readUint16LE();
 			res.handle = _exe->readUint16LE();
-			res.usage  = _exe->readUint16LE();
+			res.usage = _exe->readUint16LE();
 
 			res.type = type;
 

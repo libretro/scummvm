@@ -56,9 +56,10 @@ enum ActionZoneType : byte {
 	kZoneUnknown12		= 0x12,	// another special-effect variant
 	kZoneUnknown13		= 0x13,	// another special-effect variant
 	kZoneBoundary		= 0x14,	// play-area wall
-	kZoneUnknown15		= 0x15,	// special effect + int32; a damage range in Nancy13
+	kZoneUnknown15		= 0x15,	// Nancy12: on entry, sound + special effect + change to scene specialEffectId; a damage range in Nancy13
 	kZoneBumper			= 0x16,	// Nancy12: an overlay variant; Nancy13: a pachinko hole
-	kZoneFlatTire		= 0x17	// pothole: damages the car driving over it
+	kZoneFlatTire		= 0x17,	// pothole: damages the car driving over it
+	kZoneCursor			= 0x1a	// Nancy17: changes the cursor over the zone
 };
 
 // A polymorphic "ActionZone" record, embedded as a count-prefixed array inside
@@ -92,7 +93,8 @@ struct ActionZone {
 
 	// int16 + byte trailer carried by kZoneEventFlag and kZoneSceneChange. For the
 	// former it is an event-flag id + on/off; for the latter a target scene id + a
-	// flag. Left at their defaults for the other subtypes.
+	// flag. kZoneCursor has a cursor type + whether the cursor is the highlighted
+	// one. Left at their defaults for the other subtypes.
 	int16 tailId = 0;
 	byte tailFlag = 0;
 
@@ -121,6 +123,7 @@ struct ActionZone {
 	Common::String overlayName;
 	Common::Array<Common::Rect> overlaySrcRects;
 	Common::Rect overlayDestRect;
+	byte overlayPlayMode = 0;	// 1 = drawn opaque; anything else = color-keyed
 	int32 overlayLayer = 0;	// draw pass: 0 renders under the car, 1 over it
 
 	// The Nancy13 pinball layout (AR 175) differs from the Nancy12 one: the base carries an

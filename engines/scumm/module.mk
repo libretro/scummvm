@@ -147,10 +147,22 @@ MODULE_OBJS += \
 	insane/insane_enemy.o \
 	insane/insane_scenes.o \
 	insane/insane_iact.o \
+	insane/saveload.o \
+	insane/mortimer/campaign.o \
+	insane/mortimer/castle.o \
+	insane/mortimer/dialogs.o \
+	insane/mortimer/flight.o \
+	insane/mortimer/interview.o \
+	insane/mortimer/movie.o \
+	insane/mortimer/mortimer.o \
+	insane/mortimer/saveload.o \
+	insane/mortimer/scores.o \
+	insane/mortimer/text.o \
 	insane/rebel/rebel_audio.o \
 	insane/rebel/rebel_gamepad.o \
 	insane/rebel/rebel_touch.o \
 	insane/rebel1/rebel.o \
+	insane/rebel1/releases.o \
 	insane/rebel1/audio.o \
 	insane/rebel1/iact.o \
 	insane/rebel1/levels.o \
@@ -159,9 +171,11 @@ MODULE_OBJS += \
 	insane/rebel1/runlevels.o \
 	insane/rebel1/saveload.o \
 	insane/rebel2/rebel.o \
+	insane/rebel2/releases.o \
 	insane/rebel2/audio.o \
 	insane/rebel2/iact.o \
 	insane/rebel2/levels.o \
+	insane/rebel2/mac_archive.o \
 	insane/rebel2/menu.o \
 	insane/rebel2/render.o \
 	insane/rebel2/runlevels.o \
@@ -169,6 +183,8 @@ MODULE_OBJS += \
 	smush/codec20.o \
 	smush/codec37.o \
 	smush/codec47.o \
+	smush/saud.o \
+	smush/saud_stream.o \
 	smush/smush_player.o \
 	smush/rebel/codec_ra1.o \
 	smush/rebel/codec_ra2.o \

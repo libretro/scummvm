@@ -103,6 +103,15 @@ void Overlay::updateGraphics() {
 		setVisible(_isActive);
 	}
 
+	// Nancy16 only shows an overlay for as long as its dependencies hold, e.g. the key
+	// in scene 1383, which goes away when picked up. It comes back once they hold again.
+	if (g_nancy->getGameType() >= kGameTypeNancy16 && _state == kRun && _overlayType == kPlayOverlayStatic &&
+			!_isActive && isVisible()) {
+		setVisible(false);
+		_hasHotspot = false;
+		_currentViewportFrame = -1;
+	}
+
 	// Update inactive animated overlays
 	if (!_isActive && _state == kRun && !_blitDescriptions.empty() && _overlayType == kPlayOverlayAnimated) {
 		uint16 newFrame = NancySceneState.getSceneInfo().frameID;
@@ -425,6 +434,15 @@ Common::String Overlay::getRecordTypeName() const {
 
 void OverlayStaticTerse::readData(Common::SeekableReadStream &stream) {
 	readFilename(stream, _imageName);
+
+	// Workaround: the image name of an overlay in Nancy16 scenes 3509 and 3532 ends
+	// with a dot ("LOB_Ia_OVL."), which keeps the image from being found
+	Common::String imageName = _imageName.toString();
+	if (imageName.hasSuffix(".")) {
+		imageName.deleteLastChar();
+		_imageName = Common::Path(imageName);
+	}
+
 	_transparency = stream.readUint16LE();
 	_z = stream.readUint16LE();
 
@@ -462,6 +480,57 @@ void OverlayMultiframeTerse::readData(Common::SeekableReadStream &stream) {
 	_srcRects.push_back(Common::Rect());
 
 	_overlayType = kPlayOverlayStatic;
+}
+
+void OverlayRandomColor::readData(Common::SeekableReadStream &stream) {
+	readFilename(stream, _imageName);
+	_z = stream.readUint16LE();
+
+	_choices.resize(MAX<int16>(stream.readSint16LE(), 0));
+	for (ColorChoice &choice : _choices) {
+		choice.color = stream.readUint32BE();
+		choice.flag = stream.readSint16LE();
+	}
+
+	uint16 numBlitDescriptions = stream.readUint16LE();
+	_blitDescriptions.resize(numBlitDescriptions);
+	for (auto &bm : _blitDescriptions) {
+		bm.readData(stream);
+	}
+
+	_srcRects.push_back(Common::Rect());
+
+	_overlayType = kPlayOverlayStatic;
+}
+
+void OverlayRandomColor::init() {
+	Overlay::init();
+
+	if (_choices.empty() || _fullSurface.empty()) {
+		return;
+	}
+
+	const ColorChoice &choice = _choices[g_nancy->_randomSource->getRandomNumber(_choices.size() - 1)];
+	const uint colorA = choice.color >> 24;
+	const uint colorR = (choice.color >> 16) & 0xFF;
+	const uint colorG = (choice.color >> 8) & 0xFF;
+	const uint colorB = choice.color & 0xFF;
+
+	for (int y = 0; y < _fullSurface.h; ++y) {
+		for (int x = 0; x < _fullSurface.w; ++x) {
+			byte a, r, g, b;
+			_fullSurface.format.colorToARGB(_fullSurface.getPixel(x, y), a, r, g, b);
+			if (a == 0) {
+				continue;
+			}
+
+			_fullSurface.setPixel(x, y, _fullSurface.format.ARGBToColor(a * colorA / 255, r * colorR / 255, g * colorG / 255, b * colorB / 255));
+		}
+	}
+
+	if (choice.flag != -1) {
+		NancySceneState.setEventFlag(choice.flag, g_nancy->_true);
+	}
 }
 
 void OverlayAnimTerse::readData(Common::SeekableReadStream &stream) {
@@ -675,6 +744,11 @@ void RolloverOverlay::init() {
 }
 
 void RolloverOverlay::readData(Common::SeekableReadStream &stream) {
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		readDataNancy16(stream);
+		return;
+	}
+
 	readFilename(stream, _imageName);
 	_transparency = stream.readUint16LE();
 	_z = stream.readUint16LE();
@@ -693,10 +767,36 @@ void RolloverOverlay::readData(Common::SeekableReadStream &stream) {
 
 	_sceneChange.sceneID = stream.readUint16LE();
 	_sceneChange.frameID = stream.readUint16LE();
-	int16 verticalOffset = stream.readSint16LE();
-	_sceneChange.verticalOffset = verticalOffset >= 0 ? verticalOffset : 0;
+	_sceneChange.continueSceneSound = kContinueSceneSound;
 
-	_sceneChange.continueSceneSound = stream.readByte();
+	_flagOnClick.label = stream.readSint16LE();
+	_flagOnClick.flag = stream.readByte();
+
+	_clickSound.readData(stream);
+}
+
+// Nancy16 dropped the transparency field and widened the z value
+void RolloverOverlay::readDataNancy16(Common::SeekableReadStream &stream) {
+	readFilename(stream, _imageName);
+	_z = stream.readUint32LE();
+	_hoverCursor = stream.readUint16LE();
+
+	readRect(stream, _hotspotRect);
+	readRect(stream, _srcRect);
+	readRect(stream, _destRect);
+
+	_flagOnHover.label = stream.readSint16LE();
+	_flagOnHover.flag = stream.readByte();
+
+	_hoverSound.readData(stream);
+	_hoverSoundOnce = stream.readByte();
+
+	_sceneChange.sceneID = stream.readUint16LE();
+	_sceneChange.frameID = stream.readUint16LE();
+	_sceneChange.continueSceneSound = kContinueSceneSound;
+
+	_flagOnClick.label = stream.readSint16LE();
+	_flagOnClick.flag = stream.readByte();
 
 	_clickSound.readData(stream);
 }
@@ -778,6 +878,8 @@ void RolloverOverlay::execute() {
 
 		setVisible(false);
 		_hasHotspot = false;
+
+		NancySceneState.setEventFlag(_flagOnClick);
 
 		if (_sceneChange.sceneID != kNoScene) {
 			NancySceneState.changeScene(_sceneChange);

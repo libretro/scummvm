@@ -93,12 +93,24 @@ static Common::String resolveSoundSubtitle(const Common::String &soundName) {
 		}
 	}
 
+	// Enhancement: the muffled takes of a few Nancy16 lines have no text of their
+	// own (e.g. "NIC312_muffled" in scene 4735), so show the text of the clear take
+	static const char *const kMuffledSuffix = "_muffled";
+	if (soundName.hasSuffixIgnoreCase(kMuffledSuffix)) {
+		return resolveSoundSubtitle(soundName.substr(0, soundName.size() - strlen(kMuffledSuffix)));
+	}
+
 	return Common::String();
 }
 
 void SetVolume::readData(Common::SeekableReadStream &stream) {
 	channel = stream.readUint16LE();
-	volume = stream.readByte();
+
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		volume = CLIP<int32>(stream.readSint32LE(), 0, 100);
+	} else {
+		volume = stream.readByte();
+	}
 }
 
 void SetVolume::execute() {
@@ -108,7 +120,12 @@ void SetVolume::execute() {
 
 void SetMovieVolume::readData(Common::SeekableReadStream &stream) {
 	readFilename(stream, movieName);
-	volume = MIN<byte>(stream.readByte(), 100);
+
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		volume = CLIP<int32>(stream.readSint32LE(), 0, 100);
+	} else {
+		volume = MIN<byte>(stream.readByte(), 100);
+	}
 }
 
 void SetMovieVolume::execute() {
@@ -122,7 +139,11 @@ void SetMovieVolume::execute() {
 
 void FadeSoundToSilence::readData(Common::SeekableReadStream &stream) {
 	channel = stream.readUint16LE();
-	stream.skip(2); // pad / flag
+
+	if (g_nancy->getGameType() <= kGameTypeNancy15) {
+		stream.skip(2); // pad / flag
+	}
+
 	fadeTimeMs = stream.readUint32LE();
 }
 
@@ -281,6 +302,16 @@ void PlaySound::execute() {
 		// that never ends.
 		if (_sceneChange.sceneID == kNoScene && _flag.label == kEvNoEvent && _sound.numLoops == 0) {
 			_isDone = true;
+			break;
+		}
+
+		// Nancy16 asks for the scene change as soon as the sound has started. Waiting for
+		// the next pass wouldn't do: the flags set above can be among the record's own
+		// dependencies (scene 2343, where Nancy first meets the wolf), and the record
+		// then never runs again.
+		if (g_nancy->getGameType() >= kGameTypeNancy16 && _changeSceneImmediately) {
+			_state = kActionTrigger;
+			execute();
 			break;
 		}
 
@@ -492,7 +523,18 @@ void PlaySoundMultiHS::execute() {
 
 void StopSound::readData(Common::SeekableReadStream &stream) {
 	_channelID = stream.readUint16LE();
-	_sceneChange.readData(stream);
+
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		// Nancy16 cut the scene change down to its scene and frame IDs
+		_sceneChange._sceneChange.sceneID = stream.readUint16LE();
+		_sceneChange._sceneChange.frameID = stream.readUint16LE();
+		_sceneChange._sceneChange.continueSceneSound = kContinueSceneSound;
+		_sceneChange._sceneChange.listenerFrontVector.set(0, 0, 1);
+		_sceneChange._flag.label = stream.readSint16LE();
+		_sceneChange._flag.flag = stream.readUint16LE();
+	} else {
+		_sceneChange.readData(stream);
+	}
 }
 
 void StopSound::execute() {
@@ -686,6 +728,12 @@ void ConcatMultiSound::execute() {
 		}
 
 		if (!_soundStarted) {
+			// Wait for the channel to fall silent, even when the sound playing on it
+			// belongs to another record (e.g. Nancy14 scenes 0 -> 6401)
+			if (g_nancy->_sound->isSoundPlaying(_sound.channelID)) {
+				break;
+			}
+
 			startCurrentSound();
 			_soundStarted = true;
 		} else {

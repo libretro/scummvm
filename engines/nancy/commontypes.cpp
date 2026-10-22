@@ -24,9 +24,11 @@
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/cif.h"
 #include "engines/nancy/resource.h"
+#include "engines/nancy/sound.h"
 #include "engines/nancy/state/scene.h"
 
 #include "common/memstream.h"
+#include "common/random.h"
 
 namespace Nancy {
 
@@ -111,8 +113,14 @@ void FrameBlitDescription::readData(Common::SeekableReadStream &stream, bool lon
 		hasHotspot = stream.readUint16LE();
 	}
 
-	readRect(stream, src);
-	readRect(stream, dest);
+	// The right and bottom edges of a Nancy18 rect are no longer a part of it
+	if (g_nancy->getGameType() >= kGameTypeNancy18) {
+		readExclusiveRect(stream, src);
+		readExclusiveRect(stream, dest);
+	} else {
+		readRect(stream, src);
+		readRect(stream, dest);
+	}
 }
 
 void MultiEventFlagDescription::readData(Common::SeekableReadStream &stream) {
@@ -123,15 +131,23 @@ void MultiEventFlagDescription::readData(Common::SeekableReadStream &stream) {
 }
 
 void MultiEventFlagDescription::execute() {
-	for (uint i = 0; i < 10; ++i) {
-		NancySceneState.setEventFlag(descs[i]);
+	for (const FlagDescription &desc : descs) {
+		NancySceneState.setEventFlag(desc);
 	}
 }
 
 void SecondaryVideoDescription::readData(Common::SeekableReadStream &stream, bool hasTrailingRects) {
 	frameID = stream.readUint16LE();
-	readRect(stream, srcRect);
-	readRect(stream, destRect);
+
+	// The right and bottom edges of a Nancy18 rect are no longer a part of it
+	if (g_nancy->getGameType() >= kGameTypeNancy18) {
+		readExclusiveRect(stream, srcRect);
+		readExclusiveRect(stream, destRect);
+	} else {
+		readRect(stream, srcRect);
+		readRect(stream, destRect);
+	}
+
 	// PlaySecondaryVideo keeps the two trailing rects in every game, while
 	// PlaySecondaryMovie only has them up to Nancy 9 and dropped them afterwards.
 	if (hasTrailingRects || g_nancy->getGameType() <= kGameTypeNancy9) {
@@ -288,6 +304,35 @@ void RandomSoundBlock::readData(Common::SeekableReadStream &stream) {
 		numLoops = stream.readSint32LE();
 		volume = stream.readSint16LE();
 	}
+}
+
+SoundDescription RandomSoundBlock::play() const {
+	SoundDescription desc;
+	if (names.empty()) {
+		return desc;
+	}
+
+	uint idx = names.size() == 1 ? 0 : g_nancy->_randomSource->getRandomNumber(names.size() - 1);
+	const Common::String &name = names[idx];
+	if (name.empty() || name == "NO SOUND") {
+		return desc;
+	}
+
+	desc.name = name;
+	desc.channelID = channel;
+	desc.numLoops = numLoops > 0 ? numLoops : 1;
+	desc.volume = volume;
+
+	g_nancy->_sound->loadSound(desc);
+	g_nancy->_sound->playSound(desc);
+
+	Common::String caption = resolveSubtitleText(name);
+	if (caption.empty()) {
+		caption = resolveSubtitleText(name, Common::String(), "CONVO");
+	}
+	showSubtitle(caption);
+
+	return desc;
 }
 
 void ConditionalDialogue::readData(Common::SeekableReadStream &stream) {

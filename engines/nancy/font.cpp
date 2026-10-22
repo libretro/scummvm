@@ -19,6 +19,9 @@
  *
  */
 
+#include "graphics/fontman.h"
+#include "graphics/fonts/ttf.h"
+
 #include "engines/nancy/font.h"
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/resource.h"
@@ -74,10 +77,12 @@ void Font::read(Common::SeekableReadStream &stream) {
 	_slashOffset						= stream.readUint16LE();
 
 	if (g_nancy->getGameLanguage() == Common::RU_RUS && g_nancy->getGameType() >= kGameTypeNancy5 && g_nancy->getGameType() != kGameTypeNancy6) {
-		// Only extract the lowercase/uppercase offsets, since the letters are in order in the FONT data
-		_cyrillicLowercaseOffset 		= stream.readUint16LE();
-		stream.skip(72);
+		// Only extract the uppercase offset, since the letters are in order in the FONT data,
+		// with lowercase directly following uppercase. The first offset can't be used for
+		// lowercase letters: in nancy8 it still points to a Latin glyph
+		stream.skip(74);
 		_cyrillicUppercaseOffset 		= stream.readUint16LE();
+		_cyrillicLowercaseOffset 		= _cyrillicUppercaseOffset + 32;
 		stream.skip(2);
 
 		numCharacters = 179;
@@ -123,6 +128,7 @@ void Font::read(Common::SeekableReadStream &stream) {
 
 		if (g_nancy->getGameType() >= kGameTypeNancy10) {
 			// Nancy10 added even more characters to its fonts
+			_underscoreOffset				= stream.readUint16LE();
 			if (g_nancy->getGameLanguage() == Common::FR_FRA) {
 				_oeLigatureOffset			= stream.readUint16LE();
 				_iWithDiaeresisOffset		= stream.readUint16LE();
@@ -130,7 +136,6 @@ void Font::read(Common::SeekableReadStream &stream) {
 				_uppercaseAWithDotOffset	= stream.readUint16LE();
 				_aWithDotOffset				= stream.readUint16LE();
 			}
-			_underscoreOffset				= stream.readUint16LE();
 			_hashOffset						= stream.readUint16LE();
 			_dollarOffset					= stream.readUint16LE();
 			_lessThanOffset					= stream.readUint16LE();
@@ -143,9 +148,9 @@ void Font::read(Common::SeekableReadStream &stream) {
 		}
 
 		if (g_nancy->getGameType() >= kGameTypeNancy15) {
-			// Nancy15 added two more characters. Their glyphs are only present in a
-			// few of the fonts, and it is not yet known which characters they are
-			stream.skip(4);
+			// Nancy15 added two more characters. Their glyphs are only present in a few of the fonts
+			_caretOffset					= stream.readUint16LE();
+			_atSignOffset					= stream.readUint16LE();
 
 			numCharacters = 117;
 		}
@@ -173,15 +178,63 @@ void Font::read(Common::SeekableReadStream &stream) {
 	assert(_textboxData);
 }
 
+void Font::readSystemFont(Common::SeekableReadStream &stream, bool bold) {
+	const int32 kBoldExtraWeight = 300;
+
+	Common::String name;
+	Common::String faceName;
+	readFilename(stream, name);
+	readFilename(stream, faceName);
+	int32 height = stream.readSint32LE();
+	int32 weight = stream.readSint32LE();
+
+	if (bold) {
+		name += "_Bold";
+		weight += kBoldExtraWeight;
+	}
+
+	setSystemFont(name, faceName, height, weight);
+}
+
+void Font::setSystemFont(const Common::String &name, const Common::String &faceName, int32 height, int32 weight) {
+	_description = name;
+
+	// None of the Windows fonts the game asks for (Tahoma, Arial, Lucida Handwriting)
+	// ship with ScummVM, so they all get replaced with the same sans-serif font
+#ifdef USE_FREETYPE2
+	const int32 kBoldWeight = 700;
+	const char *substitute = weight >= kBoldWeight ? "LiberationSans-Bold.ttf" : "LiberationSans-Regular.ttf";
+	_systemFont.reset(Graphics::loadTTFFontFromArchive(substitute, height, Graphics::kTTFSizeModeCell), DisposeAfterUse::YES);
+#endif
+
+	if (!_systemFont) {
+		warning("Could not load a substitute for font %s (%s, height %d, weight %d)", _description.c_str(), faceName.c_str(), height, weight);
+		_systemFont.reset(FontMan.getFontByUsage(Graphics::FontManager::kBigGUIFont), DisposeAfterUse::NO);
+	}
+}
+
 int Font::getCharWidth(uint32 chr) const {
+	if (_systemFont) {
+		return _systemFont->getCharWidth(chr);
+	}
+
 	return getCharacterSourceRect(chr).width() + _charSpace;
 }
 
 int Font::getLineHeight() const {
+	if (_systemFont) {
+		return _systemFont->getFontHeight();
+	}
+
 	return _characterRects.empty() ? getFontHeight() : _characterRects[0].height();
 }
 
 void Font::drawChar(Graphics::Surface *dst, uint32 chr, int x, int y, uint32 color) const {
+	if (_systemFont) {
+		_systemFont->drawChar(dst, chr, x, y, g_nancy->_graphics->getFontColor(color, dst->format));
+		return;
+	}
+
 	Common::Rect srcRect = getCharacterSourceRect(chr);
 	if (color == 0) {
 		srcRect.translate(_color0CoordsOffset.x, _color0CoordsOffset.y);
@@ -207,6 +260,10 @@ void Font::drawChar(Graphics::Surface *dst, uint32 chr, int x, int y, uint32 col
 }
 
 uint32 Font::getColorPixel(uint color) const {
+	if (_systemFont) {
+		return g_nancy->_graphics->getFontColor(color, g_nancy->_graphics->getInputPixelFormat());
+	}
+
 	// The glyphs are pre-colored in the atlas (two color variants selected by
 	// the color-coordinate offsets, mirroring drawChar). Scan a solid glyph for
 	// the first non-transparent pixel to recover the color an underline should
@@ -246,11 +303,31 @@ void Font::wordWrap(const Common::String &str, int maxWidth, Common::Array<Commo
 
 		temp += *c;
 		int size = getStringWidth(temp) + (lines.size() == 0 ? initWidth : 0);
-		if (size >= maxWidth) {
-			do {
+		if (size > maxWidth) {
+			// Roll back to the previous space so the wrap falls on a word
+			// boundary. The character that overflowed is dropped from temp
+			// and `c` is rewound so the outer ++c re-reads it on the next
+			// line.
+			temp.deleteLastChar();
+			--c;
+			int rewound = 1;
+			while (temp.size() && temp.lastChar() != ' ') {
 				temp.deleteLastChar();
 				--c;
-			} while (temp.size() && temp.lastChar() != ' ');
+				++rewound;
+			}
+
+			if (temp.empty()) {
+				// Word longer than the line width — break at the character
+				// before the overflow so we make forward progress instead
+				// of looping forever on the same char.
+				for (int i = 0; i < rewound; ++i) {
+					++c;
+					temp += *c;
+				}
+				temp.deleteLastChar();
+				--c;
+			}
 
 			lines.push_back(temp);
 			temp.clear();
@@ -390,9 +467,15 @@ Common::Rect Font::getCharacterSourceRect(char chr) const {
 			case '\x80':
 				offset = _euroOffset;
 				break;
-			// TODO: _uppercaseAWithDotOffset
-			// TODO: _aWithDotOffset
-			// TODO: _oeLigatureOffset
+			case '\xc5':
+				offset = _uppercaseAWithDotOffset;
+				break;
+			case '\xe5':
+				offset = _aWithDotOffset;
+				break;
+			case '\x9c':
+				offset = _oeLigatureOffset;
+				break;
 			default:
 				offset = -1;
 				break;
@@ -482,6 +565,13 @@ Common::Rect Font::getCharacterSourceRect(char chr) const {
 			break;
 		case '}':
 			offset = _rightCurlyBracketOffset;
+			break;
+		// ASCII punctuation whose glyphs were added in nancy15
+		case '^':
+			offset = _caretOffset;
+			break;
+		case '@':
+			offset = _atSignOffset;
 			break;
 		default:
 			offset = -1;

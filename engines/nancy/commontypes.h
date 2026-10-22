@@ -49,6 +49,7 @@ static const int8 kFlagNoLabel						= -1;
 static const int8 kEvNoEvent						= -1;
 static const int8 kFrNoFrame						= -1;
 static const uint16 kNoScene						= 9999;
+static const uint16 kNoSceneNancy17					= 0x7fff;	// what the Nancy17 data has in its place
 
 // Nancy15 alternates between three protagonists (Nancy and the Hardy boys
 // Frank and Joe), each of whom keeps their own UI and journal. The two
@@ -75,6 +76,12 @@ static const byte kInvItemUseThenLose				= 0;
 static const byte kInvItemKeepAlways				= 1;
 static const byte kInvItemReturn					= 2;
 static const byte kInvItemNewSceneView				= 3;
+
+// Nancy15 EnableDisableInventory records can name a whole group of items
+// instead of a single one
+static const uint16 kInvItemGroupAll				= 100;
+static const uint16 kInvItemGroupViewable			= 101;
+static const uint16 kInvItemGroupPortable			= 102;
 
 // Inventory item sound override commands
 static const byte kInvSoundOverrideCommandNoSound	= 0;
@@ -223,9 +230,12 @@ struct FrameBlitDescription {
 	void readData(Common::SeekableReadStream &stream, bool longFormat = false);
 };
 
-// Describes 10 event flag changes to be executed when an action is triggered
+// Describes event flag changes to be executed when an action is triggered.
+// There are always 10, except in Nancy15+ event flag records, which list any number.
 struct MultiEventFlagDescription {
-	FlagDescription descs[10];
+	MultiEventFlagDescription() : descs(10) {}
+
+	Common::Array<FlagDescription> descs;
 
 	void readData(Common::SeekableReadStream &stream);
 	void execute();
@@ -318,6 +328,11 @@ struct RandomSoundBlock {
 	int16 volume = 0;
 
 	void readData(Common::SeekableReadStream &stream);
+
+	// Plays one of the sounds, picked at random, and shows its caption, looked up by the
+	// sound's name, first in AUTOTEXT, then in CONVO. Returns the sound's description,
+	// which is left as "NO SOUND" when there is nothing to play.
+	SoundDescription play() const;
 };
 
 // Structs inside nancy.dat, which contains all the data that was
@@ -424,7 +439,7 @@ struct UIButtonRecord {
 	uint32 hoverCursorFlag = 0; // swap cursor sprite on hover when set
 	uint32 secondaryStateField = 0;
 	uint32 initialState = 0; // 0=idle, 1=hover, 2=pressed, 3/4=disabled
-	uint32 reservedField = 0;
+	uint32 pressedDuration = 0; // milliseconds the pressed sprite stays up after a click
 	SoundDescription clickSound;
 };
 

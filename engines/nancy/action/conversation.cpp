@@ -37,6 +37,7 @@
 #include "engines/nancy/action/secondarymovie.h"
 
 #include "engines/nancy/state/scene.h"
+#include "engines/nancy/ui/ndui/manager.h"
 
 namespace Nancy {
 namespace Action {
@@ -54,6 +55,12 @@ ConversationSound::ConversationSound() :
 ConversationSound::~ConversationSound() {
 	if (NancySceneState.getActiveConversation() == this) {
 		NancySceneState.setActiveConversation(nullptr);
+	}
+
+	// A line that never got to its end still closes the dialog it opened, e.g. the
+	// one of Nancy16 scene 1875, which changes the scene as soon as it starts
+	if (_isDialogOpen && NancySceneState.getNDUI()) {
+		NancySceneState.getNDUI()->endConversation();
 	}
 }
 
@@ -180,13 +187,18 @@ static Common::String resolveConversationText(const Common::String &key) {
 }
 
 void ConversationSound::readDataNancy13(Common::SeekableReadStream &stream) {
-	readFilename(stream, _sound.name);
+	// Nancy17 always lists the sound files of the line after their count
+	const bool hasSoundList = g_nancy->getGameType() >= kGameTypeNancy17;
+	if (!hasSoundList) {
+		readFilename(stream, _sound.name);
+	}
+
 	_sound.channelID = 12;	// hardcoded, as in the terse variants
 	_sound.numLoops = 1;
 
 	// A sound name of "CONCAT" (Nancy14+) means the line is split across several
 	// sound files, which follow after their count. The original allows 5 at most.
-	if (_sound.name.equalsIgnoreCase("CONCAT")) {
+	if (hasSoundList || _sound.name.equalsIgnoreCase("CONCAT")) {
 		const uint16 numSounds = stream.readUint16LE();
 		_concatSounds.resize(numSounds);
 		for (uint i = 0; i < numSounds; ++i) {
@@ -200,12 +212,29 @@ void ConversationSound::readDataNancy13(Common::SeekableReadStream &stream) {
 
 	readCelDataNancy13(stream);
 
-	_conditionalResponseCharacterID = stream.readByte();
-	_goodbyeResponseCharacterID = stream.readByte();
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		readFilename(stream, _conditionalResponseScene);
+		readFilename(stream, _goodbyeResponseScene);
+
+		if (_conditionalResponseScene.equalsIgnoreCase("NO_INFOCHECK")) {
+			_conditionalResponseScene.clear();
+		}
+
+		if (_goodbyeResponseScene.equalsIgnoreCase("NO_BYE")) {
+			_goodbyeResponseScene.clear();
+		}
+	} else {
+		_conditionalResponseCharacterID = stream.readByte();
+		_goodbyeResponseCharacterID = stream.readByte();
+	}
 
 	_sceneChange.sceneID = stream.readUint16LE();
 	_sceneChange.frameID = stream.readUint16LE();
 	_sceneChange.continueSceneSound = kContinueSceneSound;
+
+	if (_sceneChange.sceneID == kNoSceneNancy17 && g_nancy->getGameType() >= kGameTypeNancy17) {
+		_sceneChange.sceneID = kNoScene;
+	}
 
 	// Caption and response texts are external, keyed by sound name.
 	// Each part of a concatenated line has its own caption; they make up one
@@ -214,7 +243,14 @@ void ConversationSound::readDataNancy13(Common::SeekableReadStream &stream) {
 		_text = resolveConversationText(_sound.name);
 	} else {
 		for (uint i = 0; i < _concatSounds.size(); ++i) {
-			_text += resolveConversationText(_concatSounds[i]);
+			Common::String part = resolveConversationText(_concatSounds[i]);
+
+			// Nancy16 starts every part on a line of its own
+			if (g_nancy->getGameType() >= kGameTypeNancy16 && !part.empty() && !_text.empty()) {
+				_text += "<n>";
+			}
+
+			_text += part;
 		}
 	}
 
@@ -342,7 +378,10 @@ void ConversationSound::execute() {
 	case kRun:
 		if (!_hasDrawnTextbox) {
 			_hasDrawnTextbox = true;
-			if (g_nancy->getGameType() >= kGameTypeNancy10) {
+			UI::NDUI::Manager *ndui = NancySceneState.getNDUI();
+			if (ndui) {
+				// The Nancy16 UI shows the line and the responses together, below
+			} else if (g_nancy->getGameType() >= kGameTypeNancy10) {
 				NancySceneState.getConversationPopup().open();
 
 				if (ConfMan.getBool("subtitles")) {
@@ -398,11 +437,11 @@ void ConversationSound::execute() {
 			uint numRegularResponses = _responses.size();
 
 			// Add responses when conditions have been satisfied
-			if (_conditionalResponseCharacterID != _noResponse) {
+			if (_conditionalResponseCharacterID != _noResponse || !_conditionalResponseScene.empty()) {
 				addConditionalDialogue();
 			}
 
-			if (_goodbyeResponseCharacterID != _noResponse) {
+			if (_goodbyeResponseCharacterID != _noResponse || !_goodbyeResponseScene.empty()) {
 				addGoodbye();
 			}
 
@@ -411,17 +450,25 @@ void ConversationSound::execute() {
 				responsesToAdd.push_back(i);
 			}
 
-			if (g_nancy->getGameType() >= kGameTypeNancy10) {
+			if (!ndui && g_nancy->getGameType() >= kGameTypeNancy10) {
 				NancySceneState.getConversationPopup().setResponseStart();
 			}
 
+			Common::Array<Common::String> responseTexts;
 			for (uint i : responsesToAdd) {
-				if (g_nancy->getGameType() >= kGameTypeNancy10) {
+				if (ndui) {
+					responseTexts.push_back(_responses[i].text);
+				} else if (g_nancy->getGameType() >= kGameTypeNancy10) {
 					NancySceneState.getConversationPopup().addTextLine(_responses[i].text);
 				} else {
 					NancySceneState.getTextbox().addTextLine(_responses[i].text);
 				}
 				_responses[i].isOnScreen = true;
+			}
+
+			if (ndui) {
+				ndui->startConversation(ConfMan.getBool("subtitles") ? _text : Common::String(), responseTexts);
+				_isDialogOpen = true;
 			}
 		}
 
@@ -532,7 +579,10 @@ void ConversationSound::execute() {
 				}
 			}
 
-			if (g_nancy->getGameType() >= kGameTypeNancy10) {
+			if (NancySceneState.getNDUI()) {
+				NancySceneState.getNDUI()->endConversation();
+				_isDialogOpen = false;
+			} else if (g_nancy->getGameType() >= kGameTypeNancy10) {
 				NancySceneState.getConversationPopup().close();
 			}
 			
@@ -550,6 +600,7 @@ void ConversationSound::skipLine() {
 		// skipped makes the next execute() take the "line has finished" path.
 		g_nancy->_sound->stopSound(_sound);
 		_isSkipped = true;
+		skipVideo();
 		break;
 	case kActionTrigger:
 		// The player's chosen response is playing; cut that short instead
@@ -721,7 +772,8 @@ void ConversationSound::addGoodbye() {
 
 void ConversationSound::addConditionalDialogueNancy12() {
 	// Every action record in scene S<800 + charID> is one conditional response
-	Common::Path sceneName(Common::String::format("S%u", 800 + _conditionalResponseCharacterID));
+	Common::Path sceneName(_conditionalResponseScene.empty() ?
+		Common::String::format("S%u", 800 + _conditionalResponseCharacterID) : _conditionalResponseScene);
 	IFF *iff = g_nancy->_resource->loadIFF(sceneName);
 	if (!iff) {
 		warning("Could not load conditional dialogue scene %s", sceneName.toString().c_str());
@@ -770,7 +822,8 @@ void ConversationSound::addConditionalDialogueNancy12() {
 
 void ConversationSound::addGoodbyeNancy12() {
 	// Use the first satisfied goodbye record in scene S<900 + charID>
-	Common::Path sceneName(Common::String::format("S%u", 900 + _goodbyeResponseCharacterID));
+	Common::Path sceneName(_goodbyeResponseScene.empty() ?
+		Common::String::format("S%u", 900 + _goodbyeResponseCharacterID) : _goodbyeResponseScene);
 	IFF *iff = g_nancy->_resource->loadIFF(sceneName);
 	if (!iff) {
 		warning("Could not load goodbye scene %s", sceneName.toString().c_str());
@@ -1044,14 +1097,75 @@ void ConversationCel::init() {
 		} else break;
 	}
 
+	// A Nancy15 tree that isn't a loaded cel archive names a movie - the character's
+	// talking head, which is played into the tree's rect while the body keeps
+	// animating from cels.
+	_treeMovies.resize(_celRObjects.size());
+	_treeShownFrames.resize(_celRObjects.size(), kMovieFrameFreeRunning);
+	for (uint i = 0; i < _celRObjects.size(); ++i) {
+		// _treeRects is only filled in from Nancy15 on, so earlier games always
+		// take the cel path here
+		if (i >= _treeRects.size() || g_nancy->_resource->hasCifTree(_treeNames[i])) {
+			continue;
+		}
+
+		if (_treeRects[i].isEmpty()) {
+			warning("Cel tree '%s' is neither a loaded .cal nor a movie with a destination rect",
+				_treeNames[i].c_str());
+			continue;
+		}
+
+		Common::SharedPtr<MoviePlayer> movie(new MoviePlayer());
+		if (!movie->loadFile(Common::Path(_treeNames[i]))) {
+			warning("Couldn't load conversation movie '%s'", _treeNames[i].c_str());
+			continue;
+		}
+
+		_treeMovies[i] = movie;
+		_celRObjects[i].moveTo(_treeRects[i]);
+
+		if (isTreeFreeRunning(i)) {
+			movie->start();
+		} else {
+			showMovieFrame(i, _firstFrame);
+		}
+	}
+
 	registerGraphics();
+}
+
+bool ConversationCel::isTreeFreeRunning(uint tree) const {
+	if (tree >= _treeMovieFrames.size() || _firstFrame >= _treeMovieFrames[tree].size()) {
+		return true;
+	}
+
+	return _treeMovieFrames[tree][_firstFrame] == kMovieFrameFreeRunning;
+}
+
+void ConversationCel::showMovieFrame(uint tree, uint xsheetFrame) {
+	if (tree >= _treeMovieFrames.size() || xsheetFrame >= _treeMovieFrames[tree].size()) {
+		return;
+	}
+
+	const int32 movieFrame = _treeMovieFrames[tree][xsheetFrame];
+	if (movieFrame == kMovieFrameFreeRunning || movieFrame == _treeShownFrames[tree]) {
+		return;
+	}
+
+	const Graphics::Surface *frame = _treeMovies[tree]->decodeNextFrame(movieFrame);
+	if (frame) {
+		_celRObjects[tree].setMovieFrame(*frame);
+		_treeShownFrames[tree] = movieFrame;
+	}
 }
 
 void ConversationCel::registerGraphics() {
 	for (uint i = 0; i < _celRObjects.size(); ++i) {
 		_celRObjects[i].setZOrder(9 + _drawingOrder[i]);
 		_celRObjects[i].setVisible(true);
-		_celRObjects[i].setTransparent(true);
+		// Head movies carry an alpha plane, so they are composited by it rather
+		// than by the transparent color key the cels use.
+		_celRObjects[i].setTransparent(i >= _treeMovies.size() || !_treeMovies[i]);
 		_celRObjects[i].registerGraphics();
 	}
 
@@ -1061,8 +1175,24 @@ void ConversationCel::registerGraphics() {
 void ConversationCel::updateGraphics() {
 	uint32 currentTime = g_nancy->getTotalPlayTime();
 
+	for (uint i = 0; i < _treeMovies.size(); ++i) {
+		if (_treeMovies[i] && isTreeFreeRunning(i) && _treeMovies[i]->needsUpdate()) {
+			const Graphics::Surface *frame = _treeMovies[i]->decodeNextFrame();
+			if (frame) {
+				_celRObjects[i].setMovieFrame(*frame);
+			}
+		}
+	}
+
 	if (_state == kRun && currentTime > _nextFrameTime && _curFrame < MIN<uint>(_lastFrame + 1, _celNames[0].size())) {
 		for (uint i = 0; i < _celRObjects.size(); ++i) {
+			if (i < _treeMovies.size() && _treeMovies[i]) {
+				// Movie trees run on the movie's own clock, unless the XSheet
+				// picks their frames
+				showMovieFrame(i, _curFrame);
+				continue;
+			}
+
 			Cel &cel = loadCel(_celNames[i][_curFrame], _treeNames[i]);
 			if (_overrideTreeRects[i] == kCelOverrideTreeRectsOn) {
 				_celRObjects[i]._drawSurface.create(cel.surf, _overrideRectSrcs[i]);
@@ -1076,6 +1206,24 @@ void ConversationCel::updateGraphics() {
 		_nextFrameTime += _frameTime;
 		++_curFrame;
 	}
+}
+
+void ConversationCel::RenderedCel::setMovieFrame(const Graphics::Surface &frame) {
+	// Nancy17 movies are padded to a multiple of 16 pixels, by repeating their
+	// last row and column; the picture itself is the size of the tree's rect
+	const Common::Rect picture(MIN<int>(frame.w, _screenPosition.width()), MIN<int>(frame.h, _screenPosition.height()));
+	GraphicsManager::copyToManaged(frame.getSubArea(picture), _drawSurface);
+	_needsRedraw = true;
+}
+
+void ConversationCel::onPause(bool pause) {
+	for (uint i = 0; i < _treeMovies.size(); ++i) {
+		if (_treeMovies[i]) {
+			_treeMovies[i]->pauseVideo(pause);
+		}
+	}
+
+	RenderActionRecord::onPause(pause);
 }
 
 void ConversationCel::readData(Common::SeekableReadStream &stream) {
@@ -1169,6 +1317,23 @@ void ConversationCel::readXSheet(Common::SeekableReadStream &stream, const Commo
 		// Skip any unused tree-name slots so the frame time is read from its fixed
 		// offset regardless of numTrees.
 		xsheet->skip((kMaxTrees - numTrees) * kNameSize);
+
+		// Nancy15 inserted a destination rect per tree slot ahead of the frame time.
+		// It is only filled in for trees that name a movie instead of a cel archive.
+		if (g_nancy->getGameType() >= kGameTypeNancy15) {
+			readRectArray(*xsheet, _treeRects, kMaxTrees);
+		}
+
+		// Nancy17 leaves the right and bottom edge out of the rect
+		if (g_nancy->getGameType() >= kGameTypeNancy17) {
+			for (Common::Rect &rect : _treeRects) {
+				if (!rect.isEmpty()) {
+					--rect.right;
+					--rect.bottom;
+				}
+			}
+		}
+
 		_frameTime = xsheet->readUint32LE();
 	} else {
 		xsheet->skip(2);
@@ -1177,6 +1342,26 @@ void ConversationCel::readXSheet(Common::SeekableReadStream &stream, const Commo
 	}
 
 	_celNames.resize(numTrees, Common::Array<Common::Path>(numFrames));
+
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		// The frame records name a movie frame per tree slot instead of a cel
+		const uint kMaxTrees = 4;
+
+		_treeMovieFrames.resize(numTrees, Common::Array<int32>(numFrames));
+		for (uint i = 0; i < numFrames; ++i) {
+			for (uint j = 0; j < kMaxTrees; ++j) {
+				const int32 movieFrame = xsheet->readSint32LE();
+				if (j < numTrees) {
+					_treeMovieFrames[j][i] = movieFrame;
+				}
+			}
+			xsheet->skip(8);
+		}
+
+		delete xsheet;
+		return;
+	}
+
 	for (uint i = 0; i < numFrames; ++i) {
 		for (uint j = 0; j < numTrees; ++j) {
 			readFilename(*xsheet, _celNames[j][i]);
@@ -1189,6 +1374,33 @@ void ConversationCel::readXSheet(Common::SeekableReadStream &stream, const Commo
 
 bool ConversationCel::isVideoDonePlaying() {
 	return _curFrame >= MIN<uint>(_lastFrame, _celNames[0].size()) && _nextFrameTime <= g_nancy->getTotalPlayTime();
+}
+
+void ConversationCel::skipVideo() {
+	if (_celNames.empty() || _celNames[0].empty()) {
+		return;
+	}
+
+	// Jump to the last frame of the line; updateGraphics() draws it on its next
+	// pass and then has nothing left to play.
+	const uint lastFrame = MIN<uint>(_lastFrame, _celNames[0].size() - 1);
+	if (_curFrame <= lastFrame) {
+		_curFrame = lastFrame;
+		_nextFrameTime = 0;
+	}
+
+	// Movies on their own clock don't follow the frame counter, so park them
+	// on their last frame as well
+	for (uint i = 0; i < _treeMovies.size(); ++i) {
+		if (!_treeMovies[i] || !isTreeFreeRunning(i) || _treeMovies[i]->endOfVideo()) {
+			continue;
+		}
+
+		const Graphics::Surface *frame = _treeMovies[i]->decodeNextFrame(_treeMovies[i]->getFrameCount() - 1);
+		if (frame) {
+			_celRObjects[i].setMovieFrame(*frame);
+		}
+	}
 }
 
 ConversationCel::Cel &ConversationCel::loadCel(const Common::Path &name, const Common::String &treeName) {
@@ -1205,6 +1417,10 @@ ConversationCel::Cel &ConversationCel::loadCel(const Common::Path &name, const C
 bool ConversationCel::load() {
 	for (uint i = _curFrame; i < _celNames[0].size(); ++i) {
 		for (uint j = 0; j < _celRObjects.size(); ++j) {
+			if (j < _treeMovies.size() && _treeMovies[j]) {
+				continue;
+			}
+
 			if (!_celCache.contains(_celNames[j][i])) {
 				loadCel(_celNames[j][i], _treeNames[j]);
 				return false;

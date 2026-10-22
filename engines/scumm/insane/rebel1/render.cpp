@@ -630,10 +630,14 @@ void InsaneRebel1::procPostRendering(byte *renderBitmap, int32 codecparam, int32
 		shotOverlayHandled = _gameOp0BOverlayRenderedThisFrame;
 		drawGameOp0BTargetingAfterFetch = _gameOp0BOverlayRenderedThisFrame;
 	} else if (onFootMode) {
-		if (_currentLevel == 8 && onFootAimMode && !onFootSequenceMode && _killCount > 0) {
-			_fireCooldown = _playerFired ? 1 : 0;
-			_vm->_smushVideoShouldFinish = true;
-			return;
+		if (_currentLevel == 8 && onFootAimMode && !onFootSequenceMode) {
+			if (_level9PathLoopOffset >= 0) {
+				updateLevel9PathSelector(curFrame, maxFrame);
+			} else if (_killCount > 0) {
+				_fireCooldown = _playerFired ? 1 : 0;
+				_vm->_smushVideoShouldFinish = true;
+				return;
+			}
 		}
 
 		if (onFootSequenceMode)
@@ -897,6 +901,25 @@ void InsaneRebel1::renderTargeting(byte *dst, int pitch, int width, int height) 
 	_prevTargetProx = _targetProximity;
 	_targetProximity = 0;
 	_lastHitTarget = 0;
+}
+
+void InsaneRebel1::updateLevel9PathSelector(int32 curFrame, int32 maxFrame) {
+	if (_level9SelectedPath >= 0)
+		return;
+
+	if (_killCount > 0) {
+		// The DOS L9 loop reveals object 8 for the left tunnel (target 3),
+		// or object 7 for the right tunnel (target 4), then hides both targets.
+		// Remember the target hit before further mouse movement can change it.
+		_level9SelectedPath = isFrameObjectPrimarySet(4) ? 1 : 0;
+		clearFrameObjectPrimaryBits(0, _level9SelectedPath == 0 ? 0x01 : 0x02);
+		_frameObjectState[0] |= 0x30;
+		_gameplayFlags75fe |= 4;
+	} else if (maxFrame >= 9 && curFrame >= maxFrame + 1 - 10) {
+		// The original loops ten frames before the end until a path is chosen.
+		// Keep the stored background and input state when seeking back to frame 1.
+		_player->seekSan(nullptr, _level9PathLoopOffset - 8, 1);
+	}
 }
 
 void InsaneRebel1::handleLevel14Play2BSplice(int32 curFrame, int32 maxFrame) {
@@ -1420,7 +1443,7 @@ static const char *const kChapterCompletePasswords[] = {
 };
 
 const char *InsaneRebel1::getChapterCompletePassword(int passwordIndex) const {
-	if (passwordIndex < 1 || passwordIndex > (int)ARRAYSIZE(kChapterCompletePasswords))
+	if (!_release.passcodes || passwordIndex < 1 || passwordIndex > (int)ARRAYSIZE(kChapterCompletePasswords))
 		return nullptr;
 
 	return kChapterCompletePasswords[passwordIndex - 1];
@@ -1779,11 +1802,6 @@ void InsaneRebel1::renderHUD(byte *dst, int pitch, int width, int height) {
 	_hudDirtyFlag = 0xFF;
 }
 
-// Each route has up to 3 attack windows, indexed by ANM-local frame. -2 means disabled.
-const int16 InsaneRebel1::kWalkerAttackWindow1[3] = { 2588, 2323, 877 };
-const int16 InsaneRebel1::kWalkerAttackWindow2[3] = { 1709, 1444, -2 };
-const int16 InsaneRebel1::kWalkerAttackWindow3[3] = { 262, -2, -2 };
-
 void InsaneRebel1::updateLevel8WalkerState() {
 	if (_walkerHealth >= 11) {
 		_walkerHealth = (int16)(100 - (_killCount + (_killCount >> 2)));
@@ -1799,16 +1817,12 @@ void InsaneRebel1::updateLevel8WalkerState() {
 	int route = CLIP(_levelRouteIndex, 0, 2);
 	uint16 fc = (uint16)_currentSmushFrame;
 
-	const int16 *windows[3] = {
-		&kWalkerAttackWindow1[route],
-		&kWalkerAttackWindow2[route],
-		&kWalkerAttackWindow3[route]
-	};
+	const int16 (*windows)[3] = _release.walker->attackWindows;
 	int16 frameNum = (int16)fc;
 
 	bool inWindow = false;
 	for (int w = 0; w < 3; w++) {
-		int16 windowEnd = *windows[w];
+		int16 windowEnd = windows[w][route];
 		if (windowEnd < 0) continue;
 		if (frameNum > windowEnd - 100 && frameNum <= windowEnd) {
 			inWindow = true;
@@ -1824,7 +1838,7 @@ void InsaneRebel1::updateLevel8WalkerState() {
 
 		bool inDirectionalPhase = false;
 		for (int w = 0; w < 3; w++) {
-			int16 windowEnd = *windows[w];
+			int16 windowEnd = windows[w][route];
 			if (windowEnd < 0) continue;
 			if (frameNum > windowEnd - 0x32 && frameNum <= windowEnd) {
 				inDirectionalPhase = true;
@@ -1843,7 +1857,7 @@ void InsaneRebel1::updateLevel8WalkerState() {
 	}
 
 	for (int w = 0; w < 3; w++) {
-		int16 windowEnd = *windows[w];
+		int16 windowEnd = windows[w][route];
 		if (windowEnd < 0) continue;
 		if (fc != (uint16)windowEnd) continue;
 
@@ -1863,9 +1877,10 @@ void InsaneRebel1::updateLevel8WalkerState() {
 			_pendingRouteIndex = newRoute;
 			// The original makes this choice in the post-frame callback, after
 			// that frame's splice check. It renders one more source frame before
-			// switching, advancing the destination's frame-1 start by that frame.
+			// switching. The early demo requests destination frame 0, retail 1;
+			// both starts advance by the extra source frame.
 			_pendingRouteCutoverFrame = _currentSmushFrame + 1;
-			_pendingRouteStartFrame = 2;
+			_pendingRouteStartFrame = _release.walker->routeStartFrame;
 			debugC(DEBUG_INSANE, "L8 branch: route=%d -> %d at localFrame=%u shipX=%d resumeLocalFrame=%d cutoverFrame=%d",
 				route, newRoute, (unsigned)fc, _shipPosX,
 				(int)_pendingRouteStartFrame, (int)_pendingRouteCutoverFrame);
@@ -1893,17 +1908,13 @@ void InsaneRebel1::renderLevel8Overlay(byte *dst, int pitch, int width, int heig
 	}
 
 	int route = CLIP(_levelRouteIndex, 0, 2);
-	const int16 *windows[3] = {
-		&kWalkerAttackWindow1[route],
-		&kWalkerAttackWindow2[route],
-		&kWalkerAttackWindow3[route]
-	};
+	const int16 (*windows)[3] = _release.walker->attackWindows;
 	int16 frameNum = (int16)(uint16)_currentSmushFrame;
 
 	bool inWindow = false;
 	bool inDirectionalPhase = false;
 	for (int w = 0; w < 3; w++) {
-		int16 windowEnd = *windows[w];
+		int16 windowEnd = windows[w][route];
 		if (windowEnd < 0) continue;
 		if (frameNum > windowEnd - 100 && frameNum <= windowEnd) {
 			inWindow = true;

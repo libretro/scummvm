@@ -30,8 +30,8 @@ namespace MADS {
 namespace Forest {
 
 int digi_val2;
-int digi_trigger_effect;
-bool digi_trigger_dialog = false;
+int digi_trigger_effect = -1;
+bool digi_trigger_dialog = true;
 bool digi_flag1, digi_flag2;
 
 DigiPlayer::DigiPlayer(Audio::Mixer *mixer) : _mixer(mixer) {
@@ -40,15 +40,29 @@ DigiPlayer::DigiPlayer(Audio::Mixer *mixer) : _mixer(mixer) {
 	_channels[2]._triggerId = 9;
 
 	digi_val2 = 0;
-	digi_trigger_effect = 0;
+	digi_trigger_effect = -1;
+	digi_trigger_dialog = true;
 	digi_flag1 = digi_flag2 = false;
 }
 
 void DigiPlayer::play(const char *name, int slot) {
-	stop(slot);
+	// Stop any previous sound on the channel without firing any end trigger
+	stopChannel(slot, false);
+
 	DigiChannel &c = _channels[slot - 1];
 	Audio::AudioStream *audioStream;
 	Common::SeekableReadStream *src;
+
+	// The original executable copies these one-shot globals into the
+	// channel's end-trigger flag when starting playback, then restores
+	// the globals to their enabled state for the next sound.
+	if (slot == 1) {
+		c._endTrigger = digi_trigger_dialog;
+		digi_trigger_dialog = true;
+	} else if (slot == 2) {
+		c._endTrigger = digi_trigger_effect != 0;
+		digi_trigger_effect = -1;
+	}
 
 	src = env_open(Common::String::format("*%s.rac", name).c_str());
 	if (src) {
@@ -77,6 +91,10 @@ void DigiPlayer::play(const char *name, int slot) {
 }
 
 void DigiPlayer::stop(int slot) {
+	stopChannel(slot, true);
+}
+
+void DigiPlayer::stopChannel(int slot, bool signalEnd) {
 	assert(slot >= 1 && slot <= MAX_DIGI_CHANNELS);
 	DigiChannel &c = _channels[slot - 1];
 
@@ -84,7 +102,7 @@ void DigiPlayer::stop(int slot) {
 		_mixer->stopHandle(c._soundHandle);
 		c._isPlaying = false;
 
-		if (c._endTrigger) {
+		if (signalEnd && c._endTrigger) {
 			kernel.trigger_setup_mode = KERNEL_TRIGGER_DAEMON;
 			kernel_timing_trigger(1, c._triggerId);
 		}

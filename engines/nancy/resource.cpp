@@ -23,6 +23,7 @@
 #include "common/config-manager.h"
 
 #include "image/bmp.h"
+#include "image/png.h"
 
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/resource.h"
@@ -162,6 +163,51 @@ bool ResourceManager::loadImage(const Common::Path &name, Graphics::ManagedSurfa
 		*outDest = info.dest;
 	}
 
+#ifdef USE_PNG
+	// Nancy18 stores its images as PNG files
+	if (g_nancy->getGameType() >= kGameTypeNancy18) {
+		Image::PNGDecoder pngDec;
+		if (!pngDec.loadStream(*stream)) {
+			warning("Couldn't decode PNG image '%s'", name.toString().c_str());
+			delete stream;
+			return false;
+		}
+
+		Graphics::Surface *converted = pngDec.getSurface()->convertTo(g_nancy->_graphics->getInputPixelFormat(32));
+		GraphicsManager::copyToManaged(*converted, surf);
+		converted->free();
+		delete converted;
+		delete stream;
+		return true;
+	}
+#endif
+
+	// Nancy16 stores its images as uncompressed, top-down TGA files. Only the header
+	// needs skipping; the image's size and depth come from the CIF info.
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		byte idLength = stream->readByte();
+		byte colorMapType = stream->readByte();
+		byte imageType = stream->readByte();
+		stream->skip(9); // color map spec, origin
+		uint16 width = stream->readUint16LE();
+		uint16 height = stream->readUint16LE();
+		byte bpp = stream->readByte();
+		byte descriptor = stream->readByte();
+
+		const byte kTGATrueColor = 2;
+		const byte kTGATopDown = 0x20;
+
+		if (colorMapType != 0 || imageType != kTGATrueColor || !(descriptor & kTGATopDown) ||
+				bpp != info.depth || width != info.width || height != info.height) {
+			warning("Image '%s' is an unsupported TGA (type %u, color map %u, %u bpp, descriptor 0x%02x, %ux%u)",
+				name.toString().c_str(), imageType, colorMapType, bpp, descriptor, width, height);
+			delete stream;
+			return false;
+		}
+
+		stream->skip(idLength);
+	}
+
 	// Finally, copy the data into the surface
 	uint32 bufSize = info.pitch * info.height;
 	byte *buf = new byte[bufSize];
@@ -174,10 +220,29 @@ bool ResourceManager::loadImage(const Common::Path &name, Graphics::ManagedSurfa
 	}
 	#endif
 
-	GraphicsManager::copyToManaged(buf, surf, info.width, info.height, g_nancy->_graphics->getInputPixelFormat(info.depth));
+	if (info.depth == 24 && surf.format.bpp() == 32) {
+		// Nancy13+ uses 32bpp surfaces for 24bpp images, so we need to convert the data
+		// to 32bpp before copying it into the surface
+		uint32 newBufSize = info.width * info.height * 4;
+		byte *newBuf = new byte[newBufSize];
+		for (uint y = 0; y < info.height; ++y) {
+			for (uint x = 0; x < info.width; ++x) {
+				uint32 srcIndex = y * info.pitch + x * 3;
+				uint32 destIndex = y * info.width * 4 + x * 4;
+				newBuf[destIndex + 0] = buf[srcIndex + 0];
+				newBuf[destIndex + 1] = buf[srcIndex + 1];
+				newBuf[destIndex + 2] = buf[srcIndex + 2];
+				newBuf[destIndex + 3] = 0xFF; // alpha channel
+			}
+		}
+		delete[] buf;
+		buf = newBuf;
+		bufSize = newBufSize;
+		info.pitch = info.width * 4;
+		info.depth = 32;
+	}
 
-	if (info.depth == 24)
-		surf.convertToInPlace(g_nancy->_graphics->getInputPixelFormat(32));
+	GraphicsManager::copyToManaged(buf, surf, info.width, info.height, g_nancy->_graphics->getInputPixelFormat(info.depth));
 
 	delete[] buf;
 	delete stream;
@@ -210,13 +275,26 @@ IFF *ResourceManager::loadIFF(const Common::Path &name) {
 	return nullptr;
 }
 
+Common::SeekableReadStream *ResourceManager::loadScript(const Common::Path &name) {
+	Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(name.append(".lua"));
+	if (stream) {
+		return stream;
+	}
+
+	stream = SearchMan.createReadStreamForMember(name.append(".cif"));
+	if (stream) {
+		CifFile cifFile(stream, name); // cifFile takes ownership of the current stream
+		return cifFile.createReadStream();
+	}
+
+	return SearchMan.createReadStreamForMember(Common::Path(name));
+}
+
 bool ResourceManager::readCifTree(const Common::String &name, const Common::String &ext, int priority) {
 	// Nancy15+ asks for a player character's tree again on every switch back
 	// to that character, so make sure each tree is only ever added once
-	for (const Common::String &loaded : _cifTreeNames) {
-		if (loaded.equalsIgnoreCase(name)) {
-			return true;
-		}
+	if (hasCifTree(name)) {
+		return true;
 	}
 
 	CifTree *tree = CifTree::makeCifTreeArchive(name, ext);
@@ -232,6 +310,16 @@ bool ResourceManager::readCifTree(const Common::String &name, const Common::Stri
 	SearchMan.add(treePrefix + upper, tree, priority, true);
 	_cifTreeNames.push_back(name);
 	return true;
+}
+
+bool ResourceManager::hasCifTree(const Common::String &name) const {
+	for (const Common::String &loaded : _cifTreeNames) {
+		if (loaded.equalsIgnoreCase(name)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void ResourceManager::setCifTreePriority(const Common::String &name, int priority) {
@@ -475,22 +563,29 @@ bool ResourceManager::exportCifTree(const Common::String &treeName, const Common
 		file.addInfo(info);
 	}
 
-	uint16 dataOffset = headerSize + file.writeFileMapSize() * infoSize; // Initial offset after header/infos
-	for (uint i = 0; i < file.writeFileMapSize(); ++i) {
-		file.setDataOffset(i, dataOffset);
-		for (uint j = 0; j < i; ++j) {
-			file.setDataOffset(i, file.getDataOffset(i) + resStreams[j]->size()); // Final offset, following raw data of previous files
-		}
-	}
-
 	Common::DumpFile dump;
 	dump.open(Common::Path(treeName + ".dat"));
 
-	Common::Serializer ser(nullptr, &dump);
-	file.sync(ser);
+	if (g_nancy->getGameType() >= kGameTypeNancy18) {
+		file.write(dump, resStreams);
+	} else {
+		uint16 dataOffset = headerSize + file.writeFileMapSize() * infoSize; // Initial offset after header/infos
+		for (uint i = 0; i < file.writeFileMapSize(); ++i) {
+			file.setDataOffset(i, dataOffset);
+			for (uint j = 0; j < i; ++j) {
+				file.setDataOffset(i, file.getDataOffset(i) + resStreams[j]->size()); // Final offset, following raw data of previous files
+			}
+		}
+
+		Common::Serializer ser(nullptr, &dump);
+		file.sync(ser);
+
+		for (uint i = 0; i < resStreams.size(); ++i) {
+			dump.writeStream(resStreams[i]);
+		}
+	}
 
 	for (uint i = 0; i < resStreams.size(); ++i) {
-		dump.writeStream(resStreams[i]);
 		delete resStreams[i];
 	}
 

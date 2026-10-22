@@ -30,7 +30,42 @@
 
 namespace Nancy {
 
+class IFF;
 class RenderObject;
+struct ScriptBootData;
+
+// Packed 0xAARRGGBB colors, independent of the byte order in memory
+extern const Graphics::PixelFormat kARGBFormat;
+
+// An ARGB color, as a pixel of the given format
+uint32 argbToColor(const Graphics::PixelFormat &format, uint32 argb);
+
+// Draws a pixel with straight alpha over what the surface already holds
+void blendPixel(Graphics::ManagedSurface &surface, int x, int y, byte a, byte r, byte g, byte b);
+
+// Nancy16 blends its colors as ARGB channels from 0 to 1, in that order. These convert
+// between a channel and the byte it gets drawn with, and between channels and colors.
+byte colorChannelToByte(float channel);
+void argbToChannels(uint32 argb, float *channels);
+uint32 channelsToArgb(const float *channels);
+
+// How much of the way toward a new color gets covered in the given time. Each 1/30
+// of a second, the color keeps the given rate of its distance to the target.
+float getBlendAmount(float seconds, float rate);
+
+// Moves an ARGB color toward the target; returns true when its bytes changed
+bool blendColor(float *current, uint32 target, float amount);
+
+// Nancy16+ font colors have one color for each state of a UI control
+enum FontColorState {
+	kFontColorNormal		= 0,
+	kFontColorDisabled		= 1,
+	kFontColorHidden		= 2,
+	kFontColorFocus			= 3,
+	kFontColorMouseOver		= 4,
+	kFontColorPressed		= 5,
+	kNumFontColorStates		= 6
+};
 
 // Graphics class that handles multilayered surface rendering with minimal redraw
 class GraphicsManager {
@@ -41,6 +76,8 @@ public:
 	void draw(bool updateScreen = true);
 
 	void loadFonts(Common::SeekableReadStream *chunkStream);
+	void loadSystemFonts(const IFF &fontIFF);
+	void loadSystemFonts(const ScriptBootData &boot);	// Nancy19+
 
 	void addObject(RenderObject *object);
 	void removeObject(RenderObject *object);
@@ -52,7 +89,20 @@ public:
 	void suppressNextDraw();
 
 	const Font *getFont(uint id) const { return id < _fonts.size() ? &_fonts[id] : nullptr; }
+	const Font *getFont(const Common::String &name) const;
+	int getFontID(const Common::String &name) const;
+	uint32 getFontColor(uint id, const Graphics::PixelFormat &format, FontColorState state = kFontColorNormal) const;
 	const Graphics::Screen *getScreen() { return &_screen; }
+	static Common::Rect getScreenBounds();
+
+	// Nancy16 draws the game at a lower resolution than the screen's, and scales it up.
+	// Objects and the mouse are in game coordinates, unless they are at the screen's
+	// resolution. For the other games the two are the same.
+	bool isGameScaled() const { return !_gameSurface.empty(); }
+	Common::Rect getGameBounds() const;
+	Common::Point screenToGame(const Common::Point &pos) const;
+	Common::Point gameToScreen(const Common::Point &pos) const;
+	Common::Rect gameToScreen(const Common::Rect &rect) const;
 
 	const Graphics::PixelFormat &getInputPixelFormat(uint bpp = 0);
 	const Graphics::PixelFormat &getScreenPixelFormat();
@@ -81,7 +131,18 @@ public:
 
 
 private:
-	void blitToScreen(const RenderObject &src, Common::Rect dest);
+	enum Layer {
+		kLayerAll,		// the game isn't scaled
+		kLayerGame,
+		kLayerNative
+	};
+
+	void addDirtyRect(const RenderObject &object, const Common::Rect &rect);
+	bool isInLayer(const RenderObject &object, Layer layer) const;
+	static void filterDirtyRects(Common::List<Common::Rect> &rects);
+	void drawObjects(Graphics::ManagedSurface &target, const Common::List<Common::Rect> &rects, Layer layer);
+	void blitObject(Graphics::ManagedSurface &target, const RenderObject &src, Common::Rect dest);
+	void blitGameToScreen(Common::Rect screenRect);
 
 	static int objectComparator(const void *a, const void *b);
 
@@ -94,8 +155,16 @@ private:
 
 	Graphics::Screen _screen;
 	Common::Array<Font> _fonts;
+	struct FontColor {
+		uint32 colors[kNumFontColorStates] = {};
+	};
 
-	Common::List<Common::Rect> _dirtyRects;
+	Common::Array<FontColor> _fontColors;
+
+	Graphics::ManagedSurface _gameSurface;		// empty unless the game is scaled
+
+	Common::List<Common::Rect> _dirtyRects;			// in game coordinates
+	Common::List<Common::Rect> _nativeDirtyRects;	// in screen coordinates
 
 	Common::HashMap<uint16, Graphics::ManagedSurface> _autotextSurfaces;
 	Common::HashMap<uint16, Common::Rect> _autotextSurfaceBounds;

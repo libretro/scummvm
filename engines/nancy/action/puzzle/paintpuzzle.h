@@ -23,7 +23,8 @@
 #define NANCY_ACTION_PAINTPUZZLE_H
 
 #include "engines/nancy/commontypes.h"
-#include "engines/nancy/action/actionrecord.h"
+#include "engines/nancy/util.h"
+#include "engines/nancy/action/puzzlerecord.h"
 
 namespace Nancy {
 namespace Action {
@@ -32,9 +33,16 @@ namespace Action {
 // palette (Vincent's brush) and clicks the regions of a picture to fill them.
 // Each region has a target color; the puzzle is solved once every region holds
 // its target color. A filled region is its shape recolored to the chosen color.
-class PaintPuzzle : public RenderActionRecord {
+// Nancy15 adds per-color objects (paint jars) drawn at the swatches, per-color
+// event flags, order-independent solutions and single-paint regions.
+// Nancy18 uses it for a mosaic of gems: a region is a plain rectangle that gets
+// the sprite of its color, and the number of correct and of empty regions is
+// kept in the value table.
+class PaintPuzzle : public PuzzleRecord {
 public:
-	PaintPuzzle() : RenderActionRecord(7) {}
+	static const int16 kNoTableValueIndex = -4;
+
+	PaintPuzzle() : PuzzleRecord(7) {}
 	virtual ~PaintPuzzle() {}
 
 	void init() override;
@@ -45,16 +53,24 @@ public:
 
 	bool isViewportRelative() const override { return true; }
 
+	// The painted picture stays on screen in the NO_ART_SCENE conversation
+	// that follows the puzzle
+	bool survivesSceneChange(bool nextSceneIsNoArt) const override { return nextSceneIsNoArt; }
+
 protected:
 	Common::String getRecordTypeName() const override { return "PaintPuzzle"; }
 
-	// A palette color: its RGB, the clickable swatch, and its fill sprite.
+	// A palette color: its RGB, the clickable swatch, its brush sprite, and
+	// (Nancy15) the object sprite drawn at the swatch plus a flag set while the
+	// color is used on any region.
 	struct PaintColor {
 		byte r = 0;
 		byte g = 0;
 		byte b = 0;
 		Common::Rect swatchRect;
 		Common::Rect fillRect;
+		Common::Rect objectRect;
+		int16 flagLabel = -1;
 	};
 
 	// A fillable region of the picture: an overlay shape drawn at a position,
@@ -73,42 +89,53 @@ protected:
 	// 255/0 from the color key for alpha-less images. 0 means outside the shape.
 	byte shapeAlpha(const Graphics::ManagedSurface &img, int x, int y) const;
 	void paintRegion(uint regionIndex, int colorIndex);
+	void dropColor();
 	void drawRegion(uint regionIndex);
+	void drawSprite(const Graphics::ManagedSurface &img, const Common::Rect &src, const Common::Point &dest, const PaintColor *tint = nullptr);
+	void drawObjects();
 	void drawBrush();
+	void updateColorFlags();
 	void redraw();
 	bool isSolved() const;
-	void playSoundBlock(const RandomSoundBlock &block);
-	bool isSoundBlockPlaying(const RandomSoundBlock &block) const;
+
+	void readDataNancy18(Common::SeekableReadStream &stream);
+	void updateRegionCounts();
 
 	// -- File data --
-	Common::Path _imageName;		// 0x3d
+	Common::Path _objectsImageName;
 	uint16 _hoverCursorType = 0;	// 0x5e - raw Nancy14 cursor type, shown over a color swatch
+	int16 _heldCursorType = -1;		// Nancy18, shown while a color is held
 	Common::Point _offset;			// 0x60 (two int32) - brush sprite offset from the cursor
 	Common::Rect _canvasRect;		// 0x68
 
 	Common::Array<PaintColor> _colors;		// 0x78
 	Common::Array<PaintRegion> _regions;	// 0x94
 
+	bool _unorderedSolution = false;	// Region targets may be matched in any order
+	bool _paintOnce = false;			// A painted region can't be repainted
+	bool _hasRegionSprites = false;		// Nancy18: regions show the sprite of their color
+
+	// Nancy18: value table entries that get the number of unpainted regions,
+	// and of regions with the right color
+	int16 _unpaintedCountIndex = kNoTableValueIndex;
+	int16 _correctCountIndex = kNoTableValueIndex;
+
 	RandomSoundBlock _sounds[2];	// 0xa4/0xfa
 
-	SceneChangeWithFlag _solveScene;	// 0x1a6
-	RandomSoundBlock _solveSound;		// 0x150, plays before the solve scene change
+	RandomSoundBlock _solveSoundBlock;		// 0x150, plays before the solve scene change
 
-	// Give-up hotspot (count-prefixed 23-byte trailer): click to leave the puzzle.
-	Common::Rect _exitHotspot;
-	uint16 _exitCursorType = 0;
-	SceneChangeDescription _exitScene;
-	FlagDescription _exitFlag;
+	Common::Array<ExitHotspot> _exitHotspots;
 
 	// -- Runtime state --
-	Graphics::ManagedSurface _image;
+	Graphics::ManagedSurface _objectsImage;
 	Common::Array<Graphics::ManagedSurface> _regionImages;
 	int _heldColor = -1;
 	Common::Point _brushPos;
 	int _hoverRegion = -1;
 	int _hoverColor = -1;
 	bool _solved = false;
-	bool _exitRequested = false;
+	bool _solveHandled = false;
+	int _takenExit = -1;
 };
 
 } // End of namespace Action

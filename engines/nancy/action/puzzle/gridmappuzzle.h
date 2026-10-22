@@ -22,8 +22,8 @@
 #ifndef NANCY_ACTION_GRIDMAPPUZZLE_H
 #define NANCY_ACTION_GRIDMAPPUZZLE_H
 
-#include "engines/nancy/action/actionrecord.h"
-#include "engines/nancy/misc/mousefollow.h"
+#include "engines/nancy/action/puzzlerecord.h"
+#include "engines/nancy/action/mousefollow.h"
 #include "engines/nancy/commontypes.h"
 
 namespace Nancy {
@@ -34,9 +34,9 @@ namespace Action {
 // either. Wins when the items-grid layout matches any of the solutions stored
 // in the action record.
 // Called from scene 6240 in Nancy10.
-class GridMapPuzzle : public RenderActionRecord {
+class GridMapPuzzle : public PuzzleRecord {
 public:
-	GridMapPuzzle() : RenderActionRecord(7) {}
+	GridMapPuzzle() : PuzzleRecord(7) {}
 	virtual ~GridMapPuzzle() {}
 
 	void init() override;
@@ -109,14 +109,6 @@ protected:
 
 	SoundDescription _pickupSound;
 	SoundDescription _placeSound;
-	SoundDescription _winSound;
-
-	SceneChangeDescription _winScene;
-	FlagDescription        _winFlag;
-	SceneChangeDescription _cancelScene;
-	FlagDescription        _cancelFlag;
-
-	Common::Rect _exitHotspot;
 
 	// Runtime state
 
@@ -132,7 +124,7 @@ protected:
 
 	ItemSlot _items[kMaxItems];
 	int      _heldItem = -1;
-	Misc::MouseFollowObject _heldObject;
+	MouseFollowObject _heldObject;
 	bool     _isSolved = false;
 
 	Graphics::ManagedSurface _boardImage;

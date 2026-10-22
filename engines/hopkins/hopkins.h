@@ -75,7 +75,9 @@ enum HOPKINSAction {
 	kActionBaseFire,
 	kActionBaseUse,
 	kActionBaseToggleTextures,
-	kActionBaseMenu
+	kActionBaseMenu,
+	kActionWBASEEnhancementsNavigationMap,
+	kActionWBASEEnhancementsAutoplay
 };
 
 enum HopkinsDebugChannels {
@@ -95,12 +97,14 @@ class BaseGame;
 class HopkinsEngine : public Engine {
 private:
 	friend class BaseGame;
+	friend class Debugger;
 
 	const HopkinsGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
 	bool _inBaseGame;
 
 	void initializeSystem();
+	bool canTeleportToRoom(int roomId) const;
 
 	void displayNotAvailable();
 	void restoreSystem();

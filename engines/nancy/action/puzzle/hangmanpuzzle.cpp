@@ -91,7 +91,7 @@ void HangmanPuzzle::readData(Common::SeekableReadStream &stream) {
 	// Trailing count-prefixed array of 23-byte give-up hotspots
 	// {Rect, uint16 cursorType, uint16 sceneID, int16 flagLabel, byte flagValue}.
 	// The exit always jumps to the scene's first frame.
-	readExitHotspot(stream, _exitHotspot, _exitCursorType, _exitScene, _exitFlag);
+	readExitHotspot(stream);
 }
 
 HangmanData *HangmanPuzzle::getPuzzleData() const {
@@ -309,44 +309,13 @@ void HangmanPuzzle::checkOutcome() {
 	}
 }
 
-void HangmanPuzzle::playSoundBlock(const RandomSoundBlock &block) {
-	if (block.names.empty()) {
-		return;
-	}
-
-	uint index = block.names.size() > 1 ?
-		g_nancy->_randomSource->getRandomNumber(block.names.size() - 1) : 0;
-	if (block.names[index].empty() || block.names[index] == "NO SOUND") {
-		return;
-	}
-
-	SoundDescription desc;
-	desc.name = block.names[index];
-	desc.channelID = block.channel;
-	desc.numLoops = block.numLoops > 0 ? block.numLoops : 1;
-	desc.volume = block.volume;
-
-	g_nancy->_sound->loadSound(desc);
-	g_nancy->_sound->playSound(desc);
-
-	Common::String caption = resolveSubtitleText(desc.name, Common::String(), "AUTOTEXT");
-	if (caption.empty()) {
-		caption = resolveSubtitleText(desc.name, Common::String(), "CONVO");
-	}
-	if (!caption.empty()) {
-		showSubtitle(caption);
-	}
-}
-
 void HangmanPuzzle::handleInput(NancyInput &input) {
 	if (_state != kRun) {
 		return;
 	}
 
 	// Give-up hotspot: leave the puzzle.
-	if (!_exitHotspot.isEmpty() &&
-			NancySceneState.getViewport().convertViewportToScreen(_exitHotspot).contains(input.mousePos)) {
-		g_nancy->_cursor->setCursorType((CursorManager::CursorType)_exitCursorType, true);
+	if (hoverExitHotspot(input)) {
 		if (input.input & NancyInput::kLeftMouseButtonUp) {
 			_exitRequested = true;
 		}
@@ -373,8 +342,7 @@ void HangmanPuzzle::execute() {
 		break;
 	case kRun:
 		if (_exitRequested) {
-			NancySceneState.setEventFlag(_exitFlag);
-			NancySceneState.changeScene(_exitScene);
+			_exitScene.execute();
 			break;
 		}
 		updateFeedback();

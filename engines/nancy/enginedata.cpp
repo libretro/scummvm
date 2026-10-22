@@ -37,19 +37,22 @@ BSUM::BSUM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	Common::Serializer s(chunkStream, nullptr);
 	s.setVersion(g_nancy->getGameType());
 
-	// The header is used to verify savegames
-	s.syncBytes(header, 90);
+	// The header is used to verify savegames. Nancy18 dropped the game's title from it
+	s.syncBytes(header, 90, kGameTypeVampire, kGameTypeNancy17);
+	s.syncBytes(header, 60, kGameTypeNancy18);
 
 	s.skip(0x17, kGameTypeVampire, kGameTypeVampire);
 	s.skip(0x49, kGameTypeNancy1, kGameTypeNancy1);
 	s.skip(0x43, kGameTypeNancy2, kGameTypeNancy9);
 	s.skip(0x41, kGameTypeNancy10, kGameTypeNancy15);
-	s.skip(0x55, kGameTypeNancy16);
+	s.skip(0x55, kGameTypeNancy16, kGameTypeNancy16);
+	s.skip(0x51, kGameTypeNancy17, kGameTypeNancy17);
 
 	readFilename(s, conversationTextsFilename, kGameTypeNancy6);
 	readFilename(s, autotextFilename, kGameTypeNancy6);
 	readFilename(s, fontFilename, kGameTypeNancy12);
 	readFilename(s, flagsFilename, kGameTypeNancy12);
+	readFilename(s, inventoryFilename, kGameTypeNancy17);
 
 	// Nancy16 went back to the pre-Nancy14 field order, and dropped both vertical
 	// offsets and the ad scene
@@ -57,7 +60,8 @@ BSUM::BSUM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	s.syncAsUint16LE(firstScene.frameID, kGameTypeNancy16);
 	s.syncAsUint16LE(startTimeHours, kGameTypeNancy16);
 	s.syncAsUint16LE(startTimeMinutes, kGameTypeNancy16);
-	s.skip(7, kGameTypeNancy16);	// End of day fields, disabled in the game data
+	s.syncAsByte(dayValueIndex, kGameTypeNancy16);
+	s.skip(6, kGameTypeNancy16);	// End of day fields, disabled in the game data
 
 	s.syncAsUint16LE(firstScene.sceneID, kGameTypeVampire, kGameTypeNancy15);
 	s.skip(0xC, kGameTypeVampire, kGameTypeVampire); // Palette name + unknown 2 bytes
@@ -141,8 +145,8 @@ BSUM::BSUM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	s.syncAsSint16LE(slowMovementTimeDelta);
 	s.syncAsSint16LE(fastMovementTimeDelta);
 
-	s.skip(4, kGameTypeNancy9, kGameTypeNancy11); // Unknown
-	if (s.getVersion() >= kGameTypeNancy9 && s.getVersion() <= kGameTypeNancy11) {
+	s.skip(4, kGameTypeNancy9, kGameTypeNancy15); // Unknown
+	if (s.getVersion() >= kGameTypeNancy9 && s.getVersion() <= kGameTypeNancy15) {
 		timerDurations.resize(10);
 		for (uint i = 0; i < timerDurations.size(); ++i) {
 			s.syncAsUint16LE(timerDurations[i]);
@@ -151,8 +155,14 @@ BSUM::BSUM(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 }
 
 VIEW::VIEW(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
-	readRect(*chunkStream, screenPosition);
-	readRect(*chunkStream, bounds);
+	// Nancy16's viewport is exactly as large as the video
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		readExclusiveRect(*chunkStream, screenPosition);
+		readExclusiveRect(*chunkStream, bounds);
+	} else {
+		readRect(*chunkStream, screenPosition);
+		readRect(*chunkStream, bounds);
+	}
 }
 
 PCAL::PCAL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
@@ -161,6 +171,11 @@ PCAL::PCAL(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 }
 
 INV::INV(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	if (g_nancy->getGameType() >= kGameTypeNancy15) {
+		readNancy15(*chunkStream);
+		return;
+	}
+
 	Common::Serializer s(chunkStream, nullptr);
 	s.setVersion(g_nancy->getGameType());
 
@@ -263,6 +278,39 @@ INV::INV(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 			item.cantText = item.cantTexts[0]; // Default text is the first one
 			item.cantSound.name = item.cantSounds[0].name;
 		}
+	}
+}
+
+// Nancy15 cut the inventory chunk down: the per-item "can't" sounds and captions
+// moved into the per-character PUIV bank, the item count is now stored in the
+// chunk itself, and the highlighted icon rect is no longer written out - every
+// item's highlighted icon sits at the same offset from its normal one.
+void INV::readNancy15(Common::SeekableReadStream &stream) {
+	captionAutoClearTime = stream.readUint16LE();
+	readFilename(stream, inventoryBoxIconsImageName);
+
+	int32 highlightOffsetX = stream.readSint32LE();
+	int32 highlightOffsetY = stream.readSint32LE();
+
+	uint16 numItems = stream.readUint16LE();
+	itemDescriptions.resize(numItems);
+
+	char textBuf[49];
+
+	for (uint i = 0; i < numItems; ++i) {
+		ItemDescription &item = itemDescriptions[i];
+
+		stream.read(textBuf, 48);
+		textBuf[48] = '\0';
+		item.name = textBuf;
+
+		item.keepItem = (byte)stream.readUint16LE();
+		item.sceneID = stream.readUint16LE();
+		item.sceneSoundFlag = stream.readUint16LE();
+
+		readRect(stream, item.sourceRect);
+		item.highlightedSourceRect = item.sourceRect;
+		item.highlightedSourceRect.translate(highlightOffsetX, highlightOffsetY);
 	}
 }
 
@@ -436,14 +484,21 @@ CRED::CRED(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 	bool isVampire = g_nancy->getGameType() == kGameTypeVampire;
 	readFilename(*chunkStream, imageName);
 
-	textNames.resize(isVampire ? 7 : 1);
-	for (Common::Path &str : textNames) {
-		readFilename(*chunkStream, str);
-	}
+	if (g_nancy->getGameType() >= kGameTypeNancy14) {
+		// The credits text is a key into the AUTOTEXT chunk instead of an image
+		readFilename(*chunkStream, textKey);
+		chunkStream->skip(0x10);
+		readRect(*chunkStream, textScreenPosition);
+	} else {
+		textNames.resize(isVampire ? 7 : 1);
+		for (Common::Path &str : textNames) {
+			readFilename(*chunkStream, str);
+		}
 
-	chunkStream->skip(0x20);
-	readRect(*chunkStream, textScreenPosition);
-	chunkStream->skip(0x10);
+		chunkStream->skip(0x20);
+		readRect(*chunkStream, textScreenPosition);
+		chunkStream->skip(0x10);
+	}
 
 	updateTime = chunkStream->readUint16LE();
 	pixelsToScroll = chunkStream->readUint16LE();
@@ -866,6 +921,17 @@ ImageChunk::ImageChunk(Common::SeekableReadStream *chunkStream) : EngineData(chu
 	readFilename(*chunkStream, imageName);
 	width = chunkStream->readUint16LE();
 	height = chunkStream->readUint16LE();
+}
+
+LogoScreen::LogoScreen(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	readFilename(*chunkStream, imageName);
+	readFilename(*chunkStream, movieName);
+	// Nancy17 dropped two of the four values in front of the position
+	chunkStream->skip(g_nancy->getGameType() >= kGameTypeNancy17 ? 4 : 8);
+	position.x = chunkStream->readSint16LE();
+	position.y = chunkStream->readSint16LE();
+
+	// Followed by a sound, which is always "NO SOUND"
 }
 
 CVTX::CVTX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
@@ -1339,15 +1405,33 @@ UINB::UINB(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 }
 
 EVNT::EVNT(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
-	Common::String name;
-	const uint16 count = (uint16)(chunkStream->size() / (int64)kEventRecordSize);
+	numRecords = (uint16)(chunkStream->size() / (int64)kEventRecordSize);
 
-	eventFlagNames.resize(count);
+	Common::Array<Common::String> names(numRecords);
+	Common::Array<uint16> ids(numRecords);
+	uint numFlags = 0;
+	uint numItems = 0;
 
-	for (uint16 i = 0; i < count; ++i) {
-		readFilename(*chunkStream, name);
-		chunkStream->skip(2);	// flag ID (starting from 2000)
-		eventFlagNames[i] = name;
+	for (uint16 i = 0; i < numRecords; ++i) {
+		readFilename(*chunkStream, names[i]);
+		ids[i] = chunkStream->readUint16LE();
+
+		if (ids[i] >= kFirstEventFlag) {
+			numFlags = MAX<uint>(numFlags, ids[i] - kFirstEventFlag + 1);
+		} else {
+			numItems = MAX<uint>(numItems, ids[i] + 1);
+		}
+	}
+
+	eventFlagNames.resize(numFlags);
+	itemNames.resize(numItems);
+
+	for (uint16 i = 0; i < numRecords; ++i) {
+		if (ids[i] >= kFirstEventFlag) {
+			eventFlagNames[ids[i] - kFirstEventFlag] = names[i];
+		} else {
+			itemNames[ids[i]] = names[i];
+		}
 	}
 }
 
@@ -1377,25 +1461,33 @@ UIRC::UIRC(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 
 Common::String formatUIResourceValue(const UIRC::ItemRecord &item, int32 value) {
 	// Nancy 12 counts cents and shows a dollar amount, Nancy 14 counts whole
-	// euros. 0x80 is the euro sign in the games' extended ASCII character set.
-	const char currencySymbol = g_nancy->getGameType() >= kGameTypeNancy14 ? '\x80' : '$';
+	// euros, and Nancy 15 is back to dollars. 0x80 is the euro sign in the
+	// games' extended ASCII character set.
+	const char currencySymbol = g_nancy->getGameType() == kGameTypeNancy14 ? '\x80' : '$';
 
-	int32 divisor = 1;
-	for (int16 i = 0; i < item.numDecimals; ++i) {
-		divisor *= 10;
+	// The value is simply printed, then split so that its last numDecimals
+	// digits become the fraction; an amount below one unit is zero-padded to
+	// that many digits and printed without a leading zero (".05", not "0.05").
+	const uint numDecimals = MAX<int16>(item.numDecimals, 0);
+	Common::String digits = Common::String::format("%d", value);
+	while (digits.size() < numDecimals) {
+		digits = "0" + digits;
 	}
 
-	Common::String ret = Common::String::format("%c%d", currencySymbol, value / divisor);
+	const uint split = digits.size() - numDecimals;
+	Common::String ret(currencySymbol);
+	ret += Common::String(digits.c_str(), split);
 
-	if (item.numDecimals > 0) {
-		Common::String decimals = Common::String::format("%d", value % divisor);
-		while ((int16)decimals.size() < item.numDecimals) {
-			decimals = "0" + decimals;
-		}
-		ret += "." + decimals;
+	if (numDecimals > 0) {
+		ret += "." + Common::String(digits.c_str() + split);
 	}
 
 	return ret;
+}
+
+bool hasMoneyResource() {
+	const GameType gameType = g_nancy->getGameType();
+	return gameType == kGameTypeNancy12 || gameType == kGameTypeNancy14 || gameType == kGameTypeNancy15;
 }
 
 MMIX::MMIX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
@@ -1410,6 +1502,37 @@ MMIX::MMIX(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 		for (uint16 j = 0; j < numTracks; ++j) {
 			readFilename(*chunkStream, rec.musicNames[j]);
 		}
+	}
+}
+
+ENVS::ENVS(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	const uint16 count = chunkStream->readUint16LE();
+	environments.resize(count);
+
+	for (uint16 i = 0; i < count; ++i) {
+		Environment &env = environments[i];
+		readFilename(*chunkStream, env.code);
+		readFilename(*chunkStream, env.name);
+		readFilename(*chunkStream, env.ambientScriptName);
+		readFilename(*chunkStream, env.leaveScriptName);
+
+		const uint16 numTracks = chunkStream->readUint16LE();
+		readFilenameArray(*chunkStream, env.musicNames, numTracks);
+	}
+}
+
+INVD::INVD(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
+	const uint16 count = chunkStream->readUint16LE();
+	items.resize(count);
+
+	for (uint16 i = 0; i < count; ++i) {
+		Item &item = items[i];
+		item.id = chunkStream->readSint16LE();
+		readFilename(*chunkStream, item.name);
+		item.kind = chunkStream->readSint32LE();
+		readFilename(*chunkStream, item.sceneName);
+		item.valueIndex = chunkStream->readSint16LE();
+		readExclusiveRect(*chunkStream, item.sourceRect);
 	}
 }
 
@@ -1428,7 +1551,15 @@ LVLN::LVLN(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 }
 
 PCUI::PCUI(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
-	flag = chunkStream->readByte();
+	// Nancy17 replaced the leading byte and the per-entry slot bytes with
+	// character names ("Tutor", "Nancy", "Bess"), listed in slot order
+	const bool hasNames = g_nancy->getGameType() >= kGameTypeNancy17;
+
+	if (hasNames) {
+		readFilename(*chunkStream, startCharacterName);
+	} else {
+		flag = chunkStream->readByte();
+	}
 
 	if (g_nancy->getGameType() >= kGameTypeNancy16) {
 		readFilename(*chunkStream, uiName);
@@ -1439,8 +1570,13 @@ PCUI::PCUI(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 
 	for (uint16 i = 0; i < count; ++i) {
 		// Each entry begins with the slot index it populates.
-		const byte slot = chunkStream->readByte();
+		const byte slot = hasNames ? i : chunkStream->readByte();
 		Character &chr = (slot < characters.size()) ? characters[slot] : characters[i];
+
+		if (hasNames) {
+			readFilename(*chunkStream, chr.name);
+		}
+
 		readFilename(*chunkStream, chr.imageName);
 		readFilename(*chunkStream, chr.defaultImageName);
 		chr.id = chunkStream->readUint16LE();
@@ -1461,13 +1597,21 @@ LDSN::LDSN(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
 }
 
 PUIH::PUIH(Common::SeekableReadStream *chunkStream) : EngineData(chunkStream) {
-	flag = chunkStream->readByte();
+	// Nancy17 dropped the leading byte
+	if (g_nancy->getGameType() <= kGameTypeNancy16) {
+		flag = chunkStream->readByte();
+	}
+
 	readFilename(*chunkStream, themeName);
 	readFilename(*chunkStream, swatchImageName);
 
-	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+	if (g_nancy->getGameType() == kGameTypeNancy16) {
 		readFilename(*chunkStream, journalPrepName);
 		readFilename(*chunkStream, tasklistPrepName);
+	} else if (g_nancy->getGameType() >= kGameTypeNancy17) {
+		readFilename(*chunkStream, becomeScriptName);
+		readFilename(*chunkStream, leaveScriptName);
+		readFilename(*chunkStream, textsName);
 	}
 }
 

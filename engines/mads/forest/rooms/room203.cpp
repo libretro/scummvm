@@ -1235,6 +1235,9 @@ static void room_203_daemon() {
 		break;
 
 	case 26:
+		// The retail executable also indexes aa[] with these display-animation
+		// handles here (and in case 55 below). It looks like a handle-space
+		// mix-up, but preserve the native behavior rather than guessing at a fix.
 		kernel_reset_animation(local->_9e, 0);
 		kernel_synch(KERNEL_ANIM, aa[local->_9e], KERNEL_NOW, 0);
 		global[g133] = 1;
@@ -1290,6 +1293,7 @@ static void room_203_daemon() {
 			kernel_synch(KERNEL_ANIM, aa[1], KERNEL_NOW, 0);
 			aainfo[1]._active = -1;
 			aainfo[1]._frame = 0;
+			local->_96 = 53;
 			local->_a8 = 0;
 			break;
 
@@ -1376,7 +1380,7 @@ static void room_203_daemon() {
 
 			player.walker_visible = false;
 			player_demand_facing(3);
-			player_demand_location(124, 91);
+			player_demand_location(91, 124);
 			kernel_synch(KERNEL_PLAYER, 0, KERNEL_NOW, 0);
 			player.commands_allowed = true;
 			player.walker_visible = true;
@@ -1394,11 +1398,13 @@ static void room_203_daemon() {
 			kernel_reset_animation(local->_a0, 1);
 			kernel_synch(KERNEL_ANIM, local->_9e, KERNEL_NOW, 0);
 			kernel_synch(KERNEL_ANIM, local->_a0, KERNEL_NOW, 0);
+			global[g047] = -1;
 			global[g133] = 0;
 			global[g143] = 0;
 
+			kernel_flip_hotspot(words_moss, false);
 			kernel_flip_hotspot(words_room_210, true);
-			seq[1] = kernel_seq_stamp(ss[1], true, -1);
+			seq[1] = kernel_seq_stamp(ss[1], false, -1);
 			kernel_seq_depth(seq[1], 15);
 			kernel_seq_loc(seq[1], 128, 74);
 			kernel_seq_scale(seq[1], 100);
@@ -1770,7 +1776,7 @@ static void room_203_parser() {
 			player.walker_visible = false;
 			scratch._a2 = kernel_run_animation_talk('b', 7, 0);
 			extra_change_animation(scratch._a2, player.x, player.y, player.scale, player.depth);
-			scratch._b4 = -1;
+			scratch._b2 = -1;
 			kernel_synch(KERNEL_ANIM, scratch._a2, KERNEL_PLAYER, 0);
 			digi_play_build_ii('b', 1, 1);
 			scratch._a4 = 30;

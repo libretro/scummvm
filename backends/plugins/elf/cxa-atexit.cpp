@@ -54,12 +54,14 @@ static int s_count;
 
 extern "C" {
 
-// GCC with -fuse-cxa-atexit emits references to __dso_handle in every TU that
-// has function-local statics with non-trivial destructors. It is normally
-// provided by crtbegin.o; on targets whose startup files don't supply one,
-// define it here for the main executable. Its address uniquely identifies
-// the main DSO.
-void *__dso_handle = &__dso_handle;
+// GCC with -fuse-cxa-atexit registers the non-trivial destructors of objects
+// with static storage duration (namespace-scope and function-local) via
+// __cxa_atexit(..., &__dso_handle), so every TU containing such an object
+// references __dso_handle. It is normally provided by crtbegin.o; mintelf's
+// doesn't, so define it here for the main executable. Its address uniquely
+// identifies the main DSO. Plugins define their own via
+// PLUGIN_DYNAMIC_DSO_HANDLE in base/plugins.h.
+__attribute__((visibility("hidden"))) void *__dso_handle = &__dso_handle;
 
 int __cxa_atexit(void (*destructor)(void *), void *arg, void *dso_handle) {
 	if (s_count >= CXA_ATEXIT_MAX) {

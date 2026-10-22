@@ -26,8 +26,11 @@
 
 #include "hopkins/base_data.h"
 #include "hopkins/base_engine.h"
+#include "hopkins/base_enhancements.h"
+#include "hopkins/base_enhancements_autoplay.h"
 
 #include "common/array.h"
+#include "common/queue.h"
 #include "common/scummsys.h"
 #include "common/str.h"
 
@@ -77,6 +80,26 @@ private:
 	};
 
 	class SessionGuard;
+	enum PendingGameplayRequestType {
+		kPendingGameplayExit,
+		kPendingGameplayContext
+	};
+	enum PendingGameplayRequestSource {
+		kPendingGameplayMapped,
+		kPendingGameplayPointer
+	};
+	enum PointerCapture {
+		kPointerCaptureNone,
+		kPointerCaptureIgnored,
+		kPointerCaptureControl,
+		kPointerCaptureChooser,
+		kPointerCaptureWorld
+	};
+	struct PendingGameplayRequest {
+		PendingGameplayRequestType type;
+		PendingGameplayRequestSource source;
+		uint32 generation;
+	};
 
 	static const BaseEntryPoint *entryPoints(uint &count);
 	static const BaseEntryPoint *findEntryPoint(int entryId);
@@ -86,6 +109,32 @@ private:
 	void initializeAudio();
 	void releaseAudio();
 	void switchKeymaps(bool entering);
+	void initializeEnhancementCursor();
+	void releaseEnhancementCursor();
+	void updateEnhancementCursor();
+	void resetEnhancementSession();
+	void clearLogicalGameplayInput();
+	void clearGameplayInput(bool disarm);
+	BaseInputState consumeGameplayInput();
+	void setMappedGameplayAction(uint32 action, bool pressed);
+	void setPointerGameplayAction(uint32 action, bool pressed, bool cancelPulse = false);
+	void cancelAutoplayForManualInput();
+	void queueGameplayRequest(PendingGameplayRequestType type,
+			PendingGameplayRequestSource source = kPendingGameplayMapped);
+	void cancelPointerGameplayRequests();
+	bool updateEnhancementActionState(uint32 action, bool pressed);
+	void updateEnhancementInputArming(uint32 now);
+	void updateOverlayInputState();
+	void setEnhancementPanel(WBASEEnhancementPanel panel);
+	void openAutoplayMenu();
+	void closeNavigationMap();
+	void startSelectedAutoplay();
+	void updateEnhancementPointer(int x, int y);
+	void beginPointerControl(WBASEEnhancementControl control);
+	void releasePointerCapture();
+	void updatePointerCapture(WBASEEnhancementControl control);
+	uint32 pressedEnhancementControls() const;
+	bool enhancementPanelVisible() const;
 	void pollInput();
 	void handleAction(uint32 action, bool pressed);
 	void openMainMenu();
@@ -95,11 +144,19 @@ private:
 	void setEngineActive(bool active);
 
 	HopkinsEngine *_vm;
+	WBASEEnhancements _wbaseEnhancements;
+	WBASEEnhancementsAutoplay _wbaseEnhancementsAutoplay;
 	BaseData _data;
 	BaseEngine *_engine;
 	BaseRenderer *_renderer;
 	Common::Array<byte> _framebuffer;
-	BaseInputState _input;
+	uint32 _wbaseMappedInputHolds;
+	uint32 _wbaseMappedInputPulses;
+	uint32 _wbasePointerInputHolds;
+	uint32 _wbasePointerInputPulses;
+	Common::Queue<PendingGameplayRequest> _wbasePendingGameplayRequests;
+	uint32 _wbaseInputGeneration;
+	bool _wbaseTextureTogglePending;
 	const BaseEntryPoint *_entry;
 	int _result;
 	bool _audioLoaded[6];
@@ -107,10 +164,25 @@ private:
 	bool _defaultKeymapWasEnabled;
 	bool _shortcutKeymapWasEnabled;
 	bool _baseKeymapWasEnabled;
+	bool _wbaseEnhancementsKeymapWasEnabled;
 	bool _inputSuspended;
 	bool _mainMenuRequested;
 	bool _presentationRefreshRequested;
 	bool _timingResetRequested;
+	WBASEEnhancementPanel _wbaseEnhancementPanel;
+	uint32 _wbaseEnhancementHeldActions;
+	uint32 _wbaseAutoplayMenuOpenedAt;
+	int _wbaseForcedAutoplayPromptTicks;
+	bool _wbaseForcedAutoplayPromptIssued;
+	WBASEEnhancementControl _wbaseEnhancementHoveredControl;
+	bool _wbaseEnhancementInputArmed;
+	bool _wbaseAutoplayMenuInputArmed;
+	bool _wbaseEnhancementCursorPushed;
+	bool _wbaseEnhancementCursorVisible;
+	bool _wbaseOverlayVisible;
+	bool _wbasePointerButtonDown;
+	PointerCapture _wbasePointerCapture;
+	WBASEEnhancementControl _wbasePointerCapturedControl;
 	bool _quitRequested;
 };
 

@@ -59,12 +59,16 @@ public:
 	void processActionRecords();
 	void processDependency(DependencyRecord &dep, ActionRecord &record, bool doNotCheckCursor);
 
-	void addNewActionRecord(Common::SeekableReadStream &inputData);
+	void addNewActionRecord(Common::SeekableReadStream &inputData, const Common::String &includeSource = Common::String());
 	Common::Array<ActionRecord *> &getActionRecords() { return _records; }
 	ActionRecord *getActionRecord(uint id) { if (id < _records.size()) return _records[id]; else return nullptr;}
 	void clearActionRecords(bool nextIsNoArt = false);
 
 	void onPause(bool pause);
+
+	// Enhancement: stops the lines being spoken by sound records that don't lead to
+	// another scene, after a cinematic got skipped
+	void stopSpeechSounds();
 
 	void synchronize(Common::Serializer &serializer);
 
@@ -74,6 +78,7 @@ public:
 
 protected:
 	static ActionRecord *createActionRecord(uint16 type, Common::SeekableReadStream *recordStream = nullptr);
+	static void readDependencies(Common::SeekableReadStream &inputData, ActionRecord &record, uint numDependencies, uint singleDepSize);
 
 	void synchronizeMovieWithSound();
 

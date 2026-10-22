@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: ScummVM 2026.3.1git\n"
+"Project-Id-Version: ScummVM 2026.4.1git\n"
 "Report-Msgid-Bugs-To: scummvm-devel@lists.scummvm.org\n"
-"POT-Creation-Date: 2026-09-17 23:52+0000\n"
+"POT-Creation-Date: 2026-10-21 17:05+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -80,7 +80,7 @@ msgstr ""
 #. I18N: Opens the help screen.
 #: gui/browser.cpp:64 gui/launcher.cpp:277 gui/launcher.cpp:959
 #: backends/platform/sdl/macosx/appmenu_osx.mm:319
-#: engines/access/metaengine.cpp:381 engines/bladerunner/metaengine.cpp:321
+#: engines/access/metaengine.cpp:387 engines/bladerunner/metaengine.cpp:321
 #: engines/ngi/metaengine.cpp:162 engines/supernova/metaengine.cpp:238
 #: engines/tucker/metaengine.cpp:215 engines/zvision/metaengine.cpp:246
 msgid "Help"
@@ -120,17 +120,19 @@ msgstr ""
 #: gui/saveload-dialog.cpp:456 gui/saveload-dialog.cpp:540
 #: gui/saveload-dialog.cpp:839 gui/saveload-dialog.cpp:1243
 #: gui/shaderbrowser-dialog.cpp:80 gui/themebrowser.cpp:54
-#: gui/unknown-game-dialog.cpp:53 base/main.cpp:608
-#: dists/android.strings.xml.cpp:43 engines/engine.cpp:872
-#: engines/engine.cpp:897 backends/dialogs/gtk/gtk-dialogs.cpp:65
+#: gui/unknown-game-dialog.cpp:53 base/main.cpp:612
+#: dists/android.strings.xml.cpp:43 engines/engine.cpp:874
+#: engines/engine.cpp:899 backends/dialogs/gtk/gtk-dialogs.cpp:65
 #: backends/events/default/default-events.cpp:207
 #: backends/events/default/default-events.cpp:231
 #: backends/platform/android/options.cpp:293
 #: backends/platform/wii/options.cpp:47 engines/asylum/asylum.cpp:204
 #: engines/buried/saveload.cpp:83 engines/cine/saveload.cpp:857
-#: engines/colony/intro.cpp:196 engines/director/lingo/xlibs/j/jitdraw3.cpp:123
+#: engines/colony/intro.cpp:250 engines/director/lingo/xlibs/j/jitdraw3.cpp:123
 #: engines/drascula/saveload.cpp:51 engines/grim/inputdialog.cpp:84
-#: engines/hypno/metaengine.cpp:282 engines/mohawk/myst_stacks/menu.cpp:283
+#: engines/hypno/metaengine.cpp:282 engines/macs2/actionbar.cpp:893
+#: engines/mads/nebular/mac_menus.cpp:824
+#: engines/mohawk/myst_stacks/menu.cpp:283
 #: engines/mohawk/myst_stacks/menu.cpp:300
 #: engines/mohawk/myst_stacks/menu.cpp:318
 #: engines/mohawk/riven_stacks/aspit.cpp:349
@@ -321,16 +323,16 @@ msgstr ""
 #: gui/downloaddialog.cpp:152 gui/filebrowser-dialog.cpp:135
 #: gui/fluidsynth-dialog.cpp:210 gui/launcher.cpp:428 gui/launcher.cpp:457
 #: gui/launcher.cpp:534 gui/launcher.cpp:1970 gui/options.cpp:3500
-#: gui/options.cpp:3874 base/main.cpp:608
+#: gui/options.cpp:3874 base/main.cpp:612
 #: backends/events/default/default-events.cpp:207 engines/buried/buried.cpp:598
-#: engines/chamber/metaengine.cpp:95 engines/colony/intro.cpp:194
+#: engines/chamber/metaengine.cpp:95 engines/colony/intro.cpp:248
 #: engines/director/events.cpp:122
 #: engines/director/lingo/xlibs/j/jitdraw3.cpp:139
 #: engines/efh/metaengine.cpp:362 engines/grim/grim.cpp:366
 #: engines/hypno/metaengine.cpp:249 engines/kyra/gui/saveload_eob.cpp:633
 #: engines/kyra/gui/saveload_eob.cpp:666 engines/lab/metaengine.cpp:197
 #: engines/mm/mm1/metaengine.cpp:54 engines/parallaction/metaengine.cpp:169
-#: engines/sci/graphics/controls32.cpp:937 engines/scumm/scumm.cpp:4511
+#: engines/sci/graphics/controls32.cpp:937 engines/scumm/scumm.cpp:4526
 #: engines/sherlock/metaengine.cpp:638 engines/sherlock/metaengine.cpp:1244
 #: engines/sludge/event.cpp:144 engines/toon/toon.cpp:1550
 #: engines/zvision/zvision.cpp:328
@@ -343,14 +345,14 @@ msgstr ""
 #: gui/fluidsynth-dialog.cpp:210 gui/launcher.cpp:428 gui/launcher.cpp:457
 #: gui/launcher.cpp:534 gui/launcher.cpp:1971 gui/options.cpp:3500
 #: gui/options.cpp:3874 engines/buried/buried.cpp:598
-#: engines/chamber/metaengine.cpp:101 engines/colony/intro.cpp:195
+#: engines/chamber/metaengine.cpp:101 engines/colony/intro.cpp:249
 #: engines/director/events.cpp:122
 #: engines/director/lingo/xlibs/j/jitdraw3.cpp:139
 #: engines/efh/metaengine.cpp:368 engines/grim/grim.cpp:366
 #: engines/hypno/metaengine.cpp:255 engines/kyra/gui/saveload_eob.cpp:633
 #: engines/kyra/gui/saveload_eob.cpp:666 engines/lab/metaengine.cpp:204
 #: engines/mm/mm1/metaengine.cpp:52 engines/parallaction/metaengine.cpp:175
-#: engines/sci/graphics/controls32.cpp:937 engines/scumm/scumm.cpp:4511
+#: engines/sci/graphics/controls32.cpp:937 engines/scumm/scumm.cpp:4526
 #: engines/sherlock/metaengine.cpp:643 engines/sherlock/metaengine.cpp:1250
 #: engines/sludge/event.cpp:144 engines/toon/toon.cpp:1550
 #: engines/zvision/zvision.cpp:329
@@ -371,13 +373,13 @@ msgstr ""
 #: gui/fluidsynth-dialog.cpp:154 gui/massadd.cpp:90 gui/message.cpp:156
 #: gui/message.cpp:160 gui/message.cpp:231 gui/message.cpp:270
 #: gui/message.cpp:274 gui/options.cpp:2422 gui/predictivedialog.cpp:69
-#: gui/saveload-dialog.cpp:1244 base/main.cpp:675 base/main.cpp:700
-#: engines/engine.cpp:918 backends/platform/wii/options.cpp:46
+#: gui/saveload-dialog.cpp:1244 base/main.cpp:679 base/main.cpp:704
+#: engines/engine.cpp:920 backends/platform/wii/options.cpp:46
 #: engines/buried/buried.cpp:622 engines/buried/saveload.cpp:83
 #: engines/director/lingo/xlibs/j/jitdraw3.cpp:123
 #: engines/drascula/saveload.cpp:51 engines/grim/inputdialog.cpp:83
 #: engines/parallaction/saveload.cpp:270 engines/sci/engine/kgraphics.cpp:76
-#: engines/sci/graphics/controls32.cpp:934 engines/scumm/scumm.cpp:4523
+#: engines/sci/graphics/controls32.cpp:934 engines/scumm/scumm.cpp:4538
 #: engines/sword1/control.cpp:2816
 msgid "OK"
 msgstr ""
@@ -571,7 +573,7 @@ msgid "GFX"
 msgstr ""
 
 #: gui/editgamedialog.cpp:166 gui/options.cpp:2077 gui/options.cpp:2258
-#: backends/graphics/atari/atari-graphics.cpp:1056
+#: backends/graphics/atari/atari-graphics.cpp:1058
 #: backends/graphics/sdl/sdl-graphics.cpp:491
 msgid "Graphics"
 msgstr ""
@@ -1057,7 +1059,7 @@ msgstr ""
 #: engines/freescape/movement.cpp:36 engines/got/metaengine.cpp:70
 #: engines/griffon/metaengine.cpp:121 engines/grim/grim.cpp:481
 #: engines/grim/grim.cpp:563 engines/icb/icb.cpp:68 engines/icb/icb.cpp:152
-#: engines/scumm/metaengine.cpp:1139 engines/supernova/metaengine.cpp:273
+#: engines/scumm/metaengine.cpp:1237 engines/supernova/metaengine.cpp:273
 #: engines/twine/metaengine.cpp:430 engines/twine/metaengine.cpp:497
 #: engines/twp/metaengine.cpp:153 engines/ultima/ultima0/metaengine.cpp:45
 #: engines/ultima/ultima4/metaengine.cpp:44
@@ -1079,7 +1081,7 @@ msgstr ""
 #: engines/freescape/movement.cpp:45 engines/got/metaengine.cpp:71
 #: engines/griffon/metaengine.cpp:127 engines/grim/grim.cpp:486
 #: engines/grim/grim.cpp:568 engines/icb/icb.cpp:73 engines/icb/icb.cpp:157
-#: engines/scumm/metaengine.cpp:1106 engines/supernova/metaengine.cpp:279
+#: engines/scumm/metaengine.cpp:1204 engines/supernova/metaengine.cpp:279
 #: engines/twine/metaengine.cpp:437 engines/twine/metaengine.cpp:505
 #: engines/twp/metaengine.cpp:154 engines/ultima/ultima0/metaengine.cpp:46
 #: engines/ultima/ultima4/metaengine.cpp:45
@@ -1101,7 +1103,7 @@ msgstr ""
 #: engines/glk/dialogs.cpp:371 engines/got/metaengine.cpp:72
 #: engines/griffon/metaengine.cpp:133 engines/grim/grim.cpp:491
 #: engines/grim/grim.cpp:573 engines/icb/icb.cpp:78 engines/icb/icb.cpp:162
-#: engines/scumm/metaengine.cpp:1119 engines/twine/metaengine.cpp:452
+#: engines/scumm/metaengine.cpp:1217 engines/twine/metaengine.cpp:452
 #: engines/twine/metaengine.cpp:520 engines/twp/metaengine.cpp:151
 #: engines/ultima/ultima4/metaengine.cpp:46
 #: engines/ultima/ultima4/metaengine.cpp:141
@@ -1123,7 +1125,7 @@ msgstr ""
 #: engines/glk/dialogs.cpp:373 engines/got/metaengine.cpp:73
 #: engines/griffon/metaengine.cpp:139 engines/grim/grim.cpp:496
 #: engines/grim/grim.cpp:578 engines/icb/icb.cpp:83 engines/icb/icb.cpp:167
-#: engines/scumm/metaengine.cpp:1126 engines/twine/metaengine.cpp:444
+#: engines/scumm/metaengine.cpp:1224 engines/twine/metaengine.cpp:444
 #: engines/twine/metaengine.cpp:513 engines/twp/metaengine.cpp:152
 #: engines/ultima/ultima4/metaengine.cpp:47
 #: engines/ultima/ultima4/metaengine.cpp:142
@@ -1522,7 +1524,7 @@ msgid "ScummVM could not find any game in the specified directory!"
 msgstr ""
 
 #. I18N: Unknown game variant
-#: gui/launcher.cpp:742 engines/engine.cpp:1316
+#: gui/launcher.cpp:742 engines/engine.cpp:1318
 msgid "Unknown variant"
 msgstr ""
 
@@ -2319,7 +2321,7 @@ msgid "Debug level:"
 msgstr ""
 
 #. I18N: Debug level -1, no messages
-#: gui/options.cpp:2760 gui/options.cpp:2897 audio/fmopl.cpp:112
+#: gui/options.cpp:2760 gui/options.cpp:2897 audio/fmopl.cpp:98
 msgid "None"
 msgstr ""
 
@@ -2547,8 +2549,8 @@ msgid ""
 "And more..."
 msgstr ""
 
-#: gui/options.cpp:2977 engines/engine.cpp:652
-#: engines/access/metaengine.cpp:319 engines/drascula/metaengine.cpp:255
+#: gui/options.cpp:2977 engines/engine.cpp:648
+#: engines/access/metaengine.cpp:325 engines/drascula/metaengine.cpp:255
 #: engines/queen/metaengine.cpp:269 engines/sherlock/metaengine.cpp:410
 #: engines/ultima/nuvie/metaengine.cpp:71
 msgid "Move"
@@ -2701,7 +2703,7 @@ msgstr ""
 
 #: gui/recorderdialog.cpp:71 gui/recorderdialog.cpp:211
 #: gui/saveload-dialog.cpp:460 gui/saveload-dialog.cpp:540
-#: dists/android.strings.xml.cpp:44 engines/engine.cpp:646
+#: dists/android.strings.xml.cpp:44 engines/engine.cpp:642
 msgid "Delete"
 msgstr ""
 
@@ -2859,7 +2861,7 @@ msgstr ""
 msgid "Standard renderer"
 msgstr ""
 
-#: gui/ThemeEngine.cpp:261 engines/scumm/dialogs.cpp:1054
+#: gui/ThemeEngine.cpp:261 engines/scumm/dialogs.cpp:1058
 msgid "Standard"
 msgstr ""
 
@@ -2883,22 +2885,22 @@ msgstr ""
 msgid "Report game"
 msgstr ""
 
-#: gui/unknown-game-dialog.cpp:100
+#: gui/unknown-game-dialog.cpp:98
 msgid ""
 "Use the button below to copy the required game information into your "
 "clipboard."
 msgstr ""
 
-#: gui/unknown-game-dialog.cpp:105
+#: gui/unknown-game-dialog.cpp:103
 msgid "You can also directly report your game to the Bug Tracker."
 msgstr ""
 
-#: gui/unknown-game-dialog.cpp:155
+#: gui/unknown-game-dialog.cpp:153
 msgid ""
 "All necessary information about your game has been copied into the clipboard"
 msgstr ""
 
-#: gui/unknown-game-dialog.cpp:157
+#: gui/unknown-game-dialog.cpp:155
 msgid "Copying the game information to the clipboard has failed!"
 msgstr ""
 
@@ -2927,12 +2929,12 @@ msgstr ""
 msgid "Saves"
 msgstr ""
 
-#: base/main.cpp:608
+#: base/main.cpp:612
 msgid "Bad config file format. overwrite?"
 msgstr ""
 
 #. I18N: <Add a new folder> must match the translation done in backends/fs/android/android-saf-fs.h
-#: base/main.cpp:657
+#: base/main.cpp:661
 msgid ""
 "In this new version of ScummVM for Android, significant changes were made to "
 "the file access system to allow support for modern versions of the Android "
@@ -2956,12 +2958,12 @@ msgid ""
 msgstr ""
 
 #. I18N: A button caption to dismiss a message and read it later
-#: base/main.cpp:677 base/main.cpp:702
+#: base/main.cpp:681 base/main.cpp:706
 msgid "Read Later"
 msgstr ""
 
 #. I18N: <Add a new folder> must match the translation done in backends/fs/android/android-saf-fs.h
-#: base/main.cpp:684
+#: base/main.cpp:688
 msgid ""
 "In this new version of ScummVM for Android, significant changes were made to "
 "the file access system to allow support for modern versions of the Android "
@@ -2982,7 +2984,7 @@ msgid ""
 "Repeat steps 1 and 6 for each game."
 msgstr ""
 
-#: base/main.cpp:866 base/main.cpp:915
+#: base/main.cpp:870 base/main.cpp:919
 msgid "Error running game:"
 msgstr ""
 
@@ -3214,14 +3216,14 @@ msgstr ""
 #: backends/events/default/default-events.cpp:231
 #: backends/events/default/default-events.cpp:372
 #: engines/adl/metaengine.cpp:352 engines/buried/metaengine.cpp:154
-#: engines/chamber/metaengine.cpp:88 engines/colony/intro.cpp:246
+#: engines/chamber/metaengine.cpp:88 engines/colony/intro.cpp:300
 #: engines/drascula/metaengine.cpp:304 engines/hdb/metaengine.cpp:275
 #: engines/hypno/metaengine.cpp:308 engines/lab/metaengine.cpp:172
-#: engines/mohawk/myst_stacks/menu.cpp:317
+#: engines/macs2/actionbar.cpp:893 engines/mohawk/myst_stacks/menu.cpp:317
 #: engines/mohawk/riven_stacks/aspit.cpp:454
 #: engines/neverhood/metaengine.cpp:200 engines/saga/metaengine.cpp:449
 #: engines/scumm/help.cpp:84 engines/scumm/help.cpp:86
-#: engines/scumm/scumm.cpp:4523 engines/sludge/keymapper_tables.h:98
+#: engines/scumm/scumm.cpp:4538 engines/sludge/keymapper_tables.h:98
 #: engines/sludge/keymapper_tables.h:147 engines/sludge/keymapper_tables.h:226
 #: engines/sludge/keymapper_tables.h:346 engines/sludge/keymapper_tables.h:358
 #: engines/sludge/keymapper_tables.h:419 engines/sludge/keymapper_tables.h:432
@@ -3425,7 +3427,7 @@ msgid ""
 msgstr ""
 
 #: engines/dialogs.cpp:201 engines/ags/ags.cpp:359
-#: engines/glk/magnetic/magnetic.cpp:197 engines/scumm/saveload.cpp:216
+#: engines/glk/magnetic/magnetic.cpp:197 engines/scumm/saveload.cpp:224
 msgid "This game does not support saving from the menu. Use in-game interface"
 msgstr ""
 
@@ -3441,7 +3443,7 @@ msgid ""
 msgstr ""
 
 #: engines/dialogs.cpp:242 engines/ags/ags.cpp:344
-#: engines/glk/magnetic/magnetic.cpp:187 engines/scumm/saveload.cpp:123
+#: engines/glk/magnetic/magnetic.cpp:187 engines/scumm/saveload.cpp:129
 msgid "This game does not support loading from the menu. Use in-game interface"
 msgstr ""
 
@@ -3457,46 +3459,46 @@ msgstr ""
 msgid "~C~ancel"
 msgstr ""
 
-#: engines/engine.cpp:377
+#: engines/engine.cpp:373
 #, c-format
 msgid "Could not switch to resolution '%dx%d'."
 msgstr ""
 
-#: engines/engine.cpp:385
+#: engines/engine.cpp:381
 msgid "Could not initialize color format."
 msgstr ""
 
-#: engines/engine.cpp:393
+#: engines/engine.cpp:389
 #, c-format
 msgid "Could not switch to video mode '%s'."
 msgstr ""
 
-#: engines/engine.cpp:401
+#: engines/engine.cpp:397
 #, c-format
 msgid "Could not switch to stretch mode '%s'."
 msgstr ""
 
-#: engines/engine.cpp:408
+#: engines/engine.cpp:404
 msgid "Could not apply aspect ratio setting."
 msgstr ""
 
-#: engines/engine.cpp:413
+#: engines/engine.cpp:409
 msgid "Could not apply fullscreen setting."
 msgstr ""
 
-#: engines/engine.cpp:418
+#: engines/engine.cpp:414
 msgid "Could not apply filtering setting."
 msgstr ""
 
-#: engines/engine.cpp:423
+#: engines/engine.cpp:419
 msgid "Could not apply shader setting."
 msgstr ""
 
-#: engines/engine.cpp:533
+#: engines/engine.cpp:529
 msgid "Error"
 msgstr ""
 
-#: engines/engine.cpp:596
+#: engines/engine.cpp:592
 msgid ""
 "You appear to be playing this game directly\n"
 "from the CD. This is known to cause problems,\n"
@@ -3505,7 +3507,7 @@ msgid ""
 "See the documentation (CD audio) for details."
 msgstr ""
 
-#: engines/engine.cpp:619
+#: engines/engine.cpp:615
 msgid ""
 "This game has audio tracks on its CD. These\n"
 "tracks need to be ripped from the CD using\n"
@@ -3514,11 +3516,11 @@ msgid ""
 "See the documentation (CD audio) for details."
 msgstr ""
 
-#: engines/engine.cpp:647
+#: engines/engine.cpp:643
 msgid "Skip autosave"
 msgstr ""
 
-#: engines/engine.cpp:649
+#: engines/engine.cpp:645
 #, c-format
 msgid ""
 "WARNING: The autosave slot contains a saved game named %s, and an autosave "
@@ -3528,48 +3530,48 @@ msgid ""
 "Alternatively, you can skip the autosave (will prompt again in 5 minutes)."
 msgstr ""
 
-#: engines/engine.cpp:659
+#: engines/engine.cpp:655
 msgid "ERROR: Could not copy the savegame to a new slot"
 msgstr ""
 
-#: engines/engine.cpp:686 engines/savestate.cpp:103
+#: engines/engine.cpp:682 engines/savestate.cpp:103
 #: backends/platform/ios7/ios7_osys_main.cpp:269 engines/mm/xeen/saves.cpp:293
 #: engines/sky/metaengine.cpp:218
 msgid "Autosave"
 msgstr ""
 
-#: engines/engine.cpp:694
+#: engines/engine.cpp:690
 msgid "Error occurred making autosave"
 msgstr ""
 
-#: engines/engine.cpp:844
+#: engines/engine.cpp:846
 #, c-format
 msgid ""
 "Failed to load saved game (%s)! Please consult the README for basic "
 "information, and for instructions on how to obtain further assistance."
 msgstr ""
 
-#: engines/engine.cpp:868
+#: engines/engine.cpp:870
 msgid "WARNING: "
 msgstr ""
 
-#: engines/engine.cpp:868
+#: engines/engine.cpp:870
 msgid " Shall we still run the game?"
 msgstr ""
 
-#: engines/engine.cpp:869
+#: engines/engine.cpp:871
 msgid ""
 "WARNING: The game you are about to start is not yet fully supported by "
 "ScummVM. As such, it is likely to be unstable, and any saved game you make "
 "might not work in future versions of ScummVM."
 msgstr ""
 
-#: engines/engine.cpp:872 engines/engine.cpp:897
+#: engines/engine.cpp:874 engines/engine.cpp:899
 #: engines/wintermute/wintermute.cpp:174
 msgid "Start anyway"
 msgstr ""
 
-#: engines/engine.cpp:891
+#: engines/engine.cpp:893
 #, c-format
 msgid ""
 "WARNING: the game you are about to start contains the add-on \"%s\" which is "
@@ -3577,14 +3579,14 @@ msgid ""
 "and any saved game you make might not work in future versions of ScummVM."
 msgstr ""
 
-#: engines/engine.cpp:917
+#: engines/engine.cpp:919
 msgid ""
 "WARNING: The game you are about to start is newly supported and is in "
 "testing mode.\n"
 "If you encounter any bugs or oddities, please report them to our bugtracker."
 msgstr ""
 
-#: engines/engine.cpp:933
+#: engines/engine.cpp:935
 #, c-format
 msgid ""
 "The game \"%s\" you are trying to add is an add-on for \"%s\" that cannot be "
@@ -3592,32 +3594,32 @@ msgid ""
 "the base game, and start the base game itself."
 msgstr ""
 
-#: engines/engine.cpp:950
+#: engines/engine.cpp:952
 msgid "This game is not supported."
 msgstr ""
 
-#: engines/engine.cpp:950
+#: engines/engine.cpp:952
 msgid ""
 "This game is not supported for the following reason:\n"
 "\n"
 msgstr ""
 
-#: engines/engine.cpp:1096
+#: engines/engine.cpp:1098
 msgid "Loading game is currently unavailable"
 msgstr ""
 
-#: engines/engine.cpp:1125
+#: engines/engine.cpp:1127
 msgid "Saving game is currently unavailable"
 msgstr ""
 
-#: engines/engine.cpp:1294
+#: engines/engine.cpp:1296
 #, c-format
 msgid ""
 "The directory '%s' looks like an add-on for the game '%s', but ScummVM could "
 "not find any matching add-on in it."
 msgstr ""
 
-#: engines/engine.cpp:1322
+#: engines/engine.cpp:1324
 #, c-format
 msgid "Directory '%s' matches several add-ons, please pick one."
 msgstr ""
@@ -3641,7 +3643,7 @@ msgid "Game not implemented"
 msgstr ""
 
 #: engines/metaengine.cpp:75 engines/saga/metaengine.cpp:267
-#: engines/scumm/metaengine.cpp:1089
+#: engines/scumm/metaengine.cpp:1187
 msgid "Default game keymappings"
 msgstr ""
 
@@ -3650,14 +3652,15 @@ msgstr ""
 #: engines/bbvs/metaengine.cpp:99 engines/cge/metaengine.cpp:203
 #: engines/cge2/metaengine.cpp:216 engines/cine/metaengine.cpp:277
 #: engines/composer/metaengine.cpp:114 engines/cruise/metaengine.cpp:173
-#: engines/draci/metaengine.cpp:200 engines/fool/metaengine.cpp:137
-#: engines/groovie/metaengine.cpp:205 engines/hdb/metaengine.cpp:207
-#: engines/hopkins/metaengine.cpp:213 engines/hugo/metaengine.cpp:134
+#: engines/dgds/metaengine.cpp:95 engines/draci/metaengine.cpp:200
+#: engines/fool/metaengine.cpp:137 engines/groovie/metaengine.cpp:205
+#: engines/harvester/metaengine.cpp:70 engines/hdb/metaengine.cpp:207
+#: engines/hopkins/metaengine.cpp:238 engines/hugo/metaengine.cpp:134
 #: engines/illusions/metaengine.cpp:94 engines/kyra/engine/eobcommon.cpp:377
 #: engines/kyra/engine/lol.cpp:505 engines/lure/metaengine.cpp:177
 #: engines/made/metaengine.cpp:141 engines/mads/metaengine.cpp:270
 #: engines/mm/metaengine.cpp:186 engines/mtropolis/metaengine.cpp:161
-#: engines/nancy/input.cpp:189 engines/parallaction/metaengine.cpp:138
+#: engines/nancy/input.cpp:191 engines/parallaction/metaengine.cpp:138
 #: engines/saga/metaengine.cpp:278 engines/sludge/keymapper_tables.h:564
 #: engines/sludge/keymapper_tables.h:583 engines/stark/metaengine.cpp:189
 #: engines/sword1/metaengine.cpp:271 engines/tinsel/metaengine.cpp:246
@@ -3684,13 +3687,14 @@ msgstr ""
 #: engines/bbvs/metaengine.cpp:105 engines/cge/metaengine.cpp:209
 #: engines/cge2/metaengine.cpp:222 engines/cine/metaengine.cpp:283
 #: engines/composer/metaengine.cpp:120 engines/cruise/metaengine.cpp:179
-#: engines/draci/metaengine.cpp:206 engines/fool/metaengine.cpp:148
-#: engines/groovie/metaengine.cpp:211 engines/hopkins/metaengine.cpp:219
+#: engines/dgds/metaengine.cpp:101 engines/draci/metaengine.cpp:206
+#: engines/fool/metaengine.cpp:148 engines/groovie/metaengine.cpp:211
+#: engines/harvester/metaengine.cpp:75 engines/hopkins/metaengine.cpp:244
 #: engines/hugo/metaengine.cpp:141 engines/illusions/metaengine.cpp:101
 #: engines/kyra/engine/eobcommon.cpp:378 engines/kyra/engine/lol.cpp:506
 #: engines/lure/metaengine.cpp:183 engines/made/metaengine.cpp:148
 #: engines/mads/metaengine.cpp:276 engines/mm/metaengine.cpp:192
-#: engines/mtropolis/metaengine.cpp:167 engines/nancy/input.cpp:196
+#: engines/mtropolis/metaengine.cpp:167 engines/nancy/input.cpp:198
 #: engines/parallaction/metaengine.cpp:144 engines/saga/metaengine.cpp:289
 #: engines/sludge/keymapper_tables.h:570 engines/sludge/keymapper_tables.h:589
 #: engines/stark/metaengine.cpp:195 engines/sword1/metaengine.cpp:277
@@ -3724,14 +3728,15 @@ msgstr ""
 msgid "Pause"
 msgstr ""
 
-#: engines/metaengine.cpp:105 engines/parallaction/metaengine.cpp:163
+#: engines/metaengine.cpp:105 engines/harvester/metaengine.cpp:93
+#: engines/parallaction/metaengine.cpp:163
 #: engines/ultima/ultima8/metaengine.cpp:47
 msgid "Game menu"
 msgstr ""
 
 #. I18N: Skipping cutscene plaback
 #. I18N: Skipping cutscene playback
-#: engines/metaengine.cpp:112 engines/access/metaengine.cpp:246
+#: engines/metaengine.cpp:112 engines/access/metaengine.cpp:252
 #: engines/composer/metaengine.cpp:126 engines/drascula/metaengine.cpp:224
 #: engines/efh/metaengine.cpp:379 engines/freescape/movement.cpp:94
 #: engines/grim/grim.cpp:533 engines/grim/grim.cpp:633
@@ -3792,72 +3797,64 @@ msgstr ""
 msgid "AdLib emulator"
 msgstr ""
 
-#: audio/fmopl.cpp:114
+#: audio/fmopl.cpp:100
 msgid "MAME OPL emulator"
 msgstr ""
 
-#: audio/fmopl.cpp:117
+#: audio/fmopl.cpp:103
 msgid "DOSBox OPL emulator"
 msgstr ""
 
-#: audio/fmopl.cpp:120
+#: audio/fmopl.cpp:106
 msgid "Nuked OPL emulator"
 msgstr ""
 
-#: audio/fmopl.cpp:123
+#: audio/fmopl.cpp:109
 msgid "ALSA Direct FM"
 msgstr ""
 
-#: audio/fmopl.cpp:126
+#: audio/fmopl.cpp:112
 msgid "OPL2LPT"
 msgstr ""
 
-#: audio/fmopl.cpp:127
+#: audio/fmopl.cpp:113
 msgid "OPL3LPT"
 msgstr ""
 
-#: audio/fmopl.cpp:130
+#: audio/fmopl.cpp:116
 msgid "RetroWave OPL3"
 msgstr ""
 
-#: audio/fmopl.cpp:133
+#: audio/fmopl.cpp:119
 msgid "[nFM] NokturnFM2 (OPL2)"
 msgstr ""
 
-#: audio/fmopl.cpp:134
+#: audio/fmopl.cpp:120
 msgid "[nFM] NokturnFM3 (OPL3)"
 msgstr ""
 
-#: audio/fmopl.cpp:135
-msgid "[nFM] RetroWave USB OPL3 Express (OPL3)"
-msgstr ""
-
-#: audio/fmopl.cpp:136
+#: audio/fmopl.cpp:121
 msgid "[nFM] Serdaco OPL2LPT (OPL2)"
 msgstr ""
 
-#: audio/fmopl.cpp:137
+#: audio/fmopl.cpp:122
 msgid "[nFM] Serdaco OPL3LPT (OPL3)"
 msgstr ""
 
-#: audio/fmopl.cpp:138
+#: audio/fmopl.cpp:123
 msgid "[nFM] Cheerful Electronics OPL2 Audio Board (OPL2)"
 msgstr ""
 
-#: audio/fmopl.cpp:139
+#: audio/fmopl.cpp:124
 msgid "[nFM] Cheerful Electronics OPL3 Duo! (2xOPL3)"
 msgstr ""
 
-#: audio/fmopl.cpp:140
+#: audio/fmopl.cpp:125
 msgid "[nFM] ST Bus ISA / VME SoundBlaster"
 msgstr ""
 
-#: audio/fmopl.cpp:141
+#: audio/fmopl.cpp:126
 msgid "[nFM] NatFeats / NULL"
-msgstr ""
-
-#: audio/fmopl.cpp:142
-msgid "[nFM] Nuked-OPL3 softsynth (OPL3)"
 msgstr ""
 
 #: audio/mididrv.cpp:232
@@ -4054,7 +4051,7 @@ msgstr ""
 msgid "Choose a new folder"
 msgstr ""
 
-#: backends/graphics/atari/atari-graphics.cpp:1060
+#: backends/graphics/atari/atari-graphics.cpp:1062
 #: backends/graphics/sdl/sdl-graphics.cpp:518 engines/scumm/help.cpp:103
 msgid "Toggle aspect ratio correction"
 msgstr ""
@@ -5581,7 +5578,7 @@ msgstr ""
 #: engines/alcachofa/metaengine.cpp:110 engines/grim/grim.cpp:545
 #: engines/grim/grim.cpp:645 engines/hdb/metaengine.cpp:264
 #: engines/macs2/metaengine.cpp:70 engines/made/metaengine.cpp:190
-#: engines/phoenixvr/metaengine.cpp:110 engines/scumm/metaengine.cpp:1247
+#: engines/phoenixvr/metaengine.cpp:110 engines/scumm/metaengine.cpp:1345
 #: engines/toltecs/metaengine.cpp:252
 msgid "Menu"
 msgstr ""
@@ -5767,20 +5764,20 @@ msgstr ""
 msgid "Check for Updates..."
 msgstr ""
 
-#: engines/access/metaengine.cpp:82
+#: engines/access/metaengine.cpp:88
 msgid "Use 'high definition' OGG music"
 msgstr ""
 
-#: engines/access/metaengine.cpp:83
+#: engines/access/metaengine.cpp:89
 msgid "Use the OGG audio from the re-release instead of original MIDI tracks"
 msgstr ""
 
-#: engines/access/metaengine.cpp:236 engines/alcachofa/metaengine.cpp:94
+#: engines/access/metaengine.cpp:242 engines/alcachofa/metaengine.cpp:94
 #: engines/bbvs/metaengine.cpp:92 engines/buried/metaengine.cpp:133
 #: engines/chamber/metaengine.cpp:63 engines/cine/metaengine.cpp:270
 #: engines/cruise/metaengine.cpp:168 engines/dm/metaengine.cpp:70
 #: engines/draci/metaengine.cpp:195 engines/drascula/metaengine.cpp:205
-#: engines/efh/metaengine.cpp:256 engines/hopkins/metaengine.cpp:206
+#: engines/efh/metaengine.cpp:256 engines/hopkins/metaengine.cpp:229
 #: engines/hugo/metaengine.cpp:129 engines/hypno/metaengine.cpp:128
 #: engines/illusions/metaengine.cpp:89 engines/lab/metaengine.cpp:149
 #: engines/lure/metaengine.cpp:168 engines/made/metaengine.cpp:136
@@ -5799,87 +5796,89 @@ msgstr ""
 msgid "Default keymappings"
 msgstr ""
 
-#: engines/access/metaengine.cpp:240
+#: engines/access/metaengine.cpp:246
 msgid "Move / Interact / Skip"
 msgstr ""
 
-#: engines/access/metaengine.cpp:252 engines/sherlock/metaengine.cpp:483
+#: engines/access/metaengine.cpp:258 engines/sherlock/metaengine.cpp:483
 msgid "Skip movie"
 msgstr ""
 
 #. I18N: Move Actor to upwards direction
-#: engines/access/metaengine.cpp:258 engines/asylum/metaengine.cpp:171
+#: engines/access/metaengine.cpp:264 engines/asylum/metaengine.cpp:171
 #: engines/asylum/metaengine.cpp:198 engines/cine/metaengine.cpp:377
-#: engines/efh/metaengine.cpp:286 engines/hdb/metaengine.cpp:213
-#: engines/hypno/metaengine.cpp:363 engines/hypno/metaengine.cpp:411
-#: engines/nancy/input.cpp:203 engines/tinsel/metaengine.cpp:263
-#: engines/titanic/metaengine.cpp:324 engines/ultima/ultima8/metaengine.cpp:52
+#: engines/efh/metaengine.cpp:286 engines/harvester/metaengine.cpp:89
+#: engines/hdb/metaengine.cpp:213 engines/hypno/metaengine.cpp:363
+#: engines/hypno/metaengine.cpp:411 engines/nancy/input.cpp:205
+#: engines/tinsel/metaengine.cpp:263 engines/titanic/metaengine.cpp:324
+#: engines/ultima/ultima8/metaengine.cpp:52
 msgid "Move up"
 msgstr ""
 
 #. I18N: Move Actor to downwards direction
-#: engines/access/metaengine.cpp:265 engines/asylum/metaengine.cpp:177
+#: engines/access/metaengine.cpp:271 engines/asylum/metaengine.cpp:177
 #: engines/asylum/metaengine.cpp:205 engines/cine/metaengine.cpp:384
-#: engines/efh/metaengine.cpp:293 engines/hdb/metaengine.cpp:219
-#: engines/hypno/metaengine.cpp:351 engines/hypno/metaengine.cpp:399
-#: engines/nancy/input.cpp:209 engines/tinsel/metaengine.cpp:269
-#: engines/titanic/metaengine.cpp:330 engines/ultima/ultima8/metaengine.cpp:53
+#: engines/efh/metaengine.cpp:293 engines/harvester/metaengine.cpp:90
+#: engines/hdb/metaengine.cpp:219 engines/hypno/metaengine.cpp:351
+#: engines/hypno/metaengine.cpp:399 engines/nancy/input.cpp:211
+#: engines/tinsel/metaengine.cpp:269 engines/titanic/metaengine.cpp:330
+#: engines/ultima/ultima8/metaengine.cpp:53
 msgid "Move down"
 msgstr ""
 
 #. I18N: Move Actor to left direction
 #. I18N: Move actor left during fight
-#: engines/access/metaengine.cpp:272 engines/asylum/metaengine.cpp:183
+#: engines/access/metaengine.cpp:278 engines/asylum/metaengine.cpp:183
 #: engines/asylum/metaengine.cpp:212 engines/cine/metaengine.cpp:391
-#: engines/efh/metaengine.cpp:300 engines/hdb/metaengine.cpp:225
-#: engines/hypno/metaengine.cpp:345 engines/hypno/metaengine.cpp:393
-#: engines/kyra/engine/eobcommon.cpp:381 engines/lure/metaengine.cpp:218
-#: engines/nancy/input.cpp:215 engines/tinsel/metaengine.cpp:275
-#: engines/titanic/metaengine.cpp:312 engines/titanic/metaengine.cpp:390
-#: engines/ultima/ultima8/metaengine.cpp:54
+#: engines/efh/metaengine.cpp:300 engines/harvester/metaengine.cpp:87
+#: engines/hdb/metaengine.cpp:225 engines/hypno/metaengine.cpp:345
+#: engines/hypno/metaengine.cpp:393 engines/kyra/engine/eobcommon.cpp:381
+#: engines/lure/metaengine.cpp:218 engines/nancy/input.cpp:217
+#: engines/tinsel/metaengine.cpp:275 engines/titanic/metaengine.cpp:312
+#: engines/titanic/metaengine.cpp:390 engines/ultima/ultima8/metaengine.cpp:54
 msgid "Move left"
 msgstr ""
 
 #. I18N: Move Actor to right direction
 #. I18N: Move actor right during fight
-#: engines/access/metaengine.cpp:279 engines/asylum/metaengine.cpp:189
+#: engines/access/metaengine.cpp:285 engines/asylum/metaengine.cpp:189
 #: engines/asylum/metaengine.cpp:219 engines/cine/metaengine.cpp:398
-#: engines/efh/metaengine.cpp:307 engines/hdb/metaengine.cpp:231
-#: engines/hypno/metaengine.cpp:357 engines/hypno/metaengine.cpp:405
-#: engines/kyra/engine/eobcommon.cpp:382 engines/lure/metaengine.cpp:226
-#: engines/nancy/input.cpp:221 engines/tinsel/metaengine.cpp:281
-#: engines/titanic/metaengine.cpp:318 engines/titanic/metaengine.cpp:396
-#: engines/ultima/ultima8/metaengine.cpp:55
+#: engines/efh/metaengine.cpp:307 engines/harvester/metaengine.cpp:88
+#: engines/hdb/metaengine.cpp:231 engines/hypno/metaengine.cpp:357
+#: engines/hypno/metaengine.cpp:405 engines/kyra/engine/eobcommon.cpp:382
+#: engines/lure/metaengine.cpp:226 engines/nancy/input.cpp:223
+#: engines/tinsel/metaengine.cpp:281 engines/titanic/metaengine.cpp:318
+#: engines/titanic/metaengine.cpp:396 engines/ultima/ultima8/metaengine.cpp:55
 msgid "Move right"
 msgstr ""
 
 #. I18N: Move Actor to top-left direction
-#: engines/access/metaengine.cpp:286 engines/cine/metaengine.cpp:405
+#: engines/access/metaengine.cpp:292 engines/cine/metaengine.cpp:405
 #: engines/efh/metaengine.cpp:314
 msgid "Move up-left"
 msgstr ""
 
 #. I18N: Move Actor to top-right direction
-#: engines/access/metaengine.cpp:291 engines/cine/metaengine.cpp:411
+#: engines/access/metaengine.cpp:297 engines/cine/metaengine.cpp:411
 #: engines/efh/metaengine.cpp:320
 msgid "Move up-right"
 msgstr ""
 
 #. I18N: Move Actor to bottom-left direction
-#: engines/access/metaengine.cpp:296 engines/cine/metaengine.cpp:417
+#: engines/access/metaengine.cpp:302 engines/cine/metaengine.cpp:417
 #: engines/efh/metaengine.cpp:326
 msgid "Move down-left"
 msgstr ""
 
 #. I18N: Move Actor to bottom-right direction
-#: engines/access/metaengine.cpp:301 engines/cine/metaengine.cpp:423
+#: engines/access/metaengine.cpp:307 engines/cine/metaengine.cpp:423
 #: engines/efh/metaengine.cpp:332
 msgid "Move down-right"
 msgstr ""
 
 #. I18N: (Game name: The Lost Files of Sherlock Holmes: The Case of the Rose Tattoo) This action is used to look at an object or npc in the game
-#: engines/access/metaengine.cpp:306 engines/bbvs/metaengine.cpp:124
-#: engines/dgds/metaengine.cpp:83 engines/drascula/metaengine.cpp:230
+#: engines/access/metaengine.cpp:312 engines/bbvs/metaengine.cpp:124
+#: engines/dgds/metaengine.cpp:87 engines/drascula/metaengine.cpp:230
 #: engines/petka/metaengine.cpp:130 engines/scumm/help.cpp:167
 #: engines/scumm/help.cpp:231 engines/sherlock/metaengine.cpp:405
 #: engines/sherlock/metaengine.cpp:556 engines/sherlock/metaengine.cpp:817
@@ -5889,7 +5888,7 @@ msgstr ""
 msgid "Look"
 msgstr ""
 
-#: engines/access/metaengine.cpp:314 engines/drascula/metaengine.cpp:240
+#: engines/access/metaengine.cpp:320 engines/drascula/metaengine.cpp:240
 #: engines/fool/fool_game.cpp:107 engines/queen/metaengine.cpp:259
 #: engines/saga/metaengine.cpp:369 engines/scumm/help.cpp:125
 #: engines/scumm/help.cpp:140 engines/scumm/help.cpp:165
@@ -5899,13 +5898,13 @@ msgstr ""
 msgid "Open"
 msgstr ""
 
-#: engines/access/metaengine.cpp:324 engines/scumm/help.cpp:128
+#: engines/access/metaengine.cpp:330 engines/scumm/help.cpp:128
 #: engines/ultima/nuvie/metaengine.cpp:70
 msgid "Get"
 msgstr ""
 
 #. I18N: Combat command in Might & Magic 1
-#: engines/access/metaengine.cpp:329 engines/access/metaengine.cpp:350
+#: engines/access/metaengine.cpp:335 engines/access/metaengine.cpp:356
 #: engines/bbvs/metaengine.cpp:136 engines/cine/metaengine.cpp:342
 #: engines/efh/metaengine.cpp:462 engines/hdb/metaengine.cpp:237
 #: engines/lab/metaengine.cpp:323 engines/mm/mm1/metaengine.cpp:86
@@ -5925,11 +5924,11 @@ msgstr ""
 msgid "Use"
 msgstr ""
 
-#: engines/access/metaengine.cpp:334
+#: engines/access/metaengine.cpp:340
 msgid "Goto"
 msgstr ""
 
-#: engines/access/metaengine.cpp:339 engines/access/metaengine.cpp:370
+#: engines/access/metaengine.cpp:345 engines/access/metaengine.cpp:376
 #: engines/bbvs/metaengine.cpp:130 engines/drascula/metaengine.cpp:250
 #: engines/efh/metaengine.cpp:506 engines/petka/metaengine.cpp:158
 #: engines/scumm/help.cpp:174 engines/scumm/help.cpp:226
@@ -5940,50 +5939,50 @@ msgstr ""
 msgid "Talk"
 msgstr ""
 
-#: engines/access/metaengine.cpp:344 engines/scumm/help.cpp:175
+#: engines/access/metaengine.cpp:350 engines/scumm/help.cpp:175
 msgid "Travel"
 msgstr ""
 
-#: engines/access/metaengine.cpp:355 engines/cine/metaengine.cpp:332
+#: engines/access/metaengine.cpp:361 engines/cine/metaengine.cpp:332
 #: engines/petka/metaengine.cpp:144 engines/saga/metaengine.cpp:394
 #: engines/supernova/metaengine.cpp:331
 msgid "Take"
 msgstr ""
 
 #. I18N: Action in In Cold Blood
-#: engines/access/metaengine.cpp:360 engines/alcachofa/metaengine.cpp:116
+#: engines/access/metaengine.cpp:366 engines/alcachofa/metaengine.cpp:116
 #: engines/cine/metaengine.cpp:337 engines/crab/input/input.cpp:251
 #: engines/cruise/metaengine.cpp:192 engines/draci/metaengine.cpp:237
 #: engines/dragons/metaengine.cpp:147 engines/drascula/metaengine.cpp:218
 #: engines/griffon/metaengine.cpp:152 engines/grim/grim.cpp:521
-#: engines/grim/grim.cpp:621 engines/hdb/metaengine.cpp:251
-#: engines/hpl1/metaengine.cpp:94 engines/icb/icb.cpp:101
-#: engines/icb/icb.cpp:179 engines/macs2/metaengine.cpp:64
-#: engines/petka/metaengine.cpp:173 engines/phoenixvr/metaengine.cpp:82
-#: engines/scumm/help.cpp:228 engines/scumm/help.cpp:237
-#: engines/scumm/help.cpp:244 engines/scumm/help.cpp:252
-#: engines/sherlock/metaengine.cpp:435 engines/sludge/keymapper_tables.h:61
-#: engines/sludge/keymapper_tables.h:122 engines/sludge/keymapper_tables.h:171
-#: engines/sludge/keymapper_tables.h:184 engines/sludge/keymapper_tables.h:220
-#: engines/sludge/keymapper_tables.h:259 engines/stark/metaengine.cpp:267
-#: engines/tinsel/metaengine.cpp:313 engines/titanic/metaengine.cpp:244
-#: engines/titanic/metaengine.cpp:297 engines/twine/metaengine.cpp:370
-#: engines/zvision/metaengine.cpp:252
+#: engines/grim/grim.cpp:621 engines/harvester/metaengine.cpp:92
+#: engines/hdb/metaengine.cpp:251 engines/hpl1/metaengine.cpp:94
+#: engines/icb/icb.cpp:101 engines/icb/icb.cpp:179
+#: engines/macs2/metaengine.cpp:64 engines/petka/metaengine.cpp:173
+#: engines/phoenixvr/metaengine.cpp:82 engines/scumm/help.cpp:228
+#: engines/scumm/help.cpp:237 engines/scumm/help.cpp:244
+#: engines/scumm/help.cpp:252 engines/sherlock/metaengine.cpp:435
+#: engines/sludge/keymapper_tables.h:61 engines/sludge/keymapper_tables.h:122
+#: engines/sludge/keymapper_tables.h:171 engines/sludge/keymapper_tables.h:184
+#: engines/sludge/keymapper_tables.h:220 engines/sludge/keymapper_tables.h:259
+#: engines/stark/metaengine.cpp:267 engines/tinsel/metaengine.cpp:313
+#: engines/titanic/metaengine.cpp:244 engines/titanic/metaengine.cpp:297
+#: engines/twine/metaengine.cpp:370 engines/zvision/metaengine.cpp:252
 msgid "Inventory"
 msgstr ""
 
-#: engines/access/metaengine.cpp:365 engines/ultima/ultima4/metaengine.cpp:51
+#: engines/access/metaengine.cpp:371 engines/ultima/ultima4/metaengine.cpp:51
 msgid "Climb"
 msgstr ""
 
-#: engines/access/metaengine.cpp:375 engines/bbvs/metaengine.cpp:142
+#: engines/access/metaengine.cpp:381 engines/bbvs/metaengine.cpp:142
 #: engines/freescape/games/castle/castle.cpp:577
 #: engines/petka/metaengine.cpp:137 engines/scumm/help.cpp:225
 #: engines/tsage/metaengine.cpp:201
 msgid "Walk"
 msgstr ""
 
-#: engines/access/metaengine.cpp:386
+#: engines/access/metaengine.cpp:392
 msgid "Open save/load menu"
 msgstr ""
 
@@ -6062,10 +6061,10 @@ msgstr ""
 #: engines/efh/metaengine.cpp:44 engines/glk/metaengine.cpp:205
 #: engines/gob/metaengine.cpp:57 engines/got/metaengine.cpp:48
 #: engines/griffon/metaengine.cpp:40 engines/hugo/metaengine.cpp:56
-#: engines/macs2/dialogs.cpp:39 engines/made/metaengine.cpp:51
+#: engines/macs2/dialogs.cpp:51 engines/made/metaengine.cpp:51
 #: engines/mm/metaengine.cpp:91 engines/mortevielle/metaengine.cpp:37
 #: engines/parallaction/metaengine.cpp:52 engines/sci/detection_options.h:221
-#: engines/scumm/dialogs.cpp:1252 engines/scumm/metaengine.cpp:887
+#: engines/scumm/dialogs.cpp:1256 engines/scumm/metaengine.cpp:908
 #: engines/supernova/metaengine.cpp:53 engines/wage/metaengine.cpp:51
 #: engines/wintermute/metaengine.cpp:81
 msgid "Enable Text to Speech"
@@ -6077,8 +6076,8 @@ msgstr ""
 #: engines/efh/metaengine.cpp:45 engines/gob/metaengine.cpp:58
 #: engines/got/metaengine.cpp:49 engines/hugo/metaengine.cpp:57
 #: engines/made/metaengine.cpp:52 engines/mm/metaengine.cpp:92
-#: engines/mortevielle/metaengine.cpp:38 engines/scumm/dialogs.cpp:1253
-#: engines/scumm/metaengine.cpp:888 engines/wintermute/metaengine.cpp:82
+#: engines/mortevielle/metaengine.cpp:38 engines/scumm/dialogs.cpp:1257
+#: engines/scumm/metaengine.cpp:909 engines/wintermute/metaengine.cpp:82
 msgid "Use TTS to read text in the game (if TTS is available)"
 msgstr ""
 
@@ -6099,7 +6098,7 @@ msgstr ""
 #: engines/drascula/metaengine.cpp:42 engines/dreamweb/metaengine.cpp:48
 #: engines/fool/metaengine.cpp:38 engines/got/metaengine.cpp:35
 #: engines/groovie/metaengine.cpp:53 engines/m4/metaengine.cpp:37
-#: engines/macs2/dialogs.cpp:34 engines/mads/metaengine.cpp:110
+#: engines/macs2/dialogs.cpp:46 engines/mads/metaengine.cpp:110
 #: engines/nancy/metaengine.cpp:104 engines/neverhood/dialogs.cpp:47
 #: engines/pelrock/metaengine.cpp:35 engines/phoenixvr/metaengine.cpp:47
 #: engines/sci/detection_options.h:105 engines/sherlock/metaengine.cpp:47
@@ -6115,7 +6114,7 @@ msgstr ""
 #: engines/drascula/metaengine.cpp:43 engines/dreamweb/metaengine.cpp:49
 #: engines/fool/metaengine.cpp:39 engines/got/metaengine.cpp:36
 #: engines/groovie/metaengine.cpp:54 engines/m4/metaengine.cpp:38
-#: engines/macs2/dialogs.cpp:35 engines/mads/metaengine.cpp:111
+#: engines/macs2/dialogs.cpp:47 engines/mads/metaengine.cpp:111
 #: engines/nancy/metaengine.cpp:105 engines/neverhood/dialogs.cpp:48
 #: engines/pelrock/metaengine.cpp:36 engines/phoenixvr/metaengine.cpp:48
 #: engines/sci/detection_options.h:106 engines/sherlock/metaengine.cpp:48
@@ -6186,7 +6185,7 @@ msgstr ""
 #: engines/dreamweb/metaengine.cpp:36 engines/gob/metaengine.cpp:45
 #: engines/lure/metaengine.cpp:41 engines/mads/metaengine.cpp:50
 #: engines/mm/metaengine.cpp:46 engines/saga/metaengine.cpp:52
-#: engines/scumm/dialogs.cpp:1233 engines/scumm/metaengine.cpp:836
+#: engines/scumm/dialogs.cpp:1237 engines/scumm/metaengine.cpp:857
 #: engines/tot/metaengine.cpp:37
 msgid "Enable copy protection"
 msgstr ""
@@ -6195,7 +6194,7 @@ msgstr ""
 #: engines/dreamweb/metaengine.cpp:37 engines/gob/metaengine.cpp:46
 #: engines/lure/metaengine.cpp:42 engines/mads/metaengine.cpp:51
 #: engines/mm/metaengine.cpp:47 engines/saga/metaengine.cpp:53
-#: engines/scumm/dialogs.cpp:1234 engines/scumm/metaengine.cpp:837
+#: engines/scumm/dialogs.cpp:1238 engines/scumm/metaengine.cpp:858
 msgid "Enable any copy protection that would otherwise be bypassed by default."
 msgstr ""
 
@@ -6311,7 +6310,7 @@ msgstr ""
 #: engines/cge2/metaengine.cpp:212 engines/chamber/metaengine.cpp:64
 #: engines/cine/metaengine.cpp:271 engines/cruise/metaengine.cpp:169
 #: engines/dm/metaengine.cpp:72 engines/draci/metaengine.cpp:196
-#: engines/drascula/metaengine.cpp:206 engines/hopkins/metaengine.cpp:207
+#: engines/drascula/metaengine.cpp:206 engines/hopkins/metaengine.cpp:230
 #: engines/hugo/metaengine.cpp:130 engines/hypno/metaengine.cpp:225
 #: engines/hypno/metaengine.cpp:324 engines/hypno/metaengine.cpp:372
 #: engines/illusions/metaengine.cpp:90 engines/lab/metaengine.cpp:152
@@ -6368,7 +6367,7 @@ msgid "Turn backward"
 msgstr ""
 
 #: engines/agos/metaengine.cpp:228 engines/dm/metaengine.cpp:132
-#: engines/hopkins/metaengine.cpp:269 engines/kyra/engine/eobcommon.cpp:383
+#: engines/hopkins/metaengine.cpp:294 engines/kyra/engine/eobcommon.cpp:383
 #: engines/kyra/engine/lol.cpp:517 engines/lab/metaengine.cpp:257
 #: engines/mm/mm1/metaengine.cpp:102 engines/mohawk/riven.cpp:901
 #: engines/pegasus/pegasus.cpp:2740 engines/twine/metaengine.cpp:353
@@ -6383,7 +6382,7 @@ msgid "Turn left"
 msgstr ""
 
 #: engines/agos/metaengine.cpp:234 engines/dm/metaengine.cpp:152
-#: engines/hopkins/metaengine.cpp:275 engines/kyra/engine/eobcommon.cpp:384
+#: engines/hopkins/metaengine.cpp:300 engines/kyra/engine/eobcommon.cpp:384
 #: engines/kyra/engine/lol.cpp:518 engines/lab/metaengine.cpp:271
 #: engines/mm/mm1/metaengine.cpp:103 engines/mohawk/riven.cpp:907
 #: engines/pegasus/pegasus.cpp:2747 engines/twine/metaengine.cpp:346
@@ -6489,7 +6488,7 @@ msgstr ""
 msgid "Quick load or save game isn't supported in this location"
 msgstr ""
 
-#: engines/agos/saveload.cpp:160 engines/scumm/scumm.cpp:3462
+#: engines/agos/saveload.cpp:160 engines/scumm/scumm.cpp:3477
 #, c-format
 msgid ""
 "Failed to load saved game from file:\n"
@@ -6497,7 +6496,7 @@ msgid ""
 "%s"
 msgstr ""
 
-#: engines/agos/saveload.cpp:195 engines/scumm/scumm.cpp:3449
+#: engines/agos/saveload.cpp:195 engines/scumm/scumm.cpp:3464
 #, c-format
 msgid ""
 "Failed to save game to file:\n"
@@ -6505,7 +6504,7 @@ msgid ""
 "%s"
 msgstr ""
 
-#: engines/agos/saveload.cpp:203 engines/scumm/scumm.cpp:3482
+#: engines/agos/saveload.cpp:203 engines/scumm/scumm.cpp:3497
 #, c-format
 msgid ""
 "Successfully saved game in file:\n"
@@ -6617,6 +6616,8 @@ msgid "Whether textures should be linearly filtered"
 msgstr ""
 
 #: engines/alcachofa/metaengine.cpp:98 engines/cine/metaengine.cpp:347
+#: engines/freescape/games/3dck/ui.cpp:34
+#: engines/freescape/games/3dck/zx.cpp:51
 #: engines/freescape/games/castle/castle.cpp:594
 msgid "Activate"
 msgstr ""
@@ -6741,7 +6742,8 @@ msgstr ""
 msgid "Select / Kick / Run"
 msgstr ""
 
-#: engines/awe/metaengine.cpp:62 engines/hpl1/metaengine.cpp:83
+#: engines/awe/metaengine.cpp:62 engines/harvester/metaengine.cpp:101
+#: engines/hpl1/metaengine.cpp:83
 msgid "Jump"
 msgstr ""
 
@@ -6749,7 +6751,7 @@ msgstr ""
 msgid "Enter level code"
 msgstr ""
 
-#: engines/awe/metaengine.cpp:88 engines/dgds/metaengine.cpp:87
+#: engines/awe/metaengine.cpp:88 engines/dgds/metaengine.cpp:91
 #: engines/got/metaengine.cpp:105
 msgid "Game Keys"
 msgstr ""
@@ -6805,7 +6807,7 @@ msgstr ""
 msgid "Escape keymappings"
 msgstr ""
 
-#: engines/bbvs/metaengine.cpp:117 engines/hopkins/metaengine.cpp:231
+#: engines/bbvs/metaengine.cpp:117 engines/hopkins/metaengine.cpp:256
 #: engines/illusions/metaengine.cpp:147 engines/sherlock/metaengine.cpp:839
 msgid "Open inventory"
 msgstr ""
@@ -6951,7 +6953,7 @@ msgstr ""
 #: engines/bladerunner/metaengine.cpp:229 engines/buried/metaengine.cpp:160
 #: engines/darkseed/metaengine.cpp:65 engines/hypno/metaengine.cpp:210
 #: engines/phoenixvr/metaengine.cpp:94 engines/scumm/help.cpp:79
-#: engines/scumm/metaengine.cpp:1165 engines/supernova/metaengine.cpp:309
+#: engines/scumm/metaengine.cpp:1263 engines/supernova/metaengine.cpp:309
 #: engines/toltecs/metaengine.cpp:246 engines/twp/metaengine.cpp:161
 #: engines/zvision/metaengine.cpp:304
 msgid "Skip cutscene"
@@ -7046,13 +7048,13 @@ msgstr ""
 #. SAVE GAME
 #: engines/bladerunner/metaengine.cpp:330 engines/buried/metaengine.cpp:179
 #: engines/cge/metaengine.cpp:221 engines/cge2/metaengine.cpp:235
-#: engines/dgds/metaengine.cpp:75 engines/dm/metaengine.cpp:120
+#: engines/dgds/metaengine.cpp:79 engines/dm/metaengine.cpp:120
 #: engines/drascula/metaengine.cpp:285 engines/efh/metaengine.cpp:272
 #: engines/freescape/games/castle/castle.cpp:539
 #: engines/freescape/games/dark/dark.cpp:231
 #: engines/freescape/games/driller/driller.cpp:121
 #: engines/freescape/games/eclipse/eclipse.cpp:337
-#: engines/hopkins/metaengine.cpp:238 engines/hugo/metaengine.cpp:165
+#: engines/hopkins/metaengine.cpp:263 engines/hugo/metaengine.cpp:165
 #: engines/lure/metaengine.cpp:191 engines/made/metaengine.cpp:196
 #: engines/mads/metaengine.cpp:295 engines/mohawk/myst.cpp:583
 #: engines/mohawk/riven.cpp:864 engines/pegasus/pegasus.cpp:2825
@@ -7074,13 +7076,13 @@ msgstr ""
 #. LOAD GAME
 #: engines/bladerunner/metaengine.cpp:339 engines/buried/metaengine.cpp:184
 #: engines/cge/metaengine.cpp:227 engines/cge2/metaengine.cpp:241
-#: engines/dgds/metaengine.cpp:74 engines/drascula/metaengine.cpp:260
+#: engines/dgds/metaengine.cpp:78 engines/drascula/metaengine.cpp:260
 #: engines/efh/metaengine.cpp:279 engines/efh/metaengine.cpp:613
 #: engines/freescape/games/castle/castle.cpp:544
 #: engines/freescape/games/dark/dark.cpp:236
 #: engines/freescape/games/driller/driller.cpp:126
 #: engines/freescape/games/eclipse/eclipse.cpp:342
-#: engines/hopkins/metaengine.cpp:244 engines/made/metaengine.cpp:202
+#: engines/hopkins/metaengine.cpp:269 engines/made/metaengine.cpp:202
 #: engines/mohawk/myst_stacks/menu.cpp:283
 #: engines/mohawk/riven_stacks/aspit.cpp:349 engines/pegasus/pegasus.cpp:2831
 #: engines/petka/metaengine.cpp:203 engines/prince/metaengine.cpp:249
@@ -7216,7 +7218,7 @@ msgid "Look right"
 msgstr ""
 
 #: engines/buried/metaengine.cpp:218 engines/colony/metaengine.cpp:110
-#: engines/dm/metaengine.cpp:142 engines/hopkins/metaengine.cpp:257
+#: engines/dm/metaengine.cpp:142 engines/hopkins/metaengine.cpp:282
 #: engines/kyra/engine/eobcommon.cpp:379 engines/kyra/engine/lol.cpp:513
 #: engines/mohawk/riven.cpp:881 engines/titanic/metaengine.cpp:336
 #: engines/titanic/metaengine.cpp:378 engines/twine/metaengine.cpp:332
@@ -7291,7 +7293,7 @@ msgid ""
 msgstr ""
 
 #: engines/buried/saveload.cpp:179 engines/mtropolis/saveload.cpp:158
-#: engines/nancy/nancy.cpp:965 engines/tot/saveload.cpp:269
+#: engines/nancy/nancy.cpp:1222 engines/tot/saveload.cpp:269
 #: engines/vcruise/vcruise.cpp:356
 msgid "Saved game was created with a newer version of ScummVM. Unable to load."
 msgstr ""
@@ -7304,7 +7306,7 @@ msgstr ""
 msgid "Enable Color Blind Mode by default"
 msgstr ""
 
-#: engines/cge/metaengine.cpp:215 engines/hopkins/metaengine.cpp:225
+#: engines/cge/metaengine.cpp:215 engines/hopkins/metaengine.cpp:250
 #: engines/sword1/metaengine.cpp:283
 msgid "Exit / Skip"
 msgstr ""
@@ -7515,19 +7517,19 @@ msgid ""
 "beginning using new savegames."
 msgstr ""
 
-#: engines/colony/intro.cpp:210
+#: engines/colony/intro.cpp:264
 msgid "Save this game?"
 msgstr ""
 
-#: engines/colony/intro.cpp:244
+#: engines/colony/intro.cpp:298
 msgid "New Game"
 msgstr ""
 
-#: engines/colony/intro.cpp:245
+#: engines/colony/intro.cpp:299
 msgid "Load Game"
 msgstr ""
 
-#: engines/colony/intro.cpp:1313
+#: engines/colony/intro.cpp:1597
 msgid "You have been terminated."
 msgstr ""
 
@@ -7547,7 +7549,7 @@ msgstr ""
 msgid "Use alternative camera controls"
 msgstr ""
 
-#: engines/colony/metaengine.cpp:117 engines/hopkins/metaengine.cpp:263
+#: engines/colony/metaengine.cpp:117 engines/hopkins/metaengine.cpp:288
 msgid "Move backward"
 msgstr ""
 
@@ -7563,7 +7565,7 @@ msgstr ""
 msgid "Strafe right"
 msgstr ""
 
-#: engines/colony/metaengine.cpp:138
+#: engines/colony/metaengine.cpp:138 engines/freescape/games/3dck/zx.cpp:49
 #: engines/freescape/games/castle/castle.cpp:562
 #: engines/freescape/games/dark/dark.cpp:257
 #: engines/freescape/games/driller/driller.cpp:145
@@ -7571,7 +7573,7 @@ msgstr ""
 msgid "Rotate left"
 msgstr ""
 
-#: engines/colony/metaengine.cpp:143
+#: engines/colony/metaengine.cpp:143 engines/freescape/games/3dck/zx.cpp:50
 #: engines/freescape/games/castle/castle.cpp:567
 #: engines/freescape/games/dark/dark.cpp:262
 #: engines/freescape/games/driller/driller.cpp:150
@@ -7617,11 +7619,11 @@ msgstr ""
 msgid "Zoom out (map)"
 msgstr ""
 
-#: engines/colony/savegame.cpp:291
+#: engines/colony/savegame.cpp:304
 msgid "Saving is only available in first-person view."
 msgstr ""
 
-#: engines/colony/savegame.cpp:300
+#: engines/colony/savegame.cpp:313
 msgid "Loading is only available in first-person view."
 msgstr ""
 
@@ -7632,7 +7634,7 @@ msgstr ""
 #. I18N: Combat command in Might & Magic 1
 #: engines/crab/input/input.cpp:125 engines/efh/metaengine.cpp:487
 #: engines/efh/metaengine.cpp:512 engines/griffon/metaengine.cpp:145
-#: engines/mm/mm1/metaengine.cpp:70 engines/scumm/metaengine.cpp:1152
+#: engines/mm/mm1/metaengine.cpp:70 engines/scumm/metaengine.cpp:1250
 #: engines/ultima/ultima0/metaengine.cpp:82
 #: engines/ultima/ultima4/metaengine.cpp:48
 #: engines/ultima/nuvie/metaengine.cpp:74
@@ -7794,35 +7796,35 @@ msgstr ""
 msgid "Time advance"
 msgstr ""
 
-#: engines/dgds/metaengine.cpp:76
+#: engines/dgds/metaengine.cpp:80
 msgid "Toggle Menu"
 msgstr ""
 
-#: engines/dgds/metaengine.cpp:77
+#: engines/dgds/metaengine.cpp:81
 msgid "Toggle Clock"
 msgstr ""
 
-#: engines/dgds/metaengine.cpp:78
+#: engines/dgds/metaengine.cpp:82
 msgid "Next dialog / menu item"
 msgstr ""
 
-#: engines/dgds/metaengine.cpp:79
+#: engines/dgds/metaengine.cpp:83
 msgid "Previous dialog / menu item"
 msgstr ""
 
-#: engines/dgds/metaengine.cpp:80
+#: engines/dgds/metaengine.cpp:84
 msgid "Next object"
 msgstr ""
 
-#: engines/dgds/metaengine.cpp:81
+#: engines/dgds/metaengine.cpp:85
 msgid "Previous object"
 msgstr ""
 
-#: engines/dgds/metaengine.cpp:82
+#: engines/dgds/metaengine.cpp:86
 msgid "Pick up / Operate"
 msgstr ""
 
-#: engines/dgds/metaengine.cpp:84
+#: engines/dgds/metaengine.cpp:88
 msgid "Activate Inventory Object"
 msgstr ""
 
@@ -7832,8 +7834,8 @@ msgid ""
 "anyway?"
 msgstr ""
 
-#: engines/director/metaengine.cpp:74 engines/scumm/dialogs.cpp:1212
-#: engines/scumm/metaengine.cpp:807
+#: engines/director/metaengine.cpp:74 engines/scumm/dialogs.cpp:1216
+#: engines/scumm/metaengine.cpp:828
 msgid "Enable gamma correction"
 msgstr ""
 
@@ -7925,9 +7927,9 @@ msgstr ""
 msgid "Toggle walk speed"
 msgstr ""
 
-#: engines/draci/metaengine.cpp:243 engines/hopkins/metaengine.cpp:302
+#: engines/draci/metaengine.cpp:243 engines/hopkins/metaengine.cpp:327
 #: engines/mohawk/myst.cpp:554 engines/mohawk/riven.cpp:835
-#: engines/nancy/input.cpp:233
+#: engines/nancy/input.cpp:235
 msgid "Open main menu"
 msgstr ""
 
@@ -8058,6 +8060,7 @@ msgid "Skip all Book 2 cases and jump to Book 3 once Book 1 is complete."
 msgstr ""
 
 #: engines/eem/metaengine.cpp:72 engines/hypno/metaengine.cpp:81
+#: engines/scumm/metaengine.cpp:990
 msgid "Enable restored content"
 msgstr ""
 
@@ -8479,6 +8482,24 @@ msgstr ""
 #. I18N: Toggles the red/blue stereoscopic 3D effect (anaglyph glasses).
 #: engines/freescape/movement.cpp:129
 msgid "Toggle red/blue 3D"
+msgstr ""
+
+#: engines/freescape/games/3dck/zx.cpp:41
+msgid "Center view"
+msgstr ""
+
+#: engines/freescape/games/3dck/zx.cpp:52
+msgid "Stand up"
+msgstr ""
+
+#. I18N: Action in In Cold Blood
+#: engines/freescape/games/3dck/zx.cpp:53 engines/hpl1/metaengine.cpp:84
+#: engines/icb/icb.cpp:119 engines/icb/icb.cpp:185
+msgid "Crouch"
+msgstr ""
+
+#: engines/freescape/games/3dck/zx.cpp:61
+msgid "Restart"
 msgstr ""
 
 #: engines/freescape/games/castle/castle.cpp:529
@@ -9149,7 +9170,7 @@ msgid "Failed to delete file."
 msgstr ""
 
 #. I18N: Action in In Cold Blood
-#: engines/got/metaengine.cpp:74 engines/hopkins/metaengine.cpp:281
+#: engines/got/metaengine.cpp:74 engines/hopkins/metaengine.cpp:306
 #: engines/icb/icb.cpp:89 engines/ultima/ultima4/metaengine.cpp:55
 msgid "Fire"
 msgstr ""
@@ -9374,24 +9395,60 @@ msgstr ""
 msgid "The Troy minigame is not supported yet. Skipping"
 msgstr ""
 
-#: engines/harvester/metaengine.cpp:33
+#: engines/harvester/metaengine.cpp:37
 msgid "Enable gore"
 msgstr ""
 
-#: engines/harvester/metaengine.cpp:34
+#: engines/harvester/metaengine.cpp:38
 msgid ""
 "When disabled, the startup movie player follows the original GORE=NO "
 "censorship path."
 msgstr ""
 
-#: engines/harvester/metaengine.cpp:44
+#: engines/harvester/metaengine.cpp:48
 msgid "Show CD change prompts"
 msgstr ""
 
-#: engines/harvester/metaengine.cpp:45
+#: engines/harvester/metaengine.cpp:49
 msgid ""
 "Display the original CD swap image and wait for a left click when the script "
 "requests disc 2 or 3."
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:69
+msgid "Gameplay"
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:91 engines/ultima/ultima4/metaengine.cpp:82
+msgid "Speed up"
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:94
+msgid "Help menu"
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:95
+msgid "Attack modifier"
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:96
+msgid "High attack"
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:97
+msgid "Medium attack"
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:98
+msgid "Low attack"
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:99
+msgid "Evasive movement modifier"
+msgstr ""
+
+#: engines/harvester/metaengine.cpp:100
+msgid "Duck"
 msgstr ""
 
 #: engines/hdb/metaengine.cpp:44 engines/illusions/metaengine.cpp:153
@@ -9410,29 +9467,170 @@ msgstr ""
 msgid "Debug"
 msgstr ""
 
-#: engines/hopkins/metaengine.cpp:47 engines/hopkins/metaengine.cpp:59
-msgid "Gore Mode"
+#: engines/hopkins/base_enhancements.cpp:313
+msgid "Player"
+msgstr ""
+
+#. I18N: Exits the game
+#: engines/hopkins/base_enhancements.cpp:314 engines/lab/metaengine.cpp:166
+#: engines/lab/metaengine.cpp:191 engines/sherlock/metaengine.cpp:395
+#: engines/sherlock/metaengine.cpp:494 engines/sherlock/metaengine.cpp:538
+#: engines/sherlock/metaengine.cpp:549 engines/sherlock/metaengine.cpp:601
+#: engines/sherlock/metaengine.cpp:680 engines/supernova/metaengine.cpp:297
+#: engines/supernova/metaengine.cpp:373
+#: engines/ultima/ultima4/metaengine.cpp:54 engines/voyeur/metaengine.cpp:198
+#: engines/voyeur/metaengine.cpp:229 engines/wintermute/keymapper_tables.h:757
+#: engines/wintermute/keymapper_tables.h:1887
+msgid "Exit"
+msgstr ""
+
+#: engines/hopkins/base_enhancements.cpp:315
+msgid "Guard"
+msgstr ""
+
+#: engines/hopkins/base_enhancements.cpp:316
+msgid "Door"
+msgstr ""
+
+#: engines/hopkins/base_enhancements.cpp:317
+msgid "Game paused"
+msgstr ""
+
+#: engines/hopkins/base_enhancements.cpp:325
+msgid "M: close  A: autoplay  Esc: menu"
+msgstr ""
+
+#: engines/hopkins/base_enhancements.cpp:326
+msgid "M/Esc: close  A: autoplay"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:51
+msgid "Exit 1: Containers room"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:51
+msgid "Containers"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:52
+msgid "Exit 2: Turbines room"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:52
+msgid "Turbines"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:53
+msgid "Exit 3: Office"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:53
+msgid "Office"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:54
+msgid "Exit 4: Laboratory"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:54
+msgid "Laboratory"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:55
+msgid "Exit 5: Resurrection room"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:55
+msgid "Resurrection"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:56
+msgid "Exit 6: Dome"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:56
+msgid "Dome"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:656
+msgid "WBASE AUTOPLAY"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:659
+msgid "Fight your way to:"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:671
+msgid "Up/Down: choose"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:673
+msgid "Enter/Space: start"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:676
+msgid "A: resume / M: map"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:676
+msgid "Select a destination"
+msgstr ""
+
+#: engines/hopkins/base_enhancements_autoplay.cpp:677
+msgid "Esc/A: cancel"
 msgstr ""
 
 #: engines/hopkins/metaengine.cpp:48 engines/hopkins/metaengine.cpp:60
+msgid "Gore Mode"
+msgstr ""
+
+#: engines/hopkins/metaengine.cpp:49 engines/hopkins/metaengine.cpp:61
 msgid "Enable Gore Mode when available"
 msgstr ""
 
-#: engines/hopkins/metaengine.cpp:208
+#: engines/hopkins/metaengine.cpp:72
+msgid "Underwater base shooter enhancements"
+msgstr ""
+
+#: engines/hopkins/metaengine.cpp:73
+msgid "Enable navigation map and autoplay options for Windows base shooter"
+msgstr ""
+
+#: engines/hopkins/metaengine.cpp:83
+msgid "Underwater base shooter Forced Autoplay"
+msgstr ""
+
+#: engines/hopkins/metaengine.cpp:84
+msgid "Require an autoplay destination in Windows base shooter"
+msgstr ""
+
+#: engines/hopkins/metaengine.cpp:231
 msgid "Underwater base shooter"
 msgstr ""
 
-#: engines/hopkins/metaengine.cpp:250 engines/tinsel/metaengine.cpp:307
+#: engines/hopkins/metaengine.cpp:233
+msgid "WBASE enhancements"
+msgstr ""
+
+#: engines/hopkins/metaengine.cpp:275 engines/tinsel/metaengine.cpp:307
 #: engines/twine/metaengine.cpp:307
 msgid "Options menu"
 msgstr ""
 
-#: engines/hopkins/metaengine.cpp:288
+#: engines/hopkins/metaengine.cpp:313
 msgid "Exit through base doorway"
 msgstr ""
 
-#: engines/hopkins/metaengine.cpp:294
+#: engines/hopkins/metaengine.cpp:319
 msgid "Toggle floor and ceiling textures"
+msgstr ""
+
+#: engines/hopkins/metaengine.cpp:333
+msgid "WBASE enhancements: open navigation map"
+msgstr ""
+
+#: engines/hopkins/metaengine.cpp:338
+msgid "WBASE enhancements: choose autoplay destination"
 msgstr ""
 
 #: engines/hpl1/metaengine.cpp:76
@@ -9449,12 +9647,6 @@ msgstr ""
 
 #: engines/hpl1/metaengine.cpp:81
 msgid "Lean right"
-msgstr ""
-
-#. I18N: Action in In Cold Blood
-#: engines/hpl1/metaengine.cpp:84 engines/icb/icb.cpp:119
-#: engines/icb/icb.cpp:185
-msgid "Crouch"
 msgstr ""
 
 #: engines/hpl1/metaengine.cpp:87
@@ -9592,8 +9784,8 @@ msgstr ""
 msgid "Player ammo will never decrease."
 msgstr ""
 
-#: engines/hypno/metaengine.cpp:70 engines/scumm/metaengine.cpp:906
-#: engines/scumm/metaengine.cpp:933
+#: engines/hypno/metaengine.cpp:70 engines/scumm/metaengine.cpp:927
+#: engines/scumm/metaengine.cpp:963
 msgid "Unlock all levels"
 msgstr ""
 
@@ -9638,23 +9830,23 @@ msgstr ""
 msgid "Aim up"
 msgstr ""
 
-#: engines/hypno/metaengine.cpp:175 engines/scumm/metaengine.cpp:1217
-#: engines/scumm/metaengine.cpp:1295
+#: engines/hypno/metaengine.cpp:175 engines/scumm/metaengine.cpp:1315
+#: engines/scumm/metaengine.cpp:1393
 msgid "Stick left"
 msgstr ""
 
-#: engines/hypno/metaengine.cpp:182 engines/scumm/metaengine.cpp:1210
-#: engines/scumm/metaengine.cpp:1288
+#: engines/hypno/metaengine.cpp:182 engines/scumm/metaengine.cpp:1308
+#: engines/scumm/metaengine.cpp:1386
 msgid "Stick down"
 msgstr ""
 
-#: engines/hypno/metaengine.cpp:189 engines/scumm/metaengine.cpp:1224
-#: engines/scumm/metaengine.cpp:1302
+#: engines/hypno/metaengine.cpp:189 engines/scumm/metaengine.cpp:1322
+#: engines/scumm/metaengine.cpp:1400
 msgid "Stick right"
 msgstr ""
 
-#: engines/hypno/metaengine.cpp:196 engines/scumm/metaengine.cpp:1203
-#: engines/scumm/metaengine.cpp:1281
+#: engines/hypno/metaengine.cpp:196 engines/scumm/metaengine.cpp:1301
+#: engines/scumm/metaengine.cpp:1379
 msgid "Stick up"
 msgstr ""
 
@@ -9792,6 +9984,14 @@ msgstr ""
 #: engines/illusions/metaengine.cpp:136 engines/twine/metaengine.cpp:422
 #: engines/twine/metaengine.cpp:474 engines/twine/metaengine.cpp:490
 msgid "Abort"
+msgstr ""
+
+#: engines/kingdom/metaengine.cpp:42
+msgid "Mono music"
+msgstr ""
+
+#: engines/kingdom/metaengine.cpp:43
+msgid "Use monophonic music"
 msgstr ""
 
 #: engines/kyra/detection_tables.h:87
@@ -10103,18 +10303,6 @@ msgstr ""
 msgid "Journal keymappings"
 msgstr ""
 
-#. I18N: Exits the game
-#: engines/lab/metaengine.cpp:166 engines/lab/metaengine.cpp:191
-#: engines/sherlock/metaengine.cpp:395 engines/sherlock/metaengine.cpp:494
-#: engines/sherlock/metaengine.cpp:538 engines/sherlock/metaengine.cpp:549
-#: engines/sherlock/metaengine.cpp:601 engines/sherlock/metaengine.cpp:680
-#: engines/supernova/metaengine.cpp:297 engines/supernova/metaengine.cpp:373
-#: engines/ultima/ultima4/metaengine.cpp:54 engines/voyeur/metaengine.cpp:198
-#: engines/voyeur/metaengine.cpp:229 engines/wintermute/keymapper_tables.h:757
-#: engines/wintermute/keymapper_tables.h:1887
-msgid "Exit"
-msgstr ""
-
 #: engines/lab/metaengine.cpp:179
 msgid "Raise the sound volume"
 msgstr ""
@@ -10276,49 +10464,62 @@ msgstr ""
 msgid "Select index"
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:40
+#: engines/macs2/actionbar.cpp:893
+msgid "Quit the game?"
+msgstr ""
+
+#: engines/macs2/dialogs.cpp:36
+msgid "Translation:"
+msgstr ""
+
+#: engines/macs2/dialogs.cpp:39
+msgid "Original"
+msgstr ""
+
+#: engines/macs2/dialogs.cpp:52
 msgid "Use TTS to read the dialogue (if TTS is available)"
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:44 engines/scumm/dialogs.cpp:1163
+#: engines/macs2/dialogs.cpp:56 engines/scumm/dialogs.cpp:1167
 msgid "Enhancements:"
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:50 engines/scumm/dialogs.cpp:1168
+#: engines/macs2/dialogs.cpp:62 engines/scumm/dialogs.cpp:1172
 msgid "Fix original bugs"
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:51 engines/scumm/dialogs.cpp:1169
+#: engines/macs2/dialogs.cpp:63 engines/scumm/dialogs.cpp:1173
 msgid ""
 "Fixes bugs which were present in the original release, and noticeable "
 "graphical/audio glitches."
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:55 engines/scumm/dialogs.cpp:1172
+#: engines/macs2/dialogs.cpp:67 engines/scumm/dialogs.cpp:1176
 msgid "Audio-visual improvements"
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:56
+#: engines/macs2/dialogs.cpp:68
 msgid ""
 "Optional generated dialogue speech (SPEECH/*.wav) and other audio/visual "
 "polish."
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:60 engines/scumm/dialogs.cpp:1176
+#: engines/macs2/dialogs.cpp:72 engines/scumm/dialogs.cpp:1180
+#: engines/scumm/metaengine.cpp:954 engines/scumm/metaengine.cpp:981
 msgid "Restored content"
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:61 engines/scumm/dialogs.cpp:1177
+#: engines/macs2/dialogs.cpp:73 engines/scumm/dialogs.cpp:1181
 msgid ""
 "Restores dialogs, graphics, and audio elements which were originally cut in "
 "the original release."
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:65 engines/scumm/dialogs.cpp:1180
+#: engines/macs2/dialogs.cpp:77 engines/scumm/dialogs.cpp:1184
 msgid "Modern UI/UX adjustments"
 msgstr ""
 
-#: engines/macs2/dialogs.cpp:66
+#: engines/macs2/dialogs.cpp:78
 msgid "Activates some modern comforts for a smoother user experience."
 msgstr ""
 
@@ -10469,6 +10670,15 @@ msgstr ""
 
 #: engines/mads/metaengine.cpp:358
 msgid "Restart animation"
+msgstr ""
+
+#: engines/mads/nebular/mac_menus.cpp:822
+#, c-format
+msgid "A saved game named '%s' already exists. Replace it?"
+msgstr ""
+
+#: engines/mads/nebular/mac_menus.cpp:824
+msgid "Replace"
 msgstr ""
 
 #: engines/mm/metaengine.cpp:57
@@ -10999,19 +11209,19 @@ msgstr ""
 msgid "Invalid file name for saving"
 msgstr ""
 
-#: engines/nancy/input.cpp:186
+#: engines/nancy/input.cpp:188
 msgid "Nancy Drew"
 msgstr ""
 
-#: engines/nancy/input.cpp:227
+#: engines/nancy/input.cpp:229
 msgid "Fast move modifier"
 msgstr ""
 
-#: engines/nancy/input.cpp:242
+#: engines/nancy/input.cpp:244
 msgid "Nancy Drew - Maze"
 msgstr ""
 
-#: engines/nancy/input.cpp:244
+#: engines/nancy/input.cpp:246
 msgid "Show / hide maze map"
 msgstr ""
 
@@ -11067,6 +11277,14 @@ msgstr ""
 msgid ""
 "Get a little more time before failing the final puzzle. This is an official "
 "patch by HeR Interactive."
+msgstr ""
+
+#: engines/nancy/metaengine.cpp:151
+msgid "Support for Nancy Drew 18 is not compiled in"
+msgstr ""
+
+#: engines/nancy/metaengine.cpp:157
+msgid "Support for Nancy Drew 19 and newer is not compiled in"
 msgstr ""
 
 #: engines/nancy/state/loadsave.cpp:108
@@ -11771,16 +11989,16 @@ msgstr ""
 msgid "Yamaha FB-01"
 msgstr ""
 
-#: engines/sci/detection_tables.h:1471 engines/sci/detection_tables.h:1482
+#: engines/sci/detection_tables.h:1506 engines/sci/detection_tables.h:1517
 msgid "Game does not contain menu resources"
 msgstr ""
 
 #. I18N: 'Robot' is a video format name (as in 'MP4 video')
-#: engines/sci/detection_tables.h:4900
+#: engines/sci/detection_tables.h:4973
 msgid "This demo uses an unimplemented version of Robot videos"
 msgstr ""
 
-#: engines/sci/detection_tables.h:4955
+#: engines/sci/detection_tables.h:5028
 msgid "Incomplete game detected. You have to copy data from all the CDs."
 msgstr ""
 
@@ -11904,7 +12122,7 @@ msgid "Your Name:"
 msgstr ""
 
 #. I18N: Button, start hosting online multiplayer game
-#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4529
+#: engines/scumm/dialog-createsession.cpp:49 engines/scumm/scumm.cpp:4544
 msgid "Host"
 msgstr ""
 
@@ -11914,7 +12132,7 @@ msgid "Querying games..."
 msgstr ""
 
 #. I18N: Join online multiplayer game
-#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4529
+#: engines/scumm/dialog-sessionselector.cpp:64 engines/scumm/scumm.cpp:4544
 msgid "Join"
 msgstr ""
 
@@ -11925,256 +12143,256 @@ msgid "Found %d available games."
 msgstr ""
 
 #. I18N: Previous page button
-#: engines/scumm/dialogs.cpp:285
+#: engines/scumm/dialogs.cpp:289
 msgid "~P~revious"
 msgstr ""
 
 #. I18N: Next page button
-#: engines/scumm/dialogs.cpp:287
+#: engines/scumm/dialogs.cpp:291
 msgid "~N~ext"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:288
+#: engines/scumm/dialogs.cpp:292
 msgid "~C~lose"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:993
+#: engines/scumm/dialogs.cpp:997
 msgid "Speech Only"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:994
+#: engines/scumm/dialogs.cpp:998
 msgid "Speech and Subtitles"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:995
+#: engines/scumm/dialogs.cpp:999
 msgid "Subtitles Only"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1003
+#: engines/scumm/dialogs.cpp:1007
 msgctxt "lowres"
 msgid "Speech & Subs"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1049
+#: engines/scumm/dialogs.cpp:1053
 msgid "Select a Proficiency Level."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1051
+#: engines/scumm/dialogs.cpp:1055
 msgid "Refer to your Loom(TM) manual for help."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1055
+#: engines/scumm/dialogs.cpp:1059
 msgid "Practice"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1056
+#: engines/scumm/dialogs.cpp:1060
 msgid "Expert"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1173
+#: engines/scumm/dialogs.cpp:1177
 msgid ""
 "Makes adjustments not related to bugs for certain audio and graphics "
 "elements (e.g. version consistency changes)."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1181
+#: engines/scumm/dialogs.cpp:1185
 msgid ""
 "Activates some modern comforts; e.g it removes the fake sound loading screen "
 "in Sam&Max, and makes early save menus snappier."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1205 engines/scumm/metaengine.cpp:797
+#: engines/scumm/dialogs.cpp:1209 engines/scumm/metaengine.cpp:818
 msgid "Enable the original GUI and Menu"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1206 engines/scumm/metaengine.cpp:798
+#: engines/scumm/dialogs.cpp:1210 engines/scumm/metaengine.cpp:819
 msgid ""
 "Allow the game to use the in-engine graphical interface and the original "
 "save/load menu. Use it together with the \"Ask for confirmation on exit\" "
 "for a more complete experience."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1213 engines/scumm/metaengine.cpp:808
+#: engines/scumm/dialogs.cpp:1217 engines/scumm/metaengine.cpp:829
 msgid "Brighten the graphics to simulate a Macintosh monitor."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1219
+#: engines/scumm/dialogs.cpp:1223
 msgid "Simulate Sega colors"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1220
+#: engines/scumm/dialogs.cpp:1224
 msgid ""
 "Instead of using the colors defined in the game, simulate colors used on "
 "actual Sega hardware. These are significantly darker, though it's unclear if "
 "that was intended or not."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1226
+#: engines/scumm/dialogs.cpp:1230
 msgid "Show wait cursor when paused"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1227
+#: engines/scumm/dialogs.cpp:1231
 msgid ""
 "When paused, show the animated wait cursor from the original Sega CD version."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1364
+#: engines/scumm/dialogs.cpp:1387
 msgid "Overture Timing:"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1368
+#: engines/scumm/dialogs.cpp:1391
 msgid ""
 "When using replacement music, this adjusts the time when the Overture "
 "changes to the scene with the Lucasfilm and Loom logotypes."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1469
+#: engines/scumm/dialogs.cpp:1492
 msgid "Music Quality:"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1473
+#: engines/scumm/dialogs.cpp:1496
 msgid ""
 "Select music quality. The original lets you choose this from the Game menu."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1474
+#: engines/scumm/dialogs.cpp:1497
 msgid ""
 "Select music quality. The original determines the basic setup by hardware "
 "detection and speed tests, but also allows changes through the Game menu to "
 "some degree."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1581 engines/scumm/dialogs.cpp:1582
+#: engines/scumm/dialogs.cpp:1604 engines/scumm/dialogs.cpp:1605
 msgid "auto"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1581
+#: engines/scumm/dialogs.cpp:1604
 msgid "Low"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1581
+#: engines/scumm/dialogs.cpp:1604
 #: engines/scumm/he/moonbase/dialog-mapgenerator.cpp:75
 msgid "Medium"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1581
+#: engines/scumm/dialogs.cpp:1604
 msgid "High"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1582
+#: engines/scumm/dialogs.cpp:1605
 msgid "Good"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1582
+#: engines/scumm/dialogs.cpp:1605
 msgid "Better"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1582
+#: engines/scumm/dialogs.cpp:1605
 msgid "Best"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1583
+#: engines/scumm/dialogs.cpp:1606
 #, c-format
 msgid "Hardware Rating: %s   -   "
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1583
+#: engines/scumm/dialogs.cpp:1606
 #, c-format
 msgid "Quality Selection: %s"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1597
+#: engines/scumm/dialogs.cpp:1620
 msgid "Playback Adjust:"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1601
+#: engines/scumm/dialogs.cpp:1624
 msgid ""
 "When playing sound from the CD audio track, adjust the start position of the "
 "sound by this much. Use this if you often hear bits of the wrong sound."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1707
+#: engines/scumm/dialogs.cpp:1730
 msgid "Intro Adjust:"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1711
+#: engines/scumm/dialogs.cpp:1734
 msgid ""
 "When playing the intro track, play from this point in it. Use this if the "
 "music gets cut off prematurely, or if you are unhappy with the way the music "
 "syncs up with the intro."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1720
+#: engines/scumm/dialogs.cpp:1743
 msgid "Outlook Adjust:"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1724
+#: engines/scumm/dialogs.cpp:1747
 msgid ""
 "The outlook music is part of the intro track. Adjust the position in the "
 "track at which it starts playing. Use this if the music is cut off, or if "
 "you hear part of the previous music."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1860 engines/scumm/metaengine.cpp:788
+#: engines/scumm/dialogs.cpp:1883 engines/scumm/metaengine.cpp:809
 msgid "Load modded audio"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1860 engines/scumm/metaengine.cpp:789
+#: engines/scumm/dialogs.cpp:1883 engines/scumm/metaengine.cpp:810
 msgid ""
 "Replace music, sound effects, and speech clips with modded audio files, if "
 "available."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1865 engines/scumm/dialogs.cpp:1878
+#: engines/scumm/dialogs.cpp:1888 engines/scumm/dialogs.cpp:1901
 msgid "Multiplayer Server:"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1868
+#: engines/scumm/dialogs.cpp:1891
 msgid "Online Server:"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1869
+#: engines/scumm/dialogs.cpp:1892
 msgid ""
 "Address of the server to connect to for online play.  It must start with "
 "either \"https://\" or \"http://\" schemas."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1871
+#: engines/scumm/dialogs.cpp:1894
 msgid "Enable online competitive mods"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1871
+#: engines/scumm/dialogs.cpp:1894
 msgid "Enables custom-made modifications intended for online competitive play."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1881
+#: engines/scumm/dialogs.cpp:1904
 msgid "Enable connection to Multiplayer Server"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1881
+#: engines/scumm/dialogs.cpp:1904
 msgid ""
 "Toggles the connection to the server that allows hosting and joining online "
 "multiplayer games over the Internet."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1882
+#: engines/scumm/dialogs.cpp:1905
 msgid "Host games over LAN"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1882
+#: engines/scumm/dialogs.cpp:1905
 msgid "Allows the game sessions to be discovered over your local area network."
 msgstr ""
 
 #. I18N: Moonbase Console is a program name
-#: engines/scumm/dialogs.cpp:1886
+#: engines/scumm/dialogs.cpp:1909
 msgid "Generate random maps"
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1886
+#: engines/scumm/dialogs.cpp:1909
 msgid "Allow random map generation (Based from Moonbase Console)."
 msgstr ""
 
-#: engines/scumm/dialogs.cpp:1889
+#: engines/scumm/dialogs.cpp:1912
 msgid ""
 "Address of the server to connect to for hosting and joining online game "
 "sessions."
@@ -12619,283 +12837,330 @@ msgstr ""
 msgid "Fly to lower right"
 msgstr ""
 
-#: engines/scumm/input.cpp:1431
+#: engines/scumm/input.cpp:1421
 msgid "Snap scroll on"
 msgstr ""
 
-#: engines/scumm/input.cpp:1433
+#: engines/scumm/input.cpp:1423
 msgid "Snap scroll off"
 msgstr ""
 
-#: engines/scumm/input.cpp:1446
+#: engines/scumm/input.cpp:1436
 msgid "Music volume: "
 msgstr ""
 
-#: engines/scumm/input.cpp:1463
+#: engines/scumm/input.cpp:1453
 msgid "Subtitle speed: "
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:405
+#: engines/scumm/metaengine.cpp:409
 msgid ""
 "This fan-made translation is not supported, because it is known to contain\n"
 "corrupted resources that might make it crash or seriously misbehave."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:413
+#: engines/scumm/metaengine.cpp:417
 msgid ""
 "The Lite version of Putt-Putt Saves the Zoo iOS is not supported to avoid "
 "piracy.\n"
 "The full version is available for purchase from the iTunes Store."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:424
+#: engines/scumm/metaengine.cpp:428
 msgid ""
 "Warning: this re-release version contains patched game scripts,\n"
 "and therefore it might crash or not work properly for the time being."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:465
+#: engines/scumm/metaengine.cpp:469
 msgid "Rebel Assault II PlayStation support is not compiled in"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:536
+#: engines/scumm/metaengine.cpp:546
 msgid "HE v71+ support is not compiled in"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:560
+#: engines/scumm/metaengine.cpp:570
 msgid "SCUMM v7-8 support is not compiled in"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:717
+#: engines/scumm/metaengine.cpp:727
 msgid "Show Object Line"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:718
+#: engines/scumm/metaengine.cpp:728
 msgid "Show the names of objects at the bottom of the screen"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:726
+#: engines/scumm/metaengine.cpp:736
 msgid "Use NES Classic Palette"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:727
+#: engines/scumm/metaengine.cpp:737
 msgid "Use a more neutral color palette that closely emulates the NES Classic"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:735
+#: engines/scumm/metaengine.cpp:746
+msgid "Use PAL timing for SID audio"
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:747
+msgid ""
+"This lowers the pitch and slows down playback compared to the original NTSC "
+"timing."
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:756
 msgid "Trim FM-TOWNS games to 200 pixels height"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:736
+#: engines/scumm/metaengine.cpp:757
 msgid ""
 "Cut the extra 40 pixels at the bottom of the screen, to make it standard 200 "
 "pixels height, allowing using 'aspect ratio correction'"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:744
+#: engines/scumm/metaengine.cpp:765
 msgid "Run in original 640 x 480 resolution"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:745
+#: engines/scumm/metaengine.cpp:766
 msgid ""
 "This allows more accurate pause/restart banners, but might impact "
 "performance or shader/scaler usage."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:752
+#: engines/scumm/metaengine.cpp:773
 msgid "Play simplified music"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:753
+#: engines/scumm/metaengine.cpp:774
 msgid "This music was intended for low-end Macs, and uses only one channel."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:761
+#: engines/scumm/metaengine.cpp:782
 msgid "Enable smooth scrolling"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:762
+#: engines/scumm/metaengine.cpp:783
 msgid "(instead of the normal 8-pixels steps scrolling)"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:770
+#: engines/scumm/metaengine.cpp:791
 msgid "Allow semi-smooth scrolling"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:771
+#: engines/scumm/metaengine.cpp:792
 msgid ""
 "Allow scrolling to be less smooth during the fast camera movement in the "
 "intro."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:816
+#: engines/scumm/metaengine.cpp:837
 msgid "Enable low latency audio mode"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:817
+#: engines/scumm/metaengine.cpp:838
 msgid ""
 "Allows the game to use low latency audio, at the cost of sound accuracy. It "
 "is recommended to enable this feature only if you incur in audio latency "
 "issues during normal gameplay."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:826
+#: engines/scumm/metaengine.cpp:847
 msgid "Enable the \"A Pirate I Was Meant To Be\" song"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:827
+#: engines/scumm/metaengine.cpp:848
 msgid ""
 "Enable the song at the beginning of Part 3 of the game, \"A Pirate I Was "
 "Meant To Be\", which was cut in international releases. Beware though: "
 "subtitles may not be fully translated."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:845
+#: engines/scumm/metaengine.cpp:866
 msgid "Enable demo/kiosk mode"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:846
+#: engines/scumm/metaengine.cpp:867
 msgid "Enable demo/kiosk mode in the full retail version of Maniac Mansion."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:854
+#: engines/scumm/metaengine.cpp:875
 msgid "Disable Playback"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:855
+#: engines/scumm/metaengine.cpp:876
 msgid ""
 "Disable the scripted part of the demo (dangerous!). This makes it "
 "interactive, but as this was never intended, expect frequent crashes!"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:863
+#: engines/scumm/metaengine.cpp:884
 msgid "Use remastered audio"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:864
+#: engines/scumm/metaengine.cpp:885
 msgid "Use the remastered speech and sound effects."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:876
+#: engines/scumm/metaengine.cpp:897
 msgid "Enable ambience sounds"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:877
+#: engines/scumm/metaengine.cpp:898
 msgid "Enable ambience sounds."
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:897
+#: engines/scumm/metaengine.cpp:918
 msgid "High resolution mode"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:898
+#: engines/scumm/metaengine.cpp:919
 msgid "Run the game in 640x400 high resolution mode instead of 320x200"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:907 engines/scumm/metaengine.cpp:934
+#: engines/scumm/metaengine.cpp:928 engines/scumm/metaengine.cpp:964
 msgid "All levels will be available without requiring passwords"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:915 engines/scumm/metaengine.cpp:942
+#: engines/scumm/metaengine.cpp:936 engines/scumm/metaengine.cpp:972
 msgid "No damage"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:916 engines/scumm/metaengine.cpp:943
+#: engines/scumm/metaengine.cpp:937 engines/scumm/metaengine.cpp:973
 msgid "Disable player damage"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:924
+#: engines/scumm/metaengine.cpp:945
 msgid "Yoda mode"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:925
+#: engines/scumm/metaengine.cpp:946
 msgid "Enable original Yoda mode shortcuts, including movie mode and auto play"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1100
+#: engines/scumm/metaengine.cpp:955
+msgid ""
+"Play additional sections included in the demo's game data but omitted from "
+"its original sequence"
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:982
+msgid ""
+"Play extra chapters included in the demo's game data but omitted from its "
+"original sequence"
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:991
+msgid ""
+"Enable the full game's view jolt and recovery rules, including the demo's "
+"unused crash and repair animations"
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:999 engines/ultima/metaengine.cpp:89
+msgid "Enable cheats"
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:1000
+msgid ""
+"Enable the original game's cheat shortcuts for rescuing animals, changing "
+"shellshock and skipping flights"
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:1008
+msgid "Programmer's Easter egg"
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:1009
+msgid ""
+"Replace the rhinoceros interview text with the hidden programmer dialogue"
+msgstr ""
+
+#: engines/scumm/metaengine.cpp:1198
 msgid "Down left"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1113
+#: engines/scumm/metaengine.cpp:1211
 msgid "Down right"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1133
+#: engines/scumm/metaengine.cpp:1231
 msgid "Up left"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1146
+#: engines/scumm/metaengine.cpp:1244
 msgid "Up right"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1158
+#: engines/scumm/metaengine.cpp:1256
 msgid "Switch weapon"
 msgstr ""
 
 #. I18N: Lets one skip the bike/car fight sequences in Full Throttle
-#: engines/scumm/metaengine.cpp:1172
+#: engines/scumm/metaengine.cpp:1270
 msgid "Win the bike fight cheat"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1181
+#: engines/scumm/metaengine.cpp:1279
 msgid "Rebel Assault controls"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1183 engines/scumm/metaengine.cpp:1261
+#: engines/scumm/metaengine.cpp:1281 engines/scumm/metaengine.cpp:1359
 msgid "Aim up / menu up"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1188 engines/scumm/metaengine.cpp:1266
+#: engines/scumm/metaengine.cpp:1286 engines/scumm/metaengine.cpp:1364
 msgid "Aim down / menu down"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1193 engines/scumm/metaengine.cpp:1271
+#: engines/scumm/metaengine.cpp:1291 engines/scumm/metaengine.cpp:1369
 msgid "Aim left / menu left"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1198 engines/scumm/metaengine.cpp:1276
+#: engines/scumm/metaengine.cpp:1296 engines/scumm/metaengine.cpp:1374
 msgid "Aim right / menu right"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1231 engines/scumm/metaengine.cpp:1309
+#: engines/scumm/metaengine.cpp:1329 engines/scumm/metaengine.cpp:1407
 msgid "Fire / select"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1237
+#: engines/scumm/metaengine.cpp:1335
 msgid "Walk / menu back"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1242
+#: engines/scumm/metaengine.cpp:1340
 msgid "Skip / menu back"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1259
+#: engines/scumm/metaengine.cpp:1357
 msgid "Rebel Assault II controls"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1314
+#: engines/scumm/metaengine.cpp:1412
 msgid "Change view"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1314
+#: engines/scumm/metaengine.cpp:1412
 msgid "Cover"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1326
+#: engines/scumm/metaengine.cpp:1424
 msgid "Skip / back"
 msgstr ""
 
-#: engines/scumm/metaengine.cpp:1333
+#: engines/scumm/metaengine.cpp:1431
 msgid "Skip / menu"
 msgstr ""
 
-#: engines/scumm/saveload.cpp:193
+#: engines/scumm/saveload.cpp:201
 msgid ""
 "This game does not support saving from the menu. Progress is saved "
 "automatically when a level is completed"
 msgstr ""
 
-#: engines/scumm/saveload.cpp:2009
+#: engines/scumm/saveload.cpp:2017
 #, c-format
 msgid ""
 "Warning: incompatible sound settings detected between the current "
@@ -12909,7 +13174,7 @@ msgid ""
 "this save file."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:327
+#: engines/scumm/scumm.cpp:336
 msgid ""
 "You have enabled 'aspect ratio correction'. However, FM-TOWNS' natural "
 "resolution is 320x240, which doesn't allow aspect ratio correction.\n"
@@ -12917,43 +13182,43 @@ msgid ""
 "320x200, under 'engine' tab."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1385
+#: engines/scumm/scumm.cpp:1400
 #, c-format
 msgid "This game requires the '%s' Macintosh executable for its fonts."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1394
+#: engines/scumm/scumm.cpp:1409
 #, c-format
 msgid ""
 "This game requires the '%s' Macintosh executable for its music and fonts."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1398
+#: engines/scumm/scumm.cpp:1413
 #, c-format
 msgid ""
 "Could not find the '%s' Macintosh executable to read resources from. %s will "
 "be disabled."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1399
+#: engines/scumm/scumm.cpp:1414
 msgid "The Mac GUI"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1399
+#: engines/scumm/scumm.cpp:1414
 msgid "The music and the Mac GUI"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1428
+#: engines/scumm/scumm.cpp:1443
 #, c-format
 msgid "Could not open Macintosh resource file %s"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1431
+#: engines/scumm/scumm.cpp:1446
 #, c-format
 msgid "Could not find resource fork in Macintosh resource file %s"
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1438
+#: engines/scumm/scumm.cpp:1453
 #, c-format
 msgid ""
 "'%s' appears to be the wrong Dig executable. It may be the launcher one "
@@ -12962,7 +13227,7 @@ msgid ""
 "its sub-folders should be what you need."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1604
+#: engines/scumm/scumm.cpp:1619
 msgid ""
 "It appears your ScummVM version was not built with TrueType Fonts support.\n"
 "\n"
@@ -12970,34 +13235,34 @@ msgid ""
 "some of the graphics on screen will be missing."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:1947
+#: engines/scumm/scumm.cpp:1960
 msgid ""
 "Audio files compressed with ScummVM Tools were detected; *.BUN/*.SOU\n"
 "compression is not supported anymore for this game, audio will be disabled.\n"
 "Please copy the game from the original media without compression."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:2437
+#: engines/scumm/scumm.cpp:2450
 #, c-format
 msgid ""
 "Native MIDI support requires the Roland Upgrade from LucasArts,\n"
 "but %s is missing. Using AdLib instead."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:2452
+#: engines/scumm/scumm.cpp:2465
 msgid ""
 "This particular version of Monkey Island 1 is known to miss some\n"
 "required resources for MT-32. Using AdLib instead."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:4405
+#: engines/scumm/scumm.cpp:4420
 msgid ""
 "Usually, Maniac Mansion would start now. But for that to work, the game "
 "files for Maniac Mansion have to be in the 'Maniac' directory inside the "
 "Tentacle game directory, and the game has to be added to ScummVM."
 msgstr ""
 
-#: engines/scumm/scumm.cpp:4529
+#: engines/scumm/scumm.cpp:4544
 msgid "Would you like to host or join a network play session?"
 msgstr ""
 
@@ -13146,6 +13411,58 @@ msgid ""
 "\n"
 "Please copy these file(s) into the game data directory.\n"
 "\n"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/level2.cpp:886
+msgid "Could not open the PlayStation Level 2 resources"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/level2.cpp:892
+msgid "Could not read the PlayStation Level 2 resources"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/level2.cpp:897
+msgid "Could not play the PlayStation Level 2 videos"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:342
+msgid "Could not load the PlayStation menu resources"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:347
+msgid "Could not load the PlayStation movie fonts"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:352
+msgid "Could not play the PlayStation introduction"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:389
+msgid "Could not load the PlayStation Level 1 resources"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:396
+msgid "Could not play the PlayStation Level 1 introduction"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:408
+msgid "Could not play the PlayStation Level 1 ending"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:411
+msgid "Could not play the PlayStation Level 1 death video"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:414
+msgid "Could not play the PlayStation game-over video"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:417
+msgid "Could not run the PlayStation Level 1 gameplay"
+msgstr ""
+
+#: engines/scumm/insane/rebel2/psx/psx.cpp:421
+msgid "Rebel Assault II PlayStation support requires TinyGL"
 msgstr ""
 
 #: engines/sherlock/metaengine.cpp:59
@@ -14532,10 +14849,6 @@ msgstr ""
 msgid "Limits the speed of the game to prevent running too fast."
 msgstr ""
 
-#: engines/ultima/metaengine.cpp:89
-msgid "Enable cheats"
-msgstr ""
-
 #: engines/ultima/metaengine.cpp:90
 msgid "Allow cheats by commands and a menu when player is clicked."
 msgstr ""
@@ -14770,10 +15083,6 @@ msgstr ""
 
 #: engines/ultima/ultima4/metaengine.cpp:76
 msgid "Yell"
-msgstr ""
-
-#: engines/ultima/ultima4/metaengine.cpp:82
-msgid "Speed up"
 msgstr ""
 
 #: engines/ultima/ultima4/metaengine.cpp:83

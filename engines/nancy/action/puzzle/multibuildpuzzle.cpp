@@ -257,12 +257,12 @@ void MultiBuildPuzzle::readData(Common::SeekableReadStream &stream) {
 		_exitCursorID1 = stream.readSint16LE();
 		readFlag(stream, _submitScene._flag);
 
-		_cancelScene._sceneChange.readData(stream);
+		_exitScene._sceneChange.readData(stream);
 		stream.skip(2);
 
 		readRect(stream, _exitHotspot2);
 		_exitCursorID2 = stream.readSint16LE();
-		readFlag(stream, _cancelScene._flag);
+		readFlag(stream, _exitScene._flag);
 		return;
 	}
 
@@ -277,12 +277,12 @@ void MultiBuildPuzzle::readData(Common::SeekableReadStream &stream) {
 	stream.read(textBuf, 200);
 	assembleTextLine(textBuf, _solveText, 200);
 
-	_cancelScene.readData(stream);
+	_exitScene.readData(stream);
 
 	readRect(stream, _exitHotspot);
 	readRect(stream, _exitHotspot2);
 
-	_minCountFlag = _cancelScene._flag;
+	_minCountFlag = _exitScene._flag;
 }
 
 void MultiBuildPuzzle::execute() {
@@ -316,7 +316,7 @@ void MultiBuildPuzzle::execute() {
 			break;
 
 		case kWaitSolveSound:
-			if (!g_nancy->_sound->isSoundPlaying(_solveSound)) {
+			if (!isSolveSoundPlaying()) {
 				g_nancy->_sound->stopSound(_solveSound);
 				_state = kActionTrigger;
 			}
@@ -400,11 +400,11 @@ void MultiBuildPuzzle::execute() {
 			NancySceneState.setEventFlag(_submitScene._flag);
 			NancySceneState.changeScene(_submitScene._sceneChange);
 		} else if (_isCancelled) {
-			NancySceneState.changeScene(_cancelScene._sceneChange);
+			NancySceneState.changeScene(_exitScene._sceneChange);
 			// Cancel flag is only set if at least one piece was placed (or
 			// spawned). For sandwich (all counter pieces) the spawn delta is
 			// what trips the gate when a bad ingredient was placed.
-			if (_cancelScene._flag.label != kFlagNoLabel) {
+			if (_exitScene._flag.label != kFlagNoLabel) {
 				uint16 count = 0;
 				for (uint i = 0; i < _numPieces; ++i) {
 					if (_pieces[i]->isPlaced && _pieces[i]->counterByte == 0)
@@ -412,11 +412,10 @@ void MultiBuildPuzzle::execute() {
 				}
 				count += (uint16)(_pieces.size() - _numPieces);
 				if (count > 0)
-					NancySceneState.setEventFlag(_cancelScene._flag);
+					NancySceneState.setEventFlag(_exitScene._flag);
 			}
 		} else {
-			NancySceneState.setEventFlag(_solveScene._flag);
-			NancySceneState.changeScene(_solveScene._sceneChange);
+			_solveScene.execute();
 		}
 		finishExecution();
 		break;
@@ -646,6 +645,7 @@ void MultiBuildPuzzle::handleInput(NancyInput &input) {
 				if (addMode) {
 					// Ingredient goes back to its shelf slot, still pickable.
 					pp.isPlaced = false;
+					pp.curRotation = 0;
 					pp.gameRect = pp.homeRect;
 				} else {
 					pp.isPlaced = true;
@@ -661,6 +661,7 @@ void MultiBuildPuzzle::handleInput(NancyInput &input) {
 				// Missed: the ingredient was thrown away. Return it to the shelf
 				// and play the "Missed." feedback (sound + caption).
 				pp.isPlaced = false;
+				pp.curRotation = 0;
 				pp.gameRect = pp.homeRect;
 				if (isNancy10 && _missedSound.name != "NO SOUND") {
 					g_nancy->_sound->playSound(_missedSound);
@@ -790,8 +791,10 @@ void MultiBuildPuzzle::handleInput(NancyInput &input) {
 
 		if (input.input & NancyInput::kLeftMouseButtonUp) {
 			Piece &pp = *_pieces[topmost];
+			// Taking a placed piece back out undoes its placement.
+			if (g_nancy->getGameType() >= kGameTypeNancy10 && pp.counterByte == 0 && pp.placeCount > 0)
+				pp.placeCount--;
 			pp.isPlaced = false;
-			pp.curRotation = 0;
 			pp.setZOrder((uint16)(_z + (int)_pieces.size() * 2));
 			pp.registerGraphics();
 
@@ -807,8 +810,8 @@ void MultiBuildPuzzle::handleInput(NancyInput &input) {
 				// Direct drag on first click.
 				_isDragging = true;
 				_pickedUpPiece = topmost;
-				_pickedUpWidth  = pp.rotateSurfaces[0].w;
-				_pickedUpHeight = pp.rotateSurfaces[0].h;
+				_pickedUpWidth  = pp.rotateSurfaces[pp.curRotation].w;
+				_pickedUpHeight = pp.rotateSurfaces[pp.curRotation].h;
 				g_nancy->_sound->playSound(_pickupSound);
 			}
 			updatePieceRender(topmost);

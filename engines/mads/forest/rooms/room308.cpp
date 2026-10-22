@@ -891,19 +891,32 @@ static void room_308_anim24() {
 	aainfo[22]._frame = cur;
 
 	int16 result = -1;
-	if (cur == 1 || cur == 27) {
+	switch (cur) {
+	case 1:
+	case 28:
 		digi_initial_volume(60);
 		digi_play_build(308, '_', 3, 1);
 		scratch._b4 = -1;
-	} else if (cur == 19) {
+		break;
+	case 20:
 		digi_play_build(308, 't', 7, 1);
 		scratch._b4 = 5;
-	} else if (cur >= 20 && cur <= 25) {
+		break;
+	case 21:
+	case 22:
+	case 23:
+	case 24:
+	case 25:
+	case 26:
 		if (aainfo[22]._val3 == 3)
 			result = imath_random(20, 25);
-	} else if (cur == 28) {
+		break;
+	case 29:
 		global[g009] = 0;
 		global_midi_play(5);
+		break;
+	default:
+		break;
 	}
 
 	if (result >= 0) {
@@ -1360,9 +1373,9 @@ void room_308_preload() {
 	room_parser_code_pointer     = room_308_parser;
 	room_daemon_code_pointer     = room_308_daemon;
 
+	global[g016] = -1;
 	global_section_walker();
 	global_section_interface();
-	player.walker_must_reload = true;
 }
 
 } // namespace Rooms

@@ -88,6 +88,7 @@ void ActionZone::readSubtype(Common::SeekableReadStream &stream, bool isNancy13)
 		slopeAngle = stream.readSint16LE();
 		break;
 	case kZoneEventFlag:
+	case kZoneCursor:
 		tailId = stream.readSint16LE();
 		tailFlag = stream.readByte();
 		break;
@@ -171,7 +172,7 @@ void ActionZone::readOverlayZone(Common::SeekableReadStream &stream, bool isNanc
 		stream.skip(4);	// extra int32 vs Nancy12
 	}
 	stream.skip(4);		// int32
-	stream.skip(1);		// byte (loop/play mode)
+	overlayPlayMode = stream.readByte();
 	overlayLayer = stream.readSint32LE();
 }
 

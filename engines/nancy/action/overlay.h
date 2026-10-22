@@ -124,6 +124,27 @@ protected:
 	Common::String getRecordTypeName() const override { return "OverlayMultiframeTerse"; }
 };
 
+// Nancy18. A static overlay that gets drawn in one of several colors, picked at
+// random. Every color comes with an event flag, which tells the scene the pick.
+class OverlayRandomColor : public OverlayMultiframeTerse {
+public:
+	virtual ~OverlayRandomColor() {}
+
+	void init() override;
+
+	void readData(Common::SeekableReadStream &stream) override;
+
+protected:
+	Common::String getRecordTypeName() const override { return "OverlayRandomColor"; }
+
+	struct ColorChoice {
+		uint32 color = 0xFFFFFFFF;	// ARGB, multiplied with the image
+		int16 flag = -1;
+	};
+
+	Common::Array<ColorChoice> _choices;
+};
+
 // Short version of an animated overlay; assumes scene background doesn't move
 class OverlayAnimTerse : public Overlay {
 public:
@@ -194,7 +215,8 @@ protected:
 
 // Nancy14 AR 53. A rollover label: an image that is only drawn while the mouse
 // is inside its hotspot. Entering the hotspot plays a sound and sets an event
-// flag, and clicking it plays a second sound before changing the scene.
+// flag, and clicking it plays a second sound before setting another event flag
+// and changing the scene.
 class RolloverOverlay : public RenderActionRecord {
 public:
 	RolloverOverlay() : RenderActionRecord(7) {}
@@ -216,6 +238,7 @@ public:
 protected:
 	Common::String getRecordTypeName() const override { return "RolloverOverlay"; }
 
+	void readDataNancy16(Common::SeekableReadStream &stream);
 	void playSoundBlock(const RandomSoundBlock &block);
 
 	Common::Path _imageName;
@@ -231,6 +254,8 @@ protected:
 	uint16 _hoverSoundOnce = 0;
 	RandomSoundBlock _hoverSound;
 	SceneChangeDescription _sceneChange;
+	// Set when the click sound finishes, even when there's no scene change
+	FlagDescription _flagOnClick;
 	RandomSoundBlock _clickSound;
 
 	bool _isHovered = false;

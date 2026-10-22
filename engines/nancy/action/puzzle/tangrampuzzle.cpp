@@ -38,12 +38,7 @@ TangramPuzzle::~TangramPuzzle() {
 }
 
 void TangramPuzzle::init() {
-	Common::Rect screenBounds = NancySceneState.getViewport().getBounds();
-	_drawSurface.create(screenBounds.width(), screenBounds.height(), g_nancy->_graphics->getInputPixelFormat());
-	_drawSurface.clear(g_nancy->_graphics->getTransColor());
-	setTransparent(true);
-	setVisible(true);
-	moveTo(screenBounds);
+	initViewportSurface();
 
 	g_nancy->_resource->loadImage(_tileImageName, _tileImage);
 	g_nancy->_resource->loadImage(_maskImageName, _maskImage);
@@ -108,7 +103,7 @@ void TangramPuzzle::registerGraphics() {
 		tile.registerGraphics();
 	}
 
-	RenderActionRecord::registerGraphics();
+	PuzzleRecord::registerGraphics();
 }
 
 void TangramPuzzle::readData(Common::SeekableReadStream &stream) {
@@ -168,8 +163,7 @@ void TangramPuzzle::execute() {
 				}
 			}
 
-			g_nancy->_sound->loadSound(_solveSound);
-			g_nancy->_sound->playSound(_solveSound);
+			playSolveSound();
 			_solved = true;
 			_state = kActionTrigger;
 		}
@@ -177,7 +171,7 @@ void TangramPuzzle::execute() {
 		break;
 	case kActionTrigger :
 		if (_solved) {
-			if (g_nancy->_sound->isSoundPlaying(_solveSound)) {
+			if (isSolveSoundPlaying()) {
 				break;
 			}
 
@@ -234,9 +228,7 @@ void TangramPuzzle::handleInput(NancyInput &input) {
 		}
 
 		// No tile under cursor, check exit hotspot
-		if (_exitHotspot.contains(mousePos)) {
-			g_nancy->_cursor->setCursorType(g_nancy->_cursor->_puzzleExitCursor);
-
+		if (hoverExitHotspot(input)) {
 			if (input.input & NancyInput::kLeftMouseButtonUp) {
 				_state = kActionTrigger;
 			}

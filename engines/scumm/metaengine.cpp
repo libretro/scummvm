@@ -48,6 +48,10 @@
 #include "scumm/file.h"
 #include "scumm/file_nes.h"
 
+#ifdef ENABLE_SCUMM_7_8
+#include "scumm/insane/mortimer/mortimer.h"
+#endif
+
 #if defined(ENABLE_REBEL2_PSX) && !defined(ENABLE_SCUMM_7_8)
 #error "SCUMM v7 & v8 games must be enabled for Rebel Assault II PlayStation. Specify --enable-engine=scumm-7-8,rebel2-psx"
 #endif
@@ -467,6 +471,12 @@ Common::Error ScummMetaEngine::createInstance(OSystem *syst, Engine **engine,
 
 	// Finally, we have massaged the GameDescriptor to our satisfaction, and can
 	// instantiate the appropriate game engine. Hooray!
+#ifdef ENABLE_SCUMM_7_8
+	if (res.game.id == GID_MORTIMER) {
+		*engine = new MortimerEngine(syst, (res.game.features & GF_DEMO) != 0);
+		return Common::kNoError;
+	}
+#endif
 	switch (res.game.version) {
 	case 0:
 		*engine = new ScummEngine_v0(syst, res);
@@ -731,6 +741,17 @@ static const ExtraGuiOption mmnesClassicPaletteOption = {
 	0
 };
 
+#ifdef USE_SID_AUDIO
+static const ExtraGuiOption c64SidTypeOption = {
+	_s("Use PAL timing for SID audio"),
+	_s("This lowers the pitch and slows down playback compared to the original NTSC timing."),
+	"c64_sid_type",
+	false,
+	0,
+	0
+};
+#endif
+
 static const ExtraGuiOption fmtownsTrimTo200 = {
 	_s("Trim FM-TOWNS games to 200 pixels height"),
 	_s("Cut the extra 40 pixels at the bottom of the screen, to make it standard 200 pixels height, allowing using 'aspect ratio correction'"),
@@ -929,6 +950,15 @@ static const ExtraGuiOption enableRebel2YodaMode = {
 	0
 };
 
+static const ExtraGuiOption enableRebel2RestoredContent = {
+	_s("Restored content"),
+	_s("Play additional sections included in the demo's game data but omitted from its original sequence"),
+	"rebel2_restored_content",
+	false,
+	0,
+	0
+};
+
 const ExtraGuiOption enableRebel1UnlockAll = {
 	_s("Unlock all levels"),
 	_s("All levels will be available without requiring passwords"),
@@ -942,6 +972,42 @@ const ExtraGuiOption enableRebel1NoDamage = {
 	_s("No damage"),
 	_s("Disable player damage"),
 	"rebel1_no_damage",
+	false,
+	0,
+	0
+};
+
+const ExtraGuiOption enableRebel1RestoredContent = {
+	_s("Restored content"),
+	_s("Play extra chapters included in the demo's game data but omitted from its original sequence"),
+	"rebel1_restored_content",
+	false,
+	0,
+	0
+};
+
+const ExtraGuiOption enableMortimerRestoredContent = {
+	_s("Enable restored content"),
+	_s("Enable the full game's view jolt and recovery rules, including the demo's unused crash and repair animations"),
+	"mortimer_restored_content",
+	false,
+	0,
+	0
+};
+
+const ExtraGuiOption enableMortimerCheats = {
+	_s("Enable cheats"),
+	_s("Enable the original game's cheat shortcuts for rescuing animals, changing shellshock and skipping flights"),
+	"mortimer_cheats",
+	false,
+	0,
+	0
+};
+
+const ExtraGuiOption enableMortimerProgrammer = {
+	_s("Programmer's Easter egg"),
+	_s("Replace the rhinoceros interview text with the hidden programmer dialogue"),
+	"mortimer_programmer_easter_egg",
 	false,
 	0,
 	0
@@ -1000,11 +1066,28 @@ const ExtraGuiOptions ScummMetaEngine::getExtraGuiOptions(const Common::String &
 	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL2_YODA_MODE)) {
 		options.push_back(enableRebel2YodaMode);
 	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL2_RESTORED_CONTENT)) {
+		options.push_back(enableRebel2RestoredContent);
+	}
 	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL1_UNLOCK_ALL)) {
 		options.push_back(enableRebel1UnlockAll);
 	}
 	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL1_NO_DAMAGE)) {
 		options.push_back(enableRebel1NoDamage);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_REBEL1_RESTORED_CONTENT)) {
+		options.push_back(enableRebel1RestoredContent);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_MORTIMER_RESTORED_CONTENT) ||
+		(gameid == "mortimer" && extra == "Demo")) {
+		options.push_back(enableMortimerRestoredContent);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_MORTIMER_CHEATS) || gameid == "mortimer") {
+		options.push_back(enableMortimerCheats);
+	}
+	if (target.empty() || guiOptions.contains(GAMEOPTION_MORTIMER_PROGRAMMER) ||
+		(gameid == "mortimer" && extra != "Demo" && !guiOptions.contains(GAMEOPTION_MORTIMER_RESTORED_CONTENT))) {
+		options.push_back(enableMortimerProgrammer);
 	}
 	if (target.empty() || gameid == "comi") {
 		options.push_back(comiObjectLabelsOption);
@@ -1016,6 +1099,11 @@ const ExtraGuiOptions ScummMetaEngine::getExtraGuiOptions(const Common::String &
 	if (target.empty() || platform == Common::kPlatformNES) {
 		options.push_back(mmnesClassicPaletteOption);
 	}
+#ifdef USE_SID_AUDIO
+	if (target.empty() || platform == Common::kPlatformC64) {
+		options.push_back(c64SidTypeOption);
+	}
+#endif
 	if (target.empty() || platform == Common::kPlatformFMTowns) {
 		options.push_back(smoothScrolling);
 		if (target.empty() || gameid == "loom")
@@ -1066,7 +1154,9 @@ const ExtraGuiOptions ScummMetaEngine::getExtraGuiOptions(const Common::String &
 void ScummMetaEngine::registerDefaultSettings(const Common::String &) const {
 	const ExtraGuiOptions engineOptions = getExtraGuiOptions("");
 	for (uint i = 0; i < engineOptions.size(); i++) {
-		if (strcmp(engineOptions[i].configOption, "enhancements") == 0)
+		if (strcmp(engineOptions[i].configOption, "c64_sid_type") == 0)
+			ConfMan.registerDefault(engineOptions[i].configOption, "ntsc");
+		else if (strcmp(engineOptions[i].configOption, "enhancements") == 0)
 			ConfMan.registerDefault(engineOptions[i].configOption, kEnhGameBreakingBugFixes | kEnhGrp1);
 		else
 			ConfMan.registerDefault(engineOptions[i].configOption, engineOptions[i].defaultState);
@@ -1081,6 +1171,14 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 	Common::KeymapArray keymaps = MetaEngine::initKeymaps(target);
 	Common::String gameId = ConfMan.get("gameid", target);
 	Action *act;
+
+#ifdef ENABLE_SCUMM_7_8
+	if (gameId == "mortimer") {
+		for (uint i = 0; i < keymaps.size(); ++i)
+			delete keymaps[i];
+		return MortimerEngine::initKeymaps();
+	}
+#endif
 
 	if (gameId == "rebel1" || gameId == "rebel2") {
 		for (uint i = 0; i < keymaps.size(); ++i) {

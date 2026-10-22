@@ -42,7 +42,6 @@ public:
 		bool day5ExitLinePlayed = false;
 	};
 
-	bool matchesNpc(const Common::String &npcName) const override;
 	void resetState() override { _state = SergeantRoomDialogueState(); }
 	void syncState(Common::Serializer &s) override {
 		syncDialogueBool(s, _state.talkStateBlock);
@@ -65,6 +64,15 @@ public:
 		const Common::String &usedItemName, DialogueSharedState &sharedState) override;
 
 private:
+	Common::Error runDay5ExitIfNeeded(DialogueRuntime &runtime);
+	Common::Error handleRemainsBranch(DialogueRuntime &runtime, DialogueSharedState &sharedState);
+	Common::Error handleInviteBranch(DialogueRuntime &runtime, DialogueSharedState &sharedState);
+	Common::Error handleBarberPoleBranch(DialogueRuntime &runtime, DialogueSharedState &sharedState);
+	Common::Error handleBoltClothBranch(DialogueRuntime &runtime, DialogueSharedState &sharedState);
+	Common::Error handleCompletedFirstTaskBranch(DialogueRuntime &runtime, DialogueSharedState &sharedState);
+	Common::Error handleCompletedApplicationBranch(DialogueRuntime &runtime, DialogueSharedState &sharedState);
+	Common::Error runIntroOrReminderBranch(DialogueRuntime &runtime, DialogueSharedState &sharedState);
+
 	SergeantRoomDialogueState _state;
 };
 

@@ -29,6 +29,7 @@
 #include "scumm/insane/rebel/rebel_audio.h"
 #include "scumm/insane/rebel/rebel_gamepad.h"
 #include "scumm/insane/rebel/rebel_touch.h"
+#include "scumm/insane/rebel1/releases.h"
 #include "scumm/smush/rebel/smush_player_ra1.h"
 
 namespace Scumm {
@@ -183,6 +184,7 @@ public:
 	void resetFrameObjectState();
 
 	void runGame();
+	bool hasPlayableLevels() const { return _release.getLevelCount() != 0; }
 	Common::Error saveGameState(int slot, const Common::String &desc, bool isAutosave = false);
 	Common::Error loadGameState(int slot, bool startupLoad = false);
 	bool shouldAbortGameFlow() const { return _vm->shouldQuit() || _loadRequested; }
@@ -333,6 +335,7 @@ public:
 private:
 
 	ScummEngine_v7 *_vm;
+	const Rebel1Release _release;
 
 	// Sprite and font banks.
 	RA1SpriteBank _shipBank;
@@ -418,6 +421,7 @@ private:
 	void updateOnFootSequence();
 	void updateOnFootAimVariant();
 	void finishOnFootFrame();
+	void updateLevel9PathSelector(int32 curFrame, int32 maxFrame);
 	int16 _onFootCharX;
 	int16 _onFootCharY;
 	int16 _onFootAnimCounter;
@@ -499,7 +503,9 @@ private:
 		int16 flags;
 	};
 	TuningParams _tuning;
+	Rebel1TuningTable _tuningTable;
 
+	void loadTuningData();
 	void loadTuningForLevel(int level);
 	void resetGameplayFlagsFromTuning();
 
@@ -529,7 +535,7 @@ private:
 	static const int16 kMaxHealth = 98;
 	static const int16 kDeathTimerInit = 30;
 	static const int16 kDamageCooldownInit = 10;
-	enum { kNumLevels = 15 };
+	enum { kNumLevels = Rebel1Release::kNumLevels };
 
 	// Streamed SMUSH audio.
 	RebelAudio _audio;
@@ -568,6 +574,8 @@ private:
 	int16 _level7WarningFrames;
 	int16 _level7WarningThreshold;
 	int _levelGameplayPhase;
+	int32 _level9PathLoopOffset;
+	int16 _level9SelectedPath;
 	bool _level14Play2BSplicePending;
 	bool _level14Play2BSpliced;
 	int32 _level14Play2BSpliceFrame;
@@ -716,11 +724,6 @@ private:
 	int16 _walkerTimer;
 	int16 _walkerBranchChoice;
 	bool _walkerRoundReplay;
-
-	// Attack window frame numbers per route.
-	static const int16 kWalkerAttackWindow1[3];
-	static const int16 kWalkerAttackWindow2[3];
-	static const int16 kWalkerAttackWindow3[3];
 
 	static const int kFrameObjectStateBytes = 300;
 	byte _frameObjectState[kFrameObjectStateBytes];

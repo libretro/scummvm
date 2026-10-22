@@ -22,6 +22,7 @@
 
 
 #include "engines/engine.h"
+#include "common/archive.h"
 #include "common/system.h"
 #include "common/config-manager.h"
 #include "common/events.h"
@@ -35,6 +36,7 @@
 #include "scumm/actor.h"
 #include "scumm/file.h"
 #include "scumm/resource.h"
+#include "scumm/insane/saveload.h"
 #include "scumm/scumm_v7.h"
 #include "scumm/sound.h"
 
@@ -45,6 +47,7 @@
 #include "scumm/smush/rebel/font_rebel2.h"
 
 #include "scumm/insane/rebel2/rebel.h"
+#include "scumm/insane/rebel2/mac_archive.h"
 #include "scumm/insane/rebel2/shared.h"
 
 #include "common/config-manager.h"
@@ -159,8 +162,16 @@ bool InsaneRebel2::isSkippableVideoState() const {
 	return _gameState != kStateGameplay || _rebelHandler == 0;
 }
 
-InsaneRebel2::InsaneRebel2(ScummEngine_v7 *scumm) {
+InsaneRebel2::InsaneRebel2(ScummEngine_v7 *scumm) :
+		_release(getRebel2Release(scumm->_game.variant, ConfMan.getBool("rebel2_restored_content"))) {
 	_vm = scumm;
+	if (_release.container) {
+		Common::Archive *archive = createRebel2MacArchive(_vm, _release.container);
+		if (!archive)
+			error("Cannot open Rebel Assault II data bundle '%s'", _release.container);
+		SearchMan.add("rebel2-mac-data", archive, 1);
+	}
+
 	// Rebel Assault II skips ScummEngine::resetScumm(), which normally clears this state.
 	for (int i = 0; i < kScummActionCount; i++)
 		_vm->_actionMap[i] = false;
@@ -178,8 +189,9 @@ InsaneRebel2::InsaneRebel2(ScummEngine_v7 *scumm) {
 	_smush_bensgoggNut = nullptr;
 
 	const bool highRes = isHiRes();
+	const bool playable = !_release.nonInteractiveVideos;
 
-	_smush_iconsNut = new NutRenderer(_vm, highRes ? "SYSTM/CPITIMHI.NUT" : "SYSTM/CPITIMAG.NUT");
+	_smush_iconsNut = playable ? new NutRenderer(_vm, highRes ? "SYSTM/CPITIMHI.NUT" : "SYSTM/CPITIMAG.NUT") : nullptr;
 	_smush_icons2Nut = nullptr;
 
 	_laserTexture.pixels = nullptr;
@@ -191,14 +203,15 @@ InsaneRebel2::InsaneRebel2(ScummEngine_v7 *scumm) {
 
 	initEdgeTable(nullptr);
 	_rebelDetailMode = 1;
-	_smush_cockpitNut = new NutRenderer(_vm, highRes ? "SYSTM/DIHIFONT.NUT" : "SYSTM/DISPFONT.NUT");
+	_smush_cockpitNut = playable ? new NutRenderer(_vm, highRes ? "SYSTM/DIHIFONT.NUT" : "SYSTM/DISPFONT.NUT") : nullptr;
 
-	_rebelMsgFont = makeRebel2Font(_vm, "SYSTM/DIHIFONT.NUT");
+	_rebelMsgFont = playable ? makeRebel2Font(_vm, "SYSTM/DIHIFONT.NUT") : nullptr;
 
-	_smush_talkfontNut = makeRebel2Font(_vm, highRes ? "SYSTM/TKHIFONT.NUT" : "SYSTM/TALKFONT.NUT");
-	_smush_smalfontNut = makeRebel2Font(_vm, highRes ? "SYSTM/SMHIFONT.NUT" : "SYSTM/SMALFONT.NUT");
-	_smush_titlefontNut = makeRebel2Font(_vm, highRes ? "SYSTM/TIHIFONT.NUT" : "SYSTM/TITLFONT.NUT");
-	_smush_povfontNut = makeRebel2Font(_vm, highRes ? "SYSTM/POHIFONT.NUT" : "SYSTM/POVFONT.NUT");
+	// Non-interactive demos load their movie fonts through the SMUSH player.
+	_smush_talkfontNut = playable ? makeRebel2Font(_vm, _release.getFontFile(0, highRes)) : nullptr;
+	_smush_smalfontNut = playable ? makeRebel2Font(_vm, _release.getFontFile(1, highRes)) : nullptr;
+	_smush_titlefontNut = playable ? makeRebel2Font(_vm, _release.getFontFile(2, highRes)) : nullptr;
+	_smush_povfontNut = playable ? makeRebel2Font(_vm, _release.getFontFile(3, highRes)) : nullptr;
 
 	_pauseOverlayActive = false;
 	memset(_savedPausePalette, 0, sizeof(_savedPausePalette));
@@ -492,7 +505,8 @@ InsaneRebel2::InsaneRebel2(ScummEngine_v7 *scumm) {
 		_sfxData[i] = nullptr;
 		_sfxSize[i] = 0;
 	}
-	loadSfx();
+	if (playable)
+		loadSfx();
 
 	for (i = 0; i < kRA2NumAuxSfx; i++) {
 		_auxSfxData[i] = (byte *)calloc(kRA2AuxBufSize, 1);
@@ -508,7 +522,7 @@ InsaneRebel2::InsaneRebel2(ScummEngine_v7 *scumm) {
 	_menuRepeatDelay = 0;
 	_menuSelectionConfirmed = false;
 	for (i = 0; i < 16; i++) {
-		_levelUnlocked[i] = (i == 0);
+		_levelUnlocked[i] = (i + 1 == _release.levels[0]);
 	}
 
 	_chapterSelection = 0;
@@ -520,10 +534,6 @@ InsaneRebel2::InsaneRebel2(ScummEngine_v7 *scumm) {
 	_noDamage = ConfMan.getBool("rebel2_no_damage");
 	_rebelYodaMode = ConfMan.getBool("rebel2_yoda_mode");
 
-	for (i = 0; i < 16; i++) {
-		_chapterUnlocked[i] = _debugUnlockAll || (i == 0);
-	}
-
 	_previewOffsetX = -90;
 	_previewOffsetY = 75;
 
@@ -533,11 +543,13 @@ InsaneRebel2::InsaneRebel2(ScummEngine_v7 *scumm) {
 	for (i = 0; i < kMaxPilots; i++) {
 		_pilots[i].init();
 	}
-	loadPilots();
+	if (playable)
+		loadPilots();
+	updateChapterUnlocks();
 
 	_levelSelection = 0;
 	_levelItemCount = _numPilots + 4;
-	_selectedLevel = 1;
+	_selectedLevel = _release.levels[0];
 	_difficultySelection = 2;
 	_pilotMenuMode = kPilotModeSelect;
 	_pilotNameInput = "";
@@ -629,6 +641,9 @@ InsaneRebel2::~InsaneRebel2() {
 		free(_rebelEmbeddedHud[i].pixels);
 		_rebelEmbeddedHud[i].pixels = nullptr;
 	}
+
+	if (_release.container)
+		SearchMan.remove("rebel2-mac-data");
 }
 
 bool InsaneRebel2::isHiRes() const {
@@ -1327,7 +1342,10 @@ int InsaneRebel2::getDifficultyRow() const {
 }
 
 InsaneRebel2::LevelDifficultyParams InsaneRebel2::getDifficultyParams() const {
-	return kDifficultyTable[CLIP(_difficulty, 0, 5)][getDifficultyRow()];
+	const int difficulty = CLIP(_difficulty, 0, 5);
+	const int levelType = getDifficultyRow();
+	const LevelDifficultyParams *params = _release.getDifficultyOverride(difficulty, levelType);
+	return params ? *params : kDifficultyTable[difficulty][levelType];
 }
 
 bool InsaneRebel2::applyPlayerDamage(int damage) {
@@ -1390,51 +1408,6 @@ void InsaneRebel2::renderScoreHUD(byte *renderBitmap, int pitch, int width, int 
 const uint32 kPilotSaveMagic = MKTAG('R', 'A', '2', 'P');
 const uint16 kPilotSaveVersion = 2;
 
-// Pilots occupy the regular ScummVM save slots, so they need the standard SCUMM
-// header too: without it every slot reads as an invalid savegame.
-const uint32 kPilotScummSaveVersion = 124;
-
-bool writeRebel2SavegameHeader(Common::WriteStream *out, const Common::String &desc) {
-	char name[32];
-	memset(name, 0, sizeof(name));
-	Common::strlcpy(name, desc.c_str(), sizeof(name));
-
-	out->writeUint32BE(MKTAG('S', 'C', 'V', 'M'));
-	out->writeUint32LE(0);
-	out->writeUint32LE(kPilotScummSaveVersion);
-	out->write(name, sizeof(name));
-	return !out->err();
-}
-
-// A stream starting with the pilot magic is a pre-header file; rewind it.
-bool readRebel2SavegameHeader(Common::SeekableReadStream *in, uint32 *version) {
-	const uint32 tag = in->readUint32BE();
-	if (tag == kPilotSaveMagic) {
-		in->seek(0);
-		if (version)
-			*version = 0;
-		return true;
-	}
-	if (tag != MKTAG('S', 'C', 'V', 'M'))
-		return false;
-
-	in->readUint32LE(); // size, unused
-	uint32 hdrVersion = in->readUint32LE();
-	if (hdrVersion > 0xFFFFFF)
-		hdrVersion = SWAP_BYTES_32(hdrVersion);
-	if (hdrVersion < VER(52) || hdrVersion > kPilotScummSaveVersion)
-		return false;
-
-	char name[32];
-	in->read(name, sizeof(name));
-	if (in->err())
-		return false;
-
-	if (version)
-		*version = hdrVersion;
-	return true;
-}
-
 bool InsaneRebel2::loadPilots() {
 	_numPilots = 0;
 
@@ -1444,23 +1417,13 @@ bool InsaneRebel2::loadPilots() {
 		if (!sf)
 			break; // Slots are contiguous
 
-		uint32 scummVersion = 0;
-		if (!readRebel2SavegameHeader(sf, &scummVersion)) {
+		SaveStateMetaInfos infos;
+		// Early pilot files have no SCUMM envelope.
+		const bool legacy = sf->readUint32BE() == kPilotSaveMagic;
+		sf->seek(0);
+		if (!legacy && !readInsaneSavegameHeader(sf, nullptr, infos)) {
 			delete sf;
 			break;
-		}
-
-		// Only present once the slot carries a SCUMM header.
-		if (scummVersion >= VER(52) && !Graphics::skipThumbnail(*sf)) {
-			delete sf;
-			break;
-		}
-		if (scummVersion >= VER(56)) {
-			SaveStateMetaInfos infos;
-			if (!_vm->loadInfos(sf, &infos)) {
-				delete sf;
-				break;
-			}
 		}
 
 		uint32 magic = sf->readUint32BE();
@@ -1510,9 +1473,11 @@ bool InsaneRebel2::savePilots() {
 		Common::String desc(_pilots[i].name);
 		if (desc.empty())
 			desc = Common::String::format("Pilot %d", i + 1);
-		writeRebel2SavegameHeader(sf, desc);
-		Graphics::saveThumbnail(*sf);
-		_vm->saveInfos(sf);
+		if (!writeInsaneSavegameHeader(sf, desc, _vm->getTotalPlayTime())) {
+			delete sf;
+			ok = false;
+			continue;
+		}
 
 		sf->writeUint32BE(kPilotSaveMagic);
 		sf->writeUint16LE(kPilotSaveVersion);
@@ -1530,6 +1495,7 @@ bool InsaneRebel2::savePilots() {
 			sf->writeSint16LE(p.rating[j]);
 
 		sf->finalize();
+		ok = !sf->err() && ok;
 		delete sf;
 	}
 
@@ -1547,7 +1513,7 @@ int InsaneRebel2::createNewPilot() {
 		return -1;
 
 	int idx = _numPilots;
-	_pilots[idx].init();
+	_pilots[idx].init(_release.levels[0], _release.unlockAvailableLevels ? 3 : 4);
 	_numPilots++;
 	return idx;
 }
@@ -1587,6 +1553,8 @@ void InsaneRebel2::updatePilotProgress(int levelIndex, int32 score, int32 lives,
 		return;
 	if (levelIndex < 0 || levelIndex >= kNumLevels)
 		return;
+	if (!_release.isChapterAvailable(levelIndex + 1))
+		return;
 
 	PilotData &pilot = _pilots[_activePilot];
 
@@ -1613,9 +1581,7 @@ bool InsaneRebel2::selectPilot(int index) {
 	_activePilot = index;
 	_difficulty = _pilots[_activePilot].difficulty;
 
-	// 0xFF is PilotData::init()'s "never played" marker.
-	for (int i = 0; i < 16; i++)
-		_chapterUnlocked[i] = _debugUnlockAll || (_pilots[_activePilot].damage[i] < 0xFF);
+	updateChapterUnlocks();
 
 	return true;
 }

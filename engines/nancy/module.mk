@@ -6,18 +6,25 @@ MODULE_OBJS = \
   action/actionzone.o \
   action/arfactory.o \
   action/autotext.o \
+  action/autotextscroll.o \
   action/cameraaction.o \
   action/datarecords.o \
   action/inventoryrecords.o \
   action/navigationrecords.o \
   action/soundrecords.o \
   action/miscrecords.o \
+  action/mousefollow.o \
   action/conversation.o \
   action/interactivevideo.o \
   action/overlay.o \
+  action/physicalobject.o \
+  action/puzzlerecord.o \
   action/secondarymovie.o \
+  action/typewritertext.o \
   action/secondaryvideo.o \
+  action/wolfcommands.o \
   action/puzzle/adjustpuzzle.o \
+  action/puzzle/analogclock.o \
   action/puzzle/angletosspuzzle.o \
   action/puzzle/arcadepuzzle.o \
   action/puzzle/assemblypuzzle.o \
@@ -29,17 +36,31 @@ MODULE_OBJS = \
   action/puzzle/buildpuzzle.o \
   action/puzzle/bulpuzzle.o \
   action/puzzle/bombpuzzle.o \
+  action/puzzle/booksortpuzzle.o \
   action/puzzle/cardgamepuzzle.o \
+  action/puzzle/chesschatpuzzle.o \
   action/puzzle/collisionpuzzle.o \
+  action/puzzle/cookingpuzzle.o \
   action/puzzle/cubepuzzle.o \
   action/puzzle/cuttingpuzzle.o \
+  action/puzzle/dancepuzzle.o \
   action/puzzle/decoderpuzzle.o \
+  action/puzzle/dialsequencepuzzle.o \
   action/puzzle/dotconnectpuzzle.o \
+  action/puzzle/dragsurfacepuzzle.o \
   action/puzzle/drivingpuzzle.o \
+  action/puzzle/escapepuzzle.o \
+  action/puzzle/flashmemorypuzzle.o \
   action/puzzle/dropsortpuzzle.o \
+  action/puzzle/escapegridpuzzle.o \
+  action/puzzle/fishingpuzzle.o \
+  action/puzzle/foxgeesepuzzle.o \
+  action/puzzle/goldbergpuzzle.o \
   action/puzzle/gridmappuzzle.o \
   action/puzzle/hamradiopuzzle.o \
   action/puzzle/hangmanpuzzle.o \
+  action/puzzle/keypadphone.o \
+  action/puzzle/lettergridpuzzle.o \
   action/puzzle/leverpuzzle.o \
   action/puzzle/magnetmazepuzzle.o \
   action/puzzle/mazechasepuzzle.o \
@@ -47,11 +68,13 @@ MODULE_OBJS = \
   action/puzzle/matchpuzzle.o \
   action/puzzle/memorypuzzle.o \
   action/puzzle/meterpuzzle.o \
+  action/puzzle/minesweeperpuzzle.o \
   action/puzzle/mindpuzzle.o \
   action/puzzle/minigolfpuzzle.o \
   action/puzzle/mirrorlightpuzzle.o \
   action/puzzle/mouselightpuzzle.o \
   action/puzzle/multibuildpuzzle.o \
+  action/puzzle/necklacepuzzle.o \
   action/puzzle/onebuildpuzzle.o \
   action/puzzle/orderingpuzzle.o \
   action/puzzle/overridelockpuzzle.o \
@@ -65,38 +88,62 @@ MODULE_OBJS = \
   action/puzzle/riddlepuzzle.o \
   action/puzzle/rippedletterpuzzle.o \
   action/puzzle/rotatinglockpuzzle.o \
+  action/puzzle/rowmatchpuzzle.o \
   action/puzzle/safedialpuzzle.o \
+  action/puzzle/sentrypuzzle.o \
+  action/puzzle/sequencelockpuzzle.o \
   action/puzzle/scalepuzzle.o \
+  action/puzzle/scopapuzzle.o \
   action/puzzle/setplayerclock.o \
   action/puzzle/sewingmachinepuzzle.o \
+  action/puzzle/shovelmeasurepuzzle.o \
+  action/puzzle/skeeballpuzzle.o \
   action/puzzle/sliderpuzzle.o \
+  action/puzzle/snowmobilepuzzle.o \
   action/puzzle/sortpuzzle.o \
   action/puzzle/soundequalizerpuzzle.o \
   action/puzzle/soundmatchpuzzle.o \
   action/puzzle/spigotpuzzle.o \
+  action/puzzle/stakeoutpuzzle.o \
   action/puzzle/stepobjectspuzzle.o \
   action/puzzle/tangrampuzzle.o \
   action/puzzle/telephone.o \
+  action/puzzle/tilecyclepuzzle.o \
   action/puzzle/towerpuzzle.o \
   action/puzzle/turningpuzzle.o \
   action/puzzle/twodialpuzzle.o \
   action/puzzle/typingquizpuzzle.o \
+  action/puzzle/weightsortpuzzle.o \
+  action/puzzle/whackitpuzzle.o \
+  action/puzzle/wolfmazepuzzle.o \
   action/puzzle/whalesurvivorpuzzle.o \
   action/puzzle/wordfindpuzzle.o \
   ui/fullscreenimage.o \
   ui/animatedbutton.o \
   ui/button.o \
   ui/clock.o \
-  ui/camera.o \
-  ui/cellphonepopup.o \
-  ui/conversationpopup.o \
   ui/inventorybox.o \
-  ui/inventorypopup.o \
-  ui/notebookpopup.o \
+  ui/ndui/button.o \
+  ui/ndui/common.o \
+  ui/ndui/control.o \
+  ui/ndui/editbox.o \
+  ui/ndui/element.o \
+  ui/ndui/enginehandlers.o \
+  ui/ndui/listbox.o \
+  ui/ndui/manager.o \
+  ui/ndui/panel.o \
+  ui/ndui/saveload.o \
+  ui/ndui/scrollbar.o \
+  ui/ndui/slider.o \
   ui/ornaments.o \
   ui/scrollbar.o \
-  ui/scrolltextbox.o \
-  ui/taskbar.o \
+  ui/taskbar/camera.o \
+  ui/taskbar/cellphonepopup.o \
+  ui/taskbar/conversationpopup.o \
+  ui/taskbar/inventorypopup.o \
+  ui/taskbar/notebookpopup.o \
+  ui/taskbar/scrolltextbox.o \
+  ui/taskbar/taskbar.o \
   ui/textbox.o \
   ui/viewport.o \
   state/credits.o \
@@ -108,11 +155,12 @@ MODULE_OBJS = \
   state/map.o \
   state/savedialog.o \
   state/scene.o \
+  state/scenestream.o \
   state/setupmenu.o \
   misc/hypertext.o \
   misc/lightning.o \
-  misc/mousefollow.o \
   misc/specialeffect.o \
+  misc/viewportfader.o \
   cif.o \
   commontypes.o \
   console.o \
@@ -133,6 +181,24 @@ MODULE_OBJS = \
   sound_vorbis.o \
   util.o \
   video.o
+
+# Nancy19 and newer, whose scenes are Lua scripts
+ifdef ENABLE_NANCY_V4
+MODULE_OBJS += \
+  script/api.o \
+  script/bootapi.o \
+  script/convo.o \
+  script/gameapi.o \
+  script/luabind.o \
+  script/luastate.o \
+  script/mathtypes.o \
+  script/record.o \
+  script/records.o \
+  script/ref.o \
+  script/scenecontext.o \
+  script/types.o \
+  script/uiapi.o
+endif
 
 # This module can be built as a plugin
 ifeq ($(ENABLE_NANCY), DYNAMIC_PLUGIN)

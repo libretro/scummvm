@@ -26,10 +26,10 @@
 #include "harvester/console.h"
 #include "harvester/detection.h"
 #include "harvester/fst_player.h"
-#include "harvester/media_manager.h"
+#include "harvester/media/media_manager.h"
 #include "harvester/resources.h"
-#include "harvester/flow.h"
-#include "harvester/script.h"
+#include "harvester/flow/flow.h"
+#include "harvester/script/script.h"
 
 namespace Harvester {
 
@@ -66,6 +66,10 @@ Common::Language HarvesterEngine::getLanguage() const {
 
 bool HarvesterEngine::isDemo() const {
 	return (_gameDescription->flags & ADGF_DEMO) != 0;
+}
+
+bool HarvesterEngine::isEuropeanRelease() const {
+	return _gameDescription->extra && Common::String(_gameDescription->extra) == "European Release";
 }
 
 bool HarvesterEngine::canLoadGameStateCurrently(Common::U32String *) {
@@ -293,10 +297,10 @@ bool HarvesterEngine::requestDebugCommand(const CommandRecord &command) {
 	return _activeFlow->queueDebugInteraction(interaction);
 }
 
-bool HarvesterEngine::requestDebugRoomChange(const Common::String &roomName) {
+bool HarvesterEngine::requestDebugRoomChange(const Common::String &roomName, int discNumber) {
 	return _activeFlow &&
 		_currentSaveRoomState.valid &&
-		_activeFlow->requestDebugRoomChange(roomName);
+		_activeFlow->requestDebugRoomChange(roomName, discNumber);
 }
 
 void HarvesterEngine::setDisplayMode(int width, int height) {
@@ -328,7 +332,6 @@ Common::Error HarvesterEngine::run() {
 	// The intro FST files play on the narrower startup movie surface.
 	setDisplayMode(320, 200);
 
-	// Set the engine's debugger console
 	setDebugger(new Console());
 
 	if (shouldSkipIntroMoviesForDebug()) {
@@ -355,7 +358,7 @@ Common::Error HarvesterEngine::run() {
 	if (!flow.load())
 		return Common::kReadingFailed;
 
-	if (!_media->loadQuickTipsResources(flow._menuTextConfig.hasQuickTipsHeader()))
+	if (!_media->loadQuickTipsResources(flow.getMenuTextConfig().hasQuickTipsHeader()))
 		return Common::kReadingFailed;
 
 	// If a savegame was selected from the launcher, load it

@@ -22,8 +22,8 @@
 #ifndef NANCY_ACTION_MINDPUZZLE_H
 #define NANCY_ACTION_MINDPUZZLE_H
 
-#include "engines/nancy/action/actionrecord.h"
-#include "engines/nancy/misc/mousefollow.h"
+#include "engines/nancy/action/puzzlerecord.h"
+#include "engines/nancy/action/mousefollow.h"
 #include "engines/nancy/commontypes.h"
 
 namespace Nancy {
@@ -33,9 +33,9 @@ namespace Action {
 // color code over a number of rows, by placing colored balls in each row. Each
 // submitted guess is scored with flag poles (right color, right slot) and plain
 // poles (right color, wrong slot).
-class MindPuzzle : public RenderActionRecord {
+class MindPuzzle : public PuzzleRecord {
 public:
-	MindPuzzle() : RenderActionRecord(7) {}
+	MindPuzzle() : PuzzleRecord(7) {}
 	virtual ~MindPuzzle() {}
 
 	void init() override;
@@ -63,7 +63,6 @@ protected:
 	};
 
 	// File data
-	Common::Path _imageName;
 
 	uint16 _numColors = 0;
 	uint16 _codeLength = 0;
@@ -75,10 +74,8 @@ protected:
 	Common::Array<Common::Rect> _ballHitRects;	// bottom-row clickable ball positions, one per color
 	Common::Rect _feedbackSrcRects[2];	// [0] right color, wrong slot (plain pole); [1] right color + slot (flag pole)
 	Common::Rect _submitButtonRect;		// golf-club button: submit the current row
-	Common::Rect _exitHotspot;			// give-up / leave hotspot
 	Common::Array<Row> _rows;
 
-	SceneChangeWithFlag _winScene;		// reached on a solved code
 	SceneChangeWithFlag _loseScene;		// reached when out of guesses or when leaving via the exit hotspot
 
 	RandomSoundBlock _sounds[kNumSounds];	// click / wall / wood / ball / applause / coin
@@ -92,14 +89,12 @@ protected:
 
 	int16 _currentRow = 0;
 	int16 _heldColor = -1;
-	Misc::MouseFollowObject _heldBall;	// the held ball's sprite, riding the cursor
+	MouseFollowObject _heldBall;	// the held ball's sprite, riding the cursor
 	int16 _remainingGuesses = 0;
 	bool _solved = false;
 
 	SoundDescription _outcomeSound;		// applause cue played once on a win
 	bool _outcomeStarted = false;
-
-	Graphics::ManagedSurface _image;
 
 	void generateSecret();
 	void scoreRow(int row);

@@ -34,7 +34,14 @@ namespace Sound {
 class RSound;
 
 #define RSOUND_CHANNEL_COUNT 9
+// The number of active notes registered per channel.
+// The original code used 4, but some chord events contain more notes and
+// overwrite in the active notes for the next channel.
+#define RSOUND_ACTIVE_NOTES_COUNT 8
 
+// Mode for fade-out to stop checks.
+// kRSoundFadeCheckAlternating: fixed speed of 2 (every other tick)
+// kRSoundFadeCheckProgrammable: speed is programmable using setFadeOutSpeed
 enum RSoundFadeCheckMode {
 	kRSoundFadeCheckAlternating,
 	kRSoundFadeCheckProgrammable
@@ -63,7 +70,7 @@ enum RSoundFadeCheckMode {
  *   0x09 _volumeFadeCounter	0x16 _pSrc
  *   0x0A _pitchSlideCounter
  *   0x0B _panningSweepCounter
- * _owner and _midiChannel below are NOT part of the original struct (it
+ * _source and _midiChannel below are NOT part of the original struct (it
  * has no equivalent fields) - they're C++-side conveniences so Channel
  * methods and callers don't need the MIDI channel number (array index+1)
  * threaded through separately. Any future raw "[bx+N]" disassembly offset
@@ -71,38 +78,38 @@ enum RSoundFadeCheckMode {
  */
 class Channel {
 public:
-	RSound *_owner = nullptr;
-	int _midiChannel = 0;				// 1-9: the MIDI channel to which the data in this struct pertains
+	byte _midiChannel = 0;					// 1-9: the MIDI channel to which the data in this struct pertains
+	byte _source = 0;						// The source used for the multisource driver (0: music, 1: SFX)
 
-	int _deltaCounter = 0;				// number of ticks until the next event occurs; loaded from the delta byte of a note or chord event
-										// 0: channel is not active
-	int _pitchSlideStepSize = 0;		// delta added to _pitchBend each pitch-slide step; 0: pitch slide is not active
-	int _volumeFadeStepSize = 0;		// delta added to _volume each volume fade step; 0: volume fade is not active
-	int _panningSweepStepSize = 0;		// delta added to _panning each panning sweep step; 0: panning sweep is not active
-	int _note = 0;						// MIDI note number, read from the note or chord event
-	int _program = 0;					// patch/instrument number, sent as a Program Change
-	int _velocity = 0;					// note velocity, used by RSound::sendNoteOn()
-	int _noteDurationOffset = 0;		// subtracted from the event delta to derive the note duration; positive offset: note is turned off
-										// before the next event is processed. Data might only use up to -1 in the negative direction.
-	int _noteDurationCounter = 0;		// number of ticks until the currently active note(s) is/are turned off
-	int _volumeFadeCounter = 0;			// number of ticks until the next volume fade step is processed
-	int _pitchSlideCounter = 0;			// number of ticks until the next pitch slide step is processed
-	int _panningSweepCounter = 0;		// number of ticks until the next panning sweep step is processed
-	int _volume = 0;					// current channel volume (MIDI CC#7)
-	int _pitchBend = 0;					// current pitch bend value (status 0xEn, coarse/MSB only); 0x40 = center
-	int _panning = 0;					// current pan value (MIDI CC#10); 0x40 = center
-	int _volumeFadeSpeed = 0;			// number of ticks between volume fade steps
-	int _pitchSlideSpeed = 0;			// number of ticks between pitch slide steps
-	int _panningSweepSpeed = 0;			// number of ticks between panning sweep steps
-	int _pitchSlideDurationCounter = 0;	// number of ticks until the pitch slide ends
-	bool _fadeOutActive = false;		// true while the channel is fading out to silence (not to be confused with a volume fade)
-	byte *_soundDataStart = nullptr;	// start of the sound data stream playing on this channel
-	byte *_pSrc = nullptr;				// current read pointer into the sound data stream
-	byte *_innerLoopStart = nullptr;	// inner loop restart address
-	byte *_outerLoopStart = nullptr;	// outer loop restart address
-	int _innerLoopCounter = 0;			// number of repeats of the inner loop remaining
-	int _outerLoopCounter = 0;			// number of repeats of the outer loop remaining
-	byte *_soundData = nullptr;			// identifies the sound data played by this channel; effectively the same as _soundDataStart
+	byte _deltaCounter = 0;					// number of ticks until the next event occurs; loaded from the delta byte of a note or chord event
+											// 0: channel is not active
+	int8 _pitchSlideStepSize = 0;			// delta added to _pitchBend each pitch-slide step; 0: pitch slide is not active
+	int8 _volumeFadeStepSize = 0;			// delta added to _volume each volume fade step; 0: volume fade is not active
+	int8 _panningSweepStepSize = 0;			// delta added to _panning each panning sweep step; 0: panning sweep is not active
+	byte _note = 0;							// MIDI note number, read from the note or chord event
+	byte _program = 0;						// patch/instrument number, sent as a Program Change
+	byte _velocity = 0;						// note velocity, used by RSound::sendNoteOn()
+	int8 _noteDurationOffset = 0;			// subtracted from the event delta to derive the note duration; positive offset: note is turned off
+											// before the next event is processed. Data might only use up to -1 in the negative direction.
+	byte _noteDurationCounter = 0;			// number of ticks until the currently active note(s) is/are turned off
+	byte _volumeFadeCounter = 0;			// number of ticks until the next volume fade step is processed
+	byte _pitchSlideCounter = 0;			// number of ticks until the next pitch slide step is processed
+	byte _panningSweepCounter = 0;			// number of ticks until the next panning sweep step is processed
+	byte _volume = 0;						// current channel volume (MIDI CC#7)
+	byte _pitchBend = 0;					// current pitch bend value (status 0xEn, coarse/MSB only); 0x40 = center
+	byte _panning = 0;						// current pan value (MIDI CC#10); 0x40 = center
+	byte _volumeFadeSpeed = 0;				// number of ticks between volume fade steps
+	byte _pitchSlideSpeed = 0;				// number of ticks between pitch slide steps
+	byte _panningSweepSpeed = 0;			// number of ticks between panning sweep steps
+	byte _pitchSlideDurationCounter = 0;	// number of ticks until the pitch slide ends
+	bool _fadeOutActive = false;			// true while the channel is fading out to silence (not to be confused with a volume fade)
+	byte *_soundDataStart = nullptr;		// start of the sound data stream playing on this channel
+	byte *_pSrc = nullptr;					// current read pointer into the sound data stream
+	byte *_innerLoopStart = nullptr;		// inner loop restart address
+	byte *_outerLoopStart = nullptr;		// outer loop restart address
+	byte _innerLoopCounter = 0;				// number of repeats of the inner loop remaining
+	byte _outerLoopCounter = 0;				// number of repeats of the outer loop remaining
+	byte *_soundData = nullptr;				// identifies the sound data played by this channel; effectively the same as _soundDataStart
 
 public:
 	Channel() {}
@@ -113,7 +120,7 @@ public:
 	 * touch volume, program, velocity, key-on state or delta/duration -
 	 * matches the original disassembly.
 	 */
-	void loadData(byte *soundData);
+	void loadData(byte *soundData, byte source);
 
 	/**
 	 * Marks the channel as fading out (fading toward silence) and stopping
@@ -121,12 +128,6 @@ public:
 	 * volume fade triggered by event 0xF8.
 	 */
 	void setFadeOut(bool fadeOut);
-
-	/**
-	 * Loads new sound data into the channel, starts playback by setting
-	 * _deltaCounter to 1 and resets pitch bend to center on the MT-32.
-	 */
-	void playData(byte *soundData);
 };
 
 /**
@@ -139,14 +140,15 @@ class RSound : public SoundDriver {
 	friend class Channel;
 private:
 	uint16 _randomSeed;
-	int _masterVolume;
-	byte _runningStatus;							// running-status cache, avoids resending an unchanged status byte
-													// Note that the ScummVM MIDI drivers do not use this; they always send the status byte
-	byte _activeNotes[RSOUND_CHANNEL_COUNT + 1][4];	// The note(s) currently playing on each MIDI channel (index 0 unused; channels are 1-9)
-	RSoundFadeCheckMode _fadeCheckMode;
-	bool _fadeCheckAlternate;
-	int _fadeCheckCounter;
-	int _fadeCheckPeriod;
+	// running-status cache, avoids resending an unchanged status byte
+	// Note that the ScummVM MIDI drivers do not use this; they always send the status byte
+	byte _runningStatus;
+	// The note(s) currently playing on each MIDI channel (index 0 unused; channels are 1-9)
+	byte _activeNotes[RSOUND_CHANNEL_COUNT + 1][RSOUND_ACTIVE_NOTES_COUNT];
+
+	RSoundFadeCheckMode _fadeOutCheckMode;
+	int _fadeOutCounter;
+	int _fadeOutSpeed;
 
 	/**
 	 * Data-segment offset of this driver's own "command0_array" (the
@@ -163,6 +165,26 @@ private:
 
 	void processTick();
 	void processTickAllChannels();
+	/**
+	 * Brief description of the event loop:
+	 * This function reads an opcode byte plus a number of data bytes (depending on the operation)
+	 * from the sound data stream. Opcodes 0x00 - 0x7F are note events, playing the MIDI note
+	 * indicated by the opcode. Opcodes 0xF1-0xFF do things like setting volume, program change
+	 * and starting a panning sweep. Opcode 0xF5 plays a chord i.e. multiple notes at the same
+	 * time (up to 4). The note events and the chord event are the only events that specify a
+	 * delta as (one of) the data byte(s). This delta is the number of ticks until the next event
+	 * should be processed. The other events are processed one after the other in the same tick,
+	 * until an event with a delta is encountered.
+	 * The note and chord events also have a duration, which is the number of ticks until the
+	 * played note(s) is/are turned off. By default this duration is equal to the event delta,
+	 * but this can be changed by setting the note duration offset (opcode 0xFB). This offset is
+	 * subtracted from the event delta to determine the note duration. So a positive offset will
+	 * cause notes to end before the next event is processed, while a negative offset will overlap
+	 * the notes with the next events. The MIDI convention of pairing note on events with note off
+	 * events is not used, but opcode 0x00 can be used to turn off all active notes.
+	 * Specifying an event delta of 0 will stop playback. Because of this, when starting playback
+	 * of sound data for a channel, a positive delta (usually 1) must be set on the channel.
+	 */
 	void Channel_processTick(Channel *channel);
 
 	/**
@@ -181,6 +203,12 @@ private:
 	void Channel_processFadeOut(Channel *channel);
 
 	/**
+	 * Loads new sound data into the channel, starts playback by setting
+	 * _deltaCounter to 1 and resets pitch bend to center on the MT-32.
+	 */
+	void Channel_playData(Channel *channel, byte *soundData, byte source);
+
+	/**
 	 * Sends Note-Off (velocity 0) for all active notes on the
 	 * given channel's MIDI channel, then clears the active note table for it.
 	 */
@@ -189,16 +217,28 @@ private:
 protected:
 	int _commandParam;
 
-	void setFadeCheckPeriod(int period) {
-		if (_fadeCheckMode == kRSoundFadeCheckProgrammable)
-			_fadeCheckPeriod = period;
-	}
+	// Specifies the lowest channel in the channel range that is used for
+	// dynamic channel allocation. F.e. if this is 5, channels 1-4 are
+	// initialized and stopped by the static commands 2 and 3, and channels
+	// 5-8 are initialized and stopped by the dyanmic commands 4 and 5. Also,
+	// channels 5-8 are used by playSoundDynamic.
+	// Channel 9 can be included with the static or dynamic channels by setting
+	// the corresponding boolean field. This will only affect commands 2-5;
+	// channel 9 is never used by playSoundDynamic.
+	// There are a number of variations of these settings in the RSOUND.00x
+	// drivers used by Rex.
+	byte _dynamicStartChannel;
+	bool _staticIncludeChannel9;
+	bool _dynamicIncludeChannel9;
+
+	void setFadeOutSpeed(int fadeOutSpeed);
 
 	/**
-	 * Clear the active and fade state for MIDI channels in [first, last].
-	 * Specify includeChannel9 to also reset MIDI channel 9.
+	 * Stop playback by clearing the delta and effects counters for MIDI
+	 * channels in [first, last]. Specify includeChannel9 to also reset MIDI
+	 * channel 9.
 	 */
-	void resetChannelRange(int firstChannel, int lastChannel, bool includeChannel9 = false);
+	void stopChannelRange(int firstChannel, int lastChannel, bool includeChannel9 = false);
 
 	/** Reset the per-MIDI-channel active note tracking table to empty. */
 	void clearActiveNotes();
@@ -206,9 +246,7 @@ protected:
 	/** Reset active note slots for the inclusive MIDI-channel range. */
 	void clearActiveNotesRange(int firstChannel, int lastChannel);
 
-	byte *loadData(int offset) {
-		return &_soundData[offset];
-	}
+	byte *loadData(int offset);
 
 	/**
 	 * Hook called once per processTick() frame, immediately after the disabled
@@ -224,50 +262,95 @@ protected:
 	void resultCheck();
 
 	/**
-	 * Play the specified sound using any free channel from 5 to 8.
-	 * Returns the channel that was used (or nullptr if none was free),
-	 * since some commands poke the just-loaded channel's loop pointer
-	 * directly afterward.
+	 * Returns a pointer to the channel data corresponding to the
+	 * specified MIDI channel.
 	 */
-	Channel *playSoundCh5To8(int offset);
+	Channel *getChannel(byte channel);
+
+	/*
+	 * MIDI channels are allocated to sound data either statically or
+	 * dynamically. Channels 1-4 and 9 are usually statically allocated,
+	 * where the command will specify the channel to use for loading the
+	 * sound data using playSoundStatic. Because channel 9 is the rhythm
+	 * channel and sound data must be specifically written for this
+	 * channel, it can only be allocated statically.
+	 * Channels 5-8 are usually dynamically allocated. The command will
+	 * use playSoundDynamic to look for a free channel and then load the
+	 * sound data into that channel.
+	 * Usually, commands will load music statically into channels 1-4 and 9,
+	 * and SFX dynamically into channels 5-8. However, there are many
+	 * exceptions.
+	 */
 
 	/**
-	 * Play the specified sound using any free channel from 1 to 8.
+	 * Play the specified sound by statically allocating the specified
+	 * channel. This will unload any sound already playing on the
+	 * channel.
 	 */
-	Channel *playSoundCh1To8(int offset);
+	Channel *playSoundStatic(int offset, byte channel, byte source = 0);
+	Channel *playSoundStatic(byte *soundData, byte channel, byte source = 0);
 
 	/**
-	 * Allocates a MIDI channel, loads the specified sound data into it
-	 * and starts playback. Allocation will look for a free channel in
-	 * the range starting with the specified channel (default 5) and
-	 * ending with channel 8. If no suitable channel could be found,
-	 * nullptr is returned and the sound data is not played.
+	 * Play the specified sound by allocating one of the free dynamic
+	 * channels. Returns the channel that was used (or nullptr if none
+	 * was free), since some commands poke the just-loaded channel's
+	 * loop pointer directly afterward.
 	 */
-	Channel *allocateAndPlay(byte *pData, int startingChannel = 5);
+	Channel *playSoundDynamic(int offset, byte source = 1);
 
 	/**
-	 * Checks to see whether the given block of data is already loaded into a channel.
+	 * Play the specified sound by allocating any free melodic channel,
+	 * dynamic or static.
 	 */
+	Channel *playSoundAnyChannel(int offset, byte source = 1);
+
+	/**
+	 * Dynamically allocates a melodic channel, loads the specified sound
+	 * data into it and starts playback. Allocation will look for a
+	 * free channel in the range starting with the specified channel
+	 * (default 5) and ending with channel 8. If no suitable channel
+	 * could be found, nullptr is returned and the sound data is not
+	 * played.
+	 */
+	Channel *allocateAndPlay(byte *pData, int startingChannel, byte source);
+
+	/**
+	 * Checks to see whether the given block of data is already loaded
+	 * into a channel and being played.
+	 */
+	bool isSoundPlaying(int offset);
 	bool isSoundPlaying(byte *pData);
 
-	int generateRandomNumber();
+	/**
+	 * Checks to see whether the given block of data is already loaded
+	 * into the specified channel and being played.
+	 */
+	bool isSoundPlaying(byte channel, byte *pData);
+
+	uint16 generateRandomNumber();
 
 	// ---- Low-level MIDI send helpers -------------------------------
 	// All send through the ScummVM MT-32 / General MIDI driver.
-	void sendNoteOn(int midiChannel, int note, int velocity);
-	void sendProgramChange(int midiChannel, int program);
-	void sendVolume(int midiChannel, int volume);
-	void sendPitchBend(int midiChannel, int value);
-	void sendPanning(int midiChannel, int value);
-	void muteChannel(int midiChannel);
-	void unmuteChannel(int midiChannel, int volume);
+	void sendNoteOn(byte midiChannel, byte note, byte velocity);
+	void sendProgramChange(byte midiChannel, byte program);
+	void sendVolume(byte midiChannel, byte volume);
+	void sendPitchBend(byte midiChannel, byte value);
+	void sendPanning(byte midiChannel, byte value);
+	void muteChannel(byte midiChannel);
+	void unmuteChannel(byte midiChannel, byte volume);
 
 	/**
 	 * Resets the MIDI channel state (all notes off, reset all
 	 * controllers, volume=100, pan=center) of MIDI channels [first, last]
 	 * (inclusive, 1-based). Shared tail used by command0/command2/command4.
 	 */
-	void sendMidiChannelReset(int first, int last);
+	void sendMidiChannelReset(int first, int last, bool includeChannel9 = false);
+
+	/**
+	 * Sets the volume for a channel. The value is set on the channel data
+	 * and it is sent out to the MT-32.
+	 */
+	void setChannelVolume(byte channel, byte volume);
 
 	/**
 	 * Sends a single SysEx message: bytes from pData up to (but not
@@ -292,19 +375,23 @@ protected:
 	 */
 	void sendSysExSequence();
 
+	/**
+	 * Stop all notes playing on the device. Used when pausing or
+	 * quitting the engine.
+	 */
+	void stopAllNotes() override;
+
 	virtual int command0();
 	int command1();
 	int command2();
 	int command3();
 	int command4();
-	int command5();
+	virtual int command5();
 	int command6();
 	int command7();
 	int command8();
 
-	int nullCommand() {
-		return 0;
-	}
+	int nullCommand();
 
 public:
 	Channel _channels[RSOUND_CHANNEL_COUNT];
@@ -338,11 +425,7 @@ public:
 	void noise() override {
 		// No equivalent in the Roland driver - noise() is an Adlib/OPL-only concept
 	}
-	void setVolume(int volume) override;
-
-	int getTicksSinceLastCommand() {
-		return _ticksSinceLastCommand;
-	}
+	int getTicksSinceLastCommand();
 };
 
 } // namespace Sound

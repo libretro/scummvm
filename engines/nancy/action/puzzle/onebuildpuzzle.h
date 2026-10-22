@@ -22,7 +22,7 @@
 #ifndef NANCY_ACTION_ONEBUILDPUZZLE_H
 #define NANCY_ACTION_ONEBUILDPUZZLE_H
 
-#include "engines/nancy/action/actionrecord.h"
+#include "engines/nancy/action/puzzlerecord.h"
 #include "engines/nancy/renderobject.h"
 
 namespace Nancy {
@@ -33,9 +33,9 @@ namespace Action {
 // Left-clicking an unplaced piece picks it up; right-clicking any piece rotates it.
 // If a piece is dropped (left-click) near its correct slot with correct rotation, it snaps in.
 // Otherwise it returns to its previous position (or home in free placement mode).
-class OneBuildPuzzle : public RenderActionRecord {
+class OneBuildPuzzle : public PuzzleRecord {
 public:
-	OneBuildPuzzle() : RenderActionRecord(7), _finalAnimOverlay(99), _counterDisplay(99), _closeupDisplay(99) {}
+	OneBuildPuzzle() : PuzzleRecord(7), _finalAnimOverlay(99), _counterDisplay(99), _closeupDisplay(99) {}
 	virtual ~OneBuildPuzzle() {}
 
 	void init() override;
@@ -118,7 +118,6 @@ protected:
 
 	// --- File data ---
 
-	Common::Path _imageName;
 	uint16 _numPieces = 0;         // Number of piece descriptions in the puzzle data
 	uint16 _totalPieces = 0;       // Number of pieces on screen; see init() for the extra ones
 	bool _freePlacement = false;   // Wrong drop restores to previous position, not home
@@ -204,21 +203,11 @@ protected:
 	Common::String _badAlt2Filename;
 	Common::Array<Common::String> _badTexts;     // 3 entries
 
-	SceneChangeWithFlag _solveScene;
-	SoundDescription _completionSound;
 	Common::String _completionText;
 
 	SoundDescription _closeupSound;
 
-	SceneChangeWithFlag _cancelScene;
-	Common::Rect _exitHotspot;
-	// Nancy13 stores this in the exit hotspot record; earlier games use
-	// _puzzleExitCursor.
-	uint16 _exitCursorType = 0;
-
 	// --- Runtime state ---
-
-	Graphics::ManagedSurface _image;
 
 	int16 _pickedUpPiece = -1;   // Index of currently dragged piece, -1 if none
 	bool _isDragging = false;    // True while a piece is attached to the cursor

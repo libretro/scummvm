@@ -70,7 +70,8 @@ public:
 		kNextIfHovered,				// -2: the mouse is over the movie
 		kNextIfNotHovered,			// -3: it isn't
 		kNextIfChannel13Playing,	// -4
-		kNextIfChannel12Playing		// -5
+		kNextIfChannel12Playing,	// -5
+		kNextIfCommanded			// -6: a movie was commanded; "commanded_movie" plays it, "random_movie" ignores it
 	};
 
 	// Name of the next sequence to chain to once the current one finishes,
@@ -84,6 +85,7 @@ public:
 	// `name` is both the sequence id and the movie filename.
 	struct RandomSequence {
 		Common::Path name;
+		int16 pauseFlag = -1;	// Nancy18: an event flag that is set for as long as the sequence pauses
 		uint16 startFrame = 0;
 		uint16 lastFrame = 0;
 		int32 minPauseMs = 0;
@@ -103,7 +105,8 @@ public:
 		kSecondaryMovieTerse,	// AR 41, Nancy13 and up
 		kRandomMovie,			// ARs 42, 43, 45
 		kMovieWithVolume,		// AR 44
-		kInteractiveMovie		// AR 47
+		kInteractiveMovie,		// AR 47
+		kMovieWithRandomPosition	// AR 48, Nancy16: AR 44 at a random spot inside its dest rect
 	};
 
 	PlaySecondaryMovie(MovieType movieType);
@@ -120,9 +123,9 @@ public:
 	bool getIsFinished() const { return _isFinished; }
 
 	// Enhancement: jump a cinematic straight to its end, as if it had finished
-	// playing on its own. Only movies that hide the player cursor are skipped;
-	// the rest are background animations the player isn't waiting on.
-	void skip();
+	// playing on its own. Only cinematics are skipped; background animations
+	// the player isn't waiting on keep playing. Returns true when skipped.
+	bool skip();
 
 	Common::Path _videoName;
 	Common::Path _paletteName;
@@ -152,6 +155,16 @@ public:
 	// AR 44/47 only; every other record plays at full volume. SetMovieVolume
 	// (AR 150) can change it later.
 	byte _movieVolume = 100;
+
+	// How a kMovieWithRandomPosition movie picks its spot
+	enum RandomPosition : byte {
+		kFixedPosition			= 0,
+		kRandomPositionOnce		= 1,
+		kRandomPositionPerLoop	= 2
+	};
+
+	byte _randomPosition = kFixedPosition;
+	Common::Point _randomOffset;
 
 	// AR 47 "InteractiveVideo" (a PlaySecondaryMovie subclass): the movie's
 	// clickable areas live in an external .iv file, which lists them per movie
@@ -184,9 +197,15 @@ public:
 
 	bool isRandom() const { return _movieType == kRandomMovie; }
 
+	// Whether skip() applies: a movie the player is waiting through, either
+	// because it hides the cursor or because it covers the whole viewport.
+	bool isSkippable();
+
 	// Random-movie state (only populated for kRandomMovie).
 	// "RandomMovie" picks any sequence; otherwise it names the starting one.
 	Common::String _startingSequenceName;
+	// Nancy16: the name movie commands are left under, e.g. the wolf's commands
+	Common::String _playlistName;
 	uint16 _randomPlayerCursorAllowed = kPlayerCursorAllowed;
 	Common::Array<RandomSequence> _sequences;
 
@@ -222,11 +241,14 @@ public:
 	// holds its last frame on screen instead of hiding.
 	enum RandomPauseMode { kPauseTimed, kPauseUntilHovered, kPauseUntilNotHovered };
 	int _activeSequenceIndex = -1;
+	Common::Array<Common::Path> _commandedSequences;
 	RandomChainState _randomChainState = kRandomPlaying;
 	RandomPauseMode _randomPauseMode = kPauseTimed;
 	uint32 _randomPauseEndTime = 0;
+	int16 _randomPauseFlag = -1;	// the flag of the sequence that is pausing
 	bool _randomStopRequested = false;
 	bool _randomPaused = false;
+	bool _isHiddenByDependencies = false;	// Nancy18: taken off screen until the dependencies hold again
 
 	// Whether the mouse is over the movie (which drives both the hover-based
 	// sequence chain and the click that opens a character's conversation), and
@@ -362,6 +384,8 @@ protected:
 	// Crop the last decoded frame with the given video description and move
 	// the movie to its destination. -1 uses the whole frame at its current spot.
 	void applyVideoDesc(int descID);
+	Common::Rect getVideoDescDest(int descID) const;
+	void pickRandomPosition();
 
 	Graphics::ManagedSurface _fullFrame;
 	Graphics::ManagedSurface _maskImage;
@@ -372,7 +396,9 @@ protected:
 
 // Companion AR for the random-movie variant of PlaySecondaryMovie. When
 // executed it stops the currently-active random PlaySecondaryMovie and
-// optionally performs a scene change / event-flag set.
+// optionally performs a scene change / event-flag set. From Nancy15 on the
+// record names the movie it controls, so it can also address an already-loaded
+// movie by filename.
 class PlayRandomMovieControl : public ActionRecord {
 public:
 	PlayRandomMovieControl() {}
@@ -383,7 +409,9 @@ public:
 	enum RandomMovieControlMode : byte {
 		kStopNow = 0,
 		kPauseMovie = 1,
-		kResumeMovie = 2
+		kResumeMovie = 2,
+		kStopAtEnd = 3,
+		kPauseAtEnd = 4
 	};
 
 protected:
@@ -394,6 +422,9 @@ protected:
 	// Nancy13's record is the mode byte alone; earlier games append a scene
 	// change to it.
 	bool _hasSceneChange = true;
+	// Nancy15 prefixes the mode with the name of the movie to control.
+	Common::Path _movieName;
+	bool _isRandomMovie = true;
 };
 
 } // End of namespace Action

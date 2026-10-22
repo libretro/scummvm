@@ -28,7 +28,7 @@
 #include "common/rect.h"
 #include "common/str.h"
 #include "harvester/art.h"
-#include "harvester/room_support.h"
+#include "harvester/scene/room_support.h"
 
 namespace Graphics {
 class Screen;
@@ -63,6 +63,7 @@ public:
 	bool isOpen() const;
 	bool hasSelection() const;
 	const Common::String &getSelectedItemName() const;
+	const IndexedBitmap *getSelectedItemBitmap() const;
 	Common::String resolveSelectedLabel() const;
 	Common::String buildSelectedPrompt(const Common::String &targetLabel,
 		const MenuTextConfig &menuTextConfig) const;

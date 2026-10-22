@@ -27,6 +27,8 @@
 
 #include "graphics/managed_surface.h"
 
+#include "engines/nancy/enginedata.h"
+
 namespace Nancy {
 
 class CursorManager {
@@ -103,6 +105,7 @@ public:
 		kNewPuzzleSlideLeft		= 51,	// Type 25 hotspot
 		kNewPuzzleSlideRight	= 53,	// Type 26 hotspot
 		kNewDropHand			= 64,	// Type 32 — Hand shown when a held piece is dropped (briefly set on the drop action)
+		kNewDropHandHotspot		= 65,	// Type 32 hotspot — Hand shown over a slot a held piece can be dropped into
 		kNewBlank				= 72,	// Type 36 — Empty sprite, used while a puzzle draws a carried piece at the mouse itself
 
 		// Cursor types in Nancy13 and newer games. Nancy13 rebuilt the CURS
@@ -141,6 +144,14 @@ public:
 
 	void init(Common::SeekableReadStream *chunkStream);
 
+	// Nancy19 and up describe their cursors in a boot script, and call them by name.
+	// A script picks one by passing the place of the name in the list as the type.
+	void init(const ScriptBootData &boot);
+	int getCursorTypeByName(const Common::String &name) const;
+
+	// The cursors of the items come after the others, one for every item
+	uint getItemCursorType(int16 itemID) const { return _numCursorTypes + itemID; }
+
 	// Change the current cursor ID. Does not change the graphic.
 	// When setFromScript is set, type is a raw Nancy 10+ system cursor type
 	// index resolved to its flat slot; hotspotVariant then picks the hotspot
@@ -156,6 +167,7 @@ public:
 	void applyCursor();
 
 	const Common::Point &getCurrentCursorHotspot() { return _cursors[_curCursorID].hotspot;}
+	const Common::Rect &getCurrentCursorBounds() { return _cursors[_curCursorID].bounds; }
 	const Common::Rect &getPrimaryVideoInactiveZone() { return _primaryVideoInactiveZone; }
 	const Common::Point &getPrimaryVideoInitialPos() { return _primaryVideoInitialPos; }
 
@@ -172,6 +184,9 @@ private:
 	// Nancy13 slot table.
 	uint resolveNancy13CursorID(CursorType type, int16 itemID, bool setFromScript, bool hotspotVariant);
 
+	uint resolveScriptedCursorID(CursorType type, int16 itemID, bool setFromScript, bool hotspotVariant);
+	void addScriptedCursors(const Common::Array<ScriptBootData::Cursor> &cursors);
+
 	struct Cursor {
 		Common::Rect bounds;
 		Common::Point hotspot;
@@ -179,6 +194,11 @@ private:
 
 	// CURS data
 	Common::Array<Cursor> _cursors;
+
+	// Nancy19+
+	Common::Array<Common::String> _cursorNames;
+	Common::Array<bool> _cursorOverridesItem;
+	uint _defaultCursorType = 0;
 
 	Common::Rect _primaryVideoInactiveZone;
 	Common::Point _primaryVideoInitialPos;
@@ -188,6 +208,8 @@ private:
 
 	Common::Point _warpedMousePos;
 	CursorType _curCursorType;
+	bool _curSetFromScript;
+	bool _curHotspotVariant;
 	int16 _curItemID;
 	uint _curCursorID;
 	uint _lastCursorID;

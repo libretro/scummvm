@@ -23,6 +23,7 @@
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/resource.h"
+#include "engines/nancy/font.h"
 
 #include "engines/nancy/misc/hypertext.h"
 
@@ -30,7 +31,7 @@ namespace Nancy {
 namespace Misc {
 
 struct MetaInfo {
-	enum Type { kColor, kFont, kMark, kHotspot, kUnderline };
+	enum Type { kColor, kFont, kMark, kHotspot, kUnderline, kJustify, kImage };
 
 	Type type;
 	uint numChars;
@@ -60,7 +61,39 @@ void HypertextParser::setImageName(const Common::Path &name) {
 	_imageName = name;
 }
 
+void HypertextParser::setDefaultTextRGB(byte r, byte g, byte b) {
+	_defaultTextRGB[0] = r;
+	_defaultTextRGB[1] = g;
+	_defaultTextRGB[2] = b;
+	_hasDefaultTextRGB = true;
+}
+
+void HypertextParser::drawTextRun(Graphics::ManagedSurface &surface, const Font *font, const Common::String &text, int x, int y, int width, int colorID) const {
+	if (font->getSystemFont()) {
+		font->getSystemFont()->drawString(&surface, text, x, y, width, getColorPixel(font, colorID));
+	} else {
+		font->drawString(&surface, text, x, y, width, colorID);
+	}
+}
+
+uint32 HypertextParser::getColorPixel(const Font *font, int colorID) const {
+	if (colorID == kDefaultRGB) {
+		return _fullSurface.format.ARGBToColor(255, _defaultTextRGB[0], _defaultTextRGB[1], _defaultTextRGB[2]);
+	}
+
+	if (font->getSystemFont()) {
+		return g_nancy->_graphics->getFontColor(colorID, _fullSurface.format, _fontColorState);
+	}
+
+	return font->getColorPixel(colorID);
+}
+
 static uint lineStep(const Font *font) {
+	// Nancy16+ system fonts put their lines right under each other
+	if (font->getSystemFont()) {
+		return font->getFontHeight();
+	}
+
 	if (g_nancy->getGameType() >= kGameTypeNancy10) {
 		const uint h = font->getLineHeight();
 		return h + h / 9;
@@ -95,6 +128,7 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 		int curFontID = fontID;
 		uint numNonSpaceChars = 0;
 		bool hasMark = false;
+		Common::Array<InlineImage> inlineImages;
 
 		// Token braces plus invalid characters that are known to appear in strings
 		Common::StringTokenizer tokenizer(_textLines[lineID], "<>\"");
@@ -107,6 +141,26 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 			if (tokenizer.delimitersAtTokenBegin().lastChar() == '<' && tokenizer.delimitersAtTokenEnd().firstChar() == '>') {
 				switch (curToken.firstChar()) {
 				case 'i' :
+					if (curToken.size() > 1) {
+						// Inline image: <iNAME,left,top,right,bottom>; a left of -1 means the whole image
+						Common::StringTokenizer imageTokenizer(curToken.substr(1), ",");
+						InlineImage inlineImage;
+						inlineImage.name = Common::Path(imageTokenizer.nextToken());
+
+						int coords[4];
+						for (uint i = 0; i < 4; ++i) {
+							coords[i] = atoi(imageTokenizer.nextToken().c_str());
+						}
+
+						if (coords[0] != -1) {
+							inlineImage.src = Common::Rect(coords[0], coords[1], coords[2] + 1, coords[3] + 1);
+						}
+
+						metaInfo.push({MetaInfo::kImage, numNonSpaceChars, (byte)inlineImages.size()});
+						inlineImages.push_back(inlineImage);
+						continue;
+					}
+
 					// CC begin
 					// fall through
 				case 'o' :
@@ -197,8 +251,29 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 						break;
 					}
 
+					// A font set before any text also applies to word wrapping
+					if (numNonSpaceChars == 0) {
+						curFontID = curToken[1] - '0';
+					}
+
 					metaInfo.push({MetaInfo::kFont, numNonSpaceChars, (byte)(curToken[1] - '0')});
 					continue;
+				case 'j' : {
+					// Justification: <jl>, <jr> or <jc>
+					if (curToken.size() != 2) {
+						break;
+					}
+
+					byte justification = kJustifyLeft;
+					if (curToken[1] == 'r') {
+						justification = kJustifyRight;
+					} else if (curToken[1] == 'c') {
+						justification = kJustifyCenter;
+					}
+
+					metaInfo.push({MetaInfo::kJustify, numNonSpaceChars, justification});
+					continue;
+				}
 				case '1':
 				case '2':
 				case '3':
@@ -269,7 +344,8 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 		// Go through the wrapped lines and draw them, making sure to
 		// respect color tokens
 		uint totalCharsDrawn = 0;
-		byte colorID = _defaultTextColor;
+		int colorID = _hasDefaultTextRGB ? kDefaultRGB : (int)_defaultTextColor;
+		uint justification = _defaultJustification;
 		bool underline = false;
 		uint numNewlineTokens = 0;
 		uint horizontalOffset = 0;
@@ -279,11 +355,7 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 			horizontalOffset = 0;
 			newLineStart = false;
 
-			// Draw images
-			if (newlineTokens.empty()) {
-				warning("HypertextParser::drawAllText():: newlineTokens list was empty at line %u out of %u wrapped lines", lineNumber+1, wrappedLines.size());
-			}
-
+			// Draw images. Lines wrapped past the last newline token don't start a new line.
 			if (!newlineTokens.empty() && newlineTokens.front() <= totalCharsDrawn) {
 				newlineTokens.pop();
 				newLineStart = true;
@@ -324,6 +396,17 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 				line.deleteChar(0);
 			}
 
+			// Justification changes and inline images may sit on otherwise empty lines
+			while (metaInfo.size() && totalCharsDrawn >= metaInfo.front().numChars &&
+					(metaInfo.front().type == MetaInfo::kJustify || metaInfo.front().type == MetaInfo::kImage)) {
+				MetaInfo change = metaInfo.pop();
+				if (change.type == MetaInfo::kJustify) {
+					justification = change.index;
+				} else {
+					drawInlineImage(inlineImages[change.index], textBounds, horizontalOffset, justification, font);
+				}
+			}
+
 			bool newWrappedLine = true; // Used to ensure color/font changes don't mess up hotspots
 			while (!line.empty()) {
 				Common::String subLine;
@@ -341,6 +424,12 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 						break;
 					case MetaInfo::kUnderline:
 						underline = !underline;
+						break;
+					case MetaInfo::kJustify:
+						justification = change.index;
+						break;
+					case MetaInfo::kImage:
+						drawInlineImage(inlineImages[change.index], textBounds, horizontalOffset, justification, font);
 						break;
 					case MetaInfo::kMark: {
 						auto *mark = GetEngineData(MARK);
@@ -403,6 +492,13 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 					}
 				}
 
+				if (newWrappedLine && justification != kJustifyLeft) {
+					int freeSpace = textBounds.width() - (int)horizontalOffset - font->getStringWidth(line);
+					if (freeSpace > 0) {
+						horizontalOffset += justification == kJustifyCenter ? freeSpace / 2 : freeSpace;
+					}
+				}
+
 				uint lineSizeNoSpace = 0;
 				for (uint i = 0; i < line.size(); ++i) {
 					if (!isSpace(line[i])) {
@@ -428,29 +524,22 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 				// Draw the normal text
 				const int drawX = textBounds.left + horizontalOffset + (newLineStart ? 0 : leftOffsetNonNewline);
 				const int drawY = textBounds.top + _numDrawnLines * lineStep(font) + _imageVerticalOffset;
-				font->drawString(				&_fullSurface,
-												stringToDraw,
-												drawX,
-												drawY,
-												textBounds.width(),
-												colorID);
+				drawTextRun(_fullSurface, font, stringToDraw, drawX, drawY, textBounds.width(), colorID);
 
 				// Underline the segment (the <u> markup toggle) in the text color.
 				if (underline && !stringToDraw.empty()) {
 					const int underlineWidth = font->getStringWidth(stringToDraw);
 					const int underlineY = drawY + font->getFontHeight() - 1;
 					_fullSurface.fillRect(Common::Rect(drawX, underlineY, drawX + underlineWidth, underlineY + 1),
-											font->getColorPixel(colorID));
+											getColorPixel(font, colorID));
 				}
 
 				// Then, draw the highlight
 				if (hasHotspot && !_textHighlightSurface.empty()) {
-					highlightFont->drawString(	&_textHighlightSurface,
-												stringToDraw,
-												textBounds.left + horizontalOffset + (newLineStart ? leftOffsetNonNewline : 0),
-												textBounds.top + _numDrawnLines * lineStep(highlightFont) + _imageVerticalOffset,
-												textBounds.width(),
-												colorID);
+					drawTextRun(_textHighlightSurface, highlightFont, stringToDraw,
+								textBounds.left + horizontalOffset + (newLineStart ? leftOffsetNonNewline : 0),
+								textBounds.top + _numDrawnLines * lineStep(highlightFont) + _imageVerticalOffset,
+								textBounds.width(), colorID);
 				}
 
 				// Count number of non-space characters drawn. Used for color.
@@ -532,6 +621,27 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 	}
 
 	_needsTextRedraw = false;
+}
+
+void HypertextParser::drawInlineImage(const InlineImage &inlineImage, const Common::Rect &textBounds, uint horizontalOffset, uint justification, const Font *font) {
+	Graphics::ManagedSurface image;
+	if (!g_nancy->_resource->loadImage(inlineImage.name, image)) {
+		return;
+	}
+
+	Common::Rect src = inlineImage.src.isEmpty() ? Common::Rect(image.w, image.h) : inlineImage.src;
+	src.clip(Common::Rect(image.w, image.h));
+
+	int x = textBounds.left + horizontalOffset;
+	if (justification == kJustifyCenter) {
+		x = textBounds.left + (textBounds.width() - src.width()) / 2;
+	} else if (justification == kJustifyRight) {
+		x = textBounds.right - src.width();
+	}
+
+	int y = textBounds.top + _numDrawnLines * lineStep(font) + _imageVerticalOffset;
+	_fullSurface.blitFrom(image, src, Common::Point(x, y));
+	_imageVerticalOffset += src.height() + font->getFontHeight();
 }
 
 void HypertextParser::clear() {

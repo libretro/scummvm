@@ -60,28 +60,28 @@ const uint32 kRestDivider = 0;
 // Ambient DOS intro phrases from COLDAT.ASM.
 // These are sparse note patterns with long rests; exact VSP note decoding
 // is not available here, so we map them to stable PC speaker dividers.
-static const MelodyStep kStars1Phrase[] = {
+const MelodyStep kStars1Phrase[] = {
 	{ 4831, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 },
 	{ 4063, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 },
 	{ 1811, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 },
 	{ 1715, 3 }, { kRestDivider, 3 }
 };
 
-static const MelodyStep kStars2Phrase[] = {
+const MelodyStep kStars2Phrase[] = {
 	{ 4831, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 }, { 2712, 3 },
 	{ 4063, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 }, { 2032, 3 },
 	{ 1811, 3 }, { kRestDivider, 3 }, { kRestDivider, 3 }, { 9121, 3 },
 	{ 1715, 3 }, { kRestDivider, 3 }
 };
 
-static const MelodyStep kStars3Phrase[] = {
+const MelodyStep kStars3Phrase[] = {
 	{ 4831, 3 }, { kRestDivider, 3 }, { 9121, 3 }, { 2712, 3 },
 	{ 4063, 3 }, { kRestDivider, 3 }, { 7670, 3 }, { 2032, 3 },
 	{ 1811, 3 }, { kRestDivider, 3 }, { 4560, 3 }, { 9121, 3 },
 	{ 1715, 3 }, { kRestDivider, 3 }
 };
 
-static const MelodyStep kStars4Phrase[] = {
+const MelodyStep kStars4Phrase[] = {
 	{ 4831, 3 }, { 1524, 3 }, { 9121, 3 }, { 2712, 3 },
 	{ 4063, 3 }, { 4831, 3 }, { 7670, 3 }, { 2032, 3 },
 	{ 1811, 3 }, { 3044, 3 }, { 4560, 3 }, { 9121, 3 },
@@ -340,6 +340,7 @@ void Sound::playPCSpeaker(int soundID) {
 bool Sound::playMacSound(int soundID, bool loop) {
 	// Primary resource IDs from original sound.c
 	int resID = -1;
+	int sampleRate = 11127;
 	switch (soundID) {
 	case kKlaxon: resID = 27317; break;
 	case kAirlock: resID = 5141; break;
@@ -372,10 +373,14 @@ bool Sound::playMacSound(int soundID, bool loop) {
 	case kMars: resID = 23390; break;
 	case kBeamMe: resID = 5342; break;
 	case kDave: resID = 13651; break;   // DAVE (the monolith's "full of stars" clip)
+	// LoadSound(SWISH, 5) and LoadSound(END, 4): StartSound's free-form
+	// synthesizer plays at 22254 Hz divided by the requested speed.
+	case kSwish: resID = 7089; sampleRate = 22254 / 5; break;
+	case kEnd: resID = 18282; sampleRate = 22254 / 4; break;
 	default: break;
 	}
 
-	if (resID != -1 && playResource(resID, loop))
+	if (resID != -1 && playResource(resID, loop, sampleRate))
 		return true;
 
 	// Fallback resource IDs for sounds missing from this binary version.
@@ -396,7 +401,7 @@ bool Sound::playMacSound(int soundID, bool loop) {
 	return false;
 }
 
-bool Sound::playResource(int resID, bool loop) {
+bool Sound::playResource(int resID, bool loop, int sampleRate) {
 	Common::SeekableReadStream *snd = nullptr;
 
 	// Search Zounds first (has most sounds)
@@ -422,7 +427,7 @@ bool Sound::playResource(int resID, bool loop) {
 	snd->read(data, dataSize);
 	delete snd;
 
-	Audio::RewindableAudioStream *raw = Audio::makeRawStream(data, dataSize, 11127, Audio::FLAG_UNSIGNED, DisposeAfterUse::YES);
+	Audio::RewindableAudioStream *raw = Audio::makeRawStream(data, dataSize, sampleRate, Audio::FLAG_UNSIGNED, DisposeAfterUse::YES);
 	Audio::AudioStream *stream = loop ? Audio::makeLoopingAudioStream(raw, 0) : raw;
 	_vm->_mixer->playStream(Audio::Mixer::kSFXSoundType, &_handle, stream);
 	return true;

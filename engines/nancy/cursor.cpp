@@ -34,6 +34,8 @@ CursorManager::CursorManager() :
 	_isInitialized(false),
 	_curItemID(-1),
 	_curCursorType(kNormal),
+	_curSetFromScript(false),
+	_curHotspotVariant(true),
 	_curCursorID(0),
 	_lastCursorID(10000), // nonsense default value to ensure cursor is drawn the first time
 	_hasItem(false),
@@ -134,17 +136,105 @@ void CursorManager::init(Common::SeekableReadStream *chunkStream) {
 	delete chunkStream;
 }
 
+void CursorManager::init(const ScriptBootData &boot) {
+	_numCursorTypes = boot.cursors.size();
+	_cursors.clear();
+	_cursorNames.clear();
+	_cursorOverridesItem.clear();
+
+	// The cursors of the game go first and the ones of the items after them, both
+	// in pairs: the regular one followed by the one for hovering something
+	addScriptedCursors(boot.cursors);
+	addScriptedCursors(boot.itemCursors);
+
+	for (const ScriptBootData::Cursor &cursor : boot.cursors) {
+		_cursorNames.push_back(cursor.name);
+		_cursorOverridesItem.push_back(cursor.overridesItem);
+	}
+
+	_defaultCursorType = MAX(getCursorTypeByName(boot.defaultCursorName), 0);
+
+	g_nancy->_resource->loadImage(boot.cursorImageName, _uiCursorsSurface);
+	g_nancy->_resource->loadImage(boot.itemCursorImageName, _invCursorsSurface);
+
+	_isInitialized = true;
+
+	setCursor(kNormalArrow, -1, false);
+	showCursor(false);
+}
+
+void CursorManager::addScriptedCursors(const Common::Array<ScriptBootData::Cursor> &cursors) {
+	for (const ScriptBootData::Cursor &cursor : cursors) {
+		for (uint i = 0; i < ScriptBootData::kNumCursorVariants; ++i) {
+			Cursor slot;
+			slot.bounds = cursor.sources[i];
+			slot.hotspot = cursor.hotspots[i];
+
+			// The rects of the cursor sheet include their last row and column
+			if (!slot.bounds.isEmpty()) {
+				++slot.bounds.right;
+				++slot.bounds.bottom;
+			}
+
+			_cursors.push_back(slot);
+		}
+	}
+}
+
+int CursorManager::getCursorTypeByName(const Common::String &name) const {
+	for (uint i = 0; i < _cursorNames.size(); ++i) {
+		if (_cursorNames[i].equalsIgnoreCase(name)) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+uint CursorManager::resolveScriptedCursorID(CursorType type, int16 itemID, bool setFromScript, bool hotspotVariant) {
+	// Scripts pick a cursor by name, and get the place of the name in the list. Anything
+	// else asks for one of the engine's own types, which only tell the default cursor
+	// from the one for hovering something.
+	uint cursorType = _defaultCursorType;
+	if (setFromScript) {
+		if ((uint)type * ScriptBootData::kNumCursorVariants < _cursors.size()) {
+			cursorType = (uint)type;
+		}
+	} else {
+		hotspotVariant = type == kHotspot || type == kHotspotArrow;
+	}
+
+	const uint variant = hotspotVariant ? ScriptBootData::kCursorHot : ScriptBootData::kCursorRegular;
+
+	// A held item replaces every cursor that doesn't ask to be kept
+	const uint itemSlot = ((uint)_numCursorTypes + (uint)itemID) * ScriptBootData::kNumCursorVariants + variant;
+	const bool keepsCursor = cursorType < _cursorOverridesItem.size() && _cursorOverridesItem[cursorType];
+	if (itemID != -1 && !keepsCursor && itemSlot < _cursors.size() && !_cursors[itemSlot].bounds.isEmpty()) {
+		_hasItem = true;
+		return itemSlot;
+	}
+
+	// A script can also ask for the cursor of an item
+	if (cursorType >= (uint)_numCursorTypes) {
+		_hasItem = true;
+	}
+
+	return cursorType * ScriptBootData::kNumCursorVariants + variant;
+}
+
 uint CursorManager::resolveNancy10CursorID(CursorType type, int16 itemID, bool setFromScript, bool hotspotVariant) {
 	// Item-held variants. The Nancy 10+ chunk reserves `numItems × 2`
 	// slots after the two 37-entry system arrays (= _numCursorTypes * 2),
 	// each item getting one [idle, hotspot] pair. Held items only
 	// override the cursor for kNormal / kHotspot; directional /
 	// rotate / arrow types render their system sprite directly even
-	// while the player is carrying something.
+	// while the player is carrying something. A script cursor of type
+	// 0/1 is a hotspot's hover cursor, so the item takes its highlighted
+	// sprite.
 	if (itemID != -1 && (type == kNormal || type == kHotspot)) {
 		_hasItem = true;
 		const uint itemsOffset = (uint)_numCursorTypes * 2;
-		const uint variant = (type == kHotspot) ? 1 : 0;
+		const uint variant = (setFromScript ? hotspotVariant : type == kHotspot) ? 1 : 0;
 		return itemsOffset + (uint)itemID * 2 + variant;
 	}
 
@@ -195,6 +285,7 @@ uint CursorManager::resolveNancy10CursorID(CursorType type, int16 itemID, bool s
 	case kNewPuzzleSlideLeft:   return kNewPuzzleSlideLeft;
 	case kNewPuzzleSlideRight:  return kNewPuzzleSlideRight;
 	case kDropHand:             return kNewDropHand;
+	case kNewDropHandHotspot:   return kNewDropHandHotspot;
 	default:
 		return kNewNormal;
 	}
@@ -203,11 +294,12 @@ uint CursorManager::resolveNancy10CursorID(CursorType type, int16 itemID, bool s
 uint CursorManager::resolveNancy13CursorID(CursorType type, int16 itemID, bool setFromScript, bool hotspotVariant) {
 	// Held-item cursors: the item block follows the 45 system-cursor pairs;
 	// each item owns an [idle, hotspot] pair now indexing _invCursorsSurface
-	// (chosen by applyCursor()).
+	// (chosen by applyCursor()). A script cursor of type 0/1 is a hotspot's
+	// hover cursor, so the item takes its highlighted sprite.
 	if (itemID != -1 && (type == kNormal || type == kHotspot)) {
 		_hasItem = true;
 		const uint itemsOffset = (uint)_numCursorTypes * 2;
-		const uint variant = (type == kHotspot) ? 1 : 0;
+		const uint variant = (setFromScript ? hotspotVariant : type == kHotspot) ? 1 : 0;
 		return itemsOffset + (uint)itemID * 2 + variant;
 	}
 
@@ -263,12 +355,23 @@ void CursorManager::setCursor(CursorType type, int16 itemID, bool setFromScript,
 
 	const GameType gameType = g_nancy->getGameType();
 
-	if (type == _curCursorType && itemID == _curItemID)
+	// A script-set cursor resolves to a different slot than the same type set by
+	// the engine (e.g. type 0 picks the highlighted eyeglass instead of the plain
+	// one), so both flags take part in the comparison below
+	if (type == _curCursorType && itemID == _curItemID &&
+			setFromScript == _curSetFromScript && hotspotVariant == _curHotspotVariant)
 		return;
 
 	_curCursorType = type;
 	_curItemID = itemID;
+	_curSetFromScript = setFromScript;
+	_curHotspotVariant = hotspotVariant;
 	_hasItem = false;
+
+	if (gameType >= kGameTypeNancy19) {
+		_curCursorID = resolveScriptedCursorID(type, itemID, setFromScript, hotspotVariant);
+		return;
+	}
 
 	if (gameType >= kGameTypeNancy13) {
 		_curCursorID = resolveNancy13CursorID(type, itemID, setFromScript, hotspotVariant);
@@ -429,7 +532,8 @@ void CursorManager::applyCursor() {
 	}
 
 	if (_warpedMousePos.x != -500 && _warpedMousePos.y != -500) {
-		g_system->warpMouse(_warpedMousePos.x, _warpedMousePos.y);
+		Common::Point screenPos = g_nancy->_graphics->gameToScreen(_warpedMousePos);
+		g_system->warpMouse(screenPos.x, screenPos.y);
 		_warpedMousePos.x = -500;
 		_warpedMousePos.y = -500;
 	}

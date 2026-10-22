@@ -94,16 +94,16 @@ void GridMapPuzzle::readData(Common::SeekableReadStream &stream) {
 	_pickupSound.readNormal(stream);
 	_placeSound.readNormal(stream);
 
-	_winScene.readData(stream);
+	_solveScene._sceneChange.readData(stream);
 	stream.skip(2);
-	_winFlag.label = stream.readSint16LE();
-	_winFlag.flag  = stream.readByte();
-	_winSound.readNormal(stream);
+	_solveScene._flag.label = stream.readSint16LE();
+	_solveScene._flag.flag  = stream.readByte();
+	_solveSound.readNormal(stream);
 
-	_cancelScene.readData(stream);
+	_exitScene._sceneChange.readData(stream);
 	stream.skip(2);
-	_cancelFlag.label = stream.readSint16LE();
-	_cancelFlag.flag  = stream.readByte();
+	_exitScene._flag.label = stream.readSint16LE();
+	_exitScene._flag.flag  = stream.readByte();
 
 	readRect(stream, _exitHotspot);
 	stream.skip(18); // trailing cursor type + unused fields
@@ -210,17 +210,16 @@ void GridMapPuzzle::execute() {
 		case kPlaying:
 			break;
 		case kPlayWinSound:
-			if (_winSound.name != "NO SOUND") {
-				g_nancy->_sound->loadSound(_winSound);
-				g_nancy->_sound->playSound(_winSound);
+			if (hasSolveSound()) {
+				playSolveSound();
 				_subState = kWaitWinSound;
 			} else {
 				_subState = kExitToWin;
 			}
 			break;
 		case kWaitWinSound:
-			if (!g_nancy->_sound->isSoundPlaying(_winSound)) {
-				g_nancy->_sound->stopSound(_winSound);
+			if (!isSolveSoundPlaying()) {
+				g_nancy->_sound->stopSound(_solveSound);
 				_subState = kExitToWin;
 			}
 			break;
@@ -236,16 +235,14 @@ void GridMapPuzzle::execute() {
 		g_nancy->_cursor->showCursor(true);
 		g_nancy->_sound->stopSound(_pickupSound);
 		g_nancy->_sound->stopSound(_placeSound);
-		g_nancy->_sound->stopSound(_winSound);
+		g_nancy->_sound->stopSound(_solveSound);
 		if (_subState == kExitToWin) {
 			GridMapPuzzleData *gmd = (GridMapPuzzleData *)NancySceneState.getPuzzleData(GridMapPuzzleData::getTag());
 			if (gmd)
 				gmd->itemState.clear();
-			NancySceneState.setEventFlag(_winFlag);
-			NancySceneState.changeScene(_winScene);
+			_solveScene.execute();
 		} else {
-			NancySceneState.setEventFlag(_cancelFlag);
-			NancySceneState.changeScene(_cancelScene);
+			_exitScene.execute();
 		}
 		finishExecution();
 		break;
@@ -363,8 +360,7 @@ void GridMapPuzzle::handleInput(NancyInput &input) {
 	g_nancy->_cursor->showCursor(_heldItem == -1);
 
 	if (!hitMap && !hitItems) {
-		if (!_exitHotspot.isEmpty() && _exitHotspot.contains(mouseVP)) {
-			g_nancy->_cursor->setCursorType(g_nancy->_cursor->_puzzleExitCursor);
+		if (hoverExitHotspot(input)) {
 			if (input.input & NancyInput::kLeftMouseButtonUp)
 				_subState = kExitToCancel;
 		} else {

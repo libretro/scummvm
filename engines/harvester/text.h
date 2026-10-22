@@ -25,9 +25,17 @@
 #include "common/array.h"
 #include "common/str.h"
 
+namespace Graphics {
+class Font;
+}
+
 namespace Harvester {
 
 class ResourceManager;
+
+bool appendTextEntryCharacter(Common::String &text, const Graphics::Font &font,
+	uint32 character, uint maxCharacters, int maxWidth);
+bool deleteTextEntryCharacter(Common::String &text);
 
 struct DialogueIndexEntry {
 	int wavId = 0;
@@ -51,7 +59,7 @@ public:
 	const Common::Array<byte> &getDialogueData() const { return _dialogueData; }
 	const Common::Array<DialogueIndexEntry> &getDialogueEntries() const { return _dialogueEntries; }
 	const Common::Array<Common::String> &getDialogueResponseLines() const { return _dialogueResponseLines; }
-	const Common::Array<CftFontResource> &getFonts() const { return _fonts; }
+	const CftFontResource *findFont(const char *fontName) const;
 	bool resolveDialogueSubtitle(int wavId, Common::String &text) const;
 	Common::String getDialogueResponseLine(int zeroBasedIndex) const;
 
@@ -64,6 +72,7 @@ private:
 	Common::Array<byte> _dialogueData;
 	Common::Array<DialogueIndexEntry> _dialogueEntries;
 	Common::Array<Common::String> _dialogueResponseLines;
+	bool _dialogueResponsesEndWithNewline = true;
 	Common::Array<CftFontResource> _fonts;
 };
 

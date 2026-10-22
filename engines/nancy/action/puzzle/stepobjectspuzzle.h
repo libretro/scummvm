@@ -23,8 +23,8 @@
 #define NANCY_ACTION_STEPOBJECTSPUZZLE_H
 
 #include "engines/nancy/commontypes.h"
-#include "engines/nancy/action/actionrecord.h"
-#include "engines/nancy/misc/mousefollow.h"
+#include "engines/nancy/action/puzzlerecord.h"
+#include "engines/nancy/action/mousefollow.h"
 
 namespace Nancy {
 namespace Action {
@@ -35,9 +35,9 @@ namespace Action {
 // shoe visits, so each cell can only be stepped on once, and the overall
 // dance has to be done in one go. The puzzle is solved once the sequence
 // of dance steps matches the scripted one.
-class StepObjectsPuzzle : public RenderActionRecord {
+class StepObjectsPuzzle : public PuzzleRecord {
 public:
-	StepObjectsPuzzle() : RenderActionRecord(7) {}
+	StepObjectsPuzzle() : PuzzleRecord(7) {}
 	virtual ~StepObjectsPuzzle() {}
 
 	void init() override;
@@ -96,16 +96,12 @@ protected:
 	void drop(int row, int col);
 	void resetBoard();
 	void beginStepSound(SoundID sound, bool isDrop);
-	// Zone cursors take the idle sprite of their type, hover/drag cursors the hotspot one.
-	void setDataCursor(uint16 cursorType, bool hotspotVariant = true) const;
 
 	void redraw();
 	void putDownCarried();
 	void drawSprite(Graphics::ManagedSurface &dest, const Common::Rect &srcRect, const Common::Point &destPos, byte alpha);
-	SoundDescription playSoundBlock(const RandomSoundBlock &block);
 
 	// File data
-	Common::Path _imageName;
 	// The puzzle carries its own cursor as a raw Nancy13 cursor type id; the same
 	// one is used for hovering and for carrying an object.
 	uint16 _cursorType = 0;
@@ -113,18 +109,10 @@ protected:
 	uint16 _numCols = 0;
 	uint16 _pitchY = 0;
 	uint16 _pitchX = 0;
-	SceneChangeDescription _solveScene;
-	FlagDescription _solveFlag;
 	uint16 _numSteps = 0;
 
 	Common::Array<Step> _solution;
 	Common::Array<StepObject> _objects;
-
-	// The clickable "give up / leave" hotspot.
-	Common::Rect _exitHotspot;
-	uint16 _exitCursorType = 0;
-	SceneChangeDescription _exitScene;
-	FlagDescription _exitFlag;			// set on give-up
 
 	Common::Array<RandomSoundBlock> _sounds;
 
@@ -133,15 +121,13 @@ protected:
 	Common::Array<Step> _playerSteps;
 	PuzzleState _puzzleState = kIdle;
 	int _carriedID = -1;
-	Misc::MouseFollowObject _carriedObject;
+	MouseFollowObject _carriedObject;
 	uint32 _stepSoundEnd = 0;
 	bool _lastStepWasDrop = false;
 	bool _lastStepCorrect = false;
 	bool _solved = false;
 	bool _exitRequested = false;
-	SoundDescription _solveSound;
 
-	Graphics::ManagedSurface _image;
 };
 
 } // End of namespace Action
