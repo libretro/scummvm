@@ -112,7 +112,7 @@ void Temple::changeCharacter(uint index) {
 		_isEradicated = true;
 	} else if (c._condition & BAD_CONDITION) {
 		_healCost = HEAL_COST2[townNum];
-	} else if (c._condition || c._hp < c._hpMax) {
+	} else if (c._condition || c._hpCurrent < c._hpMax) {
 		_healCost = HEAL_COST3[townNum];
 	}
 
@@ -136,30 +136,30 @@ void Temple::changeCharacter(uint index) {
 void Temple::draw() {
 	Location::draw();
 
-	writeString(21, 0, STRING["dialogs.temple.service_cost"]);
+	writeString(21, 0, "service        cost");
 
-	writeString(18, 2, STRING["dialogs.temple.a"]);
+	writeString(18, 2, "A) Restore health");
 	_textPos.x = 36;
 	if (_healCost)
 		writeNumber(_healCost);
 	else
 		writeString("----");
 
-	writeString(18, 3, STRING["dialogs.temple.b"]);
+	writeString(18, 3, "B) Uncurse items");
 	_textPos.x = 36;
 	if (_uncurseCost)
 		writeNumber(_uncurseCost);
 	else
 		writeString("----");
 
-	writeString(18, 4, STRING["dialogs.temple.c"]);
+	writeString(18, 4, "C) Restore align");
 	_textPos.x = 36;
 	if (_alignmentCost)
 		writeNumber(_alignmentCost);
 	else
 		writeString("----");
 
-	writeString(18, 5, STRING["dialogs.temple.d"]);
+	writeString(18, 5, "D) Make donation");
 	_textPos.x = 36;
 	writeNumber(_donateCost);
 }
@@ -168,7 +168,8 @@ void Temple::restoreHealth() {
 	if (subtractGold(_healCost)) {
 		Character &c = *g_globals->_currCharacter;
 		c._condition = FINE;
-		c._hpCurrent = c._hp;
+		c._hpMax = c._hp;
+		c._hpCurrent = c._hpMax;
 
 		if (_isEradicated) {
 			c._age += 10;
@@ -224,9 +225,9 @@ void Temple::donate() {
 				g_globals->_activeSpells._arr[i] = 75;
 
 			Sound::sound(SOUND_3);
-			displayMessage(STRING["dialogs.temple.protected"]);
+			displayMessage("*** Today you shall be protected!");
 		} else {
-			displayMessage(STRING["dialogs.temple.thankyou"]);
+			displayMessage("Thank you!");
 		}
 	}
 }

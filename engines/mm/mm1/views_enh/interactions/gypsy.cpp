@@ -20,6 +20,7 @@
  */
 
 #include "mm/mm1/views_enh/interactions/gypsy.h"
+#include "mm/mm1/data/text.h"
 #include "mm/mm1/globals.h"
 
 
@@ -29,14 +30,14 @@ namespace ViewsEnh {
 namespace Interactions {
 
 Gypsy::Gypsy() : Interaction("Gypsy", 9) {
-	_title = STRING["maps.emap23.gypsy_title"];
+	_title = "Gypsy";
 }
 
 bool Gypsy::msgFocus(const FocusMessage &msg) {
 	PartyView::msgFocus(msg);
 
 	_charSelected = false;
-	addText(STRING["maps.map23.gypsy"]);
+	addText("A toothless Gypsy seer asks:\nWho would like to hear their sign (F1-F6)?");
 	return true;
 }
 
@@ -56,9 +57,8 @@ void Gypsy::charSwitched(Character *priorChar) {
 	}
 
 	Common::String line = Common::String::format(
-		STRING["maps.map23.your_sign_is"].c_str(),
-		STRING[Common::String::format("colors.%d",
-			c._flags[4] & CHARFLAG4_SIGN)].c_str()
+		"\"Your sign is the %s\"",
+		COLOR_NAMES[c._flags[4] & CHARFLAG4_SIGN]
 	);
 	addText(line);
 

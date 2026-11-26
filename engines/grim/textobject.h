@@ -113,7 +113,7 @@ public:
 	void draw();
 	void update();
 
-	void destroy();
+	void invalidate();
 
 	void saveState(SaveGame *state) const;
 	bool restoreState(SaveGame *state);
@@ -149,6 +149,8 @@ protected:
 	int _stackLevel;
 
 private:
+	template <typename S>
+	int getWidestWord(const S &msg, const Font *font);
 	template <typename S>
 	void setupTextReal(S msg, Common::String (*convert)(const S &s));
 };

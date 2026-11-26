@@ -26,31 +26,34 @@
 
 namespace Grim {
 
+struct SmushDemoRect;
+class SmushDemoClient;
+
 class Codec48Decoder {
 public:
 	Codec48Decoder();
 	~Codec48Decoder();
-	void init(int width, int height);
+	int init(int width, int height);
 	void deinit();
-	bool decode(byte *dst, const byte *src);
+	int decode(const SmushDemoRect *rect, int x, int y, const byte *chunk, SmushDemoClient *client);
 
 private:
 	void makeTable(int pitch, int index);
-
-	void bompDecodeLine(byte *dst, const byte *src, int len);
 
 	void decode3(byte *dst, const byte *src, int bufOffset);
 	void scaleBlock(byte *dst, const byte *src);
 	void copyBlock(byte *dst, int deltaBufOffset, int offset);
 
+	bool _initialized;
 	int _curBuf;
+	byte *_buffer;
 	byte *_deltaBuf[2];
 	int _blockX, _blockY;
+	int _lastBlockX, _lastBlockY;
 	int _pitch;
 	int16 *_offsetTable;
 	int _tableLastPitch, _tableLastIndex;
 	int16 _prevSeqNb;
-	int32 _frameSize;
 	int _width, _height;
 	byte *_interTable;
 };

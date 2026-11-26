@@ -24,12 +24,11 @@
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
 namespace Maps {
-
-#define VAL1 379
 
 void Map53::special() {
 	// Scan for special actions on the map cell
@@ -52,24 +51,28 @@ void Map53::special() {
 }
 
 void Map53::special00() {
-	send(SoundMessage(STRING["maps.wall_painted"]));
-	if (!_data[VAL1]) {
+	// Keep offering the White Queen Idol until the party actually has it.
+	// The old private map byte could suppress the reward even though the
+	// idol never reached the party
+	if (!g_globals->_party.hasItem(W_QUEEN_IDOL_ID))
 		g_globals->_treasure._items[2] = W_QUEEN_IDOL_ID;
-		_data[VAL1]++;
-	}
+
+	send(SoundMessage(mapText("The wall is painted from ceiling to\n"
+		"floor in a black and white checkered\n"
+		"pattern!")));
 }
 
 void Map53::special01() {
-	send(SoundMessage(STRING["maps.map53.sign"]));
+	send(SoundMessage("Danger! Dungeon under construction."));
 }
 
 void Map53::special03() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.map53.ladder"],
+		"A ladder going up, climb it (Y/N)?",
 		[]() {
-			g_maps->changeMap(0xf01, 3);
+			g_maps->changeMapFromExit(0xf01, 3);
 		}
 	));
 }

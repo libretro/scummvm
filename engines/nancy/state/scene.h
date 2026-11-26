@@ -51,6 +51,7 @@ namespace Nancy {
 
 class NancyEngine;
 class NancyConsole;
+struct NancyInput;
 struct SceneChangeDescription;
 
 namespace Action {
@@ -131,6 +132,16 @@ public:
 	// chance save instead, once the current records have run
 	void loadSecondChance() { _isLoadingSecondChance = true; }
 
+	// Nancy22: the name of the saved game that is being loaded, until the scenes
+	// of all the streams have started. Empty at any other time.
+	void setLoadName(const Common::String &name) { _loadName = name; }
+	const Common::String &getLoadName() const { return _loadName; }
+
+	// Nancy20: the cheat mode of the original, which the scripts use for views
+	// made for debugging the puzzles. Only the console turns it on.
+	void setCheatMode(bool isOn) { _isCheatMode = isOn; }
+	bool isCheatMode() const { return _isCheatMode; }
+
 	// Nancy16: lists of movies left under the name of the movie or puzzle that plays
 	// them, e.g. the commands given to the wolf. Taking a list forgets it; returns false
 	// when there is none.
@@ -144,6 +155,27 @@ public:
 	// Nancy17 streams: scenes that run next to the one the player walks around in,
 	// which is the main stream
 	SceneStreamManager &getStreams() { return _streams; }
+
+	// Whether the main stream or another one is about to go to another scene
+	bool isSceneChangePending() const { return _state == kLoad || _streams.hasSceneChange(); }
+
+#ifdef ENABLE_NANCY_V4
+	// Nancy19: the script of the main scene; null while there is none
+	Script::SceneContext *getScriptScene() const { return _scriptScene; }
+
+	// Nancy24 tells whether a task is done with a completion function of the
+	// scripts, in place of a flag. The functions belong to the Lua state of the
+	// scene that gave them, which is the scene of the task list stream, and are
+	// dropped when that scene goes away.
+	struct TaskCompletion {
+		Script::SceneContext *context;
+		uint character;
+		Common::String text;
+		int ref;
+	};
+
+	Common::Array<TaskCompletion> &getTaskCompletions() { return _taskCompletions; }
+#endif
 	void addSceneVisit(uint16 sceneID) { _flags.sceneCounts.getOrCreateVal(sceneID)++; }
 	void pushScene(int16 itemID = -1);
 
@@ -169,6 +201,7 @@ public:
 	}
 
 	void setPlayerTime(Time time, byte relative);
+	void setPlayerClock(Time time);	// Nancy21: the days, hours and minutes at once
 	Time getPlayerTime() const { return _timers.playerTime; }
 	Time getTimerTime() const { return _timers.timerIsActive ? _timers.timerTime : 0; }
 	uint getPlayerTimeMinutes() const;
@@ -178,7 +211,17 @@ public:
 	void requestSleep() { _timers.sleepRequested = true; }
 	void setPlayerDay(int16 day);
 
-	void addItemToInventory(int16 id);
+	// Nancy29 scripts can put an item in front of the others
+	void addItemToInventory(int16 id, bool isAddedToFront = false);
+
+	// Nancy10 and up: the items, in the order the inventory shows them
+	const Common::Array<int16> &getInventoryOrder() { return _inventoryBox.getOrder(); }
+
+	// How many times an item came into the inventory or left it, and how many
+	// times the item in the hand changed. Nancy26's scripts check these to know
+	// when to show the inventory anew.
+	uint getInventoryChangeCount() const { return _inventoryChangeCount; }
+	uint getHeldItemChangeCount() const { return _heldItemChangeCount; }
 	void removeItemFromInventory(int16 id, bool pickUp = true);
 
 	// Nancy15+ inventory action records and dependencies pick the character to
@@ -249,6 +292,10 @@ public:
 	void requestStateChange(NancyState::NancyState state) { _gameStateRequested = state; }
 	void resetStateToInit() { _state = kInit; }
 
+	// A skipped movie moves the time of the scene on by what was left of it
+	void addSceneTime(uint32 millis) { _timers.sceneTime += millis; }
+	// The sounds these flags start belong to a movie that was skipped
+	void addSkippedMovieFlag(int16 label) { _skippedMovieFlags.push_back(label); }
 	void resetAndStartTimer() { _timers.timerIsActive = true; _timers.timerTime = 0; }
 	void stopTimer() { _timers.timerIsActive = false; _timers.timerTime = 0; }
 
@@ -300,6 +347,13 @@ public:
 	void processMainStream();
 	double getFrameSeconds() const { return _frameSeconds; }
 
+	// How long the last frame took for a stream: no time passes for the game
+	// while a menu has paused it, but the UI stream of later games keeps going
+	double getStreamFrameSeconds(const Common::String &streamName) const;
+
+	// Stops the game and its sounds, while a menu covers it
+	void setGamePaused(bool isPaused);
+
 	SceneChangeDescription &getSceneInfo() { return _streams.getRunning() ? _streams.getRunning()->getSceneInfo() : _sceneState.currentScene; }
 	const SceneChangeDescription &getMainSceneInfo() const { return _sceneState.currentScene; }
 
@@ -333,10 +387,19 @@ public:
 	// Nancy19: the scripts of the UI stream have made the panels
 	void onScriptedUILoaded();
 
+	// Lights, Camera, Curses: the script that ends a scene of the main stream,
+	// which saves the profile being played. It also runs when the game is left.
+	void runSceneEndScript();
+
 	// Nancy19: hands a message a script sent to the scenes it is for, of the main
 	// stream and of the others. Returns false when there is none.
 	bool receiveMessage(const Script::Message &message, bool &wasTaken);
 	bool receiveMainSceneMessage(const Script::Message &message, bool &wasTaken);
+#endif
+
+#ifdef ENABLE_NANCY_V5
+	// Nancy26: the main stream was put at another place among the streams
+	void onMainStreamBandChanged();
 #endif
 
 	// Used from nancy2 onwards
@@ -414,10 +477,17 @@ private:
 
 	void initStaticData();
 	void initUI();
+	void beginManagers();
 	void loadUIPrepRecords(const Common::Path &name);
 
 	void clearSceneData(bool nextIsNoArt = false);
 	void clearPuzzleData();
+
+	// Lights, Camera, Curses: the saved values all the profiles share survive a
+	// new game and loading another profile; the others don't
+	void keepSharedProfileValues();
+	void restoreSharedProfileValues(ScriptSavedData &saved) const;
+	bool startNewProfileGame();
 
 	// Maps an event flag label to its index in the eventFlags array
 	int16 eventFlagToIndex(int16 label) const;
@@ -430,6 +500,7 @@ private:
 	// character's are the live ones (_flags plus the inventory box order, and
 	// UIResourceData::values); the others are parked in the same puzzle data.
 	void storeCharacterInventory(uint characterIndex);
+	void showInventoryButtons();
 	void loadCharacterInventory(uint characterIndex);
 	void storeCharacterResources(uint characterIndex);
 	void loadCharacterResources(uint characterIndex);
@@ -465,14 +536,8 @@ private:
 		int16 primaryVideoResponsePicked = -1;
 	};
 
-	struct InventorySoundOverride {
-		bool isDefault = false; // When true, other fields are ignored
-		SoundDescription sound;
-		Common::String caption;
-	};
-
-	// The overrides of the character being played
-	Common::HashMap<uint16, InventorySoundOverride> &activeSoundOverrides();
+	// The inventory sound overrides of the character being played
+	Common::HashMap<uint16, InventorySoundOverrideData::Override> &activeSoundOverrides();
 
 	// UI
 	UI::FullScreenImage _frame;
@@ -510,9 +575,6 @@ private:
 	int16 _lastHintCharacter;
 	int16 _lastHintID;
 	NancyState::NancyState _gameStateRequested;
-	// One set of overrides per player character; everything before Nancy15 only
-	// ever touches the first
-	Common::HashMap<uint16, InventorySoundOverride> _inventorySoundOverrides[kMaxPlayerCharacters];
 
 	Misc::Lightning *_lightning;
 	Misc::ViewportFader *_viewportFader;
@@ -535,6 +597,12 @@ private:
 	Script::SceneContext *_scriptScene = nullptr;
 	bool _isScriptedUIReady = false;
 
+	// Lights, Camera, Curses: what is left to do of a change of profile once
+	// the scene it brought has run
+	void finishProfileChange();
+	bool _isProfileChangePending = false;
+	Common::Array<TaskCompletion> _taskCompletions;
+
 	// Nancy20: the main stream can also be in a scene that has a name instead of
 	// a number, like "s1002a_SC". These hold the name of the scene it is in and
 	// of the one it goes to next. When a name is set, it is what counts: the
@@ -545,6 +613,7 @@ private:
 	Common::String _nextScriptSceneName;
 #endif
 	double _frameSeconds = 0.0;	// how long the last frame took
+	bool _isGamePaused = false;
 	Action::PlaySecondaryMovie *_activeMovie;
 	Action::ConversationSound *_activeConversation;
 
@@ -554,11 +623,24 @@ private:
 
 	// Whether esc was already down last frame, so a held key only skips once
 	bool _escHeld = false;
+#ifdef ENABLE_NANCY_V5
+	// Nancy26 makes its UI of records, and hands its records all the input
+	void initNancy26UI();
+	void handleNancy26Input(NancyInput &input);
+#endif
+
+	uint _inventoryChangeCount = 0;
+	uint _heldItemChangeCount = 0;
 
 	// Set when esc skipped a cinematic this frame
 	bool _hasSkippedMovie = false;
 
+	// The flags the frames of the skipped cinematics set, until the scene changes
+	Common::Array<int16> _skippedMovieFlags;
+
 	bool _isLoadingSecondChance = false;
+	Common::String _loadName;
+	bool _isCheatMode = false;
 
 	Common::HashMap<Common::String, Common::Array<Common::String>, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _moviePlaylists;
 

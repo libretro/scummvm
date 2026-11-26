@@ -22,9 +22,11 @@
 #include "ngi/ngi.h"
 
 #include "ngi/objects.h"
+#include "ngi/behavior.h"
 #include "ngi/ngiarchive.h"
 #include "ngi/statics.h"
 #include "ngi/messages.h"
+#include "ngi/motion.h"
 #include "ngi/gameloader.h"
 
 #include "ngi/constants.h"
@@ -34,24 +36,23 @@
 
 namespace NGI {
 
-Scene *NGIEngine::accessScene(int sceneId) {
-	SceneTag *t = nullptr;
+Scene *NGIEngine::findScene(int sceneId) {
+	return _gameProject->findScene(sceneId);
+}
 
-	for (SceneTagList::iterator s = _gameProject->_sceneTagList->begin(); s != _gameProject->_sceneTagList->end(); ++s) {
-		if (s->_sceneId == sceneId) {
-			t = &(*s);
-			break;
+Scene *GameProject::findScene(int sceneId) {
+	for (SceneTag &tag : *_sceneTagList) {
+		if (tag._sceneId != sceneId)
+			continue;
+		if (!tag._scene) {
+			if (g_nmi->getPlatform() == Common::kPlatformAndroid)
+				tag.loadSceneXML(*this);
+			else
+				tag.loadScene();
 		}
+		return tag._scene;
 	}
-
-	if (!t)
-		return nullptr;
-
-	if (!t->_scene) {
-		t->loadScene();
-	}
-
-	return t->_scene;
+	return nullptr;
 }
 
 bool SceneTagList::load(MfcArchive &file) {
@@ -114,15 +115,15 @@ Scene::Scene() : _sceneId(0), _field_BC(0) {}
 Scene::~Scene() {
 	// _faObjlist is not used
 
-	for (uint i = 0; i < _messageQueueList.size(); i++)
-		delete _messageQueueList[i];
+	for (uint i = 0; i < _messageQueues.size(); i++)
+		delete _messageQueues[i];
 
-	_messageQueueList.clear();
+	_messageQueues.clear();
 
-	for (uint i = 0; i < _staticANIObjectList1.size(); i++)
-		delete _staticANIObjectList1[i];
+	for (uint i = 0; i < _aniObjects.size(); i++)
+		delete _aniObjects[i];
 
-	_staticANIObjectList1.clear();
+	_aniObjects.clear();
 
 	g_nmi->_globalPalette = &g_nmi->_defaultPalette;
 
@@ -148,14 +149,14 @@ bool Scene::load(MfcArchive &file) {
 
 		Common::SeekableReadStream *f = g_nmi->_currArchive->createReadStreamForMember(aniname);
 
-		StaticANIObject *ani = new StaticANIObject();
+		AniObject *ani = new AniObject();
 
 		MfcArchive archive(f);
 
 		ani->load(archive);
 		ani->_sceneId = _sceneId;
 
-		_staticANIObjectList1.push_back(ani);
+		_aniObjects.push_back(ani);
 
 		delete f;
 	}
@@ -176,7 +177,7 @@ bool Scene::load(MfcArchive &file) {
 
 		mq->load(archive);
 
-		_messageQueueList.push_back(mq);
+		_messageQueues.push_back(mq);
 
 		delete f;
 	}
@@ -191,7 +192,7 @@ bool Scene::load(MfcArchive &file) {
 
 	_libHandle.reset(g_nmi->_currArchive);
 
-	if (_picObjList.size() > 0 && !_bgname.empty()) {
+	if (_pictureObjects.size() > 0 && !_bgname.empty()) {
 		char fname[260];
 
 		Common::strlcpy(fname, _bgname.c_str(), 260);
@@ -242,8 +243,8 @@ bool Scene::load(MfcArchive &file) {
 }
 
 void Scene::initStaticANIObjects() {
-	for (uint i = 0; i < _staticANIObjectList1.size(); i++)
-		_staticANIObjectList1[i]->initMovements();
+	for (uint i = 0; i < _aniObjects.size(); i++)
+		_aniObjects[i]->initMovements();
 }
 
 void Scene::init() {
@@ -252,81 +253,81 @@ void Scene::init() {
 
 	g_nmi->_sceneRect.moveTo(0, 0);
 
-	for (uint i = 0; i < _picObjList.size(); i++)
-		_picObjList[i]->clearFlags();
+	for (uint i = 0; i < _pictureObjects.size(); i++)
+		_pictureObjects[i]->clearFlags();
 
-	for (uint i = 0; i < _staticANIObjectList1.size(); i++)
-		_staticANIObjectList1[i]->clearFlags();
+	for (uint i = 0; i < _aniObjects.size(); i++)
+		_aniObjects[i]->clearFlags();
 
-	if (_staticANIObjectList2.size() != _staticANIObjectList1.size()) {
-		_staticANIObjectList2.clear();
+	if (_renderableAnis.size() != _aniObjects.size()) {
+		_renderableAnis.clear();
 
-		for (uint i = 0; i < _staticANIObjectList1.size(); i++)
-			_staticANIObjectList2.push_back(_staticANIObjectList1[i]);
+		for (uint i = 0; i < _aniObjects.size(); i++)
+			_renderableAnis.push_back(_aniObjects[i]);
 	}
 }
 
-StaticANIObject *Scene::getAniMan() {
-	StaticANIObject *aniMan = getStaticANIObject1ById(ANI_MAN, -1);
+AniObject *Scene::getAniMan() {
+	AniObject *aniMan = findAniObjectById(ANI_MAN, -1);
 
-	deleteStaticANIObject(aniMan);
+	removeAni(aniMan);
 
 	return aniMan;
 }
 
-StaticANIObject *Scene::getStaticANIObject1ById(int obj, int a3) {
-	for (uint i = 0; i < _staticANIObjectList1.size(); i++) {
-		if (_staticANIObjectList1[i]->_id == obj && (a3 == -1 || _staticANIObjectList1[i]->_odelay == a3))
-			return _staticANIObjectList1[i];
+AniObject *Scene::findAniObjectById(int obj, int a3) {
+	const auto &objects = _roamingObjects.empty() ? _aniObjects : _renderableAnis;
+	for (AniObject *ani : objects) {
+		if (ani->_id == obj && (a3 == -1 || ani->_copyId == a3))
+			return ani;
+	}
+	return nullptr;
+}
+
+AniObject *Scene::getStaticANIObject1ByName(const Common::String &name, int a3) {
+	for (uint i = 0; i < _aniObjects.size(); i++) {
+		if ((_aniObjects[i]->_title == name) && (a3 == -1 || _aniObjects[i]->_copyId == a3))
+			return _aniObjects[i];
 	}
 
 	return nullptr;
 }
 
-StaticANIObject *Scene::getStaticANIObject1ByName(const Common::String &name, int a3) {
-	for (uint i = 0; i < _staticANIObjectList1.size(); i++) {
-		if ((_staticANIObjectList1[i]->_objectName == name) && (a3 == -1 || _staticANIObjectList1[i]->_odelay == a3))
-			return _staticANIObjectList1[i];
-	}
-
-	return nullptr;
-}
-
-void Scene::deleteStaticANIObject(StaticANIObject *obj) {
-	for (uint i = 0; i < _staticANIObjectList1.size(); i++)
-		if (_staticANIObjectList1[i] == obj) {
-			_staticANIObjectList1.remove_at(i);
+void Scene::removeAni(AniObject *obj) {
+	for (uint i = 0; i < _aniObjects.size(); i++)
+		if (_aniObjects[i] == obj) {
+			_aniObjects.remove_at(i);
 			break;
 		}
 
-	for (uint i = 0; i < _staticANIObjectList2.size(); i++)
-		if (_staticANIObjectList2[i] == obj) {
-			_staticANIObjectList2.remove_at(i);
+	for (uint i = 0; i < _renderableAnis.size(); i++)
+		if (_renderableAnis[i] == obj) {
+			_renderableAnis.remove_at(i);
 			break;
 		}
 }
 
-void Scene::addStaticANIObject(StaticANIObject *obj, bool addList2) {
+void Scene::addAni(AniObject *obj, bool addList2) {
 	// WORKAROUND: This is used for making sure that the objects
 	// with same priority do not get swapped during drawing
-	obj->_cnum = _staticANIObjectList2.size() + 1;
+	obj->_cnum = _renderableAnis.size() + 1;
 
-	if (obj->_odelay)
-		obj->renumPictures(&_staticANIObjectList1);
+	if (obj->_copyId)
+		obj->assignCopyId(&_aniObjects);
 
-	_staticANIObjectList1.push_back(obj);
+	_aniObjects.push_back(obj);
 
 	if (addList2) {
-		if (!obj->_odelay)
+		if (!obj->_copyId)
 			obj->clearFlags();
 
-		_staticANIObjectList2.push_back(obj);
+		_renderableAnis.push_back(obj);
 	}
 }
 
 void Scene::setPictureObjectsFlag4() {
-	for (uint i = 0; i < _picObjList.size(); i++) {
-		_picObjList[i]->_flags |= 4;
+	for (uint i = 0; i < _pictureObjects.size(); i++) {
+		_pictureObjects[i]->_flags |= 4;
 	}
 }
 
@@ -335,28 +336,28 @@ void Scene::stopAllSounds() {
 		_soundList->getSoundByIndex(i).stop();
 }
 
-PictureObject *Scene::getPictureObjectById(int objId, int flags) {
-	for (uint i = 1; i < _picObjList.size(); i++) {
-		if (_picObjList[i]->_id == objId && _picObjList[i]->_odelay == flags)
-			return _picObjList[i];
+PictureObject *Scene::findPictureObjectById(int objId, int flags) {
+	for (uint i = g_nmi->getPlatform() == Common::kPlatformAndroid ? 0 : 1; i < _pictureObjects.size(); i++) {
+		if (_pictureObjects[i]->_id == objId && _pictureObjects[i]->_copyId == flags)
+			return _pictureObjects[i];
 	}
 
 	return nullptr;
 }
 
 PictureObject *Scene::getPictureObjectByName(const Common::String &objName, int flags) {
-	for (uint i = 0; i < _picObjList.size(); i++) {
-		if ((_picObjList[i]->_objectName == objName) && (_picObjList[i]->_odelay == flags || flags == -1))
-			return _picObjList[i];
+	for (uint i = 0; i < _pictureObjects.size(); i++) {
+		if ((_pictureObjects[i]->_title == objName) && (_pictureObjects[i]->_copyId == flags || flags == -1))
+			return _pictureObjects[i];
 	}
 
 	return nullptr;
 }
 
-void Scene::deletePictureObject(PictureObject *obj) {
-	for (uint i = 0; i < _picObjList.size(); i++) {
-		if (_picObjList[i] == obj) {
-			_picObjList.remove_at(i);
+void Scene::removePicture(PictureObject *obj) {
+	for (uint i = 0; i < _pictureObjects.size(); i++) {
+		if (_pictureObjects[i] == obj) {
+			_pictureObjects.remove_at(i);
 			delete obj;
 
 			return;
@@ -364,18 +365,18 @@ void Scene::deletePictureObject(PictureObject *obj) {
 	}
 }
 
-MessageQueue *Scene::getMessageQueueById(int messageId) {
-	for (uint i = 0; i < _messageQueueList.size(); i++)
-		if (_messageQueueList[i]->_dataId == messageId)
-			return _messageQueueList[i];
+MessageQueue *Scene::findMessageQueue(int messageId) {
+	for (uint i = 0; i < _messageQueues.size(); i++)
+		if (_messageQueues[i]->_queueId == messageId)
+			return _messageQueues[i];
 
-	return nullptr;
+	return _commonQueueScene ? _commonQueueScene->findMessageQueue(messageId) : nullptr;
 }
 
 MessageQueue *Scene::getMessageQueueByName(const Common::String &name) {
-	for (uint i = 0; i < _messageQueueList.size(); i++)
-		if (_messageQueueList[i]->_queueName == name)
-			return _messageQueueList[i];
+	for (uint i = 0; i < _messageQueues.size(); i++)
+		if (_messageQueues[i]->_title == name)
+			return _messageQueues[i];
 
 	return nullptr;
 }
@@ -386,7 +387,7 @@ void Scene::preloadMovements(GameVar *var) {
 		return;
 
 	for (GameVar *i = preload->_subVars; i; i = i->_nextVarObj) {
-		StaticANIObject *ani = getStaticANIObject1ByName(i->_varName, -1);
+		AniObject *ani = getStaticANIObject1ByName(i->_varName, -1);
 
 		if (ani) {
 			GameVar *subVars = i->_subVars;
@@ -396,10 +397,10 @@ void Scene::preloadMovements(GameVar *var) {
 					Movement *mov = ani->getMovementByName(subVars->_varName);
 
 					if (mov)
-						mov->loadPixelData();
+						mov->load();
 				}
 			} else {
-				ani->loadMovementsPixelData();
+				ani->loadMovements();
 			}
 		}
 	}
@@ -445,19 +446,19 @@ void Scene::initObjectCursors(const char *varname) {
 
 #if 0
 bool Scene::compareObjPriority(const void *p1, const void *p2) {
-	if (((const GameObject *)p1)->_priority > ((const GameObject *)p2)->_priority)
+	if (((const GameObject *)p1)->_z > ((const GameObject *)p2)->_z)
 		return true;
 
-	if (((const GameObject *)p1)->_priority == ((const GameObject *)p2)->_priority)
+	if (((const GameObject *)p1)->_z == ((const GameObject *)p2)->_z)
 		if (((const GameObject *)p1)->_cnum > ((const GameObject *)p2)->_cnum)
 			return true;
 
 	return false;
 }
 
-void Scene::objectList_sortByPriority(Common::Array<StaticANIObject *> &list, bool skipFirst) {
+void Scene::sortRenderables(Common::Array<AniObject *> &list, bool skipFirst) {
 	if (skipFirst) {
-		Common::Array<StaticANIObject *>::iterator s = list.begin();
+		Common::Array<AniObject *>::iterator s = list.begin();
 
 		++s;
 
@@ -467,7 +468,7 @@ void Scene::objectList_sortByPriority(Common::Array<StaticANIObject *> &list, bo
 	}
 }
 
-void Scene::objectList_sortByPriority(Common::Array<PictureObject *> &list, bool skipFirst) {
+void Scene::sortRenderables(Common::Array<PictureObject *> &list, bool skipFirst) {
 	if (skipFirst) {
 		Common::Array<PictureObject *>::iterator s = list.begin();
 
@@ -480,7 +481,7 @@ void Scene::objectList_sortByPriority(Common::Array<PictureObject *> &list, bool
 }
 #else
 template<typename T>
-void Scene::objectList_sortByPriority(Common::Array<T *> &list, uint startIndex) {
+void Scene::sortRenderables(Common::Array<T *> &list, uint startIndex) {
 	if (list.size() > startIndex) {
 		int lastIndex = list.size() - 1;
 		bool changed;
@@ -489,7 +490,7 @@ void Scene::objectList_sortByPriority(Common::Array<T *> &list, uint startIndex)
 			T *refElement = list[startIndex];
 			for (int i = startIndex; i < lastIndex; i++) {
 				T *curElement = list[i + 1];
-				if (curElement->_priority > refElement->_priority) {
+				if (curElement->_z > refElement->_z) {
 					// Push refElement down the list
 					list.remove_at(i);
 					list.insert_at(i + 1, refElement);
@@ -503,8 +504,8 @@ void Scene::objectList_sortByPriority(Common::Array<T *> &list, uint startIndex)
 }
 #endif
 
-void Scene::draw() {
-	debugC(6, kDebugDrawing, ">>>>> Scene::draw()");
+void Scene::render() {
+	debugC(6, kDebugDrawing, ">>>>> Scene::render()");
 	updateScrolling();
 
 	// Clean previous stuff
@@ -512,19 +513,19 @@ void Scene::draw() {
 
 	drawContent(60000, 0, true);
 
-	objectList_sortByPriority(_staticANIObjectList2);
+	sortRenderables(_renderableAnis);
 
-	for (uint i = 0; i < _staticANIObjectList2.size(); i++) {
-		_staticANIObjectList2[i]->draw2();
+	for (uint i = 0; i < _renderableAnis.size(); i++) {
+		_renderableAnis[i]->draw2();
 	}
 
 	int priority = -1;
-	for (uint i = 0; i < _staticANIObjectList2.size(); i++) {
-		drawContent(_staticANIObjectList2[i]->_priority, priority, false);
+	for (uint i = 0; i < _renderableAnis.size(); i++) {
+		drawContent(_renderableAnis[i]->_z, priority, false);
 
-		_staticANIObjectList2[i]->draw();
+		_renderableAnis[i]->render();
 
-		priority = _staticANIObjectList2[i]->_priority;
+		priority = _renderableAnis[i]->_z;
 	}
 
 	drawContent(-1, priority, false);
@@ -541,7 +542,7 @@ void Scene::updateScrolling() {
 	}
 
 	// Might happen very early in the game
-	if (!_picObjList.size())
+	if (!_pictureObjects.size())
 		return;
 
 	if (_x || _y) {
@@ -549,7 +550,7 @@ void Scene::updateScrolling() {
 		int offsetY = 0;
 
 		if (_x < 0) {
-			if (!g_nmi->_sceneRect.left && !(_picObjList[0]->_flags & 2))
+			if (!g_nmi->_sceneRect.left && !(_pictureObjects[0]->_flags & 2))
 				_x = 0;
 
 			if (_x <= -g_nmi->_scrollSpeed) {
@@ -580,12 +581,12 @@ void Scene::updateScrolling() {
 }
 
 void Scene::updateScrolling2() {
-	if (_picObjList.size()) {
+	if (_pictureObjects.size()) {
 		int offsetY = 0;
 		int offsetX = 0;
 
-		const Dims dims = _picObjList[0]->getDimensions();
-		const int flags = _picObjList[0]->_flags;
+		const Dims dims = _pictureObjects[0]->getFullSize();
+		const int flags = _pictureObjects[0]->_flags;
 
 		if (g_nmi->_sceneRect.left < 0 && !(flags & 2))
 			offsetX = -g_nmi->_sceneRect.left;
@@ -603,29 +604,29 @@ void Scene::updateScrolling2() {
 	}
 }
 
-StaticANIObject *Scene::getStaticANIObjectAtPos(int x, int y) {
-	StaticANIObject *res = nullptr;
+AniObject *Scene::findAniObjectAtPos(int x, int y) {
+	AniObject *res = nullptr;
 
-	for (uint i = 0; i < _staticANIObjectList1.size(); i++) {
-		StaticANIObject *p = _staticANIObjectList1[i];
+	for (uint i = 0; i < _aniObjects.size(); i++) {
+		AniObject *p = _aniObjects[i];
 
-		if ((p->_field_8 & 0x100) && (p->_flags & 4) &&
-				p->isPixelHitAtPos(x, y) &&
-				(!res || res->_priority > p->_priority))
+		if ((p->_objectFlags & 0x100) && (p->_flags & 4) &&
+				p->hit(x, y) &&
+				(!res || res->_z > p->_z))
 			res = p;
 	}
 
 	return res;
 }
 
-PictureObject *Scene::getPictureObjectAtPos(int x, int y) {
+PictureObject *Scene::findPictureObjectAtPos(int x, int y) {
 	PictureObject *res = nullptr;
 
-	for (uint i = 0; i < _picObjList.size(); i++) {
-		PictureObject *p = _picObjList[i];
-		if ((p->_field_8 & 0x100) && (p->_flags & 4) &&
-				p->isPixelHitAtPos(x, y) &&
-				(!res || res->_priority >= p->_priority))
+	for (uint i = 0; i < _pictureObjects.size(); i++) {
+		PictureObject *p = _pictureObjects[i];
+		if ((p->_objectFlags & 0x100) && (p->_flags & 4) &&
+				p->hit(x, y) &&
+				(!res || res->_z >= p->_z))
 			res = p;
 	}
 
@@ -636,11 +637,11 @@ int Scene::getPictureObjectIdAtPos(int x, int y) {
 	PictureObject *resp = nullptr;
 	int res = 0;
 
-	for (uint i = 0; i < _picObjList.size(); i++) {
-		PictureObject *p = _picObjList[i];
-		if ((p->_field_8 & 0x100) && (p->_flags & 4) &&
-				p->isPixelHitAtPos(x, y) &&
-				(!res || resp->_priority >= p->_priority)) {
+	for (uint i = 0; i < _pictureObjects.size(); i++) {
+		PictureObject *p = _pictureObjects[i];
+		if ((p->_objectFlags & 0x100) && (p->_flags & 4) &&
+				p->hit(x, y) &&
+				(!res || resp->_z >= p->_z)) {
 			resp = p;
 			res = p->_id;
 		}
@@ -649,15 +650,17 @@ int Scene::getPictureObjectIdAtPos(int x, int y) {
 	return res;
 }
 
-void Scene::update(int counterdiff) {
+bool Scene::update(int counterdiff) {
 	debugC(6, kDebugDrawing, "Scene::update(%d)", counterdiff);
 
-	for (uint i = 0; i < _staticANIObjectList2.size(); i++)
-		_staticANIObjectList2[i]->update(counterdiff);
+	bool changed = false;
+	for (uint i = 0; i < _renderableAnis.size(); i++)
+		changed |= _renderableAnis[i]->update(counterdiff);
+	return changed;
 }
 
 void Scene::drawContent(int minPri, int maxPri, bool drawBg) {
-	if (!_picObjList.size() && !_bigPictureXDim)
+	if (!_pictureObjects.size() && !_bigPictureXDim)
 		return;
 
 	if (_palette.size) {
@@ -667,15 +670,15 @@ void Scene::drawContent(int minPri, int maxPri, bool drawBg) {
 	debugC(1, kDebugDrawing, "Scene::drawContent(>%d, <%d, %d)", minPri, maxPri, drawBg);
 
 #if 0
-	if (_picObjList.size() > 2) { // We need to z-sort them
-		objectList_sortByPriority(_picObjList, true);
+	if (_pictureObjects.size() > 2) { // We need to z-sort them
+		sortRenderables(_pictureObjects, true);
 	}
 #else
-	objectList_sortByPriority(_picObjList, 1);
+	sortRenderables(_pictureObjects, 1);
 #endif
 
-	if (minPri == -1 && _picObjList.size())
-		minPri = _picObjList.back()->_priority - 1;
+	if (minPri == -1 && _pictureObjects.size())
+		minPri = _pictureObjects.back()->_z - 1;
 
 	if (maxPri == -1)
 		maxPri = 60000;
@@ -684,9 +687,9 @@ void Scene::drawContent(int minPri, int maxPri, bool drawBg) {
 
 	Dims dims;
 
-	debugC(1, kDebugDrawing, "_bigPict: %d objlist: %d", _bigPictureXDim, _picObjList.size());
+	debugC(1, kDebugDrawing, "_bigPict: %d objlist: %d", _bigPictureXDim, _pictureObjects.size());
 
-	if (drawBg && _bigPictureXDim && _picObjList.size()) {
+	if (drawBg && _bigPictureXDim && _pictureObjects.size()) {
 
 		dims = _bigPictureArray[0]->getDimensions();
 
@@ -695,7 +698,7 @@ void Scene::drawContent(int minPri, int maxPri, bool drawBg) {
 
 		debugC(8, kDebugDrawing, "w: %d h:%d", width, height);
 
-		dims = _picObjList[0]->getDimensions();
+		dims = _pictureObjects[0]->getFullSize();
 
 		debugC(8, kDebugDrawing, "w2: %d h2:%d", dims.x, dims.y);
 
@@ -722,12 +725,12 @@ void Scene::drawContent(int minPri, int maxPri, bool drawBg) {
 				uint v25 = bgNumY;
 				for (int y = g_nmi->_sceneRect.top - bgOffsetY; y < g_nmi->_sceneRect.bottom - 1;) {
 					BigPicture *v27 = getBigPicture(bgNumX, v25);
-					v27->draw(bgPosX, y, 0, 0);
+					v27->render(bgPosX, y, 0, 0);
 					y += v27->getDimensions().y;
 					v25++;
 
 					if (v25 >= _bigPictureYDim) {
-						if (!(_picObjList[0]->_flags & 0x20))
+						if (!(_pictureObjects[0]->_flags & 0x20))
 							break;
 						v25 = 0;
 					}
@@ -738,7 +741,7 @@ void Scene::drawContent(int minPri, int maxPri, bool drawBg) {
 				bgNumX++;
 
 				if (bgNumX >= (int)_bigPictureXDim) {
-					if (!(_picObjList[0]->_flags & 0x2))
+					if (!(_pictureObjects[0]->_flags & 0x2))
 						break;
 					bgNumX = 0;
 				}
@@ -749,18 +752,18 @@ void Scene::drawContent(int minPri, int maxPri, bool drawBg) {
 	}
 
 
-	for (uint i = 1; i < _picObjList.size(); i++) {
-		PictureObject *obj = _picObjList[i];
+	for (uint i = 1; i < _pictureObjects.size(); i++) {
+		PictureObject *obj = _pictureObjects[i];
 
-		if (obj->_priority < minPri || obj->_priority >= maxPri)
+		if (obj->_z < minPri || obj->_z >= maxPri)
 			continue;
 
-		int objX = obj->_ox;
-		int objY = obj->_oy;
+		int objX = obj->_x;
+		int objY = obj->_y;
 
 		debugC(8, kDebugDrawing, "obj: %d %d", objX, objY);
 
-		dims = obj->getDimensions();
+		dims = obj->getFullSize();
 
 		int width = dims.x;
 		int height = dims.y;
@@ -768,50 +771,50 @@ void Scene::drawContent(int minPri, int maxPri, bool drawBg) {
 		if (obj->_flags & 8) {
 			while (objX > g_nmi->_sceneRect.right) {
 				objX -= width;
-				obj->setOXY(objX, objY);
+				obj->setPos(objX, objY);
 			}
 			for (int j = width + objX; width + objX < g_nmi->_sceneRect.left; j = width + objX) {
 				objX = j;
-				obj->setOXY(j, objY);
+				obj->setPos(j, objY);
 			}
 		}
 
 		if (obj->_flags & 0x10) {
 			while (objY > g_nmi->_sceneRect.bottom) {
 				objY -= height;
-				obj->setOXY(objX, objY);
+				obj->setPos(objX, objY);
 			}
 			for (int j = objY + height; objY + height < g_nmi->_sceneRect.top; j = objY + height) {
 				objY = j;
-				obj->setOXY(objX, j);
+				obj->setPos(objX, j);
 			}
 		}
 		if (obj->_flags & 4)
-			obj->draw();
+			obj->render();
 
 		if (obj->_flags & 2) {
 			if (objX > g_nmi->_sceneRect.left) {
-				obj->setOXY(objX - width, objY);
-				obj->draw();
-				obj->setOXY(objX, objY);
+				obj->setPos(objX - width, objY);
+				obj->render();
+				obj->setPos(objX, objY);
 			}
 			if (width + objX < g_nmi->_sceneRect.right) {
-				obj->setOXY(width + objX, objY);
-				obj->draw();
-				obj->setOXY(objX, objY);
+				obj->setPos(width + objX, objY);
+				obj->render();
+				obj->setPos(objX, objY);
 			}
 		}
 
 		if (obj->_flags & 0x20) {
 			if (objY > g_nmi->_sceneRect.top) {
-				obj->setOXY(objX, objY - height);
-				obj->draw();
-				obj->setOXY(objX, objY);
+				obj->setPos(objX, objY - height);
+				obj->render();
+				obj->setPos(objX, objY);
 			}
 			if (height + objY < g_nmi->_sceneRect.bottom) {
-				obj->setOXY(objX, height + objY);
-				obj->draw();
-				obj->setOXY(objX, objY);
+				obj->setPos(objX, height + objY);
+				obj->render();
+				obj->setPos(objX, objY);
 			}
 		}
 	}

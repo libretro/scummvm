@@ -26,6 +26,7 @@
 #include "backends/keymapper/keymap.h"
 #include "backends/keymapper/standard-actions.h"
 
+#include "common/config-manager.h"
 #include "common/savefile.h"
 #include "common/system.h"
 #include "common/translation.h"
@@ -67,6 +68,20 @@ Common::String MetaEngine::getSavegameFile(int saveGameIdx, const char *target) 
 		const char *pattern = hasFeature(kSimpleSavesNames) ? "%s.%03d" : "%s.s%02d";
 		return Common::String::format(pattern, target, saveGameIdx);
 	}
+}
+
+Common::Action *MetaEngine::createHotspotAction() {
+	Common::Action *action = new Common::Action(Common::kStandardActionToggleHotspots, _("Show/hide hotspots"));
+	action->setEvent(Common::EVENT_HOTSPOTS_SHOW);
+	action->addDefaultInputMapping("h");
+	return action;
+}
+
+bool MetaEngine::hotspotsEnabled(const char *target) {
+	if (target && ConfMan.hasKey("enable_hotspots", target))
+		return ConfMan.getBool("enable_hotspots", target);
+	return ConfMan.hasKey("enable_hotspots", Common::ConfigManager::kApplicationDomain) &&
+		ConfMan.getBool("enable_hotspots", Common::ConfigManager::kApplicationDomain);
 }
 
 Common::KeymapArray MetaEngine::initKeymaps(const char *target) const {

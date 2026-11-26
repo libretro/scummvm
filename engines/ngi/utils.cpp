@@ -295,11 +295,11 @@ static CObject *createObject(int objectId) {
 	case kNullObject:
 		return nullptr;
 	case kInteraction:
-		return new Interaction();
+		return new Interact();
 	case kMessageQueue:
 		return new MessageQueue();
 	case kExCommand:
-		return new ExCommand();
+		return new Command();
 	case kObjstateCommand:
 		return new ObjstateCommand();
 	case kGameVar:

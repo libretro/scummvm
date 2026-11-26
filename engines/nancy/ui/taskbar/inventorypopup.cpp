@@ -23,7 +23,7 @@
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/input.h"
 #include "engines/nancy/nancy.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/sound.h"
 
 #include "engines/nancy/state/scene.h"
@@ -82,6 +82,9 @@ void InventoryPopup::open() {
 		return;
 
 	_currentPage = 0;
+	_scrollPos = 0.0f;
+	_scrollbarDragging = false;
+	_scrollbarHovered = false;
 
 	rebuildVisibleList();
 	refreshGrid();
@@ -547,11 +550,11 @@ void InventoryPopup::handleInput(NancyInput &input) {
 
 			const bool pickUp = item.keepItem != kInvItemNewSceneView;
 			NancySceneState.removeItemFromInventory(itemID, pickUp);
+			g_nancy->_sound->playSound("BUOK");
 
 			if (item.keepItem == kInvItemNewSceneView) {
 				// Close-up view: stash the item and warp to its scene, which
 				// dismisses the popup.
-				g_nancy->_sound->playSound("BUOK");
 				NancySceneState.pushScene(itemID);
 				SceneChangeDescription sceneChange;
 				sceneChange.sceneID = item.sceneID;

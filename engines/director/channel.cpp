@@ -308,6 +308,7 @@ bool Channel::isDirty(Sprite *nextSprite) {
 		isDirtyFlag |= _sprite->_castId != nextSprite->_castId ||
 			_sprite->_ink != nextSprite->_ink || _sprite->_backColor != nextSprite->_backColor ||
 			_sprite->_foreColor != nextSprite->_foreColor ||
+			_sprite->_editable != nextSprite->_editable ||
 			_sprite->_blendAmount != nextSprite->_blendAmount ||
 			(_sprite->_thickness & kTThickness) != (nextSprite->_thickness & kTThickness);
 		if (!_sprite->_moveable)
@@ -805,9 +806,7 @@ bool Channel::updateWidget() {
 }
 
 bool Channel::isTrail() {
-	return _sprite->_trails || (_sprite->_cast &&
-			(_sprite->_cast->_type == kCastDigitalVideo) &&
-			(((DigitalVideoCastMember *)_sprite->_cast)->_directToStage));
+	return _sprite->_trails;
 }
 
 int Channel::getMouseChar(int x, int y) {

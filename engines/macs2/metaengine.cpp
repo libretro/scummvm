@@ -88,10 +88,8 @@ Common::KeymapArray Macs2MetaEngine::initKeymaps(const char *target) const {
 	act->addDefaultInputMapping("F1");
 	engineKeyMap->addAction(act);
 
-	act = new Action(kStandardActionToggleHotspots, _("Show hotspots"));
-	act->setEvent(Common::EVENT_HOTSPOTS_SHOW);
-	act->addDefaultInputMapping("h");
-	engineKeyMap->addAction(act);
+	if (hotspotsEnabled(target))
+		engineKeyMap->addAction(createHotspotAction());
 
 	return Keymap::arrayOf(engineKeyMap);
 }

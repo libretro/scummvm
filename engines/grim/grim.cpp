@@ -77,7 +77,7 @@
 #include "engines/grim/remastered/overlay.h"
 #include "engines/grim/remastered/lua_remastered.h"
 #include "engines/grim/remastered/commentary.h"
-#include "engines/grim/imuse/imuse.h"
+#include "engines/grim/imuse/imuse_engine.h"
 #include "engines/grim/emi/sound/emisound.h"
 #include "engines/grim/lua/lua.h"
 
@@ -160,6 +160,8 @@ GrimEngine::GrimEngine(OSystem *syst, uint32 gameFlags, GrimGameType gameType, C
 	_printLineDefaults.setFGColor(c);
 	_printLineDefaults.setFont(nullptr);
 	_printLineDefaults.setJustify(TextObject::LJUSTIFY);
+
+	_offscreenTextPos = getDefaultOffscreenTextPos();
 
 	_sayLineDefaults.setX(0);
 	_sayLineDefaults.setY(100);
@@ -384,7 +386,26 @@ Common::Error GrimEngine::run() {
 			g_movie = CreateBinkPlayer(demo);
 	}
 	if (getGameType() == GType_GRIM) {
-		g_imuse = new Imuse(20, demo);
+		// The remastered works at 48000Hz
+		int baseSampleRate = isRemastered() ? IMUSE_REMASTERED_SAMPLERATE : IMUSE_BASE_SAMPLERATE;
+		int sampleRate = baseSampleRate;
+		ConfMan.registerDefault("imuse_sample_rate", baseSampleRate);
+		if (ConfMan.hasKey("imuse_sample_rate", _targetName)) {
+			// Only accept sample rates which are a multiple or submultiple of the base one
+			int configSampleRate = ConfMan.getInt("imuse_sample_rate");
+			if ((configSampleRate % (baseSampleRate / 2)) == 0 &&
+				configSampleRate >= baseSampleRate / 2 &&
+				configSampleRate <= baseSampleRate * 4) {
+				sampleRate = configSampleRate;
+			}
+		}
+
+		bool lowLatencyMode = false;
+		ConfMan.registerDefault("imuse_low_latency_mode", false);
+		if (ConfMan.hasKey("imuse_low_latency_mode", _targetName))
+			lowLatencyMode = ConfMan.getBool("imuse_low_latency_mode");
+
+		g_imuse = new IMuse(sampleRate, _mixer, &_imuseMutex, lowLatencyMode, demo, isRemastered());
 		g_emiSound = nullptr;
 		if (g_grim->isRemastered()) {
 			// This must happen here, since we need the resource loader set up.
@@ -772,7 +793,7 @@ void GrimEngine::handleDebugLoadResource() {
 		resource = (void *)g_movie->play(buf, false, 0, 0);
 	else if (strstr(buf, ".wav") || strstr(buf, ".imu")) {
 		if (g_imuse)
-			g_imuse->startSfx(buf);
+			g_imuse->soundsLoadStartSound(buf, 127, IMUSE_GROUP_SFX);
 		resource = (void *)1;
 	} else if (strstr(buf, ".mat")) {
 		CMap *cmap = g_resourceloader->loadColormap("item.cmp");
@@ -820,7 +841,7 @@ void GrimEngine::luaUpdate() {
 		// the costumes are updated in update().
 		for (Common::List<Actor *>::iterator i = _talkingActors.begin(); i != _talkingActors.end(); ++i) {
 			Actor *a = *i;
-			if (!a->updateTalk(_frameTime)) {
+			if (!a->updateTalk()) {
 				i = _talkingActors.reverse_erase(i);
 			}
 		}
@@ -1053,9 +1074,6 @@ void GrimEngine::mainLoop() {
 		}
 
 		g_sound->flushTracks();
-		if (g_imuse) {
-			g_imuse->refreshScripts();
-		}
 
 		// Process events
 		Common::Event event;
@@ -1195,10 +1213,8 @@ void GrimEngine::savegameRestore() {
 	_savedState = SaveGame::openForLoading(filename);
 	if (!_savedState || !_savedState->isCompatible())
 		return;
-	if (g_imuse) {
-		g_imuse->stopAllSounds();
-		g_imuse->resetState();
-	}
+	if (g_imuse)
+		g_imuse->imStopAllSounds();
 	g_movie->stop();
 	if (g_imuse)
 		g_imuse->pause(true);
@@ -1224,6 +1240,9 @@ void GrimEngine::savegameRestore() {
 
 	Set::getPool().restoreObjects(_savedState);
 	Debug::debug(Debug::Engine, "Sets restored successfully.");
+
+	if (g_imuse)
+		g_imuse->soundsFloodMusicBuffer();
 
 	TextObject::getPool().restoreObjects(_savedState);
 	Debug::debug(Debug::Engine, "TextObjects restored successfully.");
@@ -1534,6 +1553,9 @@ void GrimEngine::setSet(Set *scene) {
 	if (scene == _currSet)
 		return;
 
+	if (g_imuse)
+		g_imuse->soundsFloodMusicBuffer();
+
 	if (getGameType() == GType_MONKEY4) {
 		for (PoolSound *s : PoolSound::getPool()) {
 			s->stop();
@@ -1548,7 +1570,7 @@ void GrimEngine::setSet(Set *scene) {
 
 	Set *lastSet = _currSet;
 	_currSet = scene;
-	_currSet->setSoundParameters(20, 127);
+	_currSet->setSoundParameters();
 	// should delete the old scene after setting the new one
 	if (lastSet && !lastSet->_locked) {
 		delete lastSet;
@@ -1562,9 +1584,11 @@ void GrimEngine::makeCurrentSetup(int num) {
 	int prevSetup = g_grim->getCurrSet()->getSetup();
 	if (prevSetup != num) {
 		getCurrSet()->setSetup(num);
-		getCurrSet()->setSoundParameters(20, 127);
+		getCurrSet()->setSoundParameters();
 		cameraChangeHandle(prevSetup, num);
-		// here should be set sound position
+
+		if (getGameType() == GType_GRIM)
+			getCurrSet()->relocateSounds();
 
 		_setupChanged = true;
 	}
@@ -1687,6 +1711,11 @@ void GrimEngine::pauseEngineIntern(bool pause) {
 		// It addresses bug #16667.
 		clearEventQueue();
 	}
+}
+
+Common::Point GrimEngine::getDefaultOffscreenTextPos() const {
+	// EMI shows them at the top of the screen
+	return Common::Point(320, _gameType == GType_MONKEY4 ? 30 : 450);
 }
 
 void GrimEngine::debugLua(const Common::String &str) {

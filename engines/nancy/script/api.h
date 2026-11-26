@@ -26,6 +26,8 @@
 #include "common/scummsys.h"
 #include "common/str.h"
 
+#include "engines/nancy/enginedata.h"
+
 struct lua_State;
 
 namespace Common {
@@ -58,6 +60,11 @@ struct BootTables {
 	CVTX *texts = nullptr;
 	ScriptBootData *boot = nullptr;
 	int playerIndex = -1;	// the character whose own boot script is running
+
+#ifdef ENABLE_NANCY_V5
+	// Nancy26: the font whose file is running, which FontsInit:Create fills
+	ScriptBootData::BitmapFont *font = nullptr;
+#endif
 };
 
 // Runs one of the boot scripts. Returns false when there is no such script.
@@ -83,6 +90,17 @@ bool getFlagByName(const Common::String &name, bool &value);
 // into the UI, once it has been made
 void showPlayerEntries();
 
+class SceneContext;
+
+// Nancy24: whether a task of the character being played is done, as its
+// completion function in the scripts says. A task without a completion
+// function is always done.
+bool isTaskComplete(const Common::String &text);
+
+// Drops the completion functions of tasks a scene gave, as the scene is
+// going away
+void forgetTaskCompletions(SceneContext *context);
+
 // Reads a cursor a script picked with "Cursor.<name>", "Cursor.<name>.hot"...
 // Returns false when the value is something else.
 bool testCursor(lua_State *L, int index, uint &cursorType, bool &isHot);
@@ -95,6 +113,12 @@ Common::KeyCode checkKey(lua_State *L, int index);
 // The text kept under a key: what a sound says, or a text of the UI.
 // Returns false when there is none.
 bool findText(const Common::String &key, Common::String &text);
+
+#ifdef ENABLE_NANCY_V5
+// Nancy26: the functions an Override draws with in its Render function
+// ("DrawRect", "DrawLine", "DrawTri", "DrawCircle"). Returns false for others.
+bool pushRecordDrawFunction(lua_State *L, const Common::String &name);
+#endif
 
 // The panels and controls scripts build the UI out of
 void registerUIAPI(lua_State *L);
@@ -109,6 +133,10 @@ void registerRefAPI(lua_State *L);
 // Sound channels, as picked with "SoundChannel.<name>"
 void pushSoundChannel(lua_State *L, uint16 channel);
 uint16 checkSoundChannel(lua_State *L, int index);
+
+// Whether a channel is one of those speech plays on, and whether any of them plays
+bool isVoiceChannel(uint16 channel);
+bool isVoicePlaying();
 
 } // End of namespace Script
 } // End of namespace Nancy

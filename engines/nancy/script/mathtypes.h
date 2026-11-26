@@ -32,6 +32,9 @@ namespace Script {
 // The vectors and matrices of the scripts. Scripts move what they draw around
 // with matrices: every record that shows something has a "transform", and the
 // puzzles and the map of Nancy19 are built on changing those.
+// The original does its math with D3DX, the math library of the DirectX SDK, and
+// the functions here follow its conventions and formulas, e.g. Matrix:Perspective
+// is D3DXMatrixPerspectiveFovLH.
 
 // Two to four numbers
 struct ScriptVector {
@@ -44,12 +47,29 @@ struct ScriptVector {
 
 // Four rows of four. Vectors are rows, so the offset a matrix moves things by is
 // its last row, and a product does what its left side does first.
+//
+// Nancy32 replaced the matrices with SRTs (scale, rotation, translation) in two
+// dimensions. An SRT rotates a point, then scales it, then translates it. Two
+// of them combine part by part: the scales multiply, the rotations add up, and
+// the second one moves the translation of the first. That only comes out as the
+// product of their matrices when they scale the same along both axes, so a
+// matrix also keeps the parts it was made from.
 struct ScriptMatrix {
 	double m[4][4];
 
+	// The parts of the matrix as an SRT. The translation is m[3][0] and m[3][1].
+	// A matrix that was filled in some other way isn't an SRT.
+	bool isSRT = true;
+	double scaleX = 1.0;
+	double scaleY = 1.0;
+	double rotation = 0.0;	// in radians
+
 	ScriptMatrix();	// the identity
 
+	static ScriptMatrix makeSRT(double scaleX, double scaleY, double rotation, double x, double y);
+
 	bool operator==(const ScriptMatrix &other) const;
+	bool operator!=(const ScriptMatrix &other) const { return !(*this == other); }
 	ScriptMatrix operator*(const ScriptMatrix &other) const;
 
 	// A point moved by the matrix
@@ -65,7 +85,7 @@ struct ScriptMatrix {
 void registerMathTypes(lua_State *L);
 
 void pushVector(lua_State *L, const ScriptVector &vector);
-ScriptVector *testVector(lua_State *L, int index);
+bool testVector(lua_State *L, int index, ScriptVector &vector);	// false when it is something else
 
 void pushMatrix(lua_State *L, const ScriptMatrix &matrix);
 ScriptMatrix *testMatrix(lua_State *L, int index);

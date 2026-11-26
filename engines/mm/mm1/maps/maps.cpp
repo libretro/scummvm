@@ -220,7 +220,7 @@ void Maps::synchronizeCurrent(Common::Serializer &s) {
 
 	if (s.isLoading()) {
 		updateMasksOffsets();
-		changeMap(_id, _section);
+		changeMap(_id, _section, true);
 	}
 }
 
@@ -234,6 +234,8 @@ void Maps::select(uint16 id, byte section) {
 
 void Maps::display(uint16 id, byte section) {
 	select(id, section);
+	for (uint i = 0; i < MAP_SIZE; ++i)
+		_currentMap->_visited[i] &= ~(VISITED_TRANSIENT_STATE | VISITED_REWARD_CLAIMED);
 	loadTiles();
 	g_events->send("Game", GameMessage("UPDATE"));
 }
@@ -274,8 +276,8 @@ void Maps::loadTown(TownId townId) {
 	}
 
 	byte &visited = _currentMap->_visited[_mapPos.y * MAP_W + _mapPos.x];
-	if (!visited)
-		visited = VISITED_NORMAL;
+	if (!(visited & 0x7f))
+		visited = (visited & 0x80) | VISITED_NORMAL;
 }
 
 void Maps::town15setup() {
@@ -384,8 +386,8 @@ void Maps::turnAround() {
 void Maps::step(const Common::Point &delta) {
 	_mapPos += delta;
 	byte &visited = _currentMap->_visited[_mapPos.y * MAP_W + _mapPos.x];
-	if (!visited) {
-		visited = VISITED_NORMAL;
+	if (!(visited & 0x7f)) {
+		visited = (visited & 0x80) | VISITED_NORMAL;
 	}
 
 	int section = 0, id = 0;
@@ -412,9 +414,37 @@ void Maps::step(const Common::Point &delta) {
 	changeMap(id, section);
 }
 
-void Maps::changeMap(uint16 id, byte section) {
-	// At this point, a new map is being entered
+void Maps::changeMap(uint16 id, byte section, bool loadingSave) {
+	// A genuine transition starts a fresh visit. Loading retains claimed
+	// rewards and other visit-local scripted state.
 	select(id, section);
+
+	for (uint i = 0; i < MAP_SIZE; ++i) {
+		if (loadingSave && (_currentMap->_visited[i] & VISITED_REWARD_CLAIMED))
+			_currentMap->_states[i] &= ~CELL_SPECIAL;
+		else if (!loadingSave)
+			_currentMap->_visited[i] &= ~(VISITED_TRANSIENT_STATE | VISITED_REWARD_CLAIMED);
+	}
+	if (loadingSave)
+		_currentMap->restoreVisitState();
+
+	// The Volcano stabilizer settings are visit-local, but must survive a
+	// save and load made during the same visit. Clear them only on a
+	// genuine re-entry
+	if (!loadingSave && _mapId == 11) {
+		_currentMap->_visited[3 * MAP_W + 6] &= ~0x80;
+		_currentMap->_visited[3 * MAP_W + 8] &= ~0x80;
+	}
+	if (loadingSave && _mapId == 4) {
+		// The theft count lives in overlay data that is reloaded from disk,
+		// so rebuild it from the claimed treasure squares
+		byte stolenCount = 0;
+		for (uint i = 0; i < MAP_SIZE && stolenCount < 255; ++i) {
+			if (_currentMap->_visited[i] & VISITED_REWARD_CLAIMED)
+				++stolenCount;
+		}
+		(*_currentMap)[MAP04_TREASURE_STOLEN] = stolenCount;
+	}
 	loadTiles();
 
 	visitedTile();
@@ -422,15 +452,38 @@ void Maps::changeMap(uint16 id, byte section) {
 	g_events->send("Game", GameMessage("UPDATE"));
 }
 
+void Maps::changeMapFromExit(uint16 id, byte section) {
+	// Run the normal transition first. Unlike calling the destination
+	// special(), this cannot bounce the party straight back through
+	// stairs/doors or show a second transition prompt.
+	changeMap(id, section);
+
+	// changeMap()->visitedTile() records a newly entered destination as
+	// VISITED_NORMAL. We know this particular map change came through an
+	// entrance/exit, so preserve metadata bits and correct only the tile
+	// type to VISITED_EXIT.
+	byte &visited = _currentMap->_visited[_mapPos.y * MAP_W + _mapPos.x];
+	visited = (visited & 0xf0) | VISITED_EXIT;
+
+	// changeMap() has already sent the normal Game UPDATE; repaint once
+	// more so the Enhanced minimap shows the white exit immediately.
+	g_events->redrawViews();
+}
+
 void Maps::visitedTile() {
 	byte &visited = _currentMap->_visited[_mapPos.y * MAP_W + _mapPos.x];
-	if (!visited)
-		visited = VISITED_NORMAL;
+	if (!(visited & 0x7f))
+		visited = (visited & 0x80) | VISITED_NORMAL;
 }
 
 void Maps::clearSpecial() {
 	_currentState &= ~CELL_SPECIAL;
 	_currentMap->_states[_mapOffset] &= ~CELL_SPECIAL;
+}
+
+void Maps::clearSpecialAndRememberReward() {
+	_currentMap->_visited[_mapOffset] |= VISITED_REWARD_CLAIMED;
+	clearSpecial();
 }
 
 Common::Point Maps::getMoveDelta(byte mask) {

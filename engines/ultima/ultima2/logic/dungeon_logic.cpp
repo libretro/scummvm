@@ -1,0 +1,579 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "ultima/ultima2/logic/dungeon_logic.h"
+#include "ultima/ultima2/ultima2.h"
+
+namespace Ultima {
+namespace Ultima2 {
+namespace Logic {
+
+namespace {
+
+constexpr int MAX_LEVEL = 15;
+constexpr int TORCH_TURNS = 150;
+
+// Cell contents: the high nibble is the terrain, the low bits flag a monster
+constexpr byte CELL_WALL = 0x80;
+constexpr byte CELL_CHEST = 0x40;
+constexpr byte CELL_LADDER_UP = 0x10;
+constexpr byte CELL_LADDER_DOWN = 0x20;
+
+int signOf(int v) {
+	return (v > 0) - (v < 0);
+}
+
+} // namespace
+
+byte &DungeonLogic::cellAt(int x, int y) const {
+	return _G(dungeon).cell(_G(savegame)._dungeonLevel, x, y);
+}
+
+int DungeonLogic::findMonsterAhead() const {
+	Data::Savegame &sg = _G(savegame);
+	Data::MapMonsters &monsters = _G(map)._monsters;
+	byte x = sg._mapX + sg._facingX, y = sg._mapY + sg._facingY;
+
+	for (int slot = 31; slot >= 1; --slot) {
+		if (monsters.isActive(slot) && monsters._glyphTile[slot] == sg._dungeonLevel &&
+				monsters._mapX[slot] == x && monsters._mapY[slot] == y)
+			return slot;
+	}
+
+	return -1;
+}
+
+bool DungeonLogic::move(Data::Direction dir) {
+	switch (dir) {
+	case Data::DIR_UP:
+		return advance();
+	case Data::DIR_DOWN:
+		return retreat();
+	case Data::DIR_LEFT:
+		return turn(true);
+	case Data::DIR_RIGHT:
+		return turn(false);
+	default:
+		return true;
+	}
+}
+
+bool DungeonLogic::advance() {
+	Data::Savegame &sg = _G(savegame);
+	writeString("Advance");
+
+	byte front = cellAt((byte)(sg._mapX + sg._facingX), (byte)(sg._mapY + sg._facingY));
+	if ((front & 0x0F) != 0 || front == CELL_WALL) {
+		writeString("-Blocked!\n");
+		return true;
+	}
+
+	sg._mapX = (sg._mapX + sg._facingX) & 0x3F;
+	sg._mapY = (sg._mapY + sg._facingY) & 0x3F;
+
+	// Deeper levels have more traps
+	if (randByte() >= sg._dungeonLevel) {
+		writeString("\n");
+		return true;
+	}
+
+	sg._lightTurns = 0;
+	playFX(Data::SFX_TRAP);
+	writeString("\nArgh! A trap!\n");
+
+	if (sg._thievesTools == 0) {
+		playerDied();
+		return false;
+	}
+
+	writeString("Escaped! By use of tools!\n");
+	--sg._thievesTools;
+	return true;
+}
+
+bool DungeonLogic::retreat() {
+	Data::Savegame &sg = _G(savegame);
+	writeString("Retreat");
+
+	byte back = cellAt((byte)(sg._mapX - sg._facingX), (byte)(sg._mapY - sg._facingY));
+	if ((back & 0x8F) != 0) {
+		writeString("-Blocked!\n");
+		return true;
+	}
+
+	sg._mapX = (sg._mapX - sg._facingX) & 0x3F;
+	sg._mapY = (sg._mapY - sg._facingY) & 0x3F;
+	writeString("\n");
+	return true;
+}
+
+bool DungeonLogic::turn(bool left) {
+	Data::Savegame &sg = _G(savegame);
+	writeString(left ? "Turn left\n" : "Turn right\n");
+
+	int8 fx = sg._facingX, fy = sg._facingY;
+	if (left) {
+		if (fy != 0) {
+			sg._facingX = fy;
+			sg._facingY = 0;
+		} else {
+			sg._facingY = -fx;
+			sg._facingX = 0;
+		}
+	} else {
+		if (fx != 0) {
+			sg._facingY = fx;
+			sg._facingX = 0;
+		} else {
+			sg._facingX = -fy;
+			sg._facingY = 0;
+		}
+	}
+
+	return true;
+}
+
+void DungeonLogic::printLevel() {
+	writeString("\nTo level %02d\n", _G(savegame)._dungeonLevel);
+}
+
+void DungeonLogic::surface() {
+	Data::Savegame &sg = _G(savegame);
+	sg._mapX = sg._overworldReturnX;
+	sg._mapY = sg._overworldReturnY;
+	sg._mapType = 0;
+	writeString("\n");
+	_G(map).load(sg._mapEra, sg._mapType);
+}
+
+void DungeonLogic::changeLevel(int delta) {
+	Data::Savegame &sg = _G(savegame);
+	int level = sg._dungeonLevel + delta;
+
+	if (level < 0) {
+		surface();
+	} else {
+		sg._dungeonLevel = level;
+		printLevel();
+	}
+}
+
+bool DungeonLogic::descend() {
+	Data::Savegame &sg = _G(savegame);
+	writeString("Descend");
+
+	if ((cellAt(sg._mapX, sg._mapY) & CELL_LADDER_DOWN) == 0) {
+		writeString("-what?\n");
+		return true;
+	}
+
+	// Towers are numbered from the bottom up, dungeons from the top down
+	changeLevel(sg._mapType == 4 ? -1 : 1);
+	return true;
+}
+
+bool DungeonLogic::klimb() {
+	Data::Savegame &sg = _G(savegame);
+	writeString("Klimb");
+
+	if ((cellAt(sg._mapX, sg._mapY) & CELL_LADDER_UP) == 0) {
+		writeString("-what?\n");
+		return true;
+	}
+
+	changeLevel(sg._mapType == 4 ? 1 : -1);
+	return true;
+}
+
+bool DungeonLogic::get() {
+	Data::Savegame &sg = _G(savegame);
+	writeString("Get");
+
+	byte &cell = cellAt(sg._mapX, sg._mapY);
+	if (cell != CELL_CHEST) {
+		writeString(" What?\n");
+		return true;
+	}
+
+	writeString(" Chest!\nIt contains ");
+	cell = 0;
+
+	int level = sg._dungeonLevel;
+	if (level == MAX_LEVEL) {
+		writeString("Tri-lithium!\n");
+		sg._items[Data::ITEM_TRI_LITHIUM] = MIN(sg._items[Data::ITEM_TRI_LITHIUM] + 1, Data::MAX_BCD_BYTE);
+		return true;
+	}
+
+	if (randByte() >= 0x40) {
+		writeString("Gold!\n");
+		int amount = ((randByte() & 0x1F) + level * 2) & 0x77;
+		sg._gold = MIN(sg._gold + Data::bcdValue(amount), Data::MAX_BCD_WORD);
+		return true;
+	}
+
+	// Even levels hold weapons, odd ones armour
+	if ((level & 1) == 0) {
+		writeString("A  Weapon");
+		int r = randByte() & 7;
+		if (r != 0) {
+			sg._weaponOwned[r] = MIN(sg._weaponOwned[r] + 1, Data::MAX_BCD_BYTE);
+			writeString("\n");
+			return true;
+		}
+	} else {
+		writeString(" Armour");
+		int r = randByte() & 3;
+		if (r != 0) {
+			sg._armorOwned[r] = MIN(sg._armorOwned[r] + 1, Data::MAX_BCD_BYTE);
+			writeString("\n");
+			return true;
+		}
+	}
+
+	writeString(" Empty!\n");
+	return true;
+}
+
+void DungeonLogic::killMonster(int slot) {
+	Data::Savegame &sg = _G(savegame);
+	Data::MapMonsters &monsters = _G(map)._monsters;
+
+	cellAt(monsters._mapX[slot], monsters._mapY[slot]) &= 0xF0;
+	monsters._spellHP[slot] = 0;
+	monsters._type[slot] = 0;
+	monsters._glyphTile[slot] = 0;
+
+	int gold = Data::bcdValue((randByte() & 0x17) | 1);
+	writeString("\nKilled--Gold+%.2d", gold);
+	sg._gold = MIN(sg._gold + gold, Data::MAX_BCD_WORD);
+
+	int exp = randByte() & 7;
+	writeString("--Exp.+%.2d\n", exp);
+	sg._experience = MIN(sg._experience + exp, Data::MAX_BCD_WORD);
+}
+
+bool DungeonLogic::attack(Data::Direction) {
+	Data::Savegame &sg = _G(savegame);
+	Data::MapMonsters &monsters = _G(map)._monsters;
+	playFX(Data::SFX_ATTACK);
+	writeString("Attack--");
+
+	byte x = sg._mapX + sg._facingX, y = sg._mapY + sg._facingY;
+	if ((cellAt(x, y) & 7) == 0) {
+		writeString("Miss\n");
+		return true;
+	}
+
+	int slot = -1;
+	for (int i = 31; i >= 0; --i) {
+		if (monsters.isActive(i) && monsters._mapX[i] == x && monsters._mapY[i] == y &&
+				monsters._glyphTile[i] == sg._dungeonLevel) {
+			slot = i;
+			break;
+		}
+	}
+
+	// Both checks compare against the raw packed-BCD attribute bytes, not
+	// their decimal values, matching the original's own arithmetic
+	if (slot < 0 || (randByte() >> 1) >= Data::toBcd(sg._agility)) {
+		writeString("Miss\n");
+		return true;
+	}
+
+	playFX(Data::SFX_HIT);
+	writeString("Hit!");
+	int dmg = (sg._readiedWeapon * 8 + Data::toBcd(sg._strength)) >> 2;
+	byte &hp = monsters._spellHP[slot];
+
+	if (hp <= dmg) {
+		hp = 0;
+		killMonster(slot);
+	} else {
+		hp -= dmg + 1;
+		writeString("\n");
+	}
+
+	return true;
+}
+
+bool DungeonLogic::castSpell(Data::SpellType spell) {
+	Data::Savegame &sg = _G(savegame);
+	Data::MapMonsters &monsters = _G(map)._monsters;
+	int level = sg._dungeonLevel;
+
+	switch (spell) {
+	case Data::SPELL_LIGHT:
+		sg._lightTurns = TORCH_TURNS;
+		writeString("\n");
+		return true;
+
+	case Data::SPELL_DOWN_LADDER:
+	case Data::SPELL_UP_LADDER: {
+		// Down Ladder goes deeper in a dungeon but shallower in a tower, and
+		// Up Ladder the reverse
+		bool deeper = (spell == Data::SPELL_DOWN_LADDER) == (sg._mapType == 5);
+		if (!deeper && level == 0) {
+			surface();
+			return true;
+		}
+
+		int dest = deeper ? level + 1 : level - 1;
+		if (dest > MAX_LEVEL || _G(dungeon).cell(dest, sg._mapX, sg._mapY) != 0)
+			break;
+
+		sg._dungeonLevel = dest;
+		printLevel();
+		return true;
+	}
+
+	case Data::SPELL_PASSWALL: {
+		int x = (sg._mapX + sg._facingX) & 0xF, y = (sg._mapY + sg._facingY) & 0xF;
+		if (x == 0 || y == 0 || (cellAt(x, y) & CELL_WALL) == 0)
+			break;
+
+		cellAt(x, y) = 0;
+		writeString("\n");
+		return true;
+	}
+
+	case Data::SPELL_SURFACE:
+		surface();
+		return true;
+
+	case Data::SPELL_PRAYER:
+	case Data::SPELL_KILL:
+	case Data::SPELL_MAGIC_MISSILE: {
+		if (spell == Data::SPELL_PRAYER && (randByte() & 0x80) != 0)
+			break;
+
+		int slot = findMonsterAhead();
+		if (slot < 0)
+			break;
+
+		if (spell == Data::SPELL_MAGIC_MISSILE) {
+			// Damage grows with the hundreds of experience
+			int exp = Data::toBcd((sg._experience / 100) % 100);
+			int sum = exp + exp;
+			int carry = sum >> 8;
+			int dmg = ((sum & 0xFF) + 0x1E + carry) & 0xFF;
+
+			byte &hp = monsters._spellHP[slot];
+			if (hp > dmg) {
+				hp -= dmg + 1;
+				writeString("\n");
+				return true;
+			}
+		}
+
+		killMonster(slot);
+		return true;
+	}
+
+	case Data::SPELL_BLINK: {
+		int x = (randByte() & 0xF) | 1;
+		int y = (randByte() & 0xF) | 1;
+		if (cellAt(x, y) != 0)
+			break;
+
+		sg._mapX = x;
+		sg._mapY = y;
+		writeString("\n");
+		return true;
+	}
+
+	default:
+		break;
+	}
+
+	playFX(Data::SFX_FAIL);
+
+	if (spell == Data::SPELL_MAGIC_MISSILE) {
+		// WORKAROUND: Original line wraps on the final '!'
+		writeString("-Failed");
+	} else {
+		writeString("-Failed!\n");
+	}
+
+	return true;
+}
+
+void DungeonLogic::spawnMonsters() {
+	Data::MapMonsters &monsters = _G(map)._monsters;
+
+	for (int slot = 31; slot >= 1; --slot) {
+		if (monsters.isActive(slot))
+			continue;
+
+		// Each slot belongs to a single level, and picks an odd-numbered cell
+		int level = slot >> 1;
+		byte x = ((randByte() & 7) * 2) | 1;
+		byte y = ((randByte() & 7) * 2) | 1;
+		monsters._mapX[slot] = x;
+		monsters._mapY[slot] = y;
+		monsters._glyphTile[slot] = level;
+
+		byte &cell = _G(dungeon).cell(level, x, y);
+		if (cell != 0)
+			continue;
+
+		// Tougher monsters only turn up on deeper levels
+		int r = randByte() & 7;
+		if (r == 7 || r * 2 > level)
+			continue;
+
+		int type = r + 1;
+		monsters._type[slot] = type;
+		monsters._spellHP[slot] = (byte)((type * 2 + level) * 8) | 0x10;
+		cell |= type;
+	}
+}
+
+bool DungeonLogic::monsterAttacks(int slot) {
+	Data::Savegame &sg = _G(savegame);
+	Data::MapMonsters &monsters = _G(map)._monsters;
+	int level = sg._dungeonLevel;
+
+	if (randByte() < 0x40) {
+		if (monsters._glyphTile[slot] != level)
+			return true;
+
+		switch (monsters._type[slot]) {
+		case 2:
+			if (sg._lightTurns != 0) {
+				writeString("Your torch is blown out!\n");
+				sg._lightTurns = 0;
+			}
+			return true;
+
+		case 5:
+			writeString("A Gremlin stole some food!\n");
+			if (sg._food < 100) {
+				playerDied();
+				return false;
+			}
+			sg._food -= 100;
+			return true;
+
+		case 7:
+			writeString("You feel a strong magic!\n");
+			sg._sleepTurns = randByte() & 7;
+			return true;
+
+		default:
+			break;
+		}
+	}
+
+	if (monsters._glyphTile[slot] != level)
+		return true;
+
+	playFX(Data::SFX_CANNON);
+	byte roll = randByte();
+	if ((roll & 0x80) != 0 || (roll & 7) < sg._readiedArmor)
+		return true;
+
+	showAttackTile(0, 0);
+	int dmg = Data::bcdValue((byte)((randByte() & 0x77) + ((level * 4) & 0x77)));
+	if (!sg.deductHP(dmg)) {
+		playerDied();
+		return false;
+	}
+
+	return true;
+}
+
+int DungeonLogic::tryMoveMonster(int slot, int x, int y) {
+	Data::MapMonsters &monsters = _G(map)._monsters;
+	int level = _G(savegame)._dungeonLevel;
+
+	if (monsters._glyphTile[slot] != level)
+		return 0;
+
+	byte &dest = cellAt(x, y);
+	if (dest == CELL_WALL || dest == 0xFF)
+		return 0;
+	if ((dest & 7) != 0)
+		return 2;
+
+	cellAt(monsters._mapX[slot], monsters._mapY[slot]) &= 0xF0;
+	monsters._mapX[slot] = x;
+	monsters._mapY[slot] = y;
+	dest |= monsters._type[slot];
+	return 1;
+}
+
+void DungeonLogic::updateCreatures() {
+	Data::Savegame &sg = _G(savegame);
+	Data::MapMonsters &monsters = _G(map)._monsters;
+
+	spawnMonsters();
+
+	for (int slot = 31; slot >= 1; --slot) {
+		if (!monsters.isActive(slot))
+			continue;
+
+		int dx = signOf((int8)(byte)(sg._mapX - monsters._mapX[slot]));
+		int dy = signOf((int8)(byte)(sg._mapY - monsters._mapY[slot]));
+
+		// Badly hurt monsters run away
+		if (monsters._spellHP[slot] < 0x0F) {
+			dx = -dx;
+			dy = -dy;
+		}
+
+		if (dx != 0) {
+			byte x = monsters._mapX[slot] + dx, y = monsters._mapY[slot];
+			if (x == sg._mapX && y == sg._mapY) {
+				if (!monsterAttacks(slot))
+					return;
+				continue;
+			}
+
+			if (tryMoveMonster(slot, x, y) != 0)
+				continue;
+		}
+
+		if (dy != 0) {
+			byte x = monsters._mapX[slot], y = monsters._mapY[slot] + dy;
+			if (x == sg._mapX && y == sg._mapY) {
+				if (!monsterAttacks(slot))
+					return;
+				continue;
+			}
+
+			tryMoveMonster(slot, x, y);
+		}
+	}
+
+	if (sg._lightTurns == 0) {
+		writeString("It's dark!\n");
+	} else if (--sg._lightTurns == 0) {
+		writeString("Torch Burned out!\n");
+	}
+
+	if (!eatFood(16))
+		playerDied();
+}
+
+} // namespace Logic
+} // namespace Ultima2
+} // namespace Ultima

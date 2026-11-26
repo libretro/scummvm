@@ -42,48 +42,48 @@ void scene32_initScene(Scene *sc) {
 	g_vars->scene32_cactusCounter = -1;
 	g_vars->scene32_dudeOnLadder = false;
 	g_vars->scene32_cactusIsGrowing = false;
-	g_vars->scene32_flag = sc->getStaticANIObject1ById(ANI_FLAG, -1);
-	g_vars->scene32_cactus = sc->getStaticANIObject1ById(ANI_CACTUS, -1);
-	g_vars->scene32_massOrange = sc->getStaticANIObject1ById(ANI_TESTO_ORANGE, -1);
-	g_vars->scene32_massBlue = sc->getStaticANIObject1ById(ANI_TESTO_BLUE, -1);
-	g_vars->scene32_massGreen = sc->getStaticANIObject1ById(ANI_TESTO_GREEN, -1);
-	g_vars->scene32_button = sc->getStaticANIObject1ById(ANI_BUTTON_32, -1);
+	g_vars->scene32_flag = sc->findAniObjectById(ANI_FLAG, -1);
+	g_vars->scene32_cactus = sc->findAniObjectById(ANI_CACTUS, -1);
+	g_vars->scene32_massOrange = sc->findAniObjectById(ANI_TESTO_ORANGE, -1);
+	g_vars->scene32_massBlue = sc->findAniObjectById(ANI_TESTO_BLUE, -1);
+	g_vars->scene32_massGreen = sc->findAniObjectById(ANI_TESTO_GREEN, -1);
+	g_vars->scene32_button = sc->findAniObjectById(ANI_BUTTON_32, -1);
 
-	g_vars->scene32_massOrange->startAnim(MV_TSTO_FLOW, 0, -1);
-	g_vars->scene32_massOrange->_movement->setDynamicPhaseIndex(15);
+	g_vars->scene32_massOrange->startMovement(MV_TSTO_FLOW, 0, -1);
+	g_vars->scene32_massOrange->_movement->setCurFrame(15);
 
-	g_vars->scene32_massGreen->startAnim(MV_TSTG_FLOW, 0, -1);
-	g_vars->scene32_massGreen->_movement->setDynamicPhaseIndex(26);
+	g_vars->scene32_massGreen->startMovement(MV_TSTG_FLOW, 0, -1);
+	g_vars->scene32_massGreen->_movement->setCurFrame(26);
 
 	Scene *oldsc = g_nmi->_currentScene;
-	StaticANIObject *ani;
+	AniObject *ani;
 
-	if (g_nmi->getObjectState(sO_ClockHandle) == g_nmi->getObjectEnumState(sO_ClockHandle, sO_In_32_Lies)) {
-		ani = sc->getStaticANIObject1ById(ANI_INV_HANDLE, -1);
+	if (g_nmi->getStateId(sO_ClockHandle) == g_nmi->getStateValue(sO_ClockHandle, sO_In_32_Lies)) {
+		ani = sc->findAniObjectById(ANI_INV_HANDLE, -1);
 		if (ani) {
 			g_nmi->_currentScene = sc;
 
-			ani->changeStatics2(ST_HDL_LAID);
+			ani->setStatic(ST_HDL_LAID);
 		}
 	} else {
-		if (g_nmi->getObjectState(sO_ClockHandle) == g_nmi->getObjectEnumState(sO_ClockHandle, sO_In_32_Sticks)) {
-			ani = sc->getStaticANIObject1ById(ANI_INV_HANDLE, -1);
+		if (g_nmi->getStateId(sO_ClockHandle) == g_nmi->getStateValue(sO_ClockHandle, sO_In_32_Sticks)) {
+			ani = sc->findAniObjectById(ANI_INV_HANDLE, -1);
 
 			g_nmi->_currentScene = sc;
 
 			if (ani)
-				ani->changeStatics2(ST_HDL_PLUGGED);
+				ani->setStatic(ST_HDL_PLUGGED);
 
-			g_vars->scene32_button->changeStatics2(ST_BTN32_ON);
+			g_vars->scene32_button->setStatic(ST_BTN32_ON);
 		}
 	}
 
 	g_nmi->_currentScene = oldsc;
 
-	if (g_nmi->getObjectState(sO_Cube) == g_nmi->getObjectEnumState(sO_Cube, sO_In_32)) {
-		MessageQueue *mq = new MessageQueue(sc->getMessageQueueById(QU_KBK32_START), 0, 0);
+	if (g_nmi->getStateId(sO_Cube) == g_nmi->getStateValue(sO_Cube, sO_In_32)) {
+		MessageQueue *mq = new MessageQueue(sc->findMessageQueue(QU_KBK32_START), 0, 0);
 
-		mq->sendNextCommand();
+		mq->next();
 	}
 
 	g_nmi->lift_setButton(sO_Level9, ST_LBN_9N);
@@ -91,11 +91,11 @@ void scene32_initScene(Scene *sc) {
 
 	g_nmi->initArcadeKeys("SC_32");
 
-	if (g_nmi->getObjectState(sO_Cactus) == g_nmi->getObjectEnumState(sO_Cactus, sO_HasGrown)) {
+	if (g_nmi->getStateId(sO_Cactus) == g_nmi->getStateValue(sO_Cactus, sO_HasGrown)) {
 		g_nmi->_currentScene = sc;
 
-		g_vars->scene32_cactus->changeStatics2(ST_CTS_GROWUP);
-		g_vars->scene32_cactus->_priority = 22;
+		g_vars->scene32_cactus->setStatic(ST_CTS_GROWUP);
+		g_vars->scene32_cactus->_z = 22;
 
 		g_nmi->_currentScene = oldsc;
 	}
@@ -116,8 +116,8 @@ int scene32_updateCursor() {
 }
 
 void sceneHandler32_tryCube() {
-	if (g_nmi->getObjectState(sO_Cube) == g_nmi->getObjectEnumState(sO_Cube, sO_In_33))
-		chainQueue(QU_KBK32_GO, 0);
+	if (g_nmi->getStateId(sO_Cube) == g_nmi->getStateValue(sO_Cube, sO_In_33))
+		runQueue(QU_KBK32_GO, 0);
 }
 
 void sceneHandler32_startCactus() {
@@ -125,26 +125,26 @@ void sceneHandler32_startCactus() {
 	g_vars->scene32_cactusIsGrowing = false;
 }
 
-void sceneHandler32_spin(ExCommand *cmd) {
+void sceneHandler32_spin(Command *cmd) {
 	MessageQueue *mq = g_nmi->_globalMessageQueueList->getMessageQueueById(cmd->_parId);
 
 	if (!mq || mq->getCount() == 0)
 		return;
 
-	ExCommand *ex = mq->getExCommandByIndex(0);
-	ExCommand *newex;
+	Command *ex = mq->getCommandByIndex(0);
+	Command *newex;
 
 	if ((g_vars->scene32_cactus->_movement && g_vars->scene32_cactus->_movement->_id == MV_CTS_DEFAULT)
 		|| g_vars->scene32_cactus->_statics->_staticsId == ST_CTS_GROWUP) {
 		for (int i = 0; i < 12; i++) {
 			newex = ex->createClone();
 			newex->_excFlags |= 2;
-			mq->insertExCommandAt(1, newex);
+			mq->addCommand(1, newex);
 		}
 
-		g_vars->scene32_cactus->changeStatics2(ST_CTS_GROWUP);
+		g_vars->scene32_cactus->setStatic(ST_CTS_GROWUP);
 
-		chainQueue(QU_CTS_BACK, 1);
+		runQueue(QU_CTS_BACK, 1);
 
 		g_vars->scene32_cactusIsGrowing = false;
 
@@ -155,126 +155,126 @@ void sceneHandler32_spin(ExCommand *cmd) {
 		for (int i = 0; i < 2; i++) {
 			newex = ex->createClone();
 			newex->_excFlags |= 2;
-			mq->insertExCommandAt(1, newex);
+			mq->addCommand(1, newex);
 		}
 
-		chainQueue(QU_KDK_DRIZZLE, 0);
+		runQueue(QU_KDK_DRIZZLE, 0);
 	}
 }
 
 void sceneHandler32_startFlagLeft() {
-	g_vars->scene32_flag->changeStatics2(ST_FLG_NORM);
-	g_vars->scene32_flag->startAnim(MV_FLG_STARTL, 0, -1);
+	g_vars->scene32_flag->setStatic(ST_FLG_NORM);
+	g_vars->scene32_flag->startMovement(MV_FLG_STARTL, 0, -1);
 
 	g_vars->scene32_flagIsWaving = true;
 }
 
 void sceneHandler32_startFlagRight() {
-	g_vars->scene32_flag->changeStatics2(ST_FLG_NORM);
-	g_vars->scene32_flag->startAnim(MV_FLG_STARTR, 0, -1);
+	g_vars->scene32_flag->setStatic(ST_FLG_NORM);
+	g_vars->scene32_flag->startMovement(MV_FLG_STARTR, 0, -1);
 
 	g_vars->scene32_flagIsWaving = true;
 }
 
-void sceneHandler32_trySit(ExCommand *cmd) {
+void sceneHandler32_trySit(Command *cmd) {
 	MessageQueue *mq = g_nmi->_globalMessageQueueList->getMessageQueueById(cmd->_parId);
 
 	if (!mq || mq->getCount() == 0)
 		return;
 
-	ExCommand *ex = mq->getExCommandByIndex(0);
+	Command *ex = mq->getCommandByIndex(0);
 
 	if (g_vars->scene32_cactusIsGrowing || g_vars->scene32_cactus->_movement
 		|| g_vars->scene32_cactus->_statics->_staticsId != ST_CTS_EMPTY
 		|| (g_vars->scene32_cactusCounter >= 0 && g_vars->scene32_cactusCounter <= 20)) {
-		ex->_messageKind = 0;
+		ex->_cmd = 0;
 		ex->_excFlags |= 1;
 	} else {
 		ex->_parentId = ANI_MAN;
-		ex->_messageKind = 1;
+		ex->_cmd = 1;
 		ex->_messageNum = MV_MAN32_SITDOWN;
-		ex->_param = g_nmi->_aniMan->_odelay;
+		ex->_param = g_nmi->_aniMan->_copyId;
 
 		g_vars->scene32_dudeIsSitting = true;
 
 		getCurrSceneSc2MotionController()->deactivate();
-		getGameLoaderInteractionController()->disableFlag24();
+		getGameLoaderInteractionController()->disable();
 	}
 }
 
 void sceneHandler32_buttonPush() {
-	if (g_nmi->getObjectState(sO_ClockHandle) == g_nmi->getObjectEnumState(sO_ClockHandle, sO_In_32_Sticks)) {
-		StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObject1ById(ANI_INV_HANDLE, -1);
+	if (g_nmi->getStateId(sO_ClockHandle) == g_nmi->getStateValue(sO_ClockHandle, sO_In_32_Sticks)) {
+		AniObject *ani = g_nmi->_currentScene->findAniObjectById(ANI_INV_HANDLE, -1);
 		if (ani)
-			ani->changeStatics2(ST_HDL_PLUGGED);
+			ani->setStatic(ST_HDL_PLUGGED);
 
-		chainQueue(QU_SC32_FALLHANDLE, 1);
+		runQueue(QU_SC32_FALLHANDLE, 1);
 
-		g_vars->scene32_button->changeStatics2(ST_BTN32_OFF);
+		g_vars->scene32_button->setStatic(ST_BTN32_OFF);
 	}
 }
 
 void sceneHandler32_installHandle() {
-	chainQueue(QU_SC32_SHOWHANDLE, 0);
+	runQueue(QU_SC32_SHOWHANDLE, 0);
 
-	g_vars->scene32_button->changeStatics2(ST_BTN32_ON);
+	g_vars->scene32_button->setStatic(ST_BTN32_ON);
 }
 
 void sceneHandler32_animateCactus() {
 	if (g_nmi->_aniMan->_statics->_staticsId != ST_MAN32_SIT)
-		chainQueue(QU_CTS_GROW, 1);
+		runQueue(QU_CTS_GROW, 1);
 	else
-		chainQueue(QU_CTS_GROWMAN, 1);
+		runQueue(QU_CTS_GROWMAN, 1);
 
 	g_vars->scene32_cactusCounter = -1;
 	g_vars->scene32_cactusIsGrowing = true;
 }
 
-void sceneHandler32_ladderLogic(ExCommand *cmd) {
-	MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(QU_SC32_FROMLADDER), 0, 0);
+void sceneHandler32_ladderLogic(Command *cmd) {
+	MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(QU_SC32_FROMLADDER), 0, 0);
 
 	if (g_nmi->_currentScene->getPictureObjectIdAtPos(cmd->_sceneClickX, cmd->_sceneClickY) != PIC_SC32_LADDER)
-		mq->addExCommandToEnd(cmd->createClone());
+		mq->addCommandToEnd(cmd->createClone());
 
 	mq->setFlags(mq->getFlags() | 1);
 
-	g_nmi->_aniMan->changeStatics2(ST_MAN_STANDLADDER);
-	if (!mq->chain(g_nmi->_aniMan))
+	g_nmi->_aniMan->setStatic(ST_MAN_STANDLADDER);
+	if (!mq->run(g_nmi->_aniMan))
 		delete mq;
 
 	g_vars->scene32_dudeOnLadder = false;
 
 	getCurrSceneSc2MotionController()->activate();
-	getGameLoaderInteractionController()->enableFlag24();
+	getGameLoaderInteractionController()->enable();
 }
 
-void sceneHandler32_potLogic(ExCommand *cmd) {
+void sceneHandler32_potLogic(Command *cmd) {
 	if (g_vars->scene32_cactusCounter < 0 || g_vars->scene32_cactusCounter > 20) {
 		MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
 
-		ExCommand *ex = new ExCommand(ANI_MAN, 1, MV_MAN32_STANDUP, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(ANI_MAN, 1, MV_MAN32_STANDUP, 0, 0, 0, 1, 0, 0, 0);
 
 		ex->_excFlags |= 2;
 
-		mq->addExCommandToEnd(ex);
+		mq->addCommandToEnd(ex);
 
-		StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
+		AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
 
 		if (!ani || ani->_id != ANI_KADKA)
-			mq->addExCommandToEnd(cmd->createClone());
+			mq->addCommandToEnd(cmd->createClone());
 
 		mq->setFlags(mq->getFlags() | 1);
-		mq->chain(nullptr);
+		mq->run(nullptr);
 
 		getCurrSceneSc2MotionController()->activate();
-		getGameLoaderInteractionController()->enableFlag24();
+		getGameLoaderInteractionController()->enable();
 
 		g_vars->scene32_dudeIsSitting = false;
 	}
 }
 
-int sceneHandler32(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler32(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch (cmd->_messageNum) {
@@ -291,11 +291,11 @@ int sceneHandler32(ExCommand *cmd) {
 		break;
 
 	case MSG_SC32_TRUBATOBACK:
-		g_nmi->_currentScene->getPictureObjectById(PIC_SC32_RTRUBA, 0)->_priority = 20;
+		g_nmi->_currentScene->findPictureObjectById(PIC_SC32_RTRUBA, 0)->_z = 20;
 		break;
 
 	case MSG_SC32_TRUBATOFRONT:
-		g_nmi->_currentScene->getPictureObjectById(PIC_SC32_RTRUBA, 0)->_priority = 0;
+		g_nmi->_currentScene->findPictureObjectById(PIC_SC32_RTRUBA, 0)->_z = 0;
 		break;
 
 	case MSG_LIFT_CLICKBUTTON:
@@ -339,7 +339,7 @@ int sceneHandler32(ExCommand *cmd) {
 		g_vars->scene32_dudeOnLadder = true;
 
 		getCurrSceneSc2MotionController()->deactivate();
-		getGameLoaderInteractionController()->disableFlag24();
+		getGameLoaderInteractionController()->disable();
 		break;
 
 	case MSG_SC6_BTNPUSH:
@@ -356,7 +356,7 @@ int sceneHandler32(ExCommand *cmd) {
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x < g_nmi->_sceneRect.left + 200)
 				g_nmi->_currentScene->_x = x - 300 - g_nmi->_sceneRect.left;
@@ -370,16 +370,16 @@ int sceneHandler32(ExCommand *cmd) {
 		if (!g_vars->scene32_flag->_movement) {
 			if (g_vars->scene32_flagIsWaving) {
 				if (g_vars->scene32_flag->_statics->_staticsId == ST_FLG_RIGHT)
-					g_vars->scene32_flag->startAnim(MV_FLG_CYCLER, 0, -1);
+					g_vars->scene32_flag->startMovement(MV_FLG_CYCLER, 0, -1);
 				else if (g_vars->scene32_flag->_statics->_staticsId == ST_FLG_LEFT)
-					g_vars->scene32_flag->startAnim(MV_FLG_CYCLEL, 0, -1);
+					g_vars->scene32_flag->startMovement(MV_FLG_CYCLEL, 0, -1);
 			}
 
 			if (g_vars->scene32_flagNeedsStopping && !g_vars->scene32_flagIsWaving) {
 				if (g_vars->scene32_flag->_statics->_staticsId == ST_FLG_RIGHT)
-					g_vars->scene32_flag->startAnim(MV_FLG_STOPR, 0, -1);
+					g_vars->scene32_flag->startMovement(MV_FLG_STOPR, 0, -1);
 				else if (g_vars->scene32_flag->_statics->_staticsId == ST_FLG_LEFT)
-					g_vars->scene32_flag->startAnim(MV_FLG_STOPL, 0, -1);
+					g_vars->scene32_flag->startMovement(MV_FLG_STOPL, 0, -1);
 
 				g_vars->scene32_flagNeedsStopping = false;
 			}
@@ -389,13 +389,13 @@ int sceneHandler32(ExCommand *cmd) {
 			if (g_vars->scene32_cactusCounter > 0)
 				--g_vars->scene32_cactusCounter;
 
-			g_nmi->_behaviorManager->updateBehaviors();
+			g_nmi->_behaviorManager->update();
 
 			g_nmi->startSceneTrack();
 		} else {
 			sceneHandler32_animateCactus();
 
-			g_nmi->_behaviorManager->updateBehaviors();
+			g_nmi->_behaviorManager->update();
 
 			g_nmi->startSceneTrack();
 
@@ -405,17 +405,17 @@ int sceneHandler32(ExCommand *cmd) {
 	case 29:
 		if (g_vars->scene32_dudeOnLadder) {
 			sceneHandler32_ladderLogic(cmd);
-			cmd->_messageKind = 0;
+			cmd->_cmd = 0;
 			break;
 		}
 
 		if (!g_vars->scene32_dudeIsSitting || g_nmi->_aniMan->_movement) {
-			StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
+			AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
 
 			if (ani && ani->_id == ANI_LIFTBUTTON) {
 				g_nmi->lift_animateButton(ani);
 
-				cmd->_messageKind = 0;
+				cmd->_cmd = 0;
 				break;
 			}
 
@@ -430,7 +430,7 @@ int sceneHandler32(ExCommand *cmd) {
 		if (!g_vars->scene32_cactusIsGrowing)
 			sceneHandler32_potLogic(cmd);
 
-		cmd->_messageKind = 0;
+		cmd->_cmd = 0;
 
 		break;
 

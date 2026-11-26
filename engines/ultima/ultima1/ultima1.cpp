@@ -1,0 +1,240 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/config-manager.h"
+#include "common/debug-channels.h"
+#include "common/engine_data.h"
+#include "common/events.h"
+#include "common/savefile.h"
+#include "common/system.h"
+#include "engines/util.h"
+#include "audio/decoders/raw.h"
+#include "graphics/paletteman.h"
+#include "ultima/ultima1/ultima1.h"
+#include "ultima/ultima1/console.h"
+#include "ultima/ultima1/sound_effects.h"
+#include "ultima/ultima1/gfx/dungeon_pictures.h"
+#include "ultima/shared/engine/graphics_options.h"
+#include "ultima/ultima1/gfx/font.h"
+#include "ultima/ultima1/views/views.h"
+#include "ultima/ultima1/views/map.h"
+#include "ultima/ultima1/metaengine.h"
+
+namespace Ultima {
+namespace Ultima1 {
+
+constexpr int SAVEGAME_VERSION = 1;
+
+Ultima1Engine *g_engine;
+
+Ultima1Engine::Ultima1Engine(OSystem *syst, const Ultima::UltimaGameDescription *gameDesc) :
+		Engine(syst), Shared::Events("ultima1"), _gameDescription(gameDesc) {
+	g_engine = this;
+}
+
+
+Ultima1Engine::~Ultima1Engine() {
+	Gfx::DungeonPictures::unload();
+	_mixer->stopHandle(_effectHandle);
+}
+
+uint32 Ultima1Engine::getFeatures() const {
+	return _gameDescription->desc.flags;
+}
+
+Common::String Ultima1Engine::getGameId() const {
+	return _gameDescription->desc.gameId;
+}
+
+// The graphics mode stored in the configuration, falling back to EGA if it's
+// missing or stale
+static Data::RenderMode configuredRenderMode() {
+	int mode = Shared::configuredGraphicsMode(Data::RENDER_EGA);
+	return (mode >= 0 && mode < Data::RENDER_MODE_COUNT) ?
+		(Data::RenderMode)mode : Data::RENDER_EGA;
+}
+
+Common::Error Ultima1Engine::run() {
+	MetaEngine::setKeybindingMode(KBMODE_MINIMAL);
+
+	// Initialize 320x200 paletted graphics mode
+	initGraphics(320, 200);
+
+	// The pictures for the dungeons are in the engine data, but the game doesn't need them
+	Common::U32String errMsg;
+	if (!Common::load_engine_data("ultima.dat", "ultima1", 1, 0, errMsg))
+		warning("No dungeon pictures: %s", errMsg.encode().c_str());
+	Gfx::DungeonPictures::setEnabled(Shared::configuredOption("picture_dungeons", true));
+
+	_renderMode = configuredRenderMode();
+	_colors.set(_renderMode);
+	Data::setPalette(_renderMode);
+
+	// Set the engine's debugger console
+	setDebugger(new Console());
+
+	// Load needed data
+	_map.init();
+
+	Views::Views views;
+	addView("Startup");
+	runGame();
+	(void)views;		// Suppress any warnings of unused local
+
+	return Common::kNoError;
+}
+
+void Ultima1Engine::returnToMainMenu() {
+	replaceView("MainMenu", true);
+}
+
+bool Ultima1Engine::canSaveGameStateCurrently(Common::U32String *) {
+	// Only allow saving when any of the different map views are active
+	return dynamic_cast<Views::Map *>(focusedView()) != nullptr;
+}
+
+bool Ultima1Engine::canLoadGameStateCurrently(Common::U32String *) {
+	// Allow loading savegames anywhere
+	return true;
+}
+
+Common::Error Ultima1Engine::syncGame(Common::Serializer &s) {
+	s.syncVersion(SAVEGAME_VERSION);
+
+	_savegame.synchronize(s);
+
+	if (s.isLoading()) {
+		_creaturesCount = 0;
+		for (int i = 1; i <= _savegame._overworldEntityCount; ++i) {
+			int type = _savegame._overworldEntities[i]._type;
+			if (type >= Data::TILE_FIRST_MONSTER && type <= Data::TILE_LAST_MONSTER)
+				++_creaturesCount;
+		}
+
+		// Space flight momentum isn't saved, so a ship doesn't keep thrusting from before the load
+		_G(sectorDriftX) = 0;
+		_G(sectorDriftY) = 0;
+		_G(shipExhaustCountdown) = 0;
+
+		_G(map).load(_G(savegame)._mapNum);
+	}
+
+	// Locations save their map as well, so changes to it like an unlocked cell aren't lost
+	if (_G(logic)->isPersisted())
+		_G(map).synchronize(s);
+
+	// The monsters and the rest of a dungeon level are kept too, rather than being made again
+	if (_G(map)._mapType == Data::MAPTYPE_DUNGEON)
+		_G(dungeon).synchronize(s);
+
+	return Common::kNoError;
+}
+
+bool Ultima1Engine::savegamesExist() const {
+	Common::String slotName = getSaveStateName(1);
+	Common::InSaveFile *saveFile = g_system->getSavefileManager()->openForLoading(slotName);
+	bool result = saveFile != nullptr;
+
+	delete saveFile;
+	return result;
+}
+
+void Ultima1Engine::playFX(int num) {
+	if (_savegame._soundOn)
+		queueEffect(SoundEffects::render(num));
+}
+
+void Ultima1Engine::queueEffect(const Common::Array<byte> &samples) {
+	// Don't let effects pile up behind the action
+	constexpr int MAX_QUEUED = 6;
+
+	if (samples.empty())
+		return;
+
+	if (!_mixer->isSoundHandleActive(_effectHandle)) {
+		_effectStream = Audio::makeQueuingAudioStream(SoundEffects::SAMPLE_RATE, false);
+		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_effectHandle, _effectStream);
+	}
+
+	if (_effectStream->numQueuedStreams() >= MAX_QUEUED)
+		return;
+
+	byte *data = (byte *)malloc(samples.size());
+	if (!data)
+		return;
+
+	memcpy(data, &samples[0], samples.size());
+	_effectStream->queueBuffer(data, samples.size(), DisposeAfterUse::YES, Audio::FLAG_UNSIGNED);
+}
+
+void Ultima1Engine::setHitFlash(bool on) {
+	if (on)
+		Data::setHitFlashPalette(_renderMode);
+	else
+		Data::setPalette(_renderMode);
+
+	updateScreen();
+}
+
+void Ultima1Engine::pauseForEffect(int num) {
+	pauseMillis(SoundEffects::render(num).size() * 1000 / SoundEffects::SAMPLE_RATE);
+}
+
+void Ultima1Engine::flashScreen(int effectNum) {
+	setHitFlash(true);
+	playFX(effectNum);
+	pauseForEffect(effectNum);
+	setHitFlash(false);
+}
+
+void Ultima1Engine::pauseMillis(uint32 millis) {
+	g_system->delayMillis(millis);
+}
+
+void Ultima1Engine::applyGameSettings() {
+	// The graphics can be changed from the in-game options dialog
+	Gfx::DungeonPictures::setEnabled(Shared::configuredOption("picture_dungeons", true));
+	setRenderMode(configuredRenderMode());
+
+	// The dungeon pictures can be turned on and off without changing the mode
+	if (focusedView())
+		focusedView()->redraw();
+}
+
+void Ultima1Engine::setRenderMode(Data::RenderMode mode) {
+	if (mode == _renderMode)
+		return;
+
+	_renderMode = mode;
+	_colors.set(mode);
+	Data::setPalette(mode);
+	_map.loadGraphics();
+
+	if (focusedView())
+		focusedView()->redraw();
+}
+
+Graphics::Font *Ultima1Engine::createFont() const {
+	return new Gfx::Font();
+}
+
+} // namespace Ultima1
+} // namespace Ultima

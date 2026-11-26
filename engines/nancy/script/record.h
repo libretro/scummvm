@@ -35,7 +35,41 @@ struct NancyInput;
 
 namespace Script {
 
+class Animator;
+class BlendStages;
+class GraphNode;
 class SceneContext;
+struct RecordNodeState;
+
+// The types of records a script can make, in the order of their names
+enum RecordType {
+	kRecordNavLogic		= 0,
+	kRecordSummary		= 1,
+	kRecordOverlay		= 2,
+	kRecordMovie		= 3,
+	kRecordSound		= 4,
+	kRecordVideoConvo	= 5,
+	kRecordSoundConvo	= 6,
+	kRecordText			= 7,
+	kRecordOverride		= 8,
+	kRecordParticle		= 9,
+	kRecordAnimOverlay	= 10,
+	kRecordPhysics		= 11,	// Nancy21
+	kRecordXsheet		= 12,	// Nancy22
+	kRecordTransformer	= 13,	// Nancy22
+	kRecordTimer		= 14,	// Nancy24
+	kRecordHotspot		= 15,	// Nancy26
+	kRecordSink			= 16,
+	kRecordButton		= 17,
+	kRecordEditBox		= 18,
+	kRecordRadioButton	= 19,
+	kRecordCheckBox		= 20,
+	kRecordSlider		= 21,
+	kRecordOverlayCombiner	= 22,	// Nancy29
+	kRecordFlashlight	= 23,	// Lights, Camera, Curses
+
+	kNumRecordTypes		= 24
+};
 
 // What the player does that records get told about
 enum RecordEvent {
@@ -74,6 +108,13 @@ public:
 	virtual ~Record();
 
 	const char *getTypeName() const { return _typeName; }
+
+	// Counts up as records are made, for the order of what they draw
+	uint32 getCreationOrder() const { return _creationOrder; }
+
+	// Which of the types above the record is
+	virtual RecordType getType() const = 0;
+
 	SceneContext &getContext() const { return _context; }
 
 	// Takes over the fields of the table that made the record
@@ -97,6 +138,9 @@ public:
 	// Makes a record that ran start over. Only some kinds can.
 	bool reset();
 
+	// Nancy22: works like reset(), but makes the record active as well
+	bool restart();
+
 	// Draws an active record right away, where its transform puts it on the
 	// screen. Scripts do this for what hangs off the cursor.
 	void render();
@@ -116,10 +160,22 @@ public:
 	// Whether messages sent to the given name are for this record
 	virtual bool hasMessagingName(const Common::String &name) { return false; }
 
-	bool isActive() const { return _isActive && !_isDone; }
+	bool isActive() const;
 	bool isDone() const { return _isDone; }
+
+	// Lights, Camera, Curses: the stream of the record was paused. The record
+	// stays where it is and is still drawn, but doesn't run or hear the player.
+	void setStreamPaused(bool isPaused);
+	bool isStreamPaused() const { return _isStreamPaused; }
+
+	// Lights, Camera, Curses: a masked record doesn't show where a Flashlight
+	// record drawn before it lights the scene up
+	bool isMasked() const { return _isMasked; }
 	bool hasStarted() const { return _hasStarted; }
-	double getZ() const { return _z; }
+	bool hasRunOnce() const { return _hasRunOnce; }
+	// Counted from the node the record is under, when it is under one
+	double getZ() const;
+	double getLocalZ() const { return _z; }
 
 	// Puts the record no closer to the player than the given z
 	void limitZ(double z);
@@ -128,6 +184,14 @@ public:
 	// The key is at stack index 2, and a new value at 3.
 	int getScriptField();
 	int setScriptField();
+
+	// What scripts stored in the record under a name, which the fields of its
+	// kind don't go through. AR:GetActualField (Nancy24) reads it.
+	void pushStoredValue(const char *name);
+
+	// Nancy24: clears everything scripts stored in the record, the function
+	// that says whether it is active as well
+	void clean();
 
 	// Calls a function a script stored in the record, with the record itself in
 	// front of the arguments on the stack. Returns false when there is no such
@@ -138,21 +202,144 @@ public:
 	// the function a script gave the record for it, or to what the kind of
 	// record does by itself. Positions are in the coordinates of the viewport.
 	// A click, a key and the cursor are up to the first record that takes them.
-	void sendMouseMove(const ScriptPoint &point, bool inViewport);
-	bool sendChangeCursor(const ScriptPoint &point, bool inViewport, uint &cursorType, bool &isHot);
-	bool sendMouseEvent(RecordEvent event, const ScriptPoint &point, bool inViewport);
+	void sendMouseMove(const Common::Point32 &point, bool inViewport);
+	bool sendChangeCursor(const Common::Point32 &point, bool inViewport, uint &cursorType, bool &isHot);
+	bool sendMouseEvent(RecordEvent event, const Common::Point32 &point, bool inViewport);
 	bool sendKeyEvent(RecordEvent event, Common::KeyCode key);
+	void sendMouseScroll(const Common::Point32 &point, bool inViewport, int notches);
 
-	// Where the record puts what it shows, for the kinds that show something
-	const ScriptMatrix &getTransform() const { return _transform; }
+	// Where the record puts what it shows, for the kinds that show something,
+	// after the nodes it is under moved it
+	ScriptMatrix getTransform() const;
+
+	// The record's own, before the nodes it is under: the product of its blend
+	// stages when it has any
+	ScriptMatrix getLocalTransform() const;
+
+	// Whether what the record draws gets shown: while it is visible from Nancy26
+	// on, while it is active before
+	bool isShown() const;
+
+	// Nancy26: the part of the screen the Transformers the record is under let it
+	// draw in; empty for all of it
+	Common::Rect getScreenClip() const;
+
+	// A color what the record draws gets multiplied with, made as see-through
+	// as the record is
+	uint32 applyAlpha(uint32 modColor) const;
+
+	// The same, for a picture that gets drawn now. Nancy26 draws it again once
+	// the record is made more or less see-through.
+	uint32 takeModColor(uint32 modColor);
+	bool hasAlphaChanged() const;
+
+	// The blend stages of the record: Nancy22 has them in Transformers, and
+	// Nancy26 in every record
+	BlendStages &getStages();
+	virtual void onStagesChanged();
+
+#ifdef ENABLE_NANCY_V5
+	// Nancy26: works like reset(), but leaves the record inactive
+	bool resetInactive();
+
+	// Nancy26 orders records like a tree: a record's z only places it among the
+	// records under the same node, and a node with all it holds goes where its
+	// own z puts it. The scene works out the place of every record in that
+	// order, and getZ() then gives a z that keeps it.
+	void setDrawRank(int rank);
+
+	// Nancy26: every record is a node of a tree, which can be enabled (gets the
+	// player's input), visible (gets drawn) and paused (doesn't run), and can be
+	// see-through. A record is each of them when it says so itself, and the
+	// Transformers it is attached to don't say otherwise. "active" stands for
+	// all three: enabled, visible and not paused.
+	bool isNodeEnabled() const;
+	bool isNodeVisible() const;
+	bool isNodePaused() const;
+	double getAlpha() const;
+	void setLocalEnabled(bool isEnabled);
+	void setLocalVisible(bool isVisible);
+	void setLocalPaused(bool isPaused);
+	void setActiveFlags(bool isActive);
+
+	// Nancy26: the order keys go to the records in, highest first
+	double getKeyZ() const;
+
+	// Nancy26: the record's own transform changed, by its stages or a script
+	virtual void onLocalTransformChanged();
+
+	// Nancy29: the animator that moves, rotates, scales and fades the record,
+	// and the transform and the alpha that the record gets from it
+	Animator *getAnimator() const;
+	double getLocalAlpha() const;
+	void setAnimatedTransform(const ScriptMatrix &transform);
+	void setAnimatedAlpha(double alpha);
+
+	// Nancy26: the records the mouse can be over, which take the clicks. The
+	// point is in the coordinates of the screen. A button is 0 for the left one
+	// and 1 for the right one.
+	virtual bool isMouseRegion() const { return false; }
+	virtual bool hitTest(const Common::Point32 &point) const { return false; }
+	virtual void setMouseOver(bool isOver) {}
+	virtual bool pressRegion(int button) { return false; }	// returns whether it took the click
+	virtual void releaseRegion(int button) {}
+	virtual bool getRegionCursor(uint &cursorType, bool &isHot) const { return false; }
+
+	// Nancy26: the mouse wheel turned while the mouse was at the point, in the
+	// coordinates of the screen. Returns whether the record took it.
+	virtual bool scrollRegion(const Common::Point32 &point, int notches) { return false; }
+
+	// Nancy26: whether the keys go no further than this record
+	virtual bool capturesKeys() const { return false; }
+
+	// Nancy26: a key that went down, for the records that type; returns
+	// whether the record took it
+	virtual bool handleKey(Common::KeyCode key, uint16 ascii) { return false; }
+
+	// Nancy26: the name the record goes by of its own, and the one its
+	// messages come from
+	const Common::String &getUniqueAlias() const;
+	const Common::String &getName() const;
+
+	// Nancy26: a message another record sent, from the Lua state L, with numArgs
+	// arguments from firstArg on. Leaves what the record's Receive function
+	// returned on the stack of L, and returns how many values that is.
+	int receiveMessage(lua_State *L, const Common::String &sender, const Common::String &action, int firstArg, int numArgs);
+#endif
+
+	// Nancy21: puts the record under a node; null for none
+	GraphNode *getParentNode() const { return _parentNode; }
+	void setParentNode(GraphNode *node);
+
+	// A node above the record changed its z or its transform
+	void onParentNodeChanged();
 
 	// Shows or hides what the record draws, once the records of a frame have run
 	virtual void updateGraphics() {}
+
+	// Puts what the record draws back on the screen, after a change of the
+	// state of the engine took everything off it
+	virtual void registerGraphics() {}
 
 	// Enhancement: the player can skip what a scene plays. Whether the record is
 	// something that can be skipped, and what it does when the skipping begins.
 	virtual bool isSkippable() const { return false; }
 	virtual void onSkip() {}
+
+	// A record that ended during a skip doesn't keep it going when the scripts
+	// start it over, as the random fidget movies do
+	bool canBeSkipped() const { return !_hasEndedInSkip && isSkippable(); }
+	void onSkipEnded() { _hasEndedInSkip = false; }
+
+	// Enhancement: what a character says can be skipped as well. Returns
+	// whether the record was saying something.
+	virtual bool skipSpeech() { return false; }
+
+	// For the debugger: what the scripts gave the record, as "name = value"
+	void describeFields(Common::Array<Common::String> &lines);
+
+	// For the console: what the kind of record is up to, beyond its fields
+	virtual void describeState(Common::Array<Common::String> &lines) const {}
 
 protected:
 	lua_State *getLua() const;
@@ -163,6 +350,9 @@ protected:
 	// What the record does when no script took its place
 	virtual void runOnce() {}
 	virtual void run(double sceneTime, double elapsedTime) {}
+
+	// Called every frame, whether the record is active or not
+	virtual void onFrame() {}
 	virtual void onActivation() {}
 	virtual void onDeactivation() {}
 	virtual void onZChanged() {}
@@ -171,13 +361,19 @@ protected:
 	// Whether the record can start over, after getting itself ready for it
 	virtual bool prepareReset() { return false; }
 
+	// A paused record doesn't run at all, not even once, until it goes on
+	virtual bool isPaused() const { return false; }
+
+	// What plays on by itself holds still with the stream of the record
+	virtual void onStreamPaused(bool isPaused) {}
+
 	// Whether the functions of the scripts take the place of what the record does
 	// by itself: Run, Render, and everything the player does
 	virtual bool isScripted() const { return false; }
 
-	virtual void onMouseMove(const ScriptPoint &point, bool inViewport) {}
-	virtual bool getCursor(const ScriptPoint &point, bool inViewport, uint &cursorType, bool &isHot) { return false; }
-	virtual bool onMouseEvent(RecordEvent event, const ScriptPoint &point, bool inViewport) { return false; }
+	virtual void onMouseMove(const Common::Point32 &point, bool inViewport) {}
+	virtual bool getCursor(const Common::Point32 &point, bool inViewport, uint &cursorType, bool &isHot) { return false; }
+	virtual bool onMouseEvent(RecordEvent event, const Common::Point32 &point, bool inViewport) { return false; }
 
 	// Whether the kind of record has a "transform", and what to do when it changes
 	virtual bool hasTransform() const { return false; }
@@ -188,8 +384,6 @@ protected:
 	virtual bool getField(const Common::String &key) { return false; }
 	virtual bool setField(const Common::String &key) { return false; }
 
-	// What scripts stored in the record
-	void pushStoredValue(const char *name);
 	void storeValue(const char *name);	// pops the value
 
 private:
@@ -197,19 +391,41 @@ private:
 
 	SceneContext &_context;
 	const char *_typeName;
+	uint32 _creationOrder;
 
 	double _z = 0.0;
 	ScriptMatrix _transform;
+	GraphNode *_parentNode = nullptr;
 	bool _hasActiveFunction = false;
 	bool _hasStarted = false;
 	bool _isActive = true;
 	bool _wasActive = false;
 	bool _isDone = false;
+	bool _isFinishing = false;	// while OnDone runs
+	bool _isStreamPaused = false;
+	bool _isMasked = false;
+	bool _hasEndedInSkip = false;
 	bool _hasRunOnce = false;
 
 	bool _isScriptOwned = false;
 	uint _numObjects = 0;	// the objects standing for the record that Lua still has
 	bool _isDropped = false;
+
+	BlendStages *_stages = nullptr;
+
+#ifdef ENABLE_NANCY_V5
+	// Nancy26: what makes the record a node of the tree, and what goes with it.
+	// The other games have none.
+	void createNodeState();
+	void destroyNodeState();
+	void readNodeFields(int tableIndex);
+	void updateNode(double sceneTime, double elapsedTime);
+	int getNodeScriptField(const Common::String &key);
+	bool getNodeField(const Common::String &key);
+	bool setNodeField(const Common::String &key);
+
+	RecordNodeState *_nodeState = nullptr;
+#endif
 };
 
 // Makes the "AR" object, and the types of the records
@@ -217,6 +433,12 @@ void registerRecordAPI(lua_State *L);
 
 // The record a script handed in, or a script error
 Record *checkRecord(lua_State *L, int index);
+
+// The record a value stands for, or null when it is something else
+Record *toRecord(lua_State *L, int index);
+
+// For the debugger: a value of the scripts as text
+Common::String describeValue(lua_State *L, int index);
 
 } // End of namespace Script
 } // End of namespace Nancy

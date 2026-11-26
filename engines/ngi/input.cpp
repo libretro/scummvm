@@ -32,7 +32,7 @@
 
 namespace NGI {
 
-InputController::InputController() {
+CursorController::CursorController() {
 	g_nmi->_inputController = this;
 
 	_flag = 0;
@@ -51,7 +51,7 @@ InputController::InputController() {
 	_cursorItemPicture = nullptr;
 }
 
-InputController::~InputController() {
+CursorController::~CursorController() {
 	removeMessageHandler(126, -1);
 
 	g_nmi->_inputController = nullptr;
@@ -60,7 +60,7 @@ InputController::~InputController() {
 		delete _cursorsArray[i];
 }
 
-void InputController::setInputDisabled(bool state) {
+void CursorController::setInputDisabled(bool state) {
 	_flag = state;
 	g_nmi->_inputDisabled = state;
 }
@@ -69,8 +69,8 @@ void setInputDisabled(bool state) {
 	g_nmi->_inputController->setInputDisabled(state);
 }
 
-void InputController::addCursor(CursorInfo *cursor) {
-	CursorInfo *newc = new CursorInfo(*cursor);
+void CursorController::addCursor(Cursor *cursor) {
+	Cursor *newc = new Cursor(*cursor);
 	const Dims dims = cursor->picture->getDimensions();
 
 	newc->width = dims.x;
@@ -82,30 +82,30 @@ void InputController::addCursor(CursorInfo *cursor) {
 	_cursorsArray.push_back(newc);
 }
 
-void InputController::setCursorMode(bool enabled) {
+void CursorController::setCursorMode(bool enabled) {
 	if (enabled)
 		_inputFlags |= 1;
 	else
 		_inputFlags &= ~1;
 }
 
-void InputController::drawCursor(int x, int y) {
+void CursorController::render(int x, int y) {
 	if (_cursorIndex == -1)
 		return;
 
-	_cursorBounds.left = g_nmi->_sceneRect.left + x - _cursorsArray[_cursorIndex]->hotspotX;
-	_cursorBounds.top = g_nmi->_sceneRect.top + y - _cursorsArray[_cursorIndex]->hotspotY;
+	_cursorBounds.left = g_nmi->_sceneRect.left + x - _cursorsArray[_cursorIndex]->ofsX;
+	_cursorBounds.top = g_nmi->_sceneRect.top + y - _cursorsArray[_cursorIndex]->ofsY;
 	_cursorBounds.right = _cursorBounds.left + _cursorsArray[_cursorIndex]->width;
 	_cursorBounds.bottom = _cursorBounds.top + _cursorsArray[_cursorIndex]->height;
 
-	_cursorsArray[_cursorIndex]->picture->draw(_cursorBounds.left, _cursorBounds.top, 0, 0);
+	_cursorsArray[_cursorIndex]->picture->render(_cursorBounds.left, _cursorBounds.top, 0, 0);
 
 	if (_cursorItemPicture)
-		_cursorItemPicture->draw(_cursorBounds.left + _cursorsArray[_cursorIndex]->itemPictureOffsX,
+		_cursorItemPicture->render(_cursorBounds.left + _cursorsArray[_cursorIndex]->itemPictureOffsX,
 								 _cursorBounds.top + _cursorsArray[_cursorIndex]->itemPictureOffsY, 0, 0);
 }
 
-void InputController::setCursor(int cursorId) {
+void CursorController::setCursor(int cursorId) {
 	if (_cursorIndex == -1 || _cursorsArray[_cursorIndex]->pictureId != cursorId) {
 		_cursorIndex = -1;
 
@@ -182,7 +182,7 @@ void NGIEngine::defHandleKeyDown(int key) {
 }
 
 void NGIEngine::winArcade() {
-	ExCommand *ex = new ExCommand(0, 17, MSG_CMN_WINARCADE, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex = new Command(0, 17, MSG_CMN_WINARCADE, 0, 0, 0, 1, 0, 0, 0);
 	ex->_excFlags |= 3;
 
 	ex->postMessage();
@@ -190,10 +190,10 @@ void NGIEngine::winArcade() {
 }
 
 void NGIEngine::updateCursorCommon() {
-	GameObject *ani = _currentScene->getStaticANIObjectAtPos(_mouseVirtX, _mouseVirtY);
+	GameObject *ani = _currentScene->findAniObjectAtPos(_mouseVirtX, _mouseVirtY);
 
-	PictureObject *pic = _currentScene->getPictureObjectAtPos(_mouseVirtX, _mouseVirtY);
-	if (!ani || (pic && pic->_priority < ani->_priority))
+	PictureObject *pic = _currentScene->findPictureObjectAtPos(_mouseVirtX, _mouseVirtY);
+	if (!ani || (pic && pic->_z < ani->_z))
 		ani = pic;
 
 	int selId = getGameLoaderInventory()->getSelectedItemId();
@@ -218,7 +218,7 @@ void NGIEngine::updateCursorCommon() {
 			_cursorId = PIC_CSR_DEFAULT_INV;
 			return;
 		}
-		if (_objectIdAtCursor == ANI_LIFTBUTTON && ani->_objtype == kObjTypeStaticANIObject && lift_getButtonIdP(static_cast<StaticANIObject *>(ani)->_statics->_staticsId)) {
+		if (_objectIdAtCursor == ANI_LIFTBUTTON && ani->_objtype == kObjTypeStaticANIObject && lift_getButtonIdP(static_cast<AniObject *>(ani)->_statics->_staticsId)) {
 			_cursorId = PIC_CSR_LIFT;
 			return;
 		}
@@ -270,15 +270,15 @@ void NGIEngine::initArcadeKeys(const char *varname) {
 	}
 }
 
-void NGIEngine::processArcade(ExCommand *cmd) {
+void NGIEngine::processArcade(Command *cmd) {
 	if (!g_nmi->_aniMan2)
 		return;
 
 	int idx;
 
-	if (cmd->_sceneClickX <= g_nmi->_aniMan2->_ox) {
+	if (cmd->_sceneClickX <= g_nmi->_aniMan2->_x) {
 		for (idx = (int)_arcadeKeys.size() - 1; idx >= 0; idx--) {
-			if (_arcadeKeys[idx].x < g_nmi->_aniMan2->_ox)
+			if (_arcadeKeys[idx].x < g_nmi->_aniMan2->_x)
 				break;
 		}
 
@@ -286,7 +286,7 @@ void NGIEngine::processArcade(ExCommand *cmd) {
 			return;
 	} else {
 		for (idx = 0; idx < (int)_arcadeKeys.size(); idx++) {
-			if (_arcadeKeys[idx].x > g_nmi->_aniMan2->_ox)
+			if (_arcadeKeys[idx].x > g_nmi->_aniMan2->_x)
 				break;
 		}
 
@@ -305,11 +305,11 @@ void NGIEngine::setArcadeOverlay(int picId) {
 	_arcadeOverlayX = 800;
 	_arcadeOverlayY = 545;
 
-	_arcadeOverlayHelper = accessScene(SC_INV)->getPictureObjectById(PIC_CSR_HELPERBGR, 0);
-	_arcadeOverlay = accessScene(SC_INV)->getPictureObjectById(picId, 0);
+	_arcadeOverlayHelper = findScene(SC_INV)->findPictureObjectById(PIC_CSR_HELPERBGR, 0);
+	_arcadeOverlay = findScene(SC_INV)->findPictureObjectById(picId, 0);
 
-	const Dims dims = _arcadeOverlay->getDimensions();
-	const Dims dims2 = _arcadeOverlayHelper->getDimensions();
+	const Dims dims = _arcadeOverlay->getFullSize();
+	const Dims dims2 = _arcadeOverlayHelper->getFullSize();
 
 	// TODO: Only Y gets abs?
 	_arcadeOverlayMidX = (dims2.x - dims.x) / 2;
@@ -317,8 +317,8 @@ void NGIEngine::setArcadeOverlay(int picId) {
 }
 
 int NGIEngine::drawArcadeOverlay(int adjust) {
-	_arcadeOverlayHelper->drawAt(_sceneRect.left + _arcadeOverlayX, _sceneRect.top + _arcadeOverlayY);
-	_arcadeOverlay->drawAt(_sceneRect.left + _arcadeOverlayX + _arcadeOverlayMidX, _sceneRect.top + _arcadeOverlayY + _arcadeOverlayMidY);
+	_arcadeOverlayHelper->renderAtPos(_sceneRect.left + _arcadeOverlayX, _sceneRect.top + _arcadeOverlayY);
+	_arcadeOverlay->renderAtPos(_sceneRect.left + _arcadeOverlayX + _arcadeOverlayMidX, _sceneRect.top + _arcadeOverlayY + _arcadeOverlayMidY);
 
 	if (adjust) {
 		if (_arcadeOverlayX > 745) {

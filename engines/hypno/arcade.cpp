@@ -47,6 +47,8 @@ void HypnoEngine::splitArcadeFile(const Common::String &filename, Common::String
 		if (x == 'X' && p == '\n') {
 			while (!file.eos()) {
 				x = file.readByte();
+				if (file.eos())
+					break;
 				if (x == 'Y' && list.size() > 0 && list[list.size()-1] == '\n')
 					break;
 				list += x;
@@ -541,6 +543,12 @@ void HypnoEngine::runArcade(ArcadeShooting *arc) {
 				_mask = _masks->decoder->decodeNextFrame();
 			if (_additionalVideo && _additionalVideo->decoder->needsUpdate())
 				_additionalVideo->decoder->decodeNextFrame(); // only audio?
+
+			// Lower the music while the speech video is playing
+			if (_additionalVideo && !_additionalVideo->decoder->endOfVideo())
+				_mixer->setChannelVolume(_musicHandle, Audio::Mixer::kMaxChannelVolume / 3);
+			else
+				_mixer->setChannelVolume(_musicHandle, Audio::Mixer::kMaxChannelVolume);
 		}
 
 		if (_health <= 0) {
@@ -766,6 +774,7 @@ void HypnoEngine::runArcade(ArcadeShooting *arc) {
 		skipVideo(*_additionalVideo);
 		delete _additionalVideo;
 		_additionalVideo = nullptr;
+		_mixer->setChannelVolume(_musicHandle, Audio::Mixer::kMaxChannelVolume);
 	}
 
 	_timerStarted = false;

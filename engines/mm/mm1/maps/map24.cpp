@@ -23,7 +23,9 @@
 #include "mm/mm1/maps/maps.h"
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
+#include "mm/mm1/mm1.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -51,14 +53,23 @@ void Map24::special() {
 }
 
 void Map24::special00() {
-	send(SoundMessage(STRING["maps.map24.roadsign"]));
+	send(SoundMessage("Roadsign: Sorpigal N.22, W.2, N.2"));
 }
 
 void Map24::special01() {
 	SoundMessage msg(
-		STRING["maps.map24.kilburn"],
+		g_engine->isEnhanced() ?
+			"The exiled Lord Kilburn speaks: \"Take this map and explore the desert. Report your "
+				"findings to the other lords. Then they will understand!\" Accept (Y/N)?" :
+			"The exiled Lord Kilburn speaks:\n"
+				"\"Take this map and explore the desert.\n"
+				"Report your findings to the other lords.\n"
+				"Then they will understand!\" Accept(Y/N)?",
 		[]() {
 			Map24 &map = *static_cast<Map24 *>(g_maps->_currentMap);
+			// Meeting Kilburn satisfies Lord Ironfist's second quest.
+			for (uint i = 0; i < g_globals->_party.size(); ++i)
+				g_globals->_party[i]._flags[7] |= CHARFLAG7_2;
 			if (!map.addItem(MAP_OF_DESERT_ID)) {
 				g_maps->clearSpecial();
 				map.none160();
@@ -73,7 +84,7 @@ void Map24::special01() {
 void Map24::special02() {
 	if (_data[VAL1]) {
 		send(SoundMessage(
-			STRING["maps.map24.wyvern_eye"],
+			mapText("One of the wyvern's eyes begins to glow!\nTake it (Y/N)?"),
 			[]() {
 				Map24 &map = *static_cast<Map24 *>(g_maps->_currentMap);
 				map.addItem(WYVERN_EYE_ID);
@@ -81,7 +92,7 @@ void Map24::special02() {
 		));
 	} else {
 		send(SoundMessage(
-			STRING["maps.map24.lair"],
+			"A wyvern's lair, investigate (Y/N)?",
 			[]() {
 				Map24 &map = *static_cast<Map24 *>(g_maps->_currentMap);
 				Game::Encounter &enc = g_globals->_encounters;
@@ -106,7 +117,7 @@ void Map24::special03() {
 	g_maps->clearSpecial();
 
 	SoundMessage msg(
-		STRING["maps.map24.wyverns"],
+		"Wyverns attack from above!",
 		[]() {
 			Game::Encounter &enc = g_globals->_encounters;
 			int monsterCount = g_events->getRandomNumber(4) + 3;
@@ -125,12 +136,13 @@ void Map24::special03() {
 }
 
 void Map24::special08() {
-	send(SoundMessage(STRING["maps.map24.sign"]));
+	send(SoundMessage(mapText("Painted in a black and white pattern,\n"
+		"a sign reads: The first part is female.")));
 }
 
 void Map24::special09() {
 	send(SoundMessage(
-		STRING["maps.map24.hermit"],
+		"The hermit says: \"Trade wares (Y/N)?\"",
 		[]() {
 			for (uint i = 0; i < g_globals->_party.size(); ++i) {
 				Character &c = g_globals->_party[i];
@@ -161,7 +173,7 @@ bool Map24::addItem(byte itemId) {
 		}
 	}
 
-	g_events->send(SoundMessage(STRING["maps.map24.backpacks_full"]));
+	g_events->send(SoundMessage("*** Backpacks full!"));
 	Sound::sound(SOUND_3);
 	return true;
 }

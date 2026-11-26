@@ -24,6 +24,7 @@
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -31,6 +32,12 @@ namespace Maps {
 
 #define ANSWER_OFFSET 67
 #define BEAST_FLAG 110
+// Og is the D4 special at (7,1): visited-array offset 1 * 16 + 7 = 23.
+// Use the fixed cell index here rather than reading _data[53]. The overlay
+// _data array is not loaded until Map29 itself is entered, while the Quest
+// Log can be opened anywhere in the world.
+#define OG_CELL_OFFSET (1 * MAP_W + 7)
+#define OG_QUEST_LOG_FLAG 0x80
 
 void Map29::special() {
 	Game::Encounter &enc = g_globals->_encounters;
@@ -50,7 +57,10 @@ void Map29::special() {
 	}
 
 	switch (_walls[g_maps->_mapOffset]) {
-	case 0:
+	case 0xff:
+		// The original overlay compares the cell wall byte with 0xff here.
+		// 0x00 was a transcription error that made the intended 1-in-50
+		// swamp encounter branch unreachable
 		if (getRandomNumber(50) == 50) {
 			int id1 = getRandomNumber(16);
 			int monsterCount = getRandomNumber(id1 < 15 ? 13 : 4);
@@ -87,10 +97,10 @@ void Map29::special00() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.map29.algary"],
+		"Algary, enter (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(8, 15);
-			g_maps->changeMap(0x203, 1);
+			g_maps->changeMapFromExit(0x203, 1);
 		}
 	));
 }
@@ -110,7 +120,9 @@ void Map29::special01() {
 		}
 
 		send(SoundMessage(
-			STRING["maps.map29.beast"],
+			mapText("A huge winged beast exclaims,\n"
+				"\"This swamp is quite dangerous. Fly you\n"
+				"to safety (Y/N)?\""),
 			[]() {
 				g_maps->_mapPos = Common::Point(12, 12);
 				g_maps->_currentMap->updateGame();
@@ -146,7 +158,7 @@ void Map29::special02() {
 
 void Map29::special03() {
 	SoundMessage msg(
-		STRING["maps.map29.attack"],
+		"Paul Pead and his men attack!",
 		[]() {
 			Game::Encounter &enc = g_globals->_encounters;
 			int monsterCount = g_events->getRandomNumber(5) + 6;
@@ -176,22 +188,47 @@ void Map29::chessAnswer(const Common::String &answer) {
 	if (answer.equalsIgnoreCase(properAnswer)) {
 		redrawGame();
 
-		InfoMessage msg(
-			16, 2, STRING["maps.map19.correct"],
-			[]() {
-				MM1::Maps::Map29 &map29 = *static_cast<MM1::Maps::Map29 *>(g_maps->_currentMap);
+		// Original MM1 behavior: the reward is committed immediately, the
+		// Queen Idols vanish, and Og explains both the +25,000 EXP reward and
+		// the Mt. Doom prisoner clue before the party is sent away.
+		markOgQuestCompleted();
 
-				for (uint i = 0; i < g_globals->_party.size(); ++i) {
-					Character &c = g_globals->_party[i];
-					c._exp += 25000;
+		for (uint i = 0; i < g_globals->_party.size(); ++i) {
+			Character &c = g_globals->_party[i];
+			c._exp += 25000;
+		}
+
+		auto consumeIdol = [](byte itemId) {
+			for (uint i = 0; i < g_globals->_party.size(); ++i) {
+				Character &c = g_globals->_party[i];
+				int idx = c._backpack.indexOf(itemId);
+				if (idx != -1) {
+					c._backpack.removeAt(idx);
+					return;
 				}
 
+				idx = c._equipped.indexOf(itemId);
+				if (idx != -1) {
+					c._equipped.removeAt(idx);
+					return;
+				}
+			}
+		};
+		consumeIdol(B_QUEEN_IDOL_ID);
+		consumeIdol(W_QUEEN_IDOL_ID);
+
+		InfoMessage msg(
+			0, 0, "YOU HAVE RESTORED MY SIGHT! (+25000 EXP)",
+			0, 1, "I SEE AN IMPORTANT PRISONER IN A CASTLE ON MT. DOOM! HE HAS YOUR SIGHT.",
+			[](const Common::KeyState &) {
+				// Keep Og's reward/clue visible until the player dismisses it.
+				// Only then perform the original forced move toward the Algary exit.
+				g_events->focusedView()->close();
 				g_maps->_mapPos.y = 7;
-				map29.updateGame();
+				g_maps->_currentMap->updateGame();
 			}
 		);
-
-		msg._delaySeconds = 2;
+		msg._largeMessage = true;
 		send(msg);
 		Sound::sound(SOUND_3);
 		Sound::sound(SOUND_3);
@@ -204,13 +241,25 @@ void Map29::chessAnswer(const Common::String &answer) {
 
 void Map29::begone() {
 	g_maps->_mapPos.y = 7;
-	SoundMessage msg(STRING["maps.map29.begone"],
+	SoundMessage msg("Og says, \"Begone!\"",
 		[]() {
 			g_maps->_currentMap->updateGame();
 		}
 	);
 	msg._delaySeconds = 2;
 	send(msg);
+}
+
+bool Map29::ogQuestVisited() const {
+	return (_visited[OG_CELL_OFFSET] & 0x7f) != 0;
+}
+
+bool Map29::ogQuestCompleted() const {
+	return (_visited[OG_CELL_OFFSET] & OG_QUEST_LOG_FLAG) != 0;
+}
+
+void Map29::markOgQuestCompleted() {
+	_visited[OG_CELL_OFFSET] |= OG_QUEST_LOG_FLAG;
 }
 
 } // namespace Maps

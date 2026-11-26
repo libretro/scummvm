@@ -125,7 +125,7 @@ bool GameLoader::readSavegame(const char *fname) {
 		_sc2array[i]._isLoaded = false;
 	}
 
-	getGameLoaderInventory()->rebuildItemRects();
+	getGameLoaderInventory()->recalcItemPos();
 
 	PreloadItem preloadItem;
 
@@ -158,7 +158,7 @@ bool GameLoader::readSavegame(const char *fname) {
 
 		loadScene(preloadItem.sceneId);
 
-		ExCommand *ex = new ExCommand(preloadItem.sceneId, 17, 62, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(preloadItem.sceneId, 17, 62, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags = 2;
 		ex->_param = preloadItem.param;
 
@@ -222,28 +222,28 @@ bool NGIEngine::loadGam(const char *fname, int scene) {
 		_inventory->addItem(ANI_INV_MAP, 1);
 	}
 
-	_inventory->rebuildItemRects();
+	_inventory->recalcItemPos();
 
-	for (uint i = 0; i < _inventory->getScene()->_picObjList.size(); i++)
-		_inventory->getScene()->_picObjList[i]->_picture->MemoryObject::load();
+	for (uint i = 0; i < _inventory->getScene()->_pictureObjects.size(); i++)
+		_inventory->getScene()->_pictureObjects[i]->_picture->MemoryObject::load();
 
-	// _sceneSwitcher = sceneSwitcher; // substituted with direct call
+	// _sceneSwitcher = doSetScene; // substituted with direct call
 	_gameLoader->_preloadCallback = preloadCallback;
 	_gameLoader->_savegameCallback = gameLoaderSavegameCallback;
 
-	_aniMan = accessScene(SC_COMMON)->getAniMan();
+	_aniMan = findScene(SC_COMMON)->getAniMan();
 	_scene2 = nullptr;
 
 	_movTable.reset(_aniMan->countMovements());
 
 	_aniMan->setSpeed(1);
 
-	PictureObject *pic = accessScene(SC_INV)->getPictureObjectById(PIC_INV_MENU, 0);
+	PictureObject *pic = findScene(SC_INV)->findPictureObjectById(PIC_INV_MENU, 0);
 
 	pic->setFlags(pic->_flags & 0xFFFB);
 
 	// Not used in full game
-	//_evalVersionPic = accessScene(SC_COMMON)->getPictureObjectById(PIC_CMN_EVAL, 0);
+	//_evalVersionPic = findScene(SC_COMMON)->findPictureObjectById(PIC_CMN_EVAL, 0);
 
 	initMap();
 	initCursors();
@@ -255,21 +255,21 @@ bool NGIEngine::loadGam(const char *fname, int scene) {
 
 	if (scene) {
 		_gameLoader->loadScene(726);
-		_gameLoader->gotoScene(726, TrubaLeft);
+		_gameLoader->setScene(726, TrubaLeft);
 
 		if (scene != 726)
 			_gameLoader->preloadScene(726, getSceneEntrance(scene));
 	} else {
 		if (_flgPlayIntro) {
 			_gameLoader->loadScene(SC_INTRO1);
-			_gameLoader->gotoScene(SC_INTRO1, TrubaUp);
+			_gameLoader->setScene(SC_INTRO1, TrubaUp);
 		} else {
 			if (g_nmi->isDemo() && g_nmi->getLanguage() == Common::RU_RUS) {
 				_gameLoader->loadScene(SC_9);
-				_gameLoader->gotoScene(SC_9, TrubaDown);
+				_gameLoader->setScene(SC_9, TrubaDown);
 			} else {
 				_gameLoader->loadScene(SC_1);
-				_gameLoader->gotoScene(SC_1, TrubaLeft);
+				_gameLoader->setScene(SC_1, TrubaLeft);
 			}
 		}
 	}
@@ -326,7 +326,7 @@ GameVar::GameVar() {
 	_parentVarObj = nullptr;
 	_nextVarObj = nullptr;
 	_prevVarObj = nullptr;
-	_field_14 = nullptr;
+	_firstChild = nullptr;
 	_varType = 0;
 	_value.floatValue = 0;
 
@@ -340,8 +340,8 @@ GameVar::~GameVar() {
 	if (_parentVarObj && !_prevVarObj ) {
 		if (_parentVarObj->_subVars == this) {
 			_parentVarObj->_subVars = _nextVarObj;
-		} else if (_parentVarObj->_field_14 == this) {
-			_parentVarObj->_field_14 = _nextVarObj;
+		} else if (_parentVarObj->_firstChild == this) {
+			_parentVarObj->_firstChild = _nextVarObj;
 		} else {
 			_parentVarObj = nullptr;
 		}
@@ -363,11 +363,11 @@ GameVar::~GameVar() {
 		s = _subVars;
 	}
 
-	s = _field_14;
+	s = _firstChild;
 
 	while (s) {
 		delete s;
-		s = _field_14;
+		s = _firstChild;
 	}
 }
 
@@ -405,7 +405,7 @@ bool GameVar::load(MfcArchive &file) {
 	_parentVarObj = file.readClass<GameVar>();
 	_prevVarObj = file.readClass<GameVar>();
 	_nextVarObj = file.readClass<GameVar>();
-	_field_14 = file.readClass<GameVar>();
+	_firstChild = file.readClass<GameVar>();
 	_subVars = file.readClass<GameVar>();
 	file.decLevel();
 
@@ -518,7 +518,7 @@ bool PicAniInfo::load(MfcArchive &file) {
 	type = file.readUint32LE();
 	objectId = file.readUint16LE();
 	field_6 = file.readUint16LE();
-	field_8 = file.readUint32LE();
+	copyId = file.readUint32LE();
 	sceneId = file.readUint16LE();
 	field_E = file.readUint16LE();
 	ox = file.readSint32LE();
@@ -526,10 +526,10 @@ bool PicAniInfo::load(MfcArchive &file) {
 	priority = file.readUint32LE();
 	staticsId = file.readUint16LE();
 	movementId = file.readUint16LE();
-	dynamicPhaseIndex = file.readUint16LE();
+	curFrame = file.readUint16LE();
 	flags = file.readUint16LE();
-	field_24 = file.readUint32LE();
-	someDynamicPhaseIndex = file.readUint32LE();
+	objectFlags = file.readUint32LE();
+	targetFrame = file.readUint32LE();
 
 	return true;
 }

@@ -35,9 +35,9 @@
 namespace NGI {
 
 void scene24_initScene(Scene *sc) {
-	g_vars->scene24_water = sc->getStaticANIObject1ById(ANI_WATER24, -1);
-	g_vars->scene24_jet = sc->getStaticANIObject1ById(ANI_JET24, -1);
-	g_vars->scene24_drop = sc->getStaticANIObject1ById(ANI_DROP_24, -1);
+	g_vars->scene24_water = sc->findAniObjectById(ANI_WATER24, -1);
+	g_vars->scene24_jet = sc->findAniObjectById(ANI_JET24, -1);
+	g_vars->scene24_drop = sc->findAniObjectById(ANI_DROP_24, -1);
 
 	g_vars->scene24_water->setAlpha(0xa0);
 	g_vars->scene24_jet->setAlpha(0xa0);
@@ -46,7 +46,7 @@ void scene24_initScene(Scene *sc) {
 	Scene *oldsc = g_nmi->_currentScene;
 	g_nmi->_currentScene = sc;
 
-	if (g_nmi->getObjectState(sO_Pool) == g_nmi->getObjectEnumState(sO_Pool, sO_Overfull)) {
+	if (g_nmi->getStateId(sO_Pool) == g_nmi->getStateValue(sO_Pool, sO_Overfull)) {
 		g_vars->scene24_jetIsOn = true;
 		g_vars->scene24_flowIsLow = false;
 	} else {
@@ -54,52 +54,52 @@ void scene24_initScene(Scene *sc) {
 
 		g_vars->scene24_jetIsOn = false;
 
-		g_vars->scene24_water->changeStatics2(ST_WTR24_FLOWLOWER);
+		g_vars->scene24_water->setStatic(ST_WTR24_FLOWLOWER);
 
 		g_vars->scene24_flowIsLow = true;
 	}
 
-	if (g_nmi->getObjectState(sO_Pool) < g_nmi->getObjectEnumState(sO_Pool, sO_Full)) {
+	if (g_nmi->getStateId(sO_Pool) < g_nmi->getStateValue(sO_Pool, sO_Full)) {
 		g_vars->scene24_waterIsOn = false;
 
 		g_vars->scene24_water->hide();
 
-		g_nmi->setObjectState(sO_StairsDown_24, g_nmi->getObjectEnumState(sO_StairsDown_24, sO_IsOpened));
+		g_nmi->setState(sO_StairsDown_24, g_nmi->getStateValue(sO_StairsDown_24, sO_IsOpened));
 	} else {
 		g_vars->scene24_waterIsOn = true;
 
-		g_nmi->setObjectState(sO_StairsDown_24, g_nmi->getObjectEnumState(sO_StairsDown_24, sO_IsClosed));
+		g_nmi->setState(sO_StairsDown_24, g_nmi->getStateValue(sO_StairsDown_24, sO_IsClosed));
 	}
 
 	g_nmi->_currentScene = oldsc;
 }
 
 void scene24_setPoolState() {
-	if (g_nmi->getObjectState(sO_Pool) == g_nmi->getObjectEnumState(sO_Pool, sO_Overfull)) {
-		g_nmi->_behaviorManager->setFlagByStaticAniObject(g_vars->scene24_drop, 0);
+	if (g_nmi->getStateId(sO_Pool) == g_nmi->getStateValue(sO_Pool, sO_Overfull)) {
+		g_nmi->_behaviorManager->enableAllQueuesForAni(g_vars->scene24_drop, 0);
 
 		g_nmi->playSound(SND_24_007, 1);
-	} else if (g_nmi->getObjectState(sO_Pool) == g_nmi->getObjectEnumState(sO_Pool, sO_Full)) {
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOFLOOR, 0);
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER, 1);
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER2, 0);
+	} else if (g_nmi->getStateId(sO_Pool) == g_nmi->getStateValue(sO_Pool, sO_Full)) {
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOFLOOR, 0);
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER, 1);
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER2, 0);
 
 		g_nmi->playSound(SND_24_006, 1);
-	} else if (g_nmi->getObjectState(sO_Pool) == g_nmi->getObjectEnumState(sO_Pool, sO_HalfFull)) {
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOFLOOR, 0);
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER, 0);
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER2, 1);
+	} else if (g_nmi->getStateId(sO_Pool) == g_nmi->getStateValue(sO_Pool, sO_HalfFull)) {
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOFLOOR, 0);
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER, 0);
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER2, 1);
 	} else {
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOFLOOR, 1);
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER, 0);
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER2, 0);
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOFLOOR, 1);
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER, 0);
+		g_nmi->_behaviorManager->enableAni(g_vars->scene24_drop, ST_DRP24_EMPTY, QU_DRP24_TOWATER2, 0);
 	}
 }
 
-int sceneHandler24(ExCommand *cmd) {
-	if (cmd->_messageKind == 17 && cmd->_messageNum == 33) {
+int sceneHandler24(Command *cmd) {
+	if (cmd->_cmd == 17 && cmd->_messageNum == 33) {
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x < g_nmi->_sceneRect.left + 200) {
 				g_nmi->_currentScene->_x = x - 300 - g_nmi->_sceneRect.left;
@@ -110,15 +110,15 @@ int sceneHandler24(ExCommand *cmd) {
 
 		if (g_vars->scene24_waterIsOn && !g_vars->scene24_water->_movement) {
 			if (g_vars->scene24_flowIsLow)
-				g_vars->scene24_water->startAnim(MV_WTR24_FLOWLOWER, 0, -1);
+				g_vars->scene24_water->startMovement(MV_WTR24_FLOWLOWER, 0, -1);
 			else
-				g_vars->scene24_water->startAnim(MV_WTR24_FLOW, 0, -1);
+				g_vars->scene24_water->startMovement(MV_WTR24_FLOW, 0, -1);
 		}
 
 		if (g_vars->scene24_jetIsOn && !g_vars->scene24_jet->_movement)
-			g_vars->scene24_jet->startAnim(MV_JET24_FLOW, 0, -1);
+			g_vars->scene24_jet->startMovement(MV_JET24_FLOW, 0, -1);
 
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_behaviorManager->update();
 	}
 
 	return 0;

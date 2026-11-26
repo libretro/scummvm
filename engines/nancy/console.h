@@ -56,6 +56,15 @@ private:
 	bool Cmd_loadScene(int argc, const char **argv);
 	bool Cmd_sceneID(int argc, const char **argv);
 	bool Cmd_listActionRecords(int argc, const char **argv);
+#ifdef ENABLE_NANCY_V4
+	bool Cmd_listRecords(int argc, const char **argv);
+	bool Cmd_scriptExport(int argc, const char **argv);
+	bool Cmd_listManagers(int argc, const char **argv);
+	bool Cmd_cheatMode(int argc, const char **argv);
+	bool Cmd_listVars(int argc, const char **argv);
+	bool Cmd_getVar(int argc, const char **argv);
+	bool Cmd_setVar(int argc, const char **argv);
+#endif
 	bool Cmd_actionRecordExport(int argc, const char **argv);
 	bool Cmd_scanForActionRecordType(int argc, const char **argv);
 	bool Cmd_listIncludes(int argc, const char **argv);
@@ -64,6 +73,7 @@ private:
 	bool Cmd_setEventFlags(int argc, const char **argv);
 	bool Cmd_getInventory(int argc, const char **argv);
 	bool Cmd_setInventory(int argc, const char **argv);
+	bool Cmd_holdItem(int argc, const char **argv);
 	bool Cmd_getMoney(int argc, const char **argv);
 	bool Cmd_setMoney(int argc, const char **argv);
 	bool Cmd_getPlayerTime(int argc, const char **argv);
@@ -72,6 +82,7 @@ private:
 	bool Cmd_setDifficulty(int argc, const char **argv);
 	bool Cmd_soundInfo(int argc, const char **argv);
 	bool Cmd_showHotspots(int argc, const char **argv);
+	bool Cmd_uiControl(int argc, const char **argv);
 
 	void printInventoryItem(uint itemID);
 

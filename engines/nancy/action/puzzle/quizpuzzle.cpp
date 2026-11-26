@@ -46,7 +46,8 @@ QuizPuzzle::~QuizPuzzle() {
 }
 
 void QuizPuzzle::init() {
-	Common::Rect screenClip = NancySceneState.getViewport().getBounds();
+	// The text goes where the viewport is on the screen
+	Common::Rect screenClip = NancySceneState.getViewport().getScreenPosition();
 	const uint16 sceneId = NancySceneState.getSceneInfo().sceneID;
 	if (g_nancy->getGameType() == kGameTypeNancy9 && (sceneId == 6441 || sceneId == 6443))
 		screenClip.right += 20; // WORKAROUND for chess puzzle in Nancy 9: the rightmost answer box is partially off-screen
@@ -311,6 +312,10 @@ void QuizPuzzle::readDataNancy15(Common::SeekableReadStream &stream) {
 // length limit, and the allowed characters moved out after it. The two captions
 // are gone, and the flag-setting hotspots share one cursor.
 void QuizPuzzle::readDataNancy16(Common::SeekableReadStream &stream) {
+	// The typed text is drawn by the UI, over the overlays of the scene; e.g. the
+	// lines of Nancy17's grave quiz are overlays, which come in as it gets solved
+	_z = kTextZ;
+
 	stream.skip(33);	// the record's name
 	_textColor = stream.readUint32BE();
 
@@ -918,6 +923,9 @@ void QuizPuzzle::handleInput(NancyInput &input) {
 	for (uint i = 0; i < _boxes.size() && !mouseOverHotspot; ++i) {
 		if (_boxes[i].correct && !isNancy15)
 			continue;
+		// From Nancy 10 the box being typed in is not clickable and keeps the normal cursor
+		if (i == _currentBox && g_nancy->getGameType() >= kGameTypeNancy10)
+			continue;
 		Common::Rect screenRect = NancySceneState.getViewport().convertViewportToScreen(_boxes[i].rect);
 		if (!screenRect.contains(input.mousePos))
 			continue;
@@ -1038,7 +1046,8 @@ void QuizPuzzle::drawTextNancy16() {
 		bounds = NancySceneState.getViewport().convertViewportToScreen(bounds);
 		bounds = convertToLocal(bounds);
 
-		int y = bounds.bottom - systemFont->getFontHeight();
+		// On a single line, at the left of the box and centered in its height
+		int y = bounds.top + (bounds.height() - systemFont->getFontHeight()) / 2;
 		systemFont->drawString(_drawSurface.surfacePtr(), text, bounds.left, y, bounds.width(), color);
 	}
 

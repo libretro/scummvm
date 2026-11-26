@@ -174,16 +174,16 @@ void NGIEngine::lift_setButton(const char *name, int state) {
 void NGIEngine::lift_init(Scene *sc, int enterSeq, int exitSeq) {
 	_lastLiftButton = nullptr;
 
-	_liftEnterMQ = sc->getMessageQueueById(enterSeq);
+	_liftEnterMQ = sc->findMessageQueue(enterSeq);
 	if (!_liftEnterMQ)
 		return;
 
-	_liftExitMQ = sc->getMessageQueueById(exitSeq);
+	_liftExitMQ = sc->findMessageQueue(exitSeq);
 
 	if (!_liftExitMQ)
 		return;
 
-	ExCommand *ex = _liftEnterMQ->getExCommandByIndex(0);
+	Command *ex = _liftEnterMQ->getCommandByIndex(0);
 
 	if (!ex)
 		return;
@@ -191,26 +191,26 @@ void NGIEngine::lift_init(Scene *sc, int enterSeq, int exitSeq) {
 	_liftX = ex->_x;
 	_liftY = ex->_y;
 
-	_lift = sc->getStaticANIObject1ById(ANI_LIFT, -1);
+	_lift = sc->findAniObjectById(ANI_LIFT, -1);
 
-	for (uint i = 0; i < sc->_staticANIObjectList1.size(); i++) {
-		StaticANIObject *ani = sc->_staticANIObjectList1[i];
+	for (uint i = 0; i < sc->_aniObjects.size(); i++) {
+		AniObject *ani = sc->_aniObjects[i];
 
 		if (ani->_id == ANI_LIFTBUTTON)
-			ani->_statics = ani->getStaticsById(lift_getButtonIdP(ani->_statics->_staticsId));
+			ani->_statics = ani->getStatic(lift_getButtonIdP(ani->_statics->_staticsId));
 	}
 
 	GameVar *var = getGameLoaderGameVar()->getSubVarByName("OBJSTATES")->getSubVarByName(sO_LiftButtons);
 	if (var) {
 		for (var = var->_subVars; var; var = var->_nextVarObj) {
-			for (uint i = 0; i < sc->_staticANIObjectList1.size(); i++) {
-				StaticANIObject *ani = sc->_staticANIObjectList1[i];
+			for (uint i = 0; i < sc->_aniObjects.size(); i++) {
+				AniObject *ani = sc->_aniObjects[i];
 
 				if (ani->_id == ANI_LIFTBUTTON) {
 					int id = lift_getButtonIdN(ani->_statics->_staticsId);
 
 					if (id == var->_value.intValue)
-						ani->_statics = ani->getStaticsById(id);
+						ani->_statics = ani->getStatic(id);
 				}
 
 			}
@@ -218,7 +218,7 @@ void NGIEngine::lift_init(Scene *sc, int enterSeq, int exitSeq) {
 	}
 }
 
-void NGIEngine::lift_exitSeq(ExCommand *cmd) {
+void NGIEngine::lift_exitSeq(Command *cmd) {
 	if (cmd) {
 		MessageQueue *mq = _globalMessageQueueList->getMessageQueueById(cmd->_parId);
 
@@ -226,110 +226,110 @@ void NGIEngine::lift_exitSeq(ExCommand *cmd) {
 			mq->activateExCommandsByKind(34);
 	}
 
-	_lift->changeStatics2(ST_LFT_CLOSED);
+	_lift->setStatic(ST_LFT_CLOSED);
 
 	MessageQueue *mq = new MessageQueue(_globalMessageQueueList->compact());
 
-	ExCommand *ex = new ExCommand(_aniMan->_id, 34, 256, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex = new Command(_aniMan->_id, 34, 256, 0, 0, 0, 1, 0, 0, 0);
 
 	ex->_z = 256;
 	ex->_messageNum = 256;
 	ex->_excFlags |= 3;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
 	if (!cmd) {
-		ex = new ExCommand(_aniMan->_id, 2, 40, 0, 0, 0, 1, 0, 0, 0);
-		ex->_param = _aniMan->_odelay;
+		ex = new Command(_aniMan->_id, 2, 40, 0, 0, 0, 1, 0, 0, 0);
+		ex->_param = _aniMan->_copyId;
 		ex->_excFlags |= 2;
-		mq->addExCommandToEnd(ex);
+		mq->addCommandToEnd(ex);
 	}
 
-	ex = new ExCommand(_lift->_id, 1, MV_LFT_OPEN, 0, 0, 0, 1, 0, 0, 0);
-	ex->_param = _lift->_odelay;
+	ex = new Command(_lift->_id, 1, MV_LFT_OPEN, 0, 0, 0, 1, 0, 0, 0);
+	ex->_param = _lift->_copyId;
 	ex->_excFlags |= 2;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(_aniMan->_id, 1, MV_MAN_STARTD, 0, 0, 0, 1, 0, 0, 0);
-	ex->_param = _aniMan->_odelay;
+	ex = new Command(_aniMan->_id, 1, MV_MAN_STARTD, 0, 0, 0, 1, 0, 0, 0);
+	ex->_param = _aniMan->_copyId;
 	ex->_excFlags |= 2;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(_aniMan->_id, 5, -1, 0, 0, 0, 1, 0, 0, 0);
-	ex->_param = _aniMan->_odelay;
+	ex = new Command(_aniMan->_id, 5, -1, 0, 0, 0, 1, 0, 0, 0);
+	ex->_param = _aniMan->_copyId;
 	ex->_z = 10;
 	ex->_x = -1;
 	ex->_y = -1;
 	ex->_excFlags |= 3;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(_aniMan->_id, 34, 256, 0, 0, 0, 1, 0, 0, 0);
+	ex = new Command(_aniMan->_id, 34, 256, 0, 0, 0, 1, 0, 0, 0);
 	ex->_excFlags |= 3;
 	ex->_z = 256;
 	ex->_messageNum = 0;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(0, 17, MSG_LIFT_STARTEXITQUEUE, 0, 0, 0, 1, 0, 0, 0);
+	ex = new Command(0, 17, MSG_LIFT_STARTEXITQUEUE, 0, 0, 0, 1, 0, 0, 0);
 	ex->_excFlags |= 3;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(_lift->_id, 1, MV_LFT_CLOSE, 0, 0, 0, 1, 0, 0, 0);
-	ex->_param = _lift->_odelay;
+	ex = new Command(_lift->_id, 1, MV_LFT_CLOSE, 0, 0, 0, 1, 0, 0, 0);
+	ex->_param = _lift->_copyId;
 	ex->_excFlags |= 2;
 
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	mq->chain(nullptr);
+	mq->run(nullptr);
 }
 
 void NGIEngine::lift_closedoorSeq() {
 	if (_lift->_movement) {
 		if (_lift->_movement->_id == MV_LFT_CLOSE) {
-			_lift->queueMessageQueue(nullptr);
+			_lift->setQueue(nullptr);
 		} else if (_lift->_movement->_id == MV_LFT_OPEN) {
-			int ph = _lift->_movement->_currDynamicPhaseIndex;
+			int ph = _lift->_movement->_curFrame;
 
-			_lift->changeStatics2(ST_LFT_OPEN_NEW);
-			_lift->startAnim(MV_LFT_CLOSE, 0, -1);
+			_lift->setStatic(ST_LFT_OPEN_NEW);
+			_lift->startMovement(MV_LFT_CLOSE, 0, -1);
 
 			if (_lift->_movement->_currMovement)
-				_lift->_movement->setDynamicPhaseIndex(_lift->_movement->_currMovement->_dynamicPhases.size() - ph);
+				_lift->_movement->setCurFrame(_lift->_movement->_currMovement->_phases.size() - ph);
 			else
-				_lift->_movement->setDynamicPhaseIndex(_lift->_movement->_dynamicPhases.size() - ph);
+				_lift->_movement->setCurFrame(_lift->_movement->_phases.size() - ph);
 		} else {
-			_lift->changeStatics2(ST_LFT_OPEN_NEW);
+			_lift->setStatic(ST_LFT_OPEN_NEW);
 
-			_lift->startAnim(MV_LFT_CLOSE, 0, -1);
+			_lift->startMovement(MV_LFT_CLOSE, 0, -1);
 		}
 	} else {
 		if (_lift->_statics->_staticsId == ST_LFT_CLOSED ) {
-			_lift->changeStatics2(ST_LFT_CLOSED);
+			_lift->setStatic(ST_LFT_CLOSED);
 		} else {
-			_lift->startAnim(MV_LFT_CLOSE, 0, -1);
+			_lift->startMovement(MV_LFT_CLOSE, 0, -1);
 		}
 	}
 
 	MessageQueue *mq = new MessageQueue(_globalMessageQueueList->compact());
-	ExCommand *ex = new ExCommand(0, 17, MSG_LIFT_GO, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex = new Command(0, 17, MSG_LIFT_GO, 0, 0, 0, 1, 0, 0, 0);
 
 	ex->_excFlags |= 3;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	if (!mq->chain(_lift))
+	if (!mq->run(_lift))
 		delete mq;
 }
 
 void NGIEngine::lift_walkAndGo() {
 	MessageQueue *mq;
-	ExCommand *ex;
+	Command *ex;
 
-	if (abs(_liftX - _aniMan->_ox) > 1 || abs(_liftY - _aniMan->_oy) > 1 || _aniMan->_movement || _aniMan->_statics->_staticsId != ST_MAN_UP) {
+	if (abs(_liftX - _aniMan->_x) > 1 || abs(_liftY - _aniMan->_y) > 1 || _aniMan->_movement || _aniMan->_statics->_staticsId != ST_MAN_UP) {
 		mq = getCurrSceneSc2MotionController()->startMove(_aniMan, _liftX, _liftY, 1, ST_MAN_UP);
 
 		if (mq) {
-			ex = new ExCommand(0, 17, MSG_LIFT_CLICKBUTTON, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(0, 17, MSG_LIFT_CLICKBUTTON, 0, 0, 0, 1, 0, 0, 0);
 			ex->_excFlags |= 3;
 
-			mq->addExCommandToEnd(ex);
+			mq->addCommandToEnd(ex);
 		}
 	} else {
 		lift_openLift();
@@ -338,24 +338,24 @@ void NGIEngine::lift_walkAndGo() {
 
 		mq->setFlags(mq->getFlags() | 1);
 
-		ex = new ExCommand(_aniMan->_id, 2, 15, 0, 0, 0, 1, 0, 0, 0);
-		ex->_param = _aniMan->_odelay;
+		ex = new Command(_aniMan->_id, 2, 15, 0, 0, 0, 1, 0, 0, 0);
+		ex->_param = _aniMan->_copyId;
 		ex->_excFlags |= 2;
-		mq->addExCommand(ex);
+		mq->addCommandToFront(ex);
 
-		ex = new ExCommand(_aniMan->_id, 5, -1, 0, 0, 0, 1, 0, 0, 0);
-		ex->_param = _aniMan->_odelay;
-		ex->_z = _lift->_priority + 1;
+		ex = new Command(_aniMan->_id, 5, -1, 0, 0, 0, 1, 0, 0, 0);
+		ex->_param = _aniMan->_copyId;
+		ex->_z = _lift->_z + 1;
 		ex->_x = -1;
 		ex->_y = -1;
 		ex->_excFlags |= 3;
-		mq->addExCommandToEnd(ex);
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(0, 17, MSG_LIFT_CLOSEDOOR, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(0, 17, MSG_LIFT_CLOSEDOOR, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 3;
-		mq->addExCommandToEnd(ex);
+		mq->addCommandToEnd(ex);
 
-		mq->chain(nullptr);
+		mq->run(nullptr);
 
 		_aniMan->_flags |= 0x100;
 	}
@@ -364,25 +364,25 @@ void NGIEngine::lift_walkAndGo() {
 void NGIEngine::lift_openLift() {
 	if (_lift->_movement) {
 		if (_lift->_movement->_id == MV_LFT_OPEN) {
-			_lift->queueMessageQueue(nullptr);
+			_lift->setQueue(nullptr);
 		} else if (_lift->_movement->_id == MV_LFT_CLOSE) {
-			int idx = _lift->_movement->_currDynamicPhaseIndex;
+			int idx = _lift->_movement->_curFrame;
 
-			_lift->changeStatics2(ST_LFT_CLOSED);
-			_lift->startAnim(MV_LFT_OPEN, 0, -1);
+			_lift->setStatic(ST_LFT_CLOSED);
+			_lift->startMovement(MV_LFT_OPEN, 0, -1);
 
 			if (_lift->_movement->_currMovement)
-				_lift->_movement->setDynamicPhaseIndex(_lift->_movement->_currMovement->_dynamicPhases.size() - idx);
+				_lift->_movement->setCurFrame(_lift->_movement->_currMovement->_phases.size() - idx);
 			else
-				_lift->_movement->setDynamicPhaseIndex(_lift->_movement->_dynamicPhases.size() - idx);
+				_lift->_movement->setCurFrame(_lift->_movement->_phases.size() - idx);
 		} else {
-			_lift->changeStatics2(ST_LFT_CLOSED);
-			_lift->startAnim(MV_LFT_OPEN, 0, -1);
+			_lift->setStatic(ST_LFT_CLOSED);
+			_lift->startMovement(MV_LFT_OPEN, 0, -1);
 		}
 	} else if (_lift->_statics->_staticsId == ST_LFT_OPEN_NEW) {
-		_lift->changeStatics2(ST_LFT_OPEN_NEW);
+		_lift->setStatic(ST_LFT_OPEN_NEW);
 	} else {
-		_lift->startAnim(MV_LFT_OPEN, 0, -1);
+		_lift->startMovement(MV_LFT_OPEN, 0, -1);
 	}
 }
 
@@ -407,24 +407,24 @@ void NGIEngine::lift_goAnimation() {
 			if (pre.preloadId2 == buttonId && pre.preloadId1 == _currentScene->_sceneId) {
 				MessageQueue *mq = new MessageQueue(_globalMessageQueueList->compact());
 
-				ExCommand *ex = new ExCommand(ANI_MAN, 1, (pre.param != LiftDown ? MV_MAN_LIFTDOWN : MV_MAN_LIFTUP), 0, 0, 0, 1, 0, 0, 0);
+				Command *ex = new Command(ANI_MAN, 1, (pre.param != LiftDown ? MV_MAN_LIFTDOWN : MV_MAN_LIFTUP), 0, 0, 0, 1, 0, 0, 0);
 
 				ex->_param = -1;
-				ex->_field_24 = 1;
+				ex->_wait = 1;
 				ex->_excFlags |= 2;
 
-				mq->addExCommandToEnd(ex);
+				mq->addCommandToEnd(ex);
 
-				ex = new ExCommand(parentId, 17, 61, 0, 0, 0, 1, 0, 0, 0);
+				ex = new Command(parentId, 17, 61, 0, 0, 0, 1, 0, 0, 0);
 
 				ex->_param = buttonId;
 				ex->_excFlags |= 3;
 
-				mq->addExCommandToEnd(ex);
+				mq->addCommandToEnd(ex);
 
 				_aniMan->_flags &= ~0x100;
 
-				if (!mq->chain(_aniMan))
+				if (!mq->run(_aniMan))
 					delete mq;
 
 				_aniMan->_flags |= 0x100;
@@ -437,12 +437,12 @@ void NGIEngine::lift_goAnimation() {
 	lift_exitSeq(nullptr);
 
 	if (_lastLiftButton) {
-		_lastLiftButton->_statics = _lastLiftButton->getStaticsById(lift_getButtonIdN(_lastLiftButton->_statics->_staticsId));
+		_lastLiftButton->_statics = _lastLiftButton->getStatic(lift_getButtonIdN(_lastLiftButton->_statics->_staticsId));
 		_lastLiftButton = nullptr;
 	}
 }
 
-void NGIEngine::lift_animateButton(StaticANIObject *button) {
+void NGIEngine::lift_animateButton(AniObject *button) {
 	int butId = lift_getButtonIdP(button->_statics->_staticsId);
 
 	if (butId && butId != button->_statics->_staticsId) {
@@ -453,16 +453,16 @@ void NGIEngine::lift_animateButton(StaticANIObject *button) {
 				int id = lift_getButtonIdN(_lastLiftButton->_statics->_staticsId);
 
 				if (id)
-					_lastLiftButton->_statics = _lastLiftButton->getStaticsById(id);
+					_lastLiftButton->_statics = _lastLiftButton->getStatic(id);
 
 				_lastLiftButton = nullptr;
 			}
 
 			if (_aniMan->isIdle() && !(_aniMan->_flags & 0x100)) {
 				_lastLiftButton = button;
-				button->_statics = button->getStaticsById(butId);
+				button->_statics = button->getStatic(butId);
 
-				ExCommand *ex = new ExCommand(0, 35, SND_CMN_032, 0, 0, 0, 1, 0, 0, 0);
+				Command *ex = new Command(0, 35, SND_CMN_032, 0, 0, 0, 1, 0, 0, 0);
 				ex->_excFlags |= 3;
 				ex->_z = 1;
 				ex->postMessage();
@@ -470,7 +470,7 @@ void NGIEngine::lift_animateButton(StaticANIObject *button) {
 				int id = lift_getButtonIdH(_lastLiftButton->_statics->_staticsId);
 
 				if (id) {
-					_lastLiftButton->_statics = _lastLiftButton->getStaticsById(id);
+					_lastLiftButton->_statics = _lastLiftButton->getStatic(id);
 
 					lift_walkAndGo();
 				}
@@ -482,13 +482,13 @@ void NGIEngine::lift_animateButton(StaticANIObject *button) {
 void NGIEngine::lift_startExitQueue() {
 	MessageQueue *mq = new MessageQueue(_liftExitMQ, 0, 0);
 
-	mq->chain(nullptr);
+	mq->run(nullptr);
 }
 
-void NGIEngine::lift_hoverButton(ExCommand *cmd) {
+void NGIEngine::lift_hoverButton(Command *cmd) {
 	if (_lastLiftButton) {
 		if (!(cmd->_param & 2) || _liftX != cmd->_x || _liftY != cmd->_y) {
-			_lastLiftButton->_statics = _lastLiftButton->getStaticsById(lift_getButtonIdN(_lastLiftButton->_statics->_staticsId));
+			_lastLiftButton->_statics = _lastLiftButton->getStatic(lift_getButtonIdN(_lastLiftButton->_statics->_staticsId));
 			_lastLiftButton = nullptr;
 		}
 	}
@@ -504,14 +504,14 @@ bool NGIEngine::lift_checkButton(const char *varName) {
 }
 
 void NGIEngine::lift_setButtonStatics(Scene *sc, int buttonId) {
-	for (uint i = 0; i < sc->_staticANIObjectList1.size(); i++) {
-		StaticANIObject *ani = sc->_staticANIObjectList1[i];
+	for (uint i = 0; i < sc->_aniObjects.size(); i++) {
+		AniObject *ani = sc->_aniObjects[i];
 
 		if (ani->_id == ANI_LIFTBUTTON) {
 			int id = lift_getButtonIdN(ani->_statics->_staticsId);
 
 			if (id == buttonId)
-				ani->_statics = ani->getStaticsById(id);
+				ani->_statics = ani->getStatic(id);
 		}
 	}
 }

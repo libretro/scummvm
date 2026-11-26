@@ -32,11 +32,14 @@ class MainModelComponent : public ModelComponent {
 public:
 	MainModelComponent(Component *parent, int parentID, const char *filename, Component *prevComponent, tag32 tag);
 	~MainModelComponent();
-	void init();
-	void setColormap(CMap *cmap);
-	void reset();
+	void init() override;
+	void refreshColormap() override;
+	void resetColormap() override;
+	void reset() override;
 
 private:
+	CMap *getStackCMap() const;
+
 	bool _hierShared;
 	Common::List<MainModelComponent*> _children;
 	MainModelComponent *_parentModel;

@@ -36,9 +36,9 @@
 namespace NGI {
 
 void scene30_enablePass(Scene *sc) {
-	MovGraphLink *lnk = getSc2MctlCompoundBySceneId(sc->_sceneId)->getLinkByName(sO_WayToPipe);
+	MovGraphLink *lnk = getSc2MctlCompoundBySceneId(sc->_sceneId)->getGraphLink(sO_WayToPipe);
 
-	if (g_nmi->getObjectState(sO_Leg) == g_nmi->getObjectEnumState(sO_Leg, sO_WithAll))
+	if (g_nmi->getStateId(sO_Leg) == g_nmi->getStateValue(sO_Leg, sO_WithAll))
 		lnk->_flags &= 0xDFFFFFFF;
 	else
 		lnk->_flags |= 0x20000000;
@@ -47,19 +47,19 @@ void scene30_enablePass(Scene *sc) {
 void scene30_initScene(Scene *sc, int flag) {
 	Scene *oldsc = g_nmi->_currentScene;
 
-	g_vars->scene30_leg = sc->getStaticANIObject1ById(ANI_LEG, -1);
+	g_vars->scene30_leg = sc->findAniObjectById(ANI_LEG, -1);
 	g_nmi->_currentScene = sc;
 
-	if (g_nmi->getObjectState(sO_Leg) == g_nmi->getObjectEnumState(sO_Leg, sO_ShowingHeel))
-		g_vars->scene30_leg->changeStatics2(ST_LEG_UP);
-	else if (g_nmi->getObjectState(sO_Leg) == g_nmi->getObjectEnumState(sO_Leg, sO_WithoutJugs))
-		g_vars->scene30_leg->changeStatics2(ST_LEG_DOWN);
-	else if (g_nmi->getObjectState(sO_Leg) == g_nmi->getObjectEnumState(sO_Leg, sO_WithBig))
-		g_vars->scene30_leg->changeStatics2(ST_LEG_DOWN1);
-	else if (g_nmi->getObjectState(sO_Leg) == g_nmi->getObjectEnumState(sO_Leg, sO_WithSmall))
-		g_vars->scene30_leg->changeStatics2(ST_LEG_DOWN2);
-	else if (g_nmi->getObjectState(sO_Leg) == g_nmi->getObjectEnumState(sO_Leg, sO_WithAll))
-		g_vars->scene30_leg->changeStatics2(ST_LEG_EMPTY);
+	if (g_nmi->getStateId(sO_Leg) == g_nmi->getStateValue(sO_Leg, sO_ShowingHeel))
+		g_vars->scene30_leg->setStatic(ST_LEG_UP);
+	else if (g_nmi->getStateId(sO_Leg) == g_nmi->getStateValue(sO_Leg, sO_WithoutJugs))
+		g_vars->scene30_leg->setStatic(ST_LEG_DOWN);
+	else if (g_nmi->getStateId(sO_Leg) == g_nmi->getStateValue(sO_Leg, sO_WithBig))
+		g_vars->scene30_leg->setStatic(ST_LEG_DOWN1);
+	else if (g_nmi->getStateId(sO_Leg) == g_nmi->getStateValue(sO_Leg, sO_WithSmall))
+		g_vars->scene30_leg->setStatic(ST_LEG_DOWN2);
+	else if (g_nmi->getStateId(sO_Leg) == g_nmi->getStateValue(sO_Leg, sO_WithAll))
+		g_vars->scene30_leg->setStatic(ST_LEG_EMPTY);
 
 	g_nmi->_currentScene = oldsc;
 
@@ -84,8 +84,8 @@ int scene30_updateCursor() {
 	return g_nmi->_cursorId;
 }
 
-int sceneHandler30(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler30(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch(cmd->_messageNum) {
@@ -119,19 +119,19 @@ int sceneHandler30(ExCommand *cmd) {
 
 	case 29:
 		{
-			StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(g_nmi->_sceneRect.left + cmd->_x, g_nmi->_sceneRect.top + cmd->_y);
+			AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(g_nmi->_sceneRect.left + cmd->_x, g_nmi->_sceneRect.top + cmd->_y);
 
 			if (ani && ani->_id == ANI_LIFTBUTTON) {
 				g_nmi->lift_animateButton(ani);
 
-				cmd->_messageKind = 0;
+				cmd->_cmd = 0;
 			}
 		}
 		break;
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x < g_nmi->_sceneRect.left + 200)
 				g_nmi->_currentScene->_x = x - 300 - g_nmi->_sceneRect.left;
@@ -140,7 +140,7 @@ int sceneHandler30(ExCommand *cmd) {
 				g_nmi->_currentScene->_x = x + 300 - g_nmi->_sceneRect.right;
 		}
 
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_behaviorManager->update();
 
 		break;
 

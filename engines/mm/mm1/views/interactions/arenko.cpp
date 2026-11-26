@@ -38,15 +38,17 @@ Arenko::Arenko() : TextView("Arenko") {
 bool Arenko::msgFocus(const FocusMessage &msg) {
 	MM1::Maps::Map28 &map = *static_cast<MM1::Maps::Map28 *>(g_maps->_currentMap);
 
-	if (!map[VAL1]) {
-		_line = STRING["maps.map28.arenko"];
-		map[VAL2] = 1;
+	if (!map.arenkoQuestActive()) {
+		_line = "I am Arenko Guire and this is my grove.\n"
+			"Climb all the trees, without leaving\n"
+			"the area, and return.";
+		map.startArenkoQuest();
 
 	} else if (map[VAL1] < 19) {
-		_line = STRING["maps.map28.keep_climbing"];
+		_line = "Keep climbing.";
 
 	} else {
-		_line = STRING["maps.map28.well_done"];
+		_line = "Well done! What is your pleasure?\na) Gold  b) Gems  c) Item";
 	}
 
 	return true;

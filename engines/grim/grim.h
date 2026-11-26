@@ -28,6 +28,7 @@
 #include "common/str-array.h"
 #include "common/hashmap.h"
 #include "common/events.h"
+#include "common/mutex.h"
 
 #include "graphics/renderer.h"
 
@@ -196,6 +197,10 @@ public:
 
 	TextObjectDefaults _sayLineDefaults, _printLineDefaults, _blastTextDefaults;
 
+	const Common::Point &getOffscreenTextPos() const { return _offscreenTextPos; }
+	void setOffscreenTextPos(const Common::Point &pos) { _offscreenTextPos = pos; }
+	Common::Point getDefaultOffscreenTextPos() const;
+
 	void debugLua(const Common::String &str);
 
 protected:
@@ -233,6 +238,7 @@ protected:
 	bool _savegameSaveRequest = false;
 	Common::String _savegameFileName;
 	SaveGame *_savedState;
+	Common::Mutex _imuseMutex;
 	bool _justSaveLoaded;
 
 	Set *_currSet;
@@ -265,6 +271,7 @@ protected:
 	Actor *_selectedActor;
 	Iris *_iris;
 	TextObject::Ptr _movieSubtitle;
+	Common::Point _offscreenTextPos;
 
 	bool _buildActiveActorsList;
 	Common::List<Actor *> _activeActors;

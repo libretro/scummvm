@@ -65,6 +65,8 @@ public:
 	// format instead of the input format; only for opaque videos, since the
 	// transparent color is defined in the input format.
 	bool loadFile(const Common::Path &name, byte videoPlaytype = kVideoPlaytypeAuto, bool bidirectionalCache = false, bool screenFormat = false);
+	// Turns on that cache for a movie that is already loaded
+	void enableFrameCache();
 	bool isVideoLoaded() const;
 	void close();
 	Video::VideoDecoder *getDecoder() { return _decoder.get(); }
@@ -91,6 +93,11 @@ public:
 	uint16 getHeight() const;
 	void addFrameTime(uint16 timeToAdd);	// AVF only, no-op otherwise
 
+	// Nancy30: a .bk2 movie ends with the rect it is shown at when the script
+	// gives none, after the Bink data
+	bool hasEmbeddedDest() const { return _hasEmbeddedDest; }
+	const Common::Rect &getEmbeddedDest() const { return _embeddedDest; }
+
 	// Sets the volume of the movie's audio track, as a percentage (0 - 100).
 	void setVolume(byte percent);
 
@@ -110,12 +117,24 @@ public:
 	void goToFrame(int frameNr);				// show a single still frame
 	void playRange(int first, int last);		// begin timed playback (reverse if last < first)
 	bool update();								// advance; true if the shown frame changed
+	// Advances by the time that went by in the game, which stops while the
+	// movie isn't run. A movie that falls behind skips frames to catch up.
+	bool advance(double elapsedMillis);
+	// The frames per second the frame-range player plays at, instead of the
+	// movie's own; 0 for the movie's own
+	void setFrameRate(double framesPerSecond);
 	bool isRangePlaying() const { return _rangePlaying; }
 	int getCurrentFrame() const { return getCurFrame(); }
+	double getFrameMillis() const;	// how long a frame of the range player lasts
 	void drawFrame(Graphics::ManagedSurface &dst, const Common::Point &pos) const;
+	void drawFrame(Graphics::ManagedSurface &dst, const Common::Rect &source, const Common::Point &pos) const;	// a part of it
 
 private:
 	friend class BinkCacheLoader;
+
+	// How far ahead decodeNextFrame() decodes to a frame instead of seeking: a
+	// second of a 15 frames per second movie
+	static const int kMaxFramesDecodedAhead = 15;
 
 	static byte resolvePlaytype(byte videoPlaytype);	// resolves kVideoPlaytypeAuto
 
@@ -126,28 +145,37 @@ private:
 
 	Common::ScopedPtr<Video::VideoDecoder> _decoder;
 	byte _videoType = kVideoPlaytypeAVF;
+	bool _hasEmbeddedDest = false;
+	Common::Rect _embeddedDest;
 
 	// Name this movie was loaded with; used by findLoadedMovie().
 	Common::Path _loadedName;
 
 	// Decoded-frame cache for the Bink path (AVF caches internally). Bink seeking
 	// re-decodes from the previous keyframe, so caching keeps panorama scrubbing
-	// fast. Enabled only when loadFile() is asked for a bidirectional cache; the
-	// whole cache is then filled forward (the fast direction) in spare time by a
-	// deferred loader, so even the first turn is smooth.
+	// fast. Enabled when loadFile() is asked for a bidirectional cache, or by
+	// enableFrameCache(); the whole cache is then filled forward (the fast
+	// direction) in spare time by a deferred loader, so even the first turn is
+	// smooth.
 	bool _useFrameCache = false;
 	Common::Array<Graphics::Surface> _frameCache;
 	Common::SharedPtr<DeferredLoader> _cacheLoader;
 	uint _cacheFillNext = 0;
 
+	bool showNextFrame();
+
 	// Simple frame-range player state. _currentSurface points at the decoder's
 	// last-decoded frame (owned by it, valid until the next decode).
 	const Graphics::Surface *_currentSurface = nullptr;
+	int _currentFrame = -1;	// the frame it shows
 	int _rangeLast = 0;
 	int _step = 1;
 	bool _rangePlaying = false;
-	uint32 _lastFrameTime = 0;
-	uint32 _frameDelayMs = 66;
+	double _nextFrameTime = 0.0;	// when the next frame is due, in milliseconds
+	double _playedMillis = 0.0;		// how long advance() has played the range
+	double _nextPlayedFrame = 0.0;	// when advance() shows the next frame
+	double _frameMillis = 1000.0 / 15.0;
+	double _frameRate = 0.0;
 };
 
 } // End of namespace Nancy

@@ -21,7 +21,7 @@
 
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/sound.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/util.h"
 #include "engines/nancy/input.h"
 #include "engines/nancy/cursor.h"
@@ -781,9 +781,16 @@ void RolloverOverlay::readDataNancy16(Common::SeekableReadStream &stream) {
 	_z = stream.readUint32LE();
 	_hoverCursor = stream.readUint16LE();
 
-	readRect(stream, _hotspotRect);
-	readRect(stream, _srcRect);
-	readRect(stream, _destRect);
+	// The right and bottom edges of a Nancy18 rect are no longer a part of it
+	if (g_nancy->getGameType() >= kGameTypeNancy18) {
+		readExclusiveRect(stream, _hotspotRect);
+		readExclusiveRect(stream, _srcRect);
+		readExclusiveRect(stream, _destRect);
+	} else {
+		readRect(stream, _hotspotRect);
+		readRect(stream, _srcRect);
+		readRect(stream, _destRect);
+	}
 
 	_flagOnHover.label = stream.readSint16LE();
 	_flagOnHover.flag = stream.readByte();

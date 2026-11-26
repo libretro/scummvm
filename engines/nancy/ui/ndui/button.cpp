@@ -57,11 +57,12 @@ ControlState Button::getButtonState() const {
 		return kStatePressed;
 	}
 
-	return _isMouseOver ? kStateMouseOver : kStateNormal;
+	return _isMouseOver ? kStateMouseOver : getFlashState();
 }
 
 // Buttons keep being drawn after they get hidden, until they have faded out
 bool Button::update(float seconds) {
+	updateFlash();
 	ControlState state = getButtonState();
 	float rate = state == kStatePressed ? 0.0f : kControlBlendRate;
 
@@ -103,6 +104,9 @@ bool Button::doAction(const Action &action) {
 	case kActionSetText:
 		setText(action.text);
 		return true;
+	case kActionSetImage:
+		setImage(1, action);
+		return true;
 	default:
 		return Control::doAction(action);
 	}
@@ -134,15 +138,20 @@ void InvButton::readExtra(Common::SeekableReadStream &stream) {
 
 void InvButton::setItem(const INVD::Item &item) {
 	_name = item.name;
+	attachItem(item);
+	_elements[1].setTexture(_elements[1]._textureName, item.sourceRect);
+}
+
+void InvButton::attachItem(const INVD::Item &item) {
 	_itemID = item.id;
 	_kind = item.kind;
 	_valueIndex = item.valueIndex;
 
-	// The scene is named after its number, e.g. "s6200"
-	const Common::String sceneName = item.sceneName.toString();
-	_scene = sceneName.size() > 1 ? atoi(sceneName.c_str() + 1) : 0;
-
-	_elements[1].setTexture(_elements[1]._textureName, item.sourceRect);
+	// The scene is named after its number, e.g. "s6200", up to Nancy20. Nancy21
+	// names the script of the scene instead, e.g. "INV_Article_V_SC".
+	_sceneName = item.sceneName.toString();
+	uint16 sceneID = 0;
+	_scene = parseSceneName(_sceneName, sceneID) ? sceneID : 0;
 }
 
 bool InvButton::doAction(const Action &action) {

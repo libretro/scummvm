@@ -24,6 +24,7 @@
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -56,7 +57,28 @@ void Map11::special() {
 		pit();
 
 	} else {
-		if (_data[VAL1] == 66 && _data[VAL2] == 74) {
+		auto upperDial = [](byte c) -> byte {
+			return (c >= 'a' && c <= 'z') ? c - ('a' - 'A') : c;
+		};
+
+		// The dials are stored in VAL2 and VAL3. A copy of whether each is
+		// correct is kept in the saved visit data, since the overlay data
+		// is reloaded from disk when a save is loaded
+		const byte dial1 = upperDial(_data[VAL2]);
+		const byte dial2 = upperDial(_data[VAL3]);
+		const bool rawStable = dial1 == 'B' && dial2 == 'J';
+		const bool savedStable = (_visited[3 * MAP_W + 6] & 0x80) != 0 &&
+			(_visited[3 * MAP_W + 8] & 0x80) != 0;
+
+		// If the live overlay contains the correct settings, heal the
+		// save-safe mirror as well. This makes old/partially patched visits
+		// converge on one state without changing the save format.
+		if (rawStable) {
+			_visited[3 * MAP_W + 6] |= 0x80;
+			_visited[3 * MAP_W + 8] |= 0x80;
+		}
+
+		if (rawStable || savedStable) {
 			g_maps->_mapPos = Common::Point(7, 11);
 		} else {
 			g_maps->_mapPos.x = getRandomNumber(15);
@@ -64,17 +86,16 @@ void Map11::special() {
 		}
 
 		updateGame();
-		send(SoundMessage(STRING["maps.map11.poof"]));
+		send(SoundMessage("Poof! You've been teleported..."));
 	}
 }
-
 void Map11::special00() {
 	visitedExit();
 	send(SoundMessage(
-		STRING["maps.map11.ladder"],
+		"A ladder going up, take it (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(7, 2);
-			g_maps->changeMap(0xf04, 2);
+			g_maps->changeMapFromExit(0xf04, 2);
 		}
 	));
 }
@@ -95,7 +116,9 @@ void Map11::special02() {
 }
 
 void Map11::special03() {
-	send(SoundMessage(STRING["maps.map11.sign"]));
+	send(SoundMessage(mapText("Painted in a black and white pattern,\n"
+		"a sign reads: The second part is the\n"
+		"most valuable.")));
 }
 
 void Map11::special04() {
@@ -104,7 +127,7 @@ void Map11::special04() {
 }
 
 void Map11::special05() {
-	send(SoundMessage(STRING["maps.map11.tip2"]));
+	send(SoundMessage(mapText("This cavern is random until the dials\nare set.")));
 }
 
 void Map11::special06() {
@@ -122,16 +145,14 @@ void Map11::special08() {
 
 void Map11::pit() {
 	if (g_globals->_activeSpells._s.levitate) {
-		Common::String msg = Common::String::format("%s %s",
-			STRING["maps.map10.pit"].c_str(),
-			STRING["maps.map10.levitation"].c_str());
+		Common::String msg = "Jagged slime pit! Levitation saved you.";
 		send(SoundMessage(msg));
 		Sound::sound(SOUND_3);
 
 	} else {
 		reduceHP();
 		reduceHP();
-		send(SoundMessage(STRING["maps.map10.pit"]));
+		send(SoundMessage("Jagged slime pit!"));
 		Sound::sound(SOUND_3);
 	}
 }
@@ -139,15 +160,28 @@ void Map11::pit() {
 void Map11::selectDial(int dialIndex) {
 	_dialIndex = dialIndex;
 	Common::String msg = Common::String::format(
-		STRING["maps.map11.dial"].c_str(), '1' + dialIndex);
+		"Stabilization dial #%c set (A-Z)?", '1' + dialIndex);
 
-	send(SoundMessage(msg,
+	// Show the dial's current setting under the prompt
+	byte current = _data[VAL2 + dialIndex];
+	if (current >= 'a' && current <= 'z')
+		current -= 'a' - 'A';
+	Common::String currentLine = Common::String::format("Current: %c",
+		(current >= 'A' && current <= 'Z') ? current : '-');
+
+	send(SoundMessage(
+		0, 1, msg,
+		0, 2, currentLine,
 		[](const Common::KeyState &ks) {
 			if (ks.keycode >= Common::KEYCODE_a &&
 					ks.keycode <= Common::KEYCODE_z) {
 				Map11 &map = *static_cast<Map11 *>(g_maps->_currentMap);
+				// Derive the selected letter from keycode, not KeyState::ascii.
+				// This avoids backend/keymapper differences where ascii may be 0
+				// or have unexpected case even though the A-Z keycode is valid.
+				const char c = 'A' + (ks.keycode - Common::KEYCODE_a);
 				g_events->close();
-				map.setDialChar(ks.ascii);
+				map.setDialChar(c);
 				map.none160();
 			}
 		}
@@ -168,7 +202,25 @@ void Map11::challenge() {
 }
 
 void Map11::setDialChar(char c) {
+	if (c >= 'a' && c <= 'z')
+		c -= 'a' - 'A';
+
 	_data[VAL2 + _dialIndex] = c;
+
+	const int visitedOffset = (_dialIndex == 0) ?
+		3 * MAP_W + 6 : 3 * MAP_W + 8;
+	const char target = (_dialIndex == 0) ? 'B' : 'J';
+	if (c == target)
+		_visited[visitedOffset] |= 0x80;
+	else
+		_visited[visitedOffset] &= ~0x80;
+
+	// Echo the chosen value below the original A-Z instruction so there is
+	// unambiguous visual feedback about what the engine recorded.
+	Common::String line1 = Common::String::format(
+		"Stabilization dial #%c set (A-Z)?", '1' + _dialIndex);
+	Common::String line2 = Common::String::format("Selected: %c", c);
+	send(InfoMessage(0, 1, line1, 0, 2, line2));
 }
 
 void Map11::clue() {

@@ -36,6 +36,43 @@
 
 namespace NGI {
 
+void Fader::start(uint32 fadeIn, uint32 hold, uint32 fadeOut) {
+	_durations[kFadeIn] = fadeIn;
+	_durations[kHold] = hold;
+	_durations[kFadeOut] = fadeOut;
+	_stage = kFadeIn;
+	_elapsed = 0;
+	_brightness = 0;
+}
+
+void Fader::fadeOut() {
+	if (active() && _stage != kFadeOut) {
+		_stage = kFadeOut;
+		_elapsed = 0;
+	}
+}
+
+void Fader::update(uint32 elapsed) {
+	if (!active())
+		return;
+	const uint32 duration = _durations[_stage];
+	if (elapsed < duration - _elapsed) {
+		// CFader samples the current alpha before advancing its timer.
+		if (_stage != kHold) {
+			const byte level = (uint64)_elapsed * 255 / duration;
+			_brightness = _stage == kFadeIn ? level : 255 - level;
+		}
+		_elapsed += elapsed;
+		return;
+	}
+
+	_brightness = _stage == kFadeOut ? 0 : 255;
+	_elapsed = 0;
+	do {
+		_stage = (Stage)(_stage + 1);
+	} while (active() && !_durations[_stage]);
+}
+
 Vars::Vars() {
 	sceneIntro_aniin1man = nullptr;
 	sceneIntro_needSleep = true;
@@ -520,8 +557,8 @@ int NGIEngine::getSceneFromTag(int tag) {
 
 void NGIEngine::sceneAutoScrolling() {
 	if (_aniMan2 == _aniMan && _currentScene && !_currentScene->_messageQueueId) {
-		if (800 - _mouseScreenPos.x >= 47 || _sceneRect.right >= _sceneWidth - 1 || _aniMan->_ox <= _sceneRect.left + 230) {
-			if (_mouseScreenPos.x < 47 && _sceneRect.left > 0 && _aniMan->_ox < _sceneRect.right - 230)
+		if (800 - _mouseScreenPos.x >= 47 || _sceneRect.right >= _sceneWidth - 1 || _aniMan->_x <= _sceneRect.left + 230) {
+			if (_mouseScreenPos.x < 47 && _sceneRect.left > 0 && _aniMan->_x < _sceneRect.right - 230)
 				_currentScene->_x = -10;
 		} else {
 			_currentScene->_x = 10;
@@ -529,16 +566,16 @@ void NGIEngine::sceneAutoScrolling() {
 	}
 }
 
-bool NGIEngine::sceneSwitcher(const EntranceInfo &entrance) {
+bool NGIEngine::doSetScene(const Entrance &entrance) {
 	GameVar *sceneVar;
 	Common::Point sceneDim;
 
-	Scene *scene = accessScene(entrance._sceneId);
+	Scene *scene = findScene(entrance._sceneId);
 
 	if (!scene)
 		return 0;
 
-	sceneDim = scene->_picObjList.front()->getDimensions();
+	sceneDim = scene->_pictureObjects.front()->getFullSize();
 	_sceneWidth = sceneDim.x;
 	_sceneHeight = sceneDim.y;
 
@@ -550,7 +587,7 @@ bool NGIEngine::sceneSwitcher(const EntranceInfo &entrance) {
 	scene->_x = 0;
 	scene->_y = 0;
 
-	_aniMan->setOXY(0, 0);
+	_aniMan->setPos(0, 0);
 	_aniMan->clearFlags();
 	_aniMan->_callback1 = nullptr; // Really NULL
 	_aniMan->_callback2 = nullptr; // Really NULL
@@ -566,13 +603,13 @@ bool NGIEngine::sceneSwitcher(const EntranceInfo &entrance) {
 		_inventoryScene = nullptr;
 	} else {
 		_gameLoader->loadScene(SC_INV);
-		getGameLoaderInventory()->rebuildItemRects();
+		getGameLoaderInventory()->recalcItemPos();
 		_inventoryScene = getGameLoaderInventory()->getScene();
 	}
 	if (_soundEnabled) {
 		if (scene->_soundList) {
 			_currSoundListCount = 2;
-			_currSoundList1[0] = accessScene(SC_COMMON)->_soundList.get();
+			_currSoundList1[0] = findScene(SC_COMMON)->_soundList.get();
 			_currSoundList1[1] = scene->_soundList.get();
 
 			for (int i = 0; i < scene->_soundList->getCount(); i++) {
@@ -580,32 +617,32 @@ bool NGIEngine::sceneSwitcher(const EntranceInfo &entrance) {
 			}
 		} else {
 			_currSoundListCount = 1;
-			_currSoundList1[0] = accessScene(SC_COMMON)->_soundList.get();
+			_currSoundList1[0] = findScene(SC_COMMON)->_soundList.get();
 		}
 	}
 
 	getGameLoaderInteractionController()->sortInteractions(scene->_sceneId);
 	_currentScene = scene;
-	scene->addStaticANIObject(_aniMan, 1);
+	scene->addAni(_aniMan, 1);
 	_scene2 = scene;
 	_aniMan->_movement = nullptr;
-	_aniMan->_statics = _aniMan->getStaticsById(ST_MAN_EMPTY);
-	_aniMan->setOXY(0, 0);
+	_aniMan->_statics = _aniMan->getStatic(ST_MAN_EMPTY);
+	_aniMan->setPos(0, 0);
 
 	_aniMan2 = _aniMan;
 	MctlCompound *cmp = getSc2MctlCompoundBySceneId(entrance._sceneId);
 	cmp->initMctlGraph();
 	cmp->attachObject(_aniMan);
 	cmp->activate();
-	getGameLoaderInteractionController()->enableFlag24();
+	getGameLoaderInteractionController()->enable();
 	setInputDisabled(0);
 
 	scene->setPictureObjectsFlag4();
 
-	for (uint i = 0; i < scene->_staticANIObjectList1.size(); i++)
-		scene->_staticANIObjectList1[i]->_flags &= 0xFE7F;
+	for (uint i = 0; i < scene->_aniObjects.size(); i++)
+		scene->_aniObjects[i]->_flags &= 0xFE7F;
 
-	PictureObject *p = accessScene(SC_INV)->getPictureObjectById(PIC_INV_MENU, 0);
+	PictureObject *p = findScene(SC_INV)->findPictureObjectById(PIC_INV_MENU, 0);
 	p->setFlags(p->_flags & 0xFFFB);
 
 	removeMessageHandler(2, -1);
@@ -638,7 +675,7 @@ bool NGIEngine::sceneSwitcher(const EntranceInfo &entrance) {
 		scene01_fixEntrance();
 		sceneVar = _gameLoader->_gameVar->getSubVarByName("SC_1");
 		scene->preloadMovements(sceneVar);
-		scene01_initScene(scene, entrance._field_4);
+		scene01_initScene(scene, entrance._id);
 		_behaviorManager->initBehavior(scene, sceneVar);
 		scene->initObjectCursors("SC_1");
 		setSceneMusicParameters(sceneVar);
@@ -848,12 +885,12 @@ bool NGIEngine::sceneSwitcher(const EntranceInfo &entrance) {
 
 	case SC_19:
 		if (!g_nmi->_scene3) {
-			g_nmi->_scene3 = accessScene(SC_18);
+			g_nmi->_scene3 = findScene(SC_18);
 			g_nmi->_gameLoader->loadScene(SC_18);
 
 			scene18_initScene2(g_nmi->_scene3);
 			scene18_preload();
-			scene19_setMovements(g_nmi->_scene3, entrance._field_4);
+			scene19_setMovements(g_nmi->_scene3, entrance._id);
 
 			g_vars->scene18_inScene18p1 = true;
 		}
@@ -937,12 +974,12 @@ bool NGIEngine::sceneSwitcher(const EntranceInfo &entrance) {
 	case SC_25:
 		sceneVar = _gameLoader->_gameVar->getSubVarByName("SC_25");
 		scene->preloadMovements(sceneVar);
-		scene25_initScene(scene, entrance._field_4);
+		scene25_initScene(scene, entrance._id);
 		_behaviorManager->initBehavior(scene, sceneVar);
 		scene->initObjectCursors("SC_25");
 		setSceneMusicParameters(sceneVar);
 		addMessageHandler(sceneHandler25, 2);
-		scene25_setupWater(scene, entrance._field_4);
+		scene25_setupWater(scene, entrance._id);
 		_updateCursorCallback = scene25_updateCursor;
 		break;
 
@@ -994,7 +1031,7 @@ bool NGIEngine::sceneSwitcher(const EntranceInfo &entrance) {
 	case SC_30:
 		sceneVar = _gameLoader->_gameVar->getSubVarByName("SC_30");
 		scene->preloadMovements(sceneVar);
-		scene30_initScene(scene, entrance._field_4);
+		scene30_initScene(scene, entrance._id);
 		_behaviorManager->initBehavior(scene, sceneVar);
 		scene->initObjectCursors("SC_30");
 		setSceneMusicParameters(sceneVar);
@@ -1314,7 +1351,7 @@ void NGIEngine::updateMap(PreloadItem *pre) {
 		break;
 
 	case SC_23:
-		if (getObjectState(sO_UpperHatch_23) == getObjectEnumState(sO_UpperHatch_23, sO_Opened)) {
+		if (getStateId(sO_UpperHatch_23) == getStateValue(sO_UpperHatch_23, sO_Opened)) {
 			updateMapPiece(PIC_MAP_S23_1, 0);
 			updateMapPiece(PIC_MAP_S23_2, 1);
 			updateMapPiece(PIC_MAP_P07, 1);
@@ -1387,7 +1424,7 @@ void NGIEngine::updateMap(PreloadItem *pre) {
 	case SC_31:
 		updateMapPiece(PIC_MAP_S31_2, 1);
 
-		if (getObjectState(sO_Cactus) == getObjectEnumState(sO_Cactus, sO_HasGrown))
+		if (getStateId(sO_Cactus) == getStateValue(sO_Cactus, sO_HasGrown))
 			updateMapPiece(PIC_MAP_S31_1, 1);
 
 		if (pre->param == TrubaRight)
@@ -1398,7 +1435,7 @@ void NGIEngine::updateMap(PreloadItem *pre) {
 	case SC_32:
 		updateMapPiece(PIC_MAP_S32_2, 1);
 
-		if (getObjectState(sO_Cactus) == getObjectEnumState(sO_Cactus, sO_HasGrown))
+		if (getStateId(sO_Cactus) == getStateValue(sO_Cactus, sO_HasGrown))
 			updateMapPiece(PIC_MAP_S32_1, 1);
 
 		break;

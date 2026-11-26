@@ -1,0 +1,204 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef ULTIMA1_H
+#define ULTIMA1_H
+
+#include "common/scummsys.h"
+#include "common/system.h"
+#include "common/error.h"
+#include "common/fs.h"
+#include "common/hash-str.h"
+#include "common/ptr.h"
+#include "common/random.h"
+#include "common/serializer.h"
+#include "common/util.h"
+#include "audio/audiostream.h"
+#include "audio/mixer.h"
+#include "engines/engine.h"
+#include "engines/savestate.h"
+#include "graphics/palette.h"
+#include "graphics/screen.h"
+#include "ultima/shared/engine/events.h"
+#include "ultima/detection.h"
+#include "ultima/ultima1/data/map.h"
+#include "ultima/ultima1/data/map_dungeon.h"
+#include "ultima/ultima1/gfx/render_mode.h"
+#include "ultima/ultima1/data/savegame.h"
+#include "ultima/ultima1/data/space_map.h"
+#include "ultima/ultima1/data/tiles.h"
+#include "ultima/ultima1/logic/logic.h"
+
+namespace Ultima {
+namespace Ultima1 {
+
+struct Ultima1GameDescription;
+
+class Ultima1Engine : public Engine, public Shared::Events {
+private:
+	const Ultima::UltimaGameDescription *_gameDescription;
+	Audio::QueuingAudioStream *_effectStream = nullptr;
+	Audio::SoundHandle _effectHandle;
+
+	/**
+	 * Queues up the samples of a sound effect to be played after any already playing
+	 */
+	void queueEffect(const Common::Array<byte> &samples);
+
+protected:
+	// Engine APIs
+	Common::Error run() override;
+
+	/**
+	 * Returns true if the game should quit
+	 */
+	bool shouldQuit() const override {
+		return Engine::shouldQuit();
+	}
+
+	/**
+	 * Goes back to the main menu
+	 */
+	void returnToMainMenu() override;
+
+public:
+	// The graphics being shown, and the palette indices things are drawn
+	// with in them
+	Data::RenderMode _renderMode = Data::RENDER_EGA;
+	Data::RenderColors _colors;
+	Data::Map _map;
+	Data::MapDungeon _dungeon;
+	Data::SpaceStarfield _starfield;
+	Data::Savegame _savegame;
+	Common::SharedPtr<Logic::Logic> _logic;
+	int _creaturesCount = 0;
+	int _transportFoodCtr = 0;
+	// The flight speed set while in the cockpit view (the overhead vs
+	// cockpit distinction is carried by which SpaceLogic subclass is active)
+	int _cockpitSpeed = 0;
+	// The speed it was when the cockpit view was entered, which the drift on
+	// return to the overhead view is scaled relative to
+	int _cockpitEntrySpeed = 1;
+	// The overhead sector view's current drift velocity (sectorChangeX/Y),
+	// applied to the player's ship position each frame, and the number of
+	// frames left to keep showing its engine exhaust trail (_countdown)
+	int _sectorDriftX = 0;
+	int _sectorDriftY = 0;
+	int _shipExhaustCountdown = 0;
+	// The current cockpit-view combat encounter's screen position (0 = no
+	// enemy currently engaged), set up by SpaceCockpitLogic::setupSectorEnemies
+	int _cockpitTargetX = 0;
+	int _cockpitTargetY = 0;
+	// How far the current encounter has "closed in" (targetApproachStage,
+	// 0-6 - indexes the SPACE_TARGET_HIT_* tables), and the frame counter
+	// gating how often it advances (approachTimer)
+	int _cockpitTargetStage = 0;
+	int _cockpitApproachTimer = 0;
+
+public:
+	Ultima1Engine(OSystem *syst, const Ultima::UltimaGameDescription *gameDesc);
+	~Ultima1Engine() override;
+
+	uint32 getFeatures() const;
+
+	/**
+	 * Returns the game Id
+	 */
+	Common::String getGameId() const;
+
+	bool hasFeature(EngineFeature f) const override {
+		return
+			(f == kSupportsLoadingDuringRuntime) ||
+			(f == kSupportsSavingDuringRuntime) ||
+			(f == kSupportsReturnToLauncher);
+	};
+
+	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
+	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
+
+	/**
+	 * Uses a serializer to allow implementing savegame
+	 * loading and saving using a single method
+	 */
+	Common::Error syncGame(Common::Serializer &s);
+
+	Common::Error saveGameStream(Common::WriteStream *stream, bool  = false) override {
+		Common::Serializer s(nullptr, stream);
+		return syncGame(s);
+	}
+	Common::Error loadGameStream(Common::SeekableReadStream *stream) override {
+		Common::Serializer s(stream, nullptr);
+		return syncGame(s);
+	}
+
+	/**
+	 * Returns true if any savegames exist
+	 */
+	bool savegamesExist() const;
+
+	/**
+	 * Plays one of the sound effects (0 to 9), if sound is turned on
+	 */
+	void playFX(int num);
+
+	/**
+	 * Inverts the screen's colors, or puts them back, as when Mondain strikes the player
+	 */
+	void setHitFlash(bool on);
+
+	/**
+	 * Waits for as long as a sound effect lasts
+	 */
+	void pauseForEffect(int num);
+
+	/**
+	 * Briefly inverts the screen's colors for the duration of a sound effect
+	 */
+	void flashScreen(int effectNum);
+
+	/**
+	 * Pause for a given number of milliseconds
+	 */
+	void pauseMillis(uint32 millis);
+
+	/**
+	 * Switches to a different set of graphics
+	 */
+	void setRenderMode(Data::RenderMode mode);
+
+	/**
+	 * Picks up changes made to the game options
+	 */
+	void applyGameSettings() override;
+
+	/**
+	 * Returns a font object that GfxSurface instances can use
+	 */
+	Graphics::Font *createFont() const override;
+};
+
+extern Ultima1Engine *g_engine;
+#define _G(X) (Ultima1::g_engine->_##X)
+
+} // namespace Ultima1
+} // namespace Ultima
+
+#endif

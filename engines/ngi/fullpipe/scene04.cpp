@@ -44,7 +44,7 @@ static const int scene04_speakerPhases[] = {
 	0, 2, -1, -1, -1, -1
 };
 
-void sceneHandler04_putKozyawkaBack(StaticANIObject *ani);
+void sceneHandler04_putKozyawkaBack(AniObject *ani);
 
 void scene04_speakerCallback(int *phase) {
 	if (g_vars->scene04_soundPlaying) {
@@ -71,33 +71,33 @@ void scene04_initScene(Scene *sc) {
 	debugC(1, kDebugSceneLogic, "scene04_initScene()");
 
 #if 0
-	Inventory2 *inv = getGameLoaderInventory();
+	Inventory *inv = getGameLoaderInventory();
 	inv->addItem(ANI_INV_COIN, 1);
-	inv->rebuildItemRects();
+	inv->recalcItemPos();
 #endif
 
 	g_vars->scene04_dudeOnLadder = false;
-	g_vars->scene04_bottle = sc->getPictureObjectById(PIC_SC4_BOTTLE, 0);
-	g_vars->scene04_hand = sc->getStaticANIObject1ById(ANI_HAND, -1);
-	g_vars->scene04_plank = sc->getStaticANIObject1ById(ANI_PLANK, -1);
-	g_vars->scene04_clock = sc->getStaticANIObject1ById(ANI_CLOCK, -1);
-	g_vars->scene04_spring = sc->getStaticANIObject1ById(ANI_SPRING, -1);
-	g_vars->scene04_mamasha = sc->getStaticANIObject1ById(ANI_MAMASHA_4, -1);
-	g_vars->scene04_boot = sc->getStaticANIObject1ById(ANI_SC4_BOOT, -1);
+	g_vars->scene04_bottle = sc->findPictureObjectById(PIC_SC4_BOTTLE, 0);
+	g_vars->scene04_hand = sc->findAniObjectById(ANI_HAND, -1);
+	g_vars->scene04_plank = sc->findAniObjectById(ANI_PLANK, -1);
+	g_vars->scene04_clock = sc->findAniObjectById(ANI_CLOCK, -1);
+	g_vars->scene04_spring = sc->findAniObjectById(ANI_SPRING, -1);
+	g_vars->scene04_mamasha = sc->findAniObjectById(ANI_MAMASHA_4, -1);
+	g_vars->scene04_boot = sc->findAniObjectById(ANI_SC4_BOOT, -1);
 	g_vars->scene04_ladder = nullptr;
 
-	StaticANIObject *koz = sc->getStaticANIObject1ById(ANI_KOZAWKA, -1);
+	AniObject *koz = sc->findAniObjectById(ANI_KOZAWKA, -1);
 
 	if (koz) {
-		Movement *kozmov = koz->getMovementById(MV_KZW_JUMP);
+		Movement *kozmov = koz->getMovement(MV_KZW_JUMP);
 		if (kozmov) {
-			uint kozsize = kozmov->_currMovement ? kozmov->_currMovement->_dynamicPhases.size() : kozmov->_dynamicPhases.size();
+			uint kozsize = kozmov->_currMovement ? kozmov->_currMovement->_phases.size() : kozmov->_phases.size();
 
 			for (uint i = 0; i < kozsize; i++) {
-				kozmov->setDynamicPhaseIndex(i);
+				kozmov->setCurFrame(i);
 
 				if (kozmov->_framePosOffsets.size()) {
-					g_vars->scene04_jumpingKozyawki[i] = kozmov->_framePosOffsets[kozmov->_currDynamicPhaseIndex];
+					g_vars->scene04_jumpingKozyawki[i] = kozmov->_framePosOffsets[kozmov->_curFrame];
 				} else {
 					kozmov->_somePoint.x = 0;
 					kozmov->_somePoint.y = 0;
@@ -106,15 +106,15 @@ void scene04_initScene(Scene *sc) {
 			}
 		}
 
-		kozmov = koz->getMovementById(MV_KZW_JUMPROTATE);
+		kozmov = koz->getMovement(MV_KZW_JUMPROTATE);
 		if (kozmov) {
-			uint kozsize = kozmov->_currMovement ? kozmov->_currMovement->_dynamicPhases.size() : kozmov->_dynamicPhases.size();
+			uint kozsize = kozmov->_currMovement ? kozmov->_currMovement->_phases.size() : kozmov->_phases.size();
 
 			for (uint i = 0; i < kozsize; i++) {
-				kozmov->setDynamicPhaseIndex(i);
+				kozmov->setCurFrame(i);
 
 				if (kozmov->_framePosOffsets.size()) {
-					g_vars->scene04_jumpRotateKozyawki[i] = kozmov->_framePosOffsets[kozmov->_currDynamicPhaseIndex];
+					g_vars->scene04_jumpRotateKozyawki[i] = kozmov->_framePosOffsets[kozmov->_curFrame];
 				} else {
 					kozmov->_somePoint.x = 0;
 					kozmov->_somePoint.y = 0;
@@ -124,58 +124,58 @@ void scene04_initScene(Scene *sc) {
 		}
 	}
 
-	Interaction *plank = getGameLoaderInteractionController()->getInteractionByObjectIds(ANI_PLANK, 0, 0);
+	Interact *plank = getGameLoaderInteractionController()->findInteraction(ANI_PLANK, 0, 0);
 	if (plank)
 		plank->_flags |= 8;
 
-	if (g_nmi->getObjectState(sO_Jar_4) == g_nmi->getObjectEnumState(sO_Jar_4, sO_UpsideDown)) {
+	if (g_nmi->getStateId(sO_Jar_4) == g_nmi->getStateValue(sO_Jar_4, sO_UpsideDown)) {
 		debugC(2, kDebugSceneLogic, "scene04: Jar is upside down");
 
 		g_vars->scene04_bottleObjList.clear();
 		g_vars->scene04_kozyawkiObjList.clear();
 
-		sc->getPictureObjectById(PIC_SC4_BOTTLE, 0)->_flags &= 0xfffb;
-		sc->getPictureObjectById(PIC_SC4_MASK, 0)->_flags &= 0xfffb;
-		sc->getStaticANIObject1ById(ANI_SPRING, 0)->_flags &= 0xfffb;
+		sc->findPictureObjectById(PIC_SC4_BOTTLE, 0)->_flags &= 0xfffb;
+		sc->findPictureObjectById(PIC_SC4_MASK, 0)->_flags &= 0xfffb;
+		sc->findAniObjectById(ANI_SPRING, 0)->_flags &= 0xfffb;
 
 		g_vars->scene04_clockCanGo = false;
 		g_vars->scene04_objectIsTaken = false;
 	} else {
 		debugC(2, kDebugSceneLogic, "scene04: Jar is NOT upside down");
 
-		StaticANIObject *spring = sc->getStaticANIObject1ById(ANI_SPRING, -1);
+		AniObject *spring = sc->findAniObjectById(ANI_SPRING, -1);
 
 		if (spring)
 			spring->_callback2 = scene04_springCallback;
 
 		g_vars->scene04_bottleObjList.clear();
-		g_vars->scene04_bottleObjList.push_back(sc->getPictureObjectById(PIC_SC4_BOTTLE, 0));
-		g_vars->scene04_bottleObjList.push_back(sc->getPictureObjectById(PIC_SC4_MASK, 0));
+		g_vars->scene04_bottleObjList.push_back(sc->findPictureObjectById(PIC_SC4_BOTTLE, 0));
+		g_vars->scene04_bottleObjList.push_back(sc->findPictureObjectById(PIC_SC4_MASK, 0));
 
 		g_vars->scene04_kozyawkiObjList.clear();
 
 		if (koz) {
 			debugC(2, kDebugSceneLogic, "scene04: We're in koz");
 
-			koz->loadMovementsPixelData();
+			koz->loadMovements();
 
-			koz->_statics = koz->getStaticsById(ST_KZW_EMPTY);
-			koz->setOXY(0, 0);
+			koz->_statics = koz->getStatic(ST_KZW_EMPTY);
+			koz->setPos(0, 0);
 			koz->hide();
 
 			g_vars->scene04_kozyawkiObjList.push_back(koz);
 
 			for (int i = 0; i < 6; i++) {
-				StaticANIObject *koz1 = new StaticANIObject(koz);
+				AniObject *koz1 = new AniObject(koz);
 
-				sc->addStaticANIObject(koz1, 1);
-				koz1->_statics = koz->getStaticsById(ST_KZW_EMPTY);
-				koz1->setOXY(0, 0);
+				sc->addAni(koz1, 1);
+				koz1->_statics = koz->getStatic(ST_KZW_EMPTY);
+				koz1->setPos(0, 0);
 				koz1->hide();
 				g_vars->scene04_kozyawkiObjList.push_back(koz1);
 			}
 		}
-		sc->getPictureObjectById(PIC_SC4_BOTTLE2, 0)->_flags &= 0xfffb;
+		sc->findPictureObjectById(PIC_SC4_BOTTLE2, 0)->_flags &= 0xfffb;
 
 		g_vars->scene04_clockCanGo = true;
 		g_vars->scene04_objectIsTaken = true;
@@ -192,7 +192,7 @@ void scene04_initScene(Scene *sc) {
 
 	g_vars->scene04_kozyawkiAni.clear();
 
-	g_nmi->setObjectState(sO_LowerPipe, g_nmi->getObjectEnumState(sO_LowerPipe, sO_IsClosed));
+	g_nmi->setState(sO_LowerPipe, g_nmi->getStateValue(sO_LowerPipe, sO_IsClosed));
 
 	g_vars->scene04_var07 = false;
 	g_vars->scene04_ladderClickable = false;
@@ -205,12 +205,12 @@ void scene04_initScene(Scene *sc) {
 	g_vars->scene04_bigBallCounter = 0;
 	g_vars->scene04_bigBallFromLeft = true;
 
-	if (g_nmi->getObjectState(sO_BigMumsy) != g_nmi->getObjectEnumState(sO_BigMumsy, sO_IsGone))
+	if (g_nmi->getStateId(sO_BigMumsy) != g_nmi->getStateValue(sO_BigMumsy, sO_IsGone))
 		g_vars->scene04_mamasha->hide();
 
-	g_vars->scene04_speaker = sc->getStaticANIObject1ById(ANI_SPEAKER_4, -1);
+	g_vars->scene04_speaker = sc->findAniObjectById(ANI_SPEAKER_4, -1);
 	g_vars->scene04_speaker->_callback2 = scene04_speakerCallback;
-	g_vars->scene04_speaker->startAnim(MV_SPK4_PLAY, 0, -1);
+	g_vars->scene04_speaker->startMovement(MV_SPK4_PLAY, 0, -1);
 
 	g_vars->scene04_speakerVariant = 0;
 	g_vars->scene04_speakerPhase = 0;
@@ -222,15 +222,15 @@ void scene04_initScene(Scene *sc) {
 
 bool sceneHandler04_friesAreWalking() {
 	if (g_vars->scene04_dudeOnLadder && g_nmi->_aniMan->isIdle() && !(g_nmi->_aniMan->_flags & 0x100)) {
-		int col = g_vars->scene04_ladder->collisionDetection(g_nmi->_aniMan);
+		int col = g_vars->scene04_ladder->getCurrentStep(g_nmi->_aniMan);
 		if (col >= 3 && col <= 6 ) {
 			Movement *koz;
 
 			if (!g_vars->scene04_walkingKozyawka
 				 || (koz = g_vars->scene04_walkingKozyawka->_movement) == nullptr
 				 || koz->_id != MV_KZW_WALKPLANK
-				 || koz->_currDynamicPhaseIndex < 10
-				 || koz->_currDynamicPhaseIndex > 41)
+				 || koz->_curFrame < 10
+				 || koz->_curFrame > 41)
 				return true;
 		}
 	}
@@ -270,11 +270,11 @@ int scene04_updateCursor() {
 }
 
 void sceneHandler04_checkBigBallClick() {
-	StaticANIObject *ball = g_nmi->_currentScene->getStaticANIObject1ById(ANI_BIGBALL, -1);
+	AniObject *ball = g_nmi->_currentScene->findAniObjectById(ANI_BIGBALL, -1);
 
 	if (ball)
 		for (uint i = 0; i < ball->_movements.size(); i++)
-			ball->_movements[i]->_counterMax = 73;
+			ball->_movements[i]->_loopDelay = 73;
 
 	g_vars->scene04_bigBallIn = true;
 }
@@ -285,98 +285,98 @@ void sceneHandler04_clickBottle() {
 }
 
 void sceneHandler04_clickButton() {
-	StaticANIObject *but = g_nmi->_currentScene->getStaticANIObject1ById(ANI_BUTTON, -1);
+	AniObject *but = g_nmi->_currentScene->findAniObjectById(ANI_BUTTON, -1);
 
 	if (but) {
 		if (!g_vars->scene04_clock->_movement ||
-			(g_vars->scene04_clock->_movement->_id == MV_CLK_GO && g_vars->scene04_clock->_movement->_currDynamicPhaseIndex > 3 &&
-			 g_vars->scene04_clock->_movement->_currDynamicPhaseIndex < 105)) {
+			(g_vars->scene04_clock->_movement->_id == MV_CLK_GO && g_vars->scene04_clock->_movement->_curFrame > 3 &&
+			 g_vars->scene04_clock->_movement->_curFrame < 105)) {
 			if (!g_vars->scene04_hand->_movement && !g_vars->scene04_bottleIsTaken) {
-				but->startAnim(MV_BTN_CLICK, 0, -1);
-				g_vars->scene04_hand->startAnim(MV_HND_POINT, 0, -1);
+				but->startMovement(MV_BTN_CLICK, 0, -1);
+				g_vars->scene04_hand->startMovement(MV_HND_POINT, 0, -1);
 			}
 		}
 	}
 }
 
 void sceneHandler04_downLadder(int x, int y) {
-	g_vars->scene04_ladder->startMove(g_nmi->_aniMan, x + g_vars->scene04_ladder->_ladder_field_20, y + g_vars->scene04_ladder->_ladder_field_24, 0, 0);
+	g_vars->scene04_ladder->startMove(g_nmi->_aniMan, x + g_vars->scene04_ladder->_entryOffsetX, y + g_vars->scene04_ladder->_entryOffsetY, 0, 0);
 }
 
-void sceneHandler04_walkClimbLadder(ExCommand *ex) {
+void sceneHandler04_walkClimbLadder(Command *ex) {
 	MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
 
-	ExCommand *ex1 = new ExCommand(ANI_MAN, 1, MV_MAN_TOLADDER, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex1 = new Command(ANI_MAN, 1, MV_MAN_TOLADDER, 0, 0, 0, 1, 0, 0, 0);
 
-	ex1->_param = g_nmi->_aniMan->_odelay;
+	ex1->_param = g_nmi->_aniMan->_copyId;
 	ex1->_excFlags |= 2;
 
-	mq->addExCommandToEnd(ex1);
+	mq->addCommandToEnd(ex1);
 
-	ExCommand *ex2 = new ExCommand(ANI_MAN, 1, MV_MAN_STOPLADDER, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex2 = new Command(ANI_MAN, 1, MV_MAN_STOPLADDER, 0, 0, 0, 1, 0, 0, 0);
 
-	ex2->_param = g_nmi->_aniMan->_odelay;
+	ex2->_param = g_nmi->_aniMan->_copyId;
 	ex2->_excFlags |= 2;
 
-	mq->addExCommandToEnd(ex2);
+	mq->addCommandToEnd(ex2);
 
-	ExCommand *ex3;
+	Command *ex3;
 
 	if (ex) {
 		ex3 = ex->createClone();
 	} else {
-		ex3 = new ExCommand(0, 17, MSG_SC4_CLICKLADDER, 0, 0, 0, 1, 0, 0, 0);
+		ex3 = new Command(0, 17, MSG_SC4_CLICKLADDER, 0, 0, 0, 1, 0, 0, 0);
 		ex3->_excFlags |= 3;
 	}
 
-	mq->addExCommandToEnd(ex3);
+	mq->addCommandToEnd(ex3);
 
 	mq->setFlags(mq->getFlags() | 1);
 
-	mq->chain(nullptr);
+	mq->run(nullptr);
 
 	g_vars->scene04_dudeOnLadder = 1;
 
 	g_vars->scene04_ladder = new MctlLadder;
-	g_vars->scene04_ladder->_ladderX = 1089;
-	g_vars->scene04_ladder->_ladderY = 406;
-	g_vars->scene04_ladder->_ladder_field_14 = 12;
-	g_vars->scene04_ladder->_width = 0;
-	g_vars->scene04_ladder->_height = -40;
-	g_vars->scene04_ladder->_ladder_field_20 = 0;
-	g_vars->scene04_ladder->_ladder_field_24 = -60;
+	g_vars->scene04_ladder->_x = 1089;
+	g_vars->scene04_ladder->_y = 406;
+	g_vars->scene04_ladder->_z = 12;
+	g_vars->scene04_ladder->_stepX = 0;
+	g_vars->scene04_ladder->_stepY = -40;
+	g_vars->scene04_ladder->_entryOffsetX = 0;
+	g_vars->scene04_ladder->_entryOffsetY = -60;
 
 	g_vars->scene04_ladder->attachObject(g_nmi->_aniMan);
 
 	if (g_vars->scene04_soundPlaying) {
-		g_vars->scene04_ladder->_ladmovements.front()->movVars->varUpStart = MV_MAN_STARTLADDER2;
-		g_vars->scene04_ladder->_ladmovements.front()->movVars->varUpGo = MV_MAN_GOLADDER2;
-		g_vars->scene04_ladder->_ladmovements.front()->movVars->varUpStop = MV_MAN_STOPLADDER2;
+		g_vars->scene04_ladder->_ladmovements.front()->movementIds->upStartId = MV_MAN_STARTLADDER2;
+		g_vars->scene04_ladder->_ladmovements.front()->movementIds->upGoId = MV_MAN_GOLADDER2;
+		g_vars->scene04_ladder->_ladmovements.front()->movementIds->upStopId = MV_MAN_STOPLADDER2;
 		g_vars->scene04_ladder->_ladmovements.front()->staticIds[2] = ST_MAN_GOLADDER2;
 	} else {
-		g_vars->scene04_ladder->_ladmovements.front()->movVars->varUpStart = MV_MAN_STARTLADDER;
-		g_vars->scene04_ladder->_ladmovements.front()->movVars->varUpGo = MV_MAN_GOLADDER;
-		g_vars->scene04_ladder->_ladmovements.front()->movVars->varUpStop = MV_MAN_STOPLADDER;
+		g_vars->scene04_ladder->_ladmovements.front()->movementIds->upStartId = MV_MAN_STARTLADDER;
+		g_vars->scene04_ladder->_ladmovements.front()->movementIds->upGoId = MV_MAN_GOLADDER;
+		g_vars->scene04_ladder->_ladmovements.front()->movementIds->upStopId = MV_MAN_STOPLADDER;
 		g_vars->scene04_ladder->_ladmovements.front()->staticIds[2] = ST_MAN_GOLADDER;
 	}
 
-	g_nmi->_aniMan->_priority = 12;
+	g_nmi->_aniMan->_z = 12;
 
 	getSc2MctlCompoundBySceneId(g_nmi->_currentScene->_sceneId)->deactivate();
-	getGameLoaderInteractionController()->disableFlag24();
+	getGameLoaderInteractionController()->disable();
 }
 
 void sceneHandler04_clickLadder() {
-	g_vars->scene04_dudePosX = g_nmi->_aniMan->_ox;
-	g_vars->scene04_dudePosY = g_nmi->_aniMan->_oy;
+	g_vars->scene04_dudePosX = g_nmi->_aniMan->_x;
+	g_vars->scene04_dudePosY = g_nmi->_aniMan->_y;
 
 	if (g_vars->scene04_dudeOnLadder) {
 		if (!g_nmi->_aniMan->isIdle() || (g_nmi->_aniMan->_flags & 0x100)) {
 			g_vars->scene04_ladderClickable = true;
 		} else {
-			int h3 = 3 * g_vars->scene04_ladder->_height;
-			int half = abs(g_vars->scene04_ladder->_height) / 2;
-			int start = g_vars->scene04_ladder->_ladderY - g_vars->scene04_ladder->_ladder_field_24;
+			int h3 = 3 * g_vars->scene04_ladder->_stepY;
+			int half = abs(g_vars->scene04_ladder->_stepY) / 2;
+			int start = g_vars->scene04_ladder->_y - g_vars->scene04_ladder->_entryOffsetY;
 			int min = 2 * h3 + start + half + 1;
 			int max =     h3 + start - half - 1;
 
@@ -395,10 +395,10 @@ void sceneHandler04_clickLadder() {
 			if (abs(1095 - g_vars->scene04_dudePosX) > 1 || abs(434 - g_vars->scene04_dudePosY) > 1) {
 				MessageQueue *mq = getSc2MctlCompoundBySceneId(g_nmi->_currentScene->_sceneId)->startMove(g_nmi->_aniMan, 1095, 434, 1, ST_MAN_UP);
 				if (mq) {
-					ExCommand *ex = new ExCommand(0, 17, MSG_SC4_CLICKLADDER, 0, 0, 0, 1, 0, 0, 0);
+					Command *ex = new Command(0, 17, MSG_SC4_CLICKLADDER, 0, 0, 0, 1, 0, 0, 0);
 
 					ex->_excFlags = 3;
-					mq->addExCommandToEnd(ex);
+					mq->addCommandToEnd(ex);
 
 					postExCommand(g_nmi->_aniMan->_id, 2, 1095, 434, 0, -1);
 				}
@@ -416,7 +416,7 @@ void sceneHandler04_jumpOnLadder() {
 	if (g_nmi->_aniMan->_statics->_staticsId != ST_MAN_STANDLADDER && g_nmi->_aniMan->_statics->_staticsId != ST_MAN_LADDERDOWN)
 		return;
 
-	g_nmi->_aniMan->changeStatics2(ST_MAN_LADDERDOWN);
+	g_nmi->_aniMan->setStatic(ST_MAN_LADDERDOWN);
 
 	g_nmi->_aniMan->_flags |= 0x100;
 
@@ -429,8 +429,8 @@ void sceneHandler04_jumpOnLadder() {
 	mkQueue.staticsId2 = ST_MAN_ONPLANK;
 	mkQueue.x1 = 938;
 	mkQueue.y1 = 442;
-	mkQueue.field_1C = 10;
-	mkQueue.field_10 = 1;
+	mkQueue.destZ = 10;
+	mkQueue.cycleCount = 1;
 	mkQueue.flags = 78;
 	mkQueue.movementId = MV_MAN_JUMPONPLANK;
 
@@ -439,13 +439,13 @@ void sceneHandler04_jumpOnLadder() {
 	if (mq) {
 		mq->_flags |= 1;
 
-		if (!mq->chain(g_nmi->_aniMan))
+		if (!mq->run(g_nmi->_aniMan))
 			delete mq;
 
-		g_nmi->_aniMan->_priority = 10;
+		g_nmi->_aniMan->_z = 10;
 	}
 
-	g_vars->scene04_ladderOffset = g_vars->scene04_ladder->collisionDetection(g_nmi->_aniMan);
+	g_vars->scene04_ladderOffset = g_vars->scene04_ladder->getCurrentStep(g_nmi->_aniMan);
 }
 
 void sceneHandler04_clickPlank() {
@@ -454,16 +454,16 @@ void sceneHandler04_clickPlank() {
 	else if (g_vars->scene04_dudeOnLadder)
 		g_nmi->playSound(SND_4_033, 0);
 	else if (!g_vars->scene04_soundPlaying)
-		chainQueue(QU_PNK_CLICK, 0);
+		runQueue(QU_PNK_CLICK, 0);
 }
 
-void sceneHandler04_dropBottle() {
+void sceneHandler04_doDropBottle() {
 	g_vars->scene04_bottleIsDropped = true;
 	g_vars->scene04_bottleY = 10;
 	g_vars->scene04_bottleWeight = 0;
 
 	while (g_vars->scene04_kozyawkiAni.size()) {
-		StaticANIObject *koz = g_vars->scene04_kozyawkiAni.front();
+		AniObject *koz = g_vars->scene04_kozyawkiAni.front();
 		g_vars->scene04_kozyawkiAni.pop_front();
 
 		for (Common::List<GameObject *>::iterator it = g_vars->scene04_bottleObjList.begin(); it != g_vars->scene04_bottleObjList.end(); ++it)
@@ -472,19 +472,19 @@ void sceneHandler04_dropBottle() {
 				break;
 			}
 
-		koz->queueMessageQueue(nullptr);
+		koz->setQueue(nullptr);
 		koz->hide();
 
 		g_vars->scene04_kozyawkiObjList.push_back(koz);
 	}
 
-	g_vars->scene04_hand->changeStatics2(ST_HND_EMPTY);
+	g_vars->scene04_hand->setStatic(ST_HND_EMPTY);
 
-	g_vars->scene04_hand->setOXY(429, 21);
-	g_vars->scene04_hand->_priority = 15;
+	g_vars->scene04_hand->setPos(429, 21);
+	g_vars->scene04_hand->_z = 15;
 }
 
-void sceneHandler04_gotoLadder(ExCommand *ex) {
+void sceneHandler04_gotoLadder(Command *ex) {
 	AniHandler aniHandler;
 	MakeQueueStruct mkQueue;
 
@@ -494,44 +494,44 @@ void sceneHandler04_gotoLadder(ExCommand *ex) {
 	mkQueue.staticsId2 = ST_MAN_UP;
 	mkQueue.x1 = 1095;
 	mkQueue.y1 = 434;
-	mkQueue.field_1C = 12;
-	mkQueue.field_10 = 1;
+	mkQueue.destZ = 12;
+	mkQueue.cycleCount = 1;
 	mkQueue.flags = 78;
 	mkQueue.movementId = MV_MAN_PLANKTOLADDER;
 
 	MessageQueue *mq = aniHandler.makeRunQueue(&mkQueue);
 
 	if (mq) {
-		mq->deleteExCommandByIndex(mq->getCount() - 1, 1);
+		mq->removeCommand(mq->getCount() - 1, 1);
 
-		ExCommand *ex1 = new ExCommand(ANI_MAN, 1, MV_MAN_TOLADDER, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex1 = new Command(ANI_MAN, 1, MV_MAN_TOLADDER, 0, 0, 0, 1, 0, 0, 0);
 		ex1->_excFlags = 2;
-		ex1->_field_24 = 1;
+		ex1->_wait = 1;
 		ex1->_param = -1;
-		mq->addExCommandToEnd(ex1);
+		mq->addCommandToEnd(ex1);
 
-		ExCommand *ex2 = new ExCommand(ANI_MAN, 1, MV_MAN_STOPLADDER, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex2 = new Command(ANI_MAN, 1, MV_MAN_STOPLADDER, 0, 0, 0, 1, 0, 0, 0);
 		ex2->_excFlags = 2;
-		ex2->_field_24 = 1;
+		ex2->_wait = 1;
 		ex2->_param = -1;
-		mq->addExCommandToEnd(ex2);
+		mq->addCommandToEnd(ex2);
 
-		ExCommand *ex3 = new ExCommand(g_nmi->_aniMan->_id, 34, 256, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex3 = new Command(g_nmi->_aniMan->_id, 34, 256, 0, 0, 0, 1, 0, 0, 0);
 		ex3->_z = 256;
 		ex3->_messageNum = 0;
 		ex3->_excFlags |= 3;
-		mq->addExCommandToEnd(ex3);
+		mq->addCommandToEnd(ex3);
 
 		if (ex) {
-			ExCommand *ex4 = ex->createClone();
+			Command *ex4 = ex->createClone();
 
-			mq->addExCommandToEnd(ex4);
+			mq->addCommandToEnd(ex4);
 		}
 
 		mq->setFlags(mq->getFlags() | 1);
 
-		if (mq->chain(g_nmi->_aniMan)) {
-			g_nmi->_aniMan->_priority = 12;
+		if (mq->run(g_nmi->_aniMan)) {
+			g_nmi->_aniMan->_z = 12;
 			g_nmi->_aniMan->_flags |= 0x100;
 		} else {
 			delete mq;
@@ -542,7 +542,7 @@ void sceneHandler04_gotoLadder(ExCommand *ex) {
 }
 
 void sceneHandler04_lowerPlank() {
-	g_vars->scene04_plank->startAnim(MV_PNK_WEIGHTRIGHT, 0, -1);
+	g_vars->scene04_plank->startMovement(MV_PNK_WEIGHTRIGHT, 0, -1);
 }
 
 void sceneHandler04_manFromBottle() {
@@ -559,7 +559,7 @@ void sceneHandler04_manFromBottle() {
 	g_vars->scene04_ladder = nullptr;
 
 	getSc2MctlCompoundBySceneId(g_nmi->_currentScene->_sceneId)->activate();
-	getGameLoaderInteractionController()->enableFlag24();
+	getGameLoaderInteractionController()->enable();
 }
 
 void sceneHandler04_manToBottle() {
@@ -571,10 +571,10 @@ void sceneHandler04_manToBottle() {
 }
 
 void sceneHandler04_raisePlank() {
-	g_vars->scene04_plank->startAnim(MV_PNK_WEIGHTLEFT, 0, -1);
+	g_vars->scene04_plank->startMovement(MV_PNK_WEIGHTLEFT, 0, -1);
 }
 
-MessageQueue *sceneHandler04_kozFly3(StaticANIObject *ani, double phase) {
+MessageQueue *sceneHandler04_kozFly3(AniObject *ani, double phase) {
 	AniHandler aniHandler;
 	MakeQueueStruct mkQueue;
 
@@ -586,46 +586,46 @@ MessageQueue *sceneHandler04_kozFly3(StaticANIObject *ani, double phase) {
 	mkQueue.staticsId2 = ST_KZW_SIT;
 	mkQueue.x1 = (int)(723.0 - phase * 185.0);
 	mkQueue.y1 = 486;
-	mkQueue.field_1C = 10;
-	mkQueue.field_10 = 1;
+	mkQueue.destZ = 10;
+	mkQueue.cycleCount = 1;
 	mkQueue.flags = 78;
 	mkQueue.movementId = MV_KZW_JUMP;
 
 	MessageQueue *mq = aniHandler.makeRunQueue(&mkQueue);
 
 	if (mq) {
-		ExCommand *ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_STANDUP, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(ANI_KOZAWKA, 1, MV_KZW_STANDUP, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_TURN, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 1, MV_KZW_TURN, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
 		for (int i = 0; i < 5; i++) {
-			ex = new ExCommand(ANI_KOZAWKA, 1, rMV_KZW_GOR, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(ANI_KOZAWKA, 1, rMV_KZW_GOR, 0, 0, 0, 1, 0, 0, 0);
 			ex->_excFlags |= 2;
-			ex->_param = ani->_odelay;
-			mq->addExCommandToEnd(ex);
+			ex->_param = ani->_copyId;
+			mq->addCommandToEnd(ex);
 		}
 
-		ex = new ExCommand(ANI_KOZAWKA, 6, 0, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 6, 0, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 3;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_KOZAWKA, 17, MSG_KOZAWRESTART, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 17, MSG_KOZAWRESTART, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 3;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 	}
 
 	return mq;
 }
 
-MessageQueue *sceneHandler04_kozFly5(StaticANIObject *ani, double phase) {
+MessageQueue *sceneHandler04_kozFly5(AniObject *ani, double phase) {
 	AniHandler aniHandler;
 	MakeQueueStruct mkQueue;
 
@@ -636,9 +636,9 @@ MessageQueue *sceneHandler04_kozFly5(StaticANIObject *ani, double phase) {
 	mkQueue.ani = ani;
 	mkQueue.staticsId2 = ST_KZW_JUMPOUT;
 	mkQueue.x1 = 525;
-	mkQueue.y1 = (int)(344.0 - (double)(320 - g_vars->scene04_bottle->_oy) * phase);
-	mkQueue.field_1C = 10;
-	mkQueue.field_10 = 1;
+	mkQueue.y1 = (int)(344.0 - (double)(320 - g_vars->scene04_bottle->_y) * phase);
+	mkQueue.destZ = 10;
+	mkQueue.cycleCount = 1;
 	mkQueue.flags = 78;
 	mkQueue.movementId = MV_KZW_JUMPHIT;
 
@@ -649,47 +649,47 @@ MessageQueue *sceneHandler04_kozFly5(StaticANIObject *ani, double phase) {
 	mkQueue.staticsId1 = ST_KZW_JUMPOUT;
 	mkQueue.staticsId2 = ST_KZW_SIT;
 	mkQueue.x2 = 525;
-	mkQueue.y2 = (int)(344.0 - (double)(320 - g_vars->scene04_bottle->_oy) * phase);
+	mkQueue.y2 = (int)(344.0 - (double)(320 - g_vars->scene04_bottle->_y) * phase);
 	mkQueue.y1 = 486;
-	mkQueue.field_1C = 10;
-	mkQueue.field_10 = 1;
+	mkQueue.destZ = 10;
+	mkQueue.cycleCount = 1;
 	mkQueue.flags = 117;
 	mkQueue.movementId = MV_KZW_JUMPOUT;
 
 	MessageQueue *mq2 = aniHandler.makeRunQueue(&mkQueue);
 
 	if (mq1 && mq2) {
-		mq1->addExCommandToEnd(mq2->getExCommandByIndex(0)->createClone());
+		mq1->addCommandToEnd(mq2->getCommandByIndex(0)->createClone());
 
 		delete mq2;
 		mq2 = nullptr;
 
-		ExCommand *ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_STANDUP, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(ANI_KOZAWKA, 1, MV_KZW_STANDUP, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq1->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq1->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_TURN, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 1, MV_KZW_TURN, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq1->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq1->addCommandToEnd(ex);
 
 		for (int i = 0; i < 5; i++) {
-			ex = new ExCommand(ANI_KOZAWKA, 1, rMV_KZW_GOR, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(ANI_KOZAWKA, 1, rMV_KZW_GOR, 0, 0, 0, 1, 0, 0, 0);
 			ex->_excFlags |= 2;
-			ex->_param = ani->_odelay;
-			mq1->addExCommandToEnd(ex);
+			ex->_param = ani->_copyId;
+			mq1->addCommandToEnd(ex);
 		}
 
-		ex = new ExCommand(ANI_KOZAWKA, 6, 0, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 6, 0, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 3;
-		ex->_param = ani->_odelay;
-		mq1->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq1->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_KOZAWKA, 17, MSG_KOZAWRESTART, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 17, MSG_KOZAWRESTART, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 3;
-		ex->_param = ani->_odelay;
-		mq1->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq1->addCommandToEnd(ex);
 	}
 
 	if (mq2)
@@ -698,7 +698,7 @@ MessageQueue *sceneHandler04_kozFly5(StaticANIObject *ani, double phase) {
 	return mq1;
 }
 
-MessageQueue *sceneHandler04_kozFly6(StaticANIObject *ani) {
+MessageQueue *sceneHandler04_kozFly6(AniObject *ani) {
 	AniHandler aniHandler;
 	MakeQueueStruct mkQueue;
 
@@ -709,31 +709,31 @@ MessageQueue *sceneHandler04_kozFly6(StaticANIObject *ani) {
 	mkQueue.ani = ani;
 	mkQueue.staticsId2 = ST_KZW_SIT;
 	mkQueue.x1 = 397 - 4 * g_nmi->_rnd.getRandomNumber(1);
-	mkQueue.field_1C = ani->_priority;
-	mkQueue.y1 = g_vars->scene04_bottle->_oy - 4 * g_nmi->_rnd.getRandomNumber(1) + 109;
-	mkQueue.field_10 = 1;
+	mkQueue.destZ = ani->_z;
+	mkQueue.y1 = g_vars->scene04_bottle->_y - 4 * g_nmi->_rnd.getRandomNumber(1) + 109;
+	mkQueue.cycleCount = 1;
 	mkQueue.flags = 78;
 	mkQueue.movementId = MV_KZW_JUMPROTATE;
 
 	MessageQueue *mq = aniHandler.makeRunQueue(&mkQueue);
 
 	if (mq) {
-		mq->deleteExCommandByIndex(mq->getCount() - 1, 1);
+		mq->removeCommand(mq->getCount() - 1, 1);
 
-		ExCommand *ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_STANDUP, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(ANI_KOZAWKA, 1, MV_KZW_STANDUP, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_GOR, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 1, MV_KZW_GOR, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_RAISEHEAD, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 1, MV_KZW_RAISEHEAD, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
 		g_vars->scene04_kozHeadRaised = true;
 	}
@@ -743,11 +743,11 @@ MessageQueue *sceneHandler04_kozFly6(StaticANIObject *ani) {
 
 void sceneHandler04_kozMove(Movement *mov, int from, int to, Common::Point *points, double phase) {
 	for (int i = from; i < to; i++) {
-		mov->setDynamicPhaseIndex(i);
+		mov->setCurFrame(i);
 
 		Common::Point *p;
 		if (mov->_framePosOffsets.size()) {
-			p = &mov->_framePosOffsets[mov->_currDynamicPhaseIndex];
+			p = &mov->_framePosOffsets[mov->_curFrame];
 		} else {
 			p = &mov->_somePoint;
 			p->x = 0;
@@ -758,7 +758,7 @@ void sceneHandler04_kozMove(Movement *mov, int from, int to, Common::Point *poin
 	}
 }
 
-MessageQueue *sceneHandler04_kozFly7(StaticANIObject *ani, double phase) {
+MessageQueue *sceneHandler04_kozFly7(AniObject *ani, double phase) {
 	AniHandler aniHandler;
 	MakeQueueStruct mkQueue;
 
@@ -770,44 +770,44 @@ MessageQueue *sceneHandler04_kozFly7(StaticANIObject *ani, double phase) {
 	mkQueue.staticsId2 = 560;
 	mkQueue.x1 = (int)(250.0 - phase * 100.0);
 	mkQueue.y1 = 455;
-	mkQueue.field_1C = 10;
-	mkQueue.field_10 = 1;
+	mkQueue.destZ = 10;
+	mkQueue.cycleCount = 1;
 	mkQueue.flags = 78;
 	mkQueue.movementId = MV_KZW_JUMPROTATE;
 
 	MessageQueue *mq = aniHandler.makeRunQueue(&mkQueue);
 
 	if (mq) {
-		sceneHandler04_kozMove(ani->getMovementById(MV_KZW_JUMPROTATE), 1, 9, g_vars->scene04_jumpRotateKozyawki, phase * 0.5 + 1.5);
+		sceneHandler04_kozMove(ani->getMovement(MV_KZW_JUMPROTATE), 1, 9, g_vars->scene04_jumpRotateKozyawki, phase * 0.5 + 1.5);
 
-		ani->_priority = 10;
+		ani->_z = 10;
 
-		ExCommand *ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_STANDUP, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(ANI_KOZAWKA, 1, MV_KZW_STANDUP, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_KOZAWKA, 1, MV_KZW_TURN, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 1, MV_KZW_TURN, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
 		for (int i = 0; i < 2; i++) {
-			ex = new ExCommand(ANI_KOZAWKA, 1, rMV_KZW_GOR, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(ANI_KOZAWKA, 1, rMV_KZW_GOR, 0, 0, 0, 1, 0, 0, 0);
 			ex->_excFlags |= 2;
-			ex->_param = ani->_odelay;
-			mq->addExCommandToEnd(ex);
+			ex->_param = ani->_copyId;
+			mq->addCommandToEnd(ex);
 		}
 
-		ex = new ExCommand(ANI_KOZAWKA, 6, 0, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 6, 0, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 3;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_KOZAWKA, 17, MSG_KOZAWRESTART, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(ANI_KOZAWKA, 17, MSG_KOZAWRESTART, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 3;
-		ex->_param = ani->_odelay;
-		mq->addExCommandToEnd(ex);
+		ex->_param = ani->_copyId;
+		mq->addCommandToEnd(ex);
 	}
 
 	return mq;
@@ -838,14 +838,14 @@ static const int kozTrajectory6[] = {
 };
 
 void sceneHandler04_shootKozyawka() {
-	g_vars->scene04_plank->changeStatics2(ST_PNK_WEIGHTRIGHT);
+	g_vars->scene04_plank->setStatic(ST_PNK_WEIGHTRIGHT);
 
 	if (!g_vars->scene04_walkingKozyawka)
 		return;
 
 	if (g_vars->scene04_walkingKozyawka->_movement) {
 		if (g_vars->scene04_walkingKozyawka->_movement->_id == MV_KZW_WALKPLANK) {
-			int dphase = g_vars->scene04_walkingKozyawka->_movement->_currDynamicPhaseIndex;
+			int dphase = g_vars->scene04_walkingKozyawka->_movement->_curFrame;
 
 			if (dphase < 41) {
 				int col = 3 * dphase / 15;
@@ -870,9 +870,9 @@ void sceneHandler04_shootKozyawka() {
 						phase = kozTrajectory6[idx];
 				}
 
-				g_vars->scene04_walkingKozyawka->queueMessageQueue(nullptr);
+				g_vars->scene04_walkingKozyawka->setQueue(nullptr);
 				g_vars->scene04_walkingKozyawka->_movement = nullptr;
-				g_vars->scene04_walkingKozyawka->_statics = g_vars->scene04_walkingKozyawka->getStaticsById(ST_KZW_RIGHT);
+				g_vars->scene04_walkingKozyawka->_statics = g_vars->scene04_walkingKozyawka->getStatic(ST_KZW_RIGHT);
 
 				MessageQueue *mq;
 
@@ -892,7 +892,7 @@ void sceneHandler04_shootKozyawka() {
 				if (mq) {
 					g_vars->scene04_lastKozyawka = g_vars->scene04_walkingKozyawka;
 
-					if (!mq->chain(g_vars->scene04_walkingKozyawka) )
+					if (!mq->run(g_vars->scene04_walkingKozyawka) )
 						delete mq;
 				}
 			}
@@ -900,18 +900,18 @@ void sceneHandler04_shootKozyawka() {
 	}
 
 	if (g_vars->scene04_ladderOffset > 3)
-		g_nmi->_aniMan->changeStatics1(ST_MAN_LOOKPLANK);
+		g_nmi->_aniMan->moveToStatic(ST_MAN_LOOKPLANK);
 
 	g_vars->scene04_kozyawkaOnLadder = true;
 }
 
-void sceneHandler04_showCoin() {
-	StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObject1ById(ANI_SC4_COIN, -1);
+void sceneHandler04_doShowCoin() {
+	AniObject *ani = g_nmi->_currentScene->findAniObjectById(ANI_SC4_COIN, -1);
 
 	if (ani) {
 		ani->show1(MV_BDG_OPEN, MV_MAN_GOU, MV_SC4_COIN_default, 0);
 
-		ani->_priority = 40;
+		ani->_z = 40;
 	}
 }
 
@@ -921,22 +921,22 @@ void sceneHandler04_stopSound() {
 	g_nmi->stopSoundStream2();
 }
 
-void sceneHandler04_animOutOfBottle(ExCommand *ex) {
-	g_nmi->_aniMan->changeStatics2(ST_MAN_SIT);
+void sceneHandler04_animOutOfBottle(Command *ex) {
+	g_nmi->_aniMan->setStatic(ST_MAN_SIT);
 
-	MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(QU_SC4_MANFROMBOTTLE), 0, 0);
+	MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(QU_SC4_MANFROMBOTTLE), 0, 0);
 
 	if (ex) {
-		ExCommand *newex = ex->createClone();
+		Command *newex = ex->createClone();
 
-		mq->addExCommandToEnd(newex);
+		mq->addCommandToEnd(newex);
 	  }
 
 	mq->_flags |= 1;
-	mq->chain(nullptr);
+	mq->run(nullptr);
 
 	g_vars->scene04_dudeInBottle = false;
-	g_nmi->_behaviorManager->setFlagByStaticAniObject(g_nmi->_aniMan, 1);
+	g_nmi->_behaviorManager->enableAllQueuesForAni(g_nmi->_aniMan, 1);
 }
 
 void sceneHandler04_walkKozyawka() {
@@ -948,22 +948,22 @@ void sceneHandler04_walkKozyawka() {
 		g_vars->scene04_walkingKozyawka = g_vars->scene04_kozyawkiObjList.front();
 		g_vars->scene04_kozyawkiObjList.pop_front();
 
-		MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(QU_KOZAW_WALK), 0, 1);
-		mq->setParamInt(-1, g_vars->scene04_walkingKozyawka->_odelay);
-		mq->chain(nullptr);
+		MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(QU_KOZAW_WALK), 0, 1);
+		mq->setObjectCopy(-1, g_vars->scene04_walkingKozyawka->_copyId);
+		mq->run(nullptr);
 	}
 }
 
 void sceneHandler04_bottleUpdateObjects(int off) {
 	for (Common::List<GameObject *>::iterator it = g_vars->scene04_bottleObjList.begin(); it != g_vars->scene04_bottleObjList.end(); ++it) {
 		if ((*it)->_objtype == kObjTypeStaticANIObject) {
-			StaticANIObject *st = static_cast<StaticANIObject *>(*it);
+			AniObject *st = static_cast<AniObject *>(*it);
 
-			st->setOXY(st->_ox, off + st->_oy);
+			st->setPos(st->_x, off + st->_y);
 		} else {
 			GameObject *obj = *it;
 
-			obj->setOXY(obj->_ox, off + obj->_oy);
+			obj->setPos(obj->_x, off + obj->_y);
 		}
 	}
 }
@@ -1002,31 +1002,31 @@ void sceneHandler04_springWobble() {
 		}
 	}
 
-	int oldpos = g_vars->scene04_spring->getCurrDimensions().y - oldDynIndex;
+	int oldpos = g_vars->scene04_spring->getFullSize().y - oldDynIndex;
 
 	if (g_vars->scene04_dynamicPhaseIndex) {
 		if (!g_vars->scene04_spring->_movement)
-			g_vars->scene04_spring->startAnim(MV_SPR_LOWER, 0, -1);
+			g_vars->scene04_spring->startMovement(MV_SPR_LOWER, 0, -1);
 
-		g_vars->scene04_spring->_movement->setDynamicPhaseIndex(g_vars->scene04_dynamicPhaseIndex);
+		g_vars->scene04_spring->_movement->setCurFrame(g_vars->scene04_dynamicPhaseIndex);
 	} else {
-		g_vars->scene04_spring->changeStatics2(ST_SPR_UP);
+		g_vars->scene04_spring->setStatic(ST_SPR_UP);
 	}
 
 	if (g_vars->scene04_dynamicPhaseIndex != oldDynIndex) {
-		sceneHandler04_bottleUpdateObjects(oldpos - (g_vars->scene04_spring->getCurrDimensions().y - g_vars->scene04_dynamicPhaseIndex));
+		sceneHandler04_bottleUpdateObjects(oldpos - (g_vars->scene04_spring->getFullSize().y - g_vars->scene04_dynamicPhaseIndex));
 	}
 }
 
 void sceneHandler04_leaveScene() {
 	g_nmi->_aniMan2 = nullptr;
 
-	MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(QU_SC4_MANTOBOTTLE), 0, 0);
-	ExCommand *ex = nullptr;
+	MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(QU_SC4_MANTOBOTTLE), 0, 0);
+	Command *ex = nullptr;
 
 	for (uint i = 0; i < mq->getCount(); i++) {
-		if (mq->getExCommandByIndex(i)->_messageKind == 27) {
-			ex = mq->getExCommandByIndex(i);
+		if (mq->getCommandByIndex(i)->_cmd == 27) {
+			ex = mq->getCommandByIndex(i);
 			break;
 		}
 	}
@@ -1035,31 +1035,31 @@ void sceneHandler04_leaveScene() {
 		error("sceneHandler04_leaveScene(): Cannot find exit");
 	}
 
-	ex->_y = g_vars->scene04_bottle->_oy - 304;
+	ex->_y = g_vars->scene04_bottle->_y - 304;
 
-	mq->chain(nullptr);
+	mq->run(nullptr);
 
 	g_vars->scene04_var07 = false;
 	g_vars->scene04_dudeOnLadder = 0;
 
-	g_nmi->_behaviorManager->setFlagByStaticAniObject(g_nmi->_aniMan, 0);
+	g_nmi->_behaviorManager->enableAllQueuesForAni(g_nmi->_aniMan, 0);
 
 	g_nmi->updateMapPiece(PIC_MAP_P03, 1);
 }
 
 void sceneHandler04_liftBottle() {
-	int newy = g_vars->scene04_bottleY + g_vars->scene04_spring->_oy;
+	int newy = g_vars->scene04_bottleY + g_vars->scene04_spring->_y;
 
 	g_vars->scene04_bottleY += 5;
 
-	sceneHandler04_bottleUpdateObjects(newy - g_vars->scene04_spring->_oy);
+	sceneHandler04_bottleUpdateObjects(newy - g_vars->scene04_spring->_y);
 
-	g_vars->scene04_spring->setOXY(g_vars->scene04_spring->_ox, newy);
+	g_vars->scene04_spring->setPos(g_vars->scene04_spring->_x, newy);
 
-	if (g_vars->scene04_bottle->_oy >= 226) {
-		sceneHandler04_bottleUpdateObjects(226 - g_vars->scene04_bottle->_oy);
+	if (g_vars->scene04_bottle->_y >= 226) {
+		sceneHandler04_bottleUpdateObjects(226 - g_vars->scene04_bottle->_y);
 
-		g_vars->scene04_spring->setOXY(g_vars->scene04_spring->_ox, 437);
+		g_vars->scene04_spring->setPos(g_vars->scene04_spring->_x, 437);
 		g_vars->scene04_bottleIsDropped = false;
 		g_vars->scene04_handIsDown = false;
 		g_vars->scene04_objectIsTaken = true;
@@ -1067,7 +1067,7 @@ void sceneHandler04_liftBottle() {
 		g_vars->scene04_springOffset = 10;
 		g_vars->scene04_bottleIsTaken = false;
 
-		g_nmi->setObjectState(sO_LowerPipe, g_nmi->getObjectEnumState(sO_LowerPipe, sO_IsClosed));
+		g_nmi->setState(sO_LowerPipe, g_nmi->getStateValue(sO_LowerPipe, sO_IsClosed));
 	}
 }
 
@@ -1110,7 +1110,7 @@ void updateSound() {
 
 void sceneHandler04_goClock() {
 	sceneHandler04_walkKozyawka();
-	chainQueue(QU_SC4_GOCLOCK, 0);
+	runQueue(QU_SC4_GOCLOCK, 0);
 	g_vars->scene04_soundPlaying = true;
 	g_vars->scene04_coinPut = false;
 
@@ -1122,16 +1122,16 @@ void sceneHandler04_goClock() {
 }
 
 void sceneHandler04_bigBallOut() {
-	StaticANIObject *ball =  g_nmi->_currentScene->getStaticANIObject1ById(ANI_BIGBALL, -1);
+	AniObject *ball =  g_nmi->_currentScene->findAniObjectById(ANI_BIGBALL, -1);
 
 	if (ball && ball->_flags & 4)
 		for (uint i = 0; i < ball->_movements.size(); i++)
-			ball->_movements[i]->_counterMax = 0;
+			ball->_movements[i]->_loopDelay = 0;
 
 	g_vars->scene04_bigBallIn = false;
 }
 
-void sceneHandler04_leaveLadder(ExCommand *ex) {
+void sceneHandler04_leaveLadder(Command *ex) {
 	if (!g_nmi->_aniMan->isIdle())
 		return;
 
@@ -1139,15 +1139,15 @@ void sceneHandler04_leaveLadder(ExCommand *ex) {
 		if (getSc2MctlCompoundBySceneId(g_nmi->_currentScene->_sceneId)->_objtype == kObjTypeMctlCompound) {
 			MctlCompound *mc = static_cast<MctlCompound *>(getSc2MctlCompoundBySceneId(g_nmi->_currentScene->_sceneId));
 
-			if (mc->_motionControllers[0]->_movGraphReactObj->pointInRegion(g_nmi->_sceneRect.left + ex->_x, g_nmi->_sceneRect.top + ex->_y)) {
-				if (g_vars->scene04_ladder->collisionDetection(g_nmi->_aniMan)) {
-					MessageQueue *mq = g_vars->scene04_ladder->controllerWalkTo(g_nmi->_aniMan, 0);
+			if (mc->_motionControllers[0]->_movGraphReactObj->hitTest(g_nmi->_sceneRect.left + ex->_x, g_nmi->_sceneRect.top + ex->_y)) {
+				if (g_vars->scene04_ladder->getCurrentStep(g_nmi->_aniMan)) {
+					MessageQueue *mq = g_vars->scene04_ladder->makeQueue(g_nmi->_aniMan, 0);
 
 					if (mq) {
-						mq->addExCommandToEnd(ex->createClone());
+						mq->addCommandToEnd(ex->createClone());
 
-						if (mq->chain(g_nmi->_aniMan) )
-							ex->_messageKind = 0;
+						if (mq->run(g_nmi->_aniMan) )
+							ex->_cmd = 0;
 						else
 							delete mq;
 
@@ -1158,41 +1158,41 @@ void sceneHandler04_leaveLadder(ExCommand *ex) {
 					}
 				} else {
 					MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
-					ExCommand *ex1;
+					Command *ex1;
 
 					if (g_nmi->_aniMan->_statics->_staticsId == ST_MAN_LADDERDOWN) {
-						ex1 = new ExCommand(ANI_MAN, 1, MV_MAN_LOOKLADDERRV, 0, 0, 0, 1, 0, 0, 0);
-						ex1->_param = g_nmi->_aniMan->_odelay;
+						ex1 = new Command(ANI_MAN, 1, MV_MAN_LOOKLADDERRV, 0, 0, 0, 1, 0, 0, 0);
+						ex1->_param = g_nmi->_aniMan->_copyId;
 						ex1->_excFlags |= 2;
-						mq->addExCommandToEnd(ex1);
+						mq->addCommandToEnd(ex1);
 					}
 
-					ex1 = new ExCommand(ANI_MAN, 1, MV_MAN_STARTLADDERD, 0, 0, 0, 1, 0, 0, 0);
-					ex1->_param = g_nmi->_aniMan->_odelay;
+					ex1 = new Command(ANI_MAN, 1, MV_MAN_STARTLADDERD, 0, 0, 0, 1, 0, 0, 0);
+					ex1->_param = g_nmi->_aniMan->_copyId;
 					ex1->_excFlags |= 2;
-					mq->addExCommandToEnd(ex1);
+					mq->addCommandToEnd(ex1);
 
-					ex1 = new ExCommand(ANI_MAN, 1, MV_MAN_FROMLADDER, 0, 0, 0, 1, 0, 0, 0);
-					ex1->_param = g_nmi->_aniMan->_odelay;
+					ex1 = new Command(ANI_MAN, 1, MV_MAN_FROMLADDER, 0, 0, 0, 1, 0, 0, 0);
+					ex1->_param = g_nmi->_aniMan->_copyId;
 					ex1->_excFlags |= 2;
-					mq->addExCommandToEnd(ex1);
+					mq->addCommandToEnd(ex1);
 
 					ex1 = ex->createClone();
-					mq->addExCommandToEnd(ex1);
+					mq->addCommandToEnd(ex1);
 
 					mq->setFlags(mq->getFlags() | 1);
 
-					if (mq->chain(g_nmi->_aniMan)) {
+					if (mq->run(g_nmi->_aniMan)) {
 						if (g_vars->scene04_ladder)
 							delete g_vars->scene04_ladder;
 
 						g_vars->scene04_ladder = nullptr;
 						g_vars->scene04_dudeOnLadder = 0;
 
-						ex->_messageKind = 0;
+						ex->_cmd = 0;
 
 						mc->activate();
-						getGameLoaderInteractionController()->enableFlag24();
+						getGameLoaderInteractionController()->enable();
 					} else {
 						delete mq;
 					}
@@ -1208,23 +1208,23 @@ void sceneHandler04_leaveLadder(ExCommand *ex) {
 }
 
 void sceneHandler04_handTake() {
-	g_vars->scene04_clock->changeStatics2(ST_CLK_CLOSED);
+	g_vars->scene04_clock->setStatic(ST_CLK_CLOSED);
 
 	if (g_vars->scene04_kozyawkiAni.size()) {
 		if (g_vars->scene04_kozyawkiAni.size() == 1) {
-			chainQueue(QU_HND_TAKE1, 0);
+			runQueue(QU_HND_TAKE1, 0);
 			g_vars->scene04_objectIsTaken = false;
 		} else {
-			chainQueue((g_vars->scene04_kozyawkiAni.size() != 2) ? QU_HND_TAKEBOTTLE : QU_HND_TAKE2, 0);
+			runQueue((g_vars->scene04_kozyawkiAni.size() != 2) ? QU_HND_TAKEBOTTLE : QU_HND_TAKE2, 0);
 			g_vars->scene04_objectIsTaken = false;
 		}
 	} else {
-		chainQueue(QU_HND_TAKE0, 0);
+		runQueue(QU_HND_TAKE0, 0);
 		g_vars->scene04_objectIsTaken = false;
 	}
 }
 
-void sceneHandler04_putKozyawkaBack(StaticANIObject *ani) {
+void sceneHandler04_putKozyawkaBack(AniObject *ani) {
 	debugC(2, kDebugSceneLogic, "scene04: putKozyawkaBack");
 
 	g_vars->scene04_bottleObjList.push_back(ani);
@@ -1246,17 +1246,17 @@ void sceneHandler04_putKozyawkaBack(StaticANIObject *ani) {
 }
 
 void sceneHandler04_bigBallWalkIn() {
-	StaticANIObject *ball =  g_nmi->_currentScene->getStaticANIObject1ById(ANI_BIGBALL, -1);
+	AniObject *ball =  g_nmi->_currentScene->findAniObjectById(ANI_BIGBALL, -1);
 
 	if (g_vars->scene04_dudeOnLadder
 		 && (!ball || !(ball->_flags & 4))
-		 && g_vars->scene04_ladder->collisionDetection(g_nmi->_aniMan) > 3) {
+		 && g_vars->scene04_ladder->getCurrentStep(g_nmi->_aniMan) > 3) {
 
 		if (!g_nmi->_rnd.getRandomNumber(49)) {
 			if (g_vars->scene04_bigBallFromLeft)
-				chainQueue(QU_BALL_WALKR, 0);
+				runQueue(QU_BALL_WALKR, 0);
 			else
-				chainQueue(QU_BALL_WALKL, 0);
+				runQueue(QU_BALL_WALKL, 0);
 
 			g_vars->scene04_bigBallFromLeft = !g_vars->scene04_bigBallFromLeft;
 
@@ -1267,11 +1267,11 @@ void sceneHandler04_bigBallWalkIn() {
 	}
 }
 
-void sceneHandler04_takeBottle() {
+void sceneHandler04_doTakeBottle() {
 	g_vars->scene04_bottleIsTaken = true;
-	g_vars->scene04_hand->_priority = 5;
+	g_vars->scene04_hand->_z = 5;
 
-	g_nmi->setObjectState(sO_LowerPipe, g_nmi->getObjectEnumState(sO_LowerPipe, sO_IsOpened));
+	g_nmi->setState(sO_LowerPipe, g_nmi->getStateValue(sO_LowerPipe, sO_IsOpened));
 }
 
 void sceneHandler04_takeKozyawka() {
@@ -1279,11 +1279,11 @@ void sceneHandler04_takeKozyawka() {
 		if (g_vars->scene04_kozyawkiAni.size() == 1)
 			g_vars->scene04_objectIsTaken = true;
 
-		StaticANIObject *koz = g_vars->scene04_kozyawkiAni.front();
+		AniObject *koz = g_vars->scene04_kozyawkiAni.front();
 		g_vars->scene04_kozyawkiAni.pop_front();
 
 		if (koz) {
-			koz->queueMessageQueue(nullptr);
+			koz->setQueue(nullptr);
 			koz->hide();
 
 			g_vars->scene04_kozyawkiObjList.push_back(koz);
@@ -1299,16 +1299,16 @@ void sceneHandler04_takeKozyawka() {
 	}
 }
 
-void sceneHandler04_testPlank(ExCommand *ex) {
+void sceneHandler04_testPlank(Command *ex) {
 	MessageQueue *mq = g_nmi->_globalMessageQueueList->getMessageQueueById(ex->_parId);
 
 	if (!mq)
 		return;
 
 	if (g_vars->scene04_plank->_movement || !g_vars->scene04_plank->_statics || g_vars->scene04_plank->_statics->_staticsId != ST_PNK_WEIGHTLEFT) {
-		mq->getExCommandByIndex(0)->_messageNum = MV_KZW_TOHOLERV;
+		mq->getCommandByIndex(0)->_messageNum = MV_KZW_TOHOLERV;
 	} else {
-		mq->getExCommandByIndex(0)->_messageNum = MV_KZW_WALKPLANK;
+		mq->getCommandByIndex(0)->_messageNum = MV_KZW_WALKPLANK;
 	}
 }
 
@@ -1316,29 +1316,29 @@ void sceneHandler04_updateBottle() {
 	int yoff;
 
 	if (g_vars->scene04_hand->_movement)
-		yoff = g_vars->scene04_hand->_movement->_oy;
+		yoff = g_vars->scene04_hand->_movement->_y;
 	else
-		yoff = g_vars->scene04_hand->_oy;
+		yoff = g_vars->scene04_hand->_y;
 
 	int newy = g_vars->scene04_hand->getSomeXY().y + yoff + 140;
 
-	sceneHandler04_bottleUpdateObjects(newy - g_vars->scene04_spring->_oy);
+	sceneHandler04_bottleUpdateObjects(newy - g_vars->scene04_spring->_y);
 
-	g_vars->scene04_spring->setOXY(g_vars->scene04_spring->_ox, newy);
+	g_vars->scene04_spring->setPos(g_vars->scene04_spring->_x, newy);
 }
 
-void sceneHandler04_winArcade() {
-	if (g_nmi->getObjectState(sO_LowerPipe) == g_nmi->getObjectEnumState(sO_LowerPipe, sO_IsClosed)
+void sceneHandler04_doWinArcade() {
+	if (g_nmi->getStateId(sO_LowerPipe) == g_nmi->getStateValue(sO_LowerPipe, sO_IsClosed)
 		&& g_vars->scene04_soundPlaying) {
-		g_vars->scene04_clock->changeStatics2(ST_CLK_CLOSED);
-		g_vars->scene04_hand->changeStatics2(ST_HND_EMPTY);
+		g_vars->scene04_clock->setStatic(ST_CLK_CLOSED);
+		g_vars->scene04_hand->setStatic(ST_HND_EMPTY);
 
-		chainQueue(QU_HND_TAKEBOTTLE, 1);
+		runQueue(QU_HND_TAKEBOTTLE, 1);
 
 		if (g_vars->scene04_walkingKozyawka) {
 			g_vars->scene04_kozyawkiObjList.push_back(g_vars->scene04_walkingKozyawka);
 
-			g_vars->scene04_walkingKozyawka->changeStatics2(ST_KZW_EMPTY);
+			g_vars->scene04_walkingKozyawka->setStatic(ST_KZW_EMPTY);
 			g_vars->scene04_walkingKozyawka->hide();
 			g_vars->scene04_walkingKozyawka = nullptr;
 		}
@@ -1348,14 +1348,14 @@ void sceneHandler04_winArcade() {
 
 		getSc2MctlCompoundBySceneId(g_nmi->_currentScene->_sceneId)->activate();
 
-		getGameLoaderInteractionController()->enableFlag24();
+		getGameLoaderInteractionController()->enable();
 
 		g_nmi->stopSoundStream2();
 	}
 }
 
-int sceneHandler04(ExCommand *ex) {
-	if (ex->_messageKind != 17)
+int sceneHandler04(Command *ex) {
+	if (ex->_cmd != 17)
 		return 0;
 
 	switch (ex->_messageNum) {
@@ -1427,18 +1427,18 @@ int sceneHandler04(ExCommand *ex) {
 
 	case 33:
 		{
-			g_vars->scene04_dudePosX = g_nmi->_aniMan->_ox;
-			g_vars->scene04_dudePosY = g_nmi->_aniMan->_oy;
+			g_vars->scene04_dudePosX = g_nmi->_aniMan->_x;
+			g_vars->scene04_dudePosY = g_nmi->_aniMan->_y;
 
 			int res = 0;
 
 			if (g_nmi->_aniMan2) {
-				if (g_nmi->_aniMan->_ox < g_nmi->_sceneRect.left + 200) {
-					g_nmi->_currentScene->_x = g_nmi->_aniMan->_ox - g_nmi->_sceneRect.left - 300;
-					g_nmi->_aniMan->_ox = g_vars->scene04_dudePosX;
+				if (g_nmi->_aniMan->_x < g_nmi->_sceneRect.left + 200) {
+					g_nmi->_currentScene->_x = g_nmi->_aniMan->_x - g_nmi->_sceneRect.left - 300;
+					g_nmi->_aniMan->_x = g_vars->scene04_dudePosX;
 				}
-				if (g_nmi->_aniMan->_ox > g_nmi->_sceneRect.right - 200) {
-					g_nmi->_currentScene->_x = g_nmi->_aniMan->_ox - g_nmi->_sceneRect.right + 300;
+				if (g_nmi->_aniMan->_x > g_nmi->_sceneRect.right - 200) {
+					g_nmi->_currentScene->_x = g_nmi->_aniMan->_x - g_nmi->_sceneRect.right + 300;
 				}
 
 				res = 1;
@@ -1483,7 +1483,7 @@ int sceneHandler04(ExCommand *ex) {
 				if (!g_vars->scene04_soundPlaying) {
 					g_nmi->startSceneTrack();
 
-					g_nmi->_behaviorManager->updateBehaviors();
+					g_nmi->_behaviorManager->update();
 					return res;
 				}
 
@@ -1494,14 +1494,14 @@ int sceneHandler04(ExCommand *ex) {
 			}
 
 			if (g_vars->scene04_soundPlaying) {
-				g_nmi->_behaviorManager->updateBehaviors();
+				g_nmi->_behaviorManager->update();
 
 				return res;
 			}
 
 			g_nmi->startSceneTrack();
 
-			g_nmi->_behaviorManager->updateBehaviors();
+			g_nmi->_behaviorManager->update();
 
 			return res;
 		}
@@ -1524,7 +1524,7 @@ int sceneHandler04(ExCommand *ex) {
 
 					sceneHandler04_clickLadder();
 
-					ex->_messageKind = 0;
+					ex->_cmd = 0;
 
 					break;
 				}
@@ -1534,16 +1534,16 @@ int sceneHandler04(ExCommand *ex) {
 				break;
 			}
 
-			StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(ex->_sceneClickX, ex->_sceneClickY);
+			AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(ex->_sceneClickX, ex->_sceneClickY);
 
 			if ((ani && ani->_id == ANI_PLANK) || picid == PIC_SC4_PLANK) {
 				sceneHandler04_clickPlank();
 
-				ex->_messageKind = 0;
+				ex->_cmd = 0;
 			} else if (g_vars->scene04_dudeOnLadder) {
 				sceneHandler04_leaveLadder(ex);
 			} else if (!ani || !canInteractAny(g_nmi->_aniMan, ani, ex->_param)) {
-				PictureObject *pic = g_nmi->_currentScene->getPictureObjectById(picid, 0);
+				PictureObject *pic = g_nmi->_currentScene->findPictureObjectById(picid, 0);
 
 				if (!pic || !canInteractAny(g_nmi->_aniMan, pic,ex->_param)) {
 					if ((g_nmi->_sceneRect.right - ex->_sceneClickX < 47 && g_nmi->_sceneRect.right < g_nmi->_sceneWidth - 1)
@@ -1559,7 +1559,7 @@ int sceneHandler04(ExCommand *ex) {
 		break;
 
 	case MSG_CMN_WINARCADE:
-		sceneHandler04_winArcade();
+		sceneHandler04_doWinArcade();
 		break;
 
 	case MSG_SC4_HANDOVER:
@@ -1568,11 +1568,11 @@ int sceneHandler04(ExCommand *ex) {
 		break;
 
 	case MSG_SC4_DROPBOTTLE:
-		sceneHandler04_dropBottle();
+		sceneHandler04_doDropBottle();
 		break;
 
 	case MSG_SC4_COINOUT:
-		g_vars->scene04_clock->changeStatics2(ST_CLK_CLOSED);
+		g_vars->scene04_clock->setStatic(ST_CLK_CLOSED);
 		g_vars->scene04_coinPut = false;
 		sceneHandler04_stopSound();
 
@@ -1588,16 +1588,16 @@ int sceneHandler04(ExCommand *ex) {
 
 	case MSG_SC4_KOZAWFALL:
 		{
-			ExCommand *exnew;
+			Command *exnew;
 
 			if (g_vars->scene04_kozHeadRaised) {
 				sceneHandler04_putKozyawkaBack(g_vars->scene04_lastKozyawka);
 
 				g_vars->scene04_kozHeadRaised = 0;
 
-				exnew = new ExCommand(0, 35, SND_4_010, 0, 0, 0, 1, 0, 0, 0);
+				exnew = new Command(0, 35, SND_4_010, 0, 0, 0, 1, 0, 0, 0);
 			} else {
-				exnew = new ExCommand(0, 35, SND_4_012, 0, 0, 0, 1, 0, 0, 0);
+				exnew = new Command(0, 35, SND_4_012, 0, 0, 0, 1, 0, 0, 0);
 			}
 
 			exnew->_z = 5;
@@ -1619,11 +1619,11 @@ int sceneHandler04(ExCommand *ex) {
 		break;
 
 	case MSG_SHOWCOIN:
-		sceneHandler04_showCoin();
+		sceneHandler04_doShowCoin();
 		break;
 
 	case MSG_TAKEBOTTLE:
-		sceneHandler04_takeBottle();
+		sceneHandler04_doTakeBottle();
 		break;
 
 	case MSG_GOTOLADDER:

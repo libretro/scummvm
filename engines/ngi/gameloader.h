@@ -35,7 +35,7 @@ namespace NGI {
 
 class SceneTag;
 class MctlCompound;
-class InputController;
+class CursorController;
 class InteractionController;
 class MotionController;
 class MovGraph;
@@ -51,7 +51,7 @@ class Sc2 : public CObject {
 	PicAniInfoList _defPicAniInfos;
 	PicAniInfoList _picAniInfos;
 	bool _isLoaded;
-	Common::Array<EntranceInfo> _entranceData;
+	Common::Array<Entrance> _entranceData;
 
  public:
 	Sc2();
@@ -91,13 +91,13 @@ class GameLoader : public CObject {
 
 	bool load(MfcArchive &file) override;
 	bool loadScene(int sceneId);
-	bool gotoScene(int sceneId, int entranceId);
+	bool setScene(int sceneId, int entranceId);
 	bool preloadScene(int sceneId, int entranceId);
 	bool unloadScene(int sceneId);
 
 	void addPreloadItem(const PreloadItem &item);
 
-	void updateSystems(int counterdiff);
+	void updateContent(int counterdiff);
 
 	int getSceneTagBySceneId(int sceneId, SceneTag **st);
 	void applyPicAniInfos(Scene *sc, const PicAniInfoList &picAniInfo);
@@ -113,25 +113,25 @@ class GameLoader : public CObject {
 
 	Common::ScopedPtr<GameProject> _gameProject;
 	InteractionController *_interactionController;
-	InputController *_inputController;
-	Inventory2 _inventory;
+	CursorController *_inputController;
+	Inventory _inventory;
 	Sc2Array _sc2array;
 	void *_sceneSwitcher;
 	bool (*_preloadCallback)(PreloadItem &pre, int flag);
 	void (*_savegameCallback)(MfcArchive *archive, bool mode);
 	int16 _field_F8;
-	int16 _field_FA;
+	int16 _heroId;
 	PreloadItems _preloadItems;
 	GameVar *_gameVar;
 	Common::String _gameName;
-	ExCommand _exCommand;
+	Command _exCommand;
 	int _updateCounter;
 	int _preloadSceneId;
 	int _preloadEntranceId;
 };
 
 
-Inventory2 *getGameLoaderInventory();
+Inventory *getGameLoaderInventory();
 InteractionController *getGameLoaderInteractionController();
 MctlCompound *getSc2MctlCompoundBySceneId(int16 sceneId);
 MovGraph *getSc2MovGraphBySceneId(int16 sceneId);

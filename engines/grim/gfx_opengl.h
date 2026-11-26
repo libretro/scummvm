@@ -57,10 +57,6 @@ public:
 	bool isHardwareAccelerated() override;
 	bool supportsShaders() override;
 
-	void getScreenBoundingBox(const Mesh *model, int *x1, int *y1, int *x2, int *y2) override;
-	void getScreenBoundingBox(const EMIModel *model, int *x1, int *y1, int *x2, int *y2) override;
-	void getActorScreenBBox(const Actor *actor, Common::Point &p1, Common::Point &p2) override;
-
 	void startActorDraw(const Actor *actor) override;
 	void finishActorDraw() override;
 	void setShadow(Shadow *shadow) override;
@@ -86,8 +82,6 @@ public:
 
 	void enableLights() override;
 	void disableLights() override;
-	void setupLight(Light *light, int lightId) override;
-	void turnOffLight(int lightId) override;
 
 	void createTexture(Texture *texture, const uint8 *data, const CMap *cmap, bool clamp) override;
 	void selectTexture(const Texture *texture) override;
@@ -130,6 +124,9 @@ protected:
 	void createSpecialtyTextureFromScreen(uint id, uint8 *data, int x, int y, int width, int height) override;
 	void drawDepthBitmap(int x, int y, int w, int h, const char *data);
 	void initExtensions();
+	void setupLight(Light *light, int lightId) override;
+	void turnOffLight(int lightId) override;
+
 private:
 	GLuint _emergFont;
 	int _smushNumTex;
@@ -137,13 +134,12 @@ private:
 	int _smushWidth;
 	int _smushHeight;
 	byte *_storedDisplay;
+	byte *_dimmedDisplay;
+	bool _storedDimmed;
 	bool _useDepthShader;
 #ifdef GL_ARB_fragment_program
 	GLuint _fragmentProgram;
-	GLuint _dimFragProgram;
 #endif
-	bool _useDimShader;
-	GLint _maxLights;
 	float _alpha;
 	const Actor *_currentActor;
 	GLenum _depthFunc;

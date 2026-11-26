@@ -41,29 +41,29 @@ void CharacterInfo::draw() {
 
 	switch (_state) {
 	case DISPLAY:
-		writeString(0, 21, STRING["dialogs.character.legend1"]);
-		writeString(0, 22, STRING["dialogs.character.legend2"]);
-		writeString(0, 23, STRING["dialogs.character.legend3"]);
-		writeString(0, 24, STRING["dialogs.character.legend4"]);
+		writeString(0, 21, "'q' quick ref     'c' cast    'r' remove");
+		writeString(0, 22, " # view other     'd' discard 's' share");
+		writeString(0, 23, "                  'e' equip   't' trade");
+		writeString(0, 24, "'esc' to go back  'g' gather  'u' use");
 		break;
 
 	case DISCARD:
-		writeString(0, 20, STRING["dialogs.character.discard"]);
+		writeString(0, 20, "discard which item: 'a'-'f'?");
 		escToGoBack(0);
 		break;
 
 	case EQUIP:
-		writeString(0, 20, STRING["dialogs.character.equip"]);
+		writeString(0, 20, "equip which item: 'a'-'f'?");
 		escToGoBack(0);
 		break;
 
 	case REMOVE:
-		writeString(0, 20, STRING["dialogs.character.remove"]);
+		writeString(0, 20, "remove which item: '1'-'6'?");
 		escToGoBack(0);
 		break;
 
 	case SHARE:
-		writeString(8, 20, STRING["dialogs.character.share_all"]);
+		writeString(8, 20, "share all:");
 		drawGemsGoldFood();
 		break;
 
@@ -75,33 +75,31 @@ void CharacterInfo::draw() {
 			_textPos.x = (i % 2) == 0 ? 1 : 22;
 			_textPos.y = 15 + (i / 2);
 			writeChar(c._condition ? '*' : ' ');
-			writeChar('1' + i);
-			writeString(") ");
+			writeString(Common::String::format("F%d) ", (int)i + 1));
 			writeString(c._name);
 		}
 
 		writeString(10, 20, Common::String::format(
-			STRING["dialogs.character.trade_with"].c_str(),
-			(int)g_globals->_party.size()
-		));
+			"Trade with character (F1-F%d)",
+			(int)g_globals->_party.size()));
 		break;
 
 	case TRADE_KIND:
-		writeString(6, 20, STRING["dialogs.character.trade_which"]);
+		writeString(6, 20, "trade which:");
 		drawGemsGoldFood();
-		writeString(20, 23, STRING["dialogs.character.item"]);
+		writeString(20, 23, "4) Item");
 		escToGoBack(0);
 		break;
 
 	case TRADE_ITEM:
-		writeString(10, 20, STRING["dialogs.character.which"]);
+		writeString(10, 20, "which item: 'a'-'f'?");
 		escToGoBack(0);
 		break;
 
 	case USE:
 		g_globals->_combatEffectCtr = 0;
 		g_globals->_nonCombatEffectCtr = 0;
-		writeString(7, 20, STRING["dialogs.character.use_what"]);
+		writeString(7, 20, "use which 'a'-'f','1'-'6'?");
 		escToGoBack(0);
 		break;
 
@@ -149,7 +147,7 @@ bool CharacterInfo::msgKeypress(const KeypressMessage &msg) {
 			redraw();
 			break;
 		case Common::KEYCODE_g:
-			g_globals->_currCharacter->gatherGold();
+			g_globals->_currCharacter->gatherResources();
 			redraw();
 			break;
 		case Common::KEYCODE_q:
@@ -216,7 +214,7 @@ bool CharacterInfo::msgKeypress(const KeypressMessage &msg) {
 
 		} else if (msg.keycode == Common::KEYCODE_4) {
 			if (g_globals->_party[_tradeWith]._backpack.full()) {
-				writeString(14, 21, STRING["dialogs.character.full"]);
+				writeString(14, 21, "*** full ***");
 				Sound::sound(SOUND_2);
 				_state = DISPLAY;
 				delaySeconds(3);
@@ -233,7 +231,7 @@ bool CharacterInfo::msgKeypress(const KeypressMessage &msg) {
 			switch (g_globals->_currCharacter->trade(_tradeWith,
 				msg.keycode - Common::KEYCODE_a)) {
 			case Character::TRADE_FULL:
-				writeString(14, 21, STRING["dialogs.character.full"]);
+				writeString(14, 21, "*** full ***");
 				_state = DISPLAY;
 				delaySeconds(3);
 				break;
@@ -358,9 +356,9 @@ void CharacterInfo::removeItem(uint index) {
 }
 
 void CharacterInfo::drawGemsGoldFood() {
-	writeString(20, 20, STRING["dialogs.character.gems"]);
-	writeString(20, 21, STRING["dialogs.character.gold"]);
-	writeString(20, 22, STRING["dialogs.character.food"]);
+	writeString(20, 20, "1) gems");
+	writeString(20, 21, "2) gold");
+	writeString(20, 22, "3) Food");
 }
 
 void CharacterInfo::howMuchAborted() {
@@ -419,9 +417,10 @@ void CharacterInfo::enterFunc(const Common::String &text) {
 void CharacterInfo::tradeHowMuch() {
 	clearLines(20, 24);
 	escToGoBack(0);
-	writeString(10, 20, STRING["dialogs.character.how_much"]);
+	writeString(10, 20, "how much:");
 
-	_textEntry.display(20, 20, 5, true, abortFunc, enterFunc);
+	_textEntry.display(20, 20, _tradeKind == TK_GOLD ? 8 : 5, true,
+		abortFunc, enterFunc);
 }
 
 void CharacterInfo::combatUseItem(Inventory &inv, Inventory::Entry &invEntry, bool isEquipped) {

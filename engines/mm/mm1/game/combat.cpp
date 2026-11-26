@@ -20,6 +20,7 @@
  */
 
 #include "mm/mm1/game/combat.h"
+#include "mm/mm1/data/text.h"
 #include "mm/mm1/game/spell_casting.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/mm1.h"
@@ -73,9 +74,16 @@ void Combat::clear() {
 	_timesHit = 0;
 	_isShooting = false;
 
+	_selectedSpellMonster = -1;
 	_turnUndeadUsed = false;
 	_divineInterventionUsed = false;
 	_monstersDestroyedCtr = 0;
+	_slowCasts = 0;
+	_weakenCasts = 0;
+	Common::fill(&_heroismBonus[0], &_heroismBonus[MAX_PARTY_SIZE], 0);
+	Common::fill(&_heroismIsSuper[0], &_heroismIsSuper[MAX_PARTY_SIZE], false);
+	Common::fill(&_powerBonus[0], &_powerBonus[MAX_PARTY_SIZE], -1);
+	Common::fill(&_quicknessBonus[0], &_quicknessBonus[MAX_PARTY_SIZE], -1);
 
 	// TODO: clear everything
 
@@ -92,6 +100,7 @@ void Combat::loadMonsters() {
 	// Set up hp and ac for the encounter monsters
 	for (uint i = 0; i < enc._monsterList.size(); ++i) {
 		Monster &mon = enc._monsterList[i];
+		g_globals->_bestiary.discover(mon._bestiaryId);
 		_monsterP = &mon;
 		int val = getRandomNumber(8);
 
@@ -240,7 +249,6 @@ bool Combat::canMonsterCast() const {
 void Combat::dispelParty() {
 	g_globals->_activeSpells.clear();
 	Character *tmpC = g_globals->_currCharacter;
-	Monster *tmpM = _monsterP;
 
 	for (uint i = 0; i < g_globals->_combatParty.size(); ++i) {
 		Character &c = *g_globals->_combatParty[i];
@@ -256,11 +264,9 @@ void Combat::dispelParty() {
 	g_globals->_currCharacter = tmpC;
 
 	for (uint i = 0; i < _remainingMonsters.size(); ++i) {
-		monsterSetPtr(i);
 		_remainingMonsters[i]->_status = 0;
 	}
 
-	_monsterP = tmpM;
 }
 
 void Combat::combatLoop(bool checkMonstersFirst) {
@@ -333,6 +339,10 @@ void Combat::defeatedMonsters() {
 		_totalExperience += _monsterP->_experience;
 		setTreasure();
 	}
+
+	// Convert the highest defeated-monster treasure rating into the
+	// original random item rolls and container quality.
+	selectTreasure();
 
 	// Count number of active characters
 	for (uint i = 0; i < g_globals->_combatParty.size(); ++i) {
@@ -412,7 +422,8 @@ void Combat::selectTreasure2(int count) {
 	byte itemId = TREASURES_ARR1[idx];
 	byte rndCount = TREASURES_ARR2[idx];
 
-	for (idx = 0; idx < count; ++idx)
+	// count is a 1-based treasure tier; tier 1 starts at the family base.
+	for (idx = 1; idx < count; ++idx)
 		itemId += rndCount;
 	itemId += getRandomNumber(rndCount) - 1;
 
@@ -511,6 +522,10 @@ bool Combat::monsterChanges() {
 	for (uint i = 0; i < _remainingMonsters.size(); ++i) {
 		monsterSetPtr(i);
 
+		// Dead monsters must remain dead until combat cleanup removes them.
+		if (_remainingMonsters[i]->_status == MONFLAG_DEAD)
+			continue;
+
 		if ((_monsterP->_counterFlags & COUNTER_REGENERATE) &&
 			(_monsterP->_defaultHP != _remainingMonsters[i]->_hp)) {
 			_monstersRegenerate = true;
@@ -572,7 +587,7 @@ bool Combat::monsterChanges() {
 }
 
 void Combat::proc2() {
-	int threshold = getMonsterIndex() * 8 + 20;
+	int threshold = MAX((int)_monsterP->_level - 1, 0) * 8 + 20;
 	int val = getRandomNumber(100);
 
 	_val9 = (val != 100 && val <= threshold) ? 1 : 0;
@@ -684,10 +699,10 @@ void Combat::checkMonsterActions() {
 
 	// Chosen character was incapitated, so scan through party
 	for (uint i = 0; i < g_globals->_party.size(); ++i) {
-		c = g_globals->_party[i];
+		Character &candidate = g_globals->_party[i];
 
-		if (!(c._condition & (BAD_CONDITION | UNCONSCIOUS))) {
-			g_globals->_currCharacter = &c;
+		if (!(candidate._condition & (BAD_CONDITION | UNCONSCIOUS))) {
+			g_globals->_currCharacter = &candidate;
 			monsterAttackShooting();
 			return;
 		}
@@ -801,9 +816,9 @@ void Combat::attackMonster(int monsterNum) {
 
 	_numberOfTimes = 1;
 
-	if (c._class >= CLERIC && c._level >= 8) {
+	// Extra attacks belong to the martial classes: Knight, Paladin and Archer
+	if (c._class >= KNIGHT && c._class <= ARCHER && c._level >= 8)
 		_numberOfTimes += c._level / 8;
-	}
 
 	// Affect level based on might
 	_attackAttr2 = _attackAttr1;
@@ -925,15 +940,27 @@ bool Combat::monsterTouch(Common::String &line) {
 }
 
 void Combat::iterateMonsters1() {
+	_selectedSpellMonster = -1;
 	_destMonsterNum = 0;
 	_spellMonsterCount = _remainingMonsters.size();
 	iterateMonsters1Inner();
 }
 
+void Combat::iterateSelectedMonster1() {
+	if (!setSpellTarget(_selectedSpellMonster)) {
+		spellFailed();
+		return;
+	}
+
+	_spellMonsterCount = _remainingMonsters.size();
+	g_globals->_spellsState._resistanceTypeOrTargetCount = 1;
+	iterateMonsters1Inner();
+}
+
+
 void Combat::iterateMonsters1Inner() {
-	Common::String line1 = Common::String::format("%s %s",
-		g_globals->_currCharacter->_name,
-		STRING["spells.casts_spell"].c_str());
+	Common::String line1 = Common::String::format("%s casts a spell:",
+		g_globals->_currCharacter->_name);
 
 	_monsterP = _remainingMonsters[_destMonsterNum];
 	const Common::String monsterName = _monsterP->_name;
@@ -958,7 +985,7 @@ void Combat::iterateMonsters1Inner() {
 
 	Common::String effect;
 	if (!affects) {
-		effect = STRING["monster_spells.not_affected"];
+		effect = "is not affected!";
 
 	} else {
 		_monsterP->_status |= g_globals->_spellsState._damage;
@@ -970,8 +997,7 @@ void Combat::iterateMonsters1Inner() {
 				break;
 		}
 
-		effect = STRING[Common::String::format(
-			"spells.monster_effects.%d", effectNum)];
+		effect = MONSTER_EFFECTS[effectNum];
 	}
 
 	InfoMessage msg(
@@ -1002,15 +1028,27 @@ void Combat::iterateMonsters1Inner() {
 }
 
 void Combat::iterateMonsters2() {
+	_selectedSpellMonster = -1;
 	_destMonsterNum = 0;
 	_spellMonsterCount = _remainingMonsters.size();
 	iterateMonsters2Inner();
 }
 
+void Combat::iterateSelectedMonster2() {
+	if (!setSpellTarget(_selectedSpellMonster)) {
+		spellFailed();
+		return;
+	}
+
+	_spellMonsterCount = _remainingMonsters.size();
+	g_globals->_spellsState._resistanceTypeOrTargetCount = 1;
+	iterateMonsters2Inner();
+}
+
+
 void Combat::iterateMonsters2Inner() {
-	Common::String line1 = Common::String::format("%s %s",
-		g_globals->_currCharacter->_name,
-		STRING["spells.casts_spell"].c_str());
+	Common::String line1 = Common::String::format("%s casts a spell:",
+		g_globals->_currCharacter->_name);
 
 	_monsterP = _remainingMonsters[_destMonsterNum];
 	const Common::String monsterName = _monsterP->_name;
@@ -1044,29 +1082,26 @@ void Combat::iterateMonsters2Inner() {
 
 	if (!affects) {
 		msg._lines.push_back(Line(
-			0, 1, Common::String::format("%s %s",
-				monsterName.c_str(),
-				STRING["monster_spells.not_affected"].c_str()
-			)
+			0, 1, Common::String::format("%s is not affected!",
+				monsterName.c_str())
 		));
 
 	} else {
-		Common::String line2 = Common::String::format("%s %s %d %s %s",
+		Common::String line2 = Common::String::format("%s takes %d %s of damage!",
 			monsterName.c_str(),
-			STRING["dialogs.combat.takes"].c_str(),
 			_damage,
-			STRING[_damage == 1 ? "dialogs.combat.point" : "dialogs.combat.points"].c_str(),
-			STRING["dialogs.combat.of_damage"].c_str()
-		);
+			(_damage == 1 ? "point" : "points"));
 
 		msg._lines.push_back(Line(0, 1, line2));
 
 		if (_damage >= _monsterP->_hp) {
-			msg._lines.push_back(Line(0, 2, STRING["dialogs.combat.and_goes_down"]));
+			msg._lines.push_back(Line(0, 2, "and goes down!!!"));
 		}
 	}
 
-	updateMonsterStatus();
+	// A monster that wasn't affected by the spell takes no damage
+	if (affects)
+		updateMonsterStatus();
 
 	msg._delaySeconds = 3;
 
@@ -1095,22 +1130,39 @@ void Combat::iterateMonsters2Inner() {
 }
 
 void Combat::characterDone() {
+	// Spell damage marks defeated monsters dead but does not remove them.
+	removeDeadMonsters();
+	_selectedSpellMonster = -1;
 	g_globals->_combatParty[_currentChar]->_checked = true;
 	combatLoop();
 }
 
 void Combat::resetDestMonster() {
+	_selectedSpellMonster = -1;
 	_destMonsterNum = 0;
 	_monsterP = _remainingMonsters[0];
 	monsterIndexOf();
 	g_globals->_spellsState._resistanceTypeOrTargetCount = RESISTANCE_15;
 }
 
+bool Combat::setSpellTarget(int monsterNum) {
+	if (monsterNum < 0 ||
+			monsterNum >= (int)_remainingMonsters.size())
+		return false;
+
+	_selectedSpellMonster = monsterNum;
+	_destMonsterNum = monsterNum;
+	monsterSetPtr(monsterNum);
+	monsterIndexOf();
+	return true;
+}
+
+
 void Combat::spellFailed() {
 	g_globals->_combatParty[_currentChar]->_checked = true;
 	Sound::sound(SOUND_2);
 
-	SoundMessage msg(10, 2, SpellCasting::spellResultMessage(STRING["spells.failed"]));
+	SoundMessage msg(10, 2, SpellCasting::spellResultMessage("Spell failed"));
 	msg._delaySeconds = 3;
 	displaySpellResult(msg);
 }
@@ -1122,11 +1174,11 @@ bool Combat::monsterLevelThreshold() const {
 }
 
 void Combat::turnUndead() {
-	if (_turnUndeadUsed) {
-		// Already been used in the current combat, can't be used again
-		displaySpellResult(InfoMessage(15, 1, STRING["spells.no_effect"]));
+	// It can only be used once per combat. Further casts have no effect
+	Common::String result = "No effect!";
+	int resultX = 15;
 
-	} else {
+	if (!_turnUndeadUsed) {
 		_turnUndeadUsed = true;
 
 		for (uint i = 0; i < _remainingMonsters.size(); ++i) {
@@ -1134,18 +1186,22 @@ void Combat::turnUndead() {
 			Monster *monster = _monsterP;
 
 			if ((monster->_resistUndead & IS_UNDEAD) &&
-					(getRandomNumber(20) + g_globals->_currCharacter->_level) >=
-					(_remainingMonsters[i]->_hp * 2 + 10)) {
+						(getRandomNumber(20) + g_globals->_currCharacter->_level) >=
+						(monster->_level * 2 + 10)) {
 				destroyMonster();
 				++_monstersDestroyedCtr;
 			}
 		}
 
-		if (_monstersDestroyedCtr)
-			displaySpellResult(InfoMessage(5, 1, STRING["spells.monsters_destroyed"]));
-		else
-			displaySpellResult(InfoMessage(15, 1, STRING["spells.no_effect"]));
+		if (_monstersDestroyedCtr) {
+			result = "Some monsters were destroyed!";
+			resultX = 5;
+		}
 	}
+
+	InfoMessage msg(resultX, 1, result);
+	msg._delaySeconds = 3;
+	displaySpellResult(msg);
 
 	g_globals->_combatParty[_currentChar]->_checked = true;
 }
@@ -1160,9 +1216,8 @@ void Combat::summonLightning() {
 	SpellsState &ss = g_globals->_spellsState;
 
 	if (_destMonsterNum < _attackersCount) {
-		Common::String line1 = Common::String::format("%s %s",
-			g_globals->_currCharacter->_name,
-			STRING["spells.casts_spell"].c_str());
+		Common::String line1 = Common::String::format("%s casts a spell:",
+			g_globals->_currCharacter->_name);
 
 		ss._damage = g_globals->_currCharacter->_level * 2 + 4;
 		ss._mmVal1++;
@@ -1193,12 +1248,23 @@ void Combat::summonLightning2() {
 
 void Combat::fireball2() {
 	SpellsState &ss = g_globals->_spellsState;
+
 	ss._mmVal1 = 1;
 	ss._resistanceIndex = 1;
-	ss._resistanceTypeOrTargetCount = 5;
 	ss._damage = 0;
 
-	levelAdjust();
+	// Fireball affects up to five monsters outside hand-to-hand range.
+	_selectedSpellMonster = -1;
+	_destMonsterNum = _attackersCount;
+	_spellMonsterCount = _remainingMonsters.size();
+	ss._resistanceTypeOrTargetCount = MIN(
+		5, (int)_remainingMonsters.size() - _destMonsterNum);
+
+	for (uint i = 0;
+			i < g_globals->_currCharacter->_level._current; ++i)
+		ss._damage += getRandomNumber(6);
+
+	iterateMonsters2Inner();
 }
 
 void Combat::levelAdjust() {
@@ -1226,20 +1292,21 @@ bool Combat::divineIntervention() {
 	if (c._alignment != c._alignmentInitial || _divineInterventionUsed)
 		return false;
 
-	_divineInterventionUsed = true;
-	int age = (int)c._level + 5;
-	if (age > 255)
+	// Casting ages the caster by five years
+	const int newAge = (int)c._age + 5;
+	if (newAge > 255)
 		return false;
 
-	c._age = age;
+	_divineInterventionUsed = true;
+	c._age = newAge;
 
 	for (uint i = 0; i < g_globals->_party.size(); ++i) {
-		c = g_globals->_party[i];
+		Character &partyMember = g_globals->_party[i];
 
-		if (c._condition != ERADICATED) {
-			c._condition = 0;
-			c._hpCurrent = c._hp;
-			c._hpMax = c._hpCurrent;
+		if (partyMember._condition != ERADICATED) {
+			partyMember._condition = 0;
+			partyMember._hpCurrent = partyMember._hp;
+			partyMember._hpMax = partyMember._hpCurrent;
 		}
 	}
 
@@ -1256,10 +1323,14 @@ void Combat::holyWord() {
 		}
 	}
 
-	if (_monstersDestroyedCtr)
-		displaySpellResult(InfoMessage(5, 1, STRING["spells.monsters_destroyed"]));
-	else
-		displaySpellResult(InfoMessage(15, 1, STRING["spells.no_effect"]));
+	// Holy Word result must be timed, like the existing Turn Undead result.
+	InfoMessage msg(_monstersDestroyedCtr ? 5 : 15, 1,
+		_monstersDestroyedCtr ? "Some monsters were destroyed!" : "No effect!");
+	msg._delaySeconds = 3;
+	msg._callback = []() {
+		g_globals->_combat->characterDone();
+	};
+	displaySpellResult(msg);
 	g_globals->_combatParty[_currentChar]->_checked = true;
 }
 
@@ -1273,35 +1344,35 @@ void Combat::identifyMonster() {
 	line += ':';
 	while (line.size() < COL2)
 		line += ' ';
-	line += STRING["spells.info.hp"];
+	line += "hp = ";
 	line += Common::String::format("%d", _monsterP->_hp);
 	line += "  ";
-	line += STRING["spells.info.ac"];
+	line += "ac = ";
 	line += Common::String::format("%d", _monsterP->_ac);
 	msg._lines.push_back(Line(0, 0, line));
 
-	line = STRING["spells.info.speed"];
+	line = "speed = ";
 	line += Common::String::format("%d", _monsterP->_speed);
 	while (line.size() < COL2)
 		line += ' ';
-	line += STRING["spells.info.bonus_on_touch"];
+	line += "bonus on touch   ";
 	line += _monsterP->_bonusOnTouch ? 'Y' : 'N';
 	msg._lines.push_back(Line(0, 1, line));
 
-	line = STRING["spells.info.num_attacks"];
+	line = "# of attacks = ";
 	line += Common::String::format("%d", _monsterP->_numberOfAttacks);
 	while (line.size() < COL2)
 		line += ' ';
-	line += STRING["spells.info.special_ability"];
+	line += "special ability ";
 	line += (_monsterP->_specialAbility & 0x80) ||
 		!_monsterP->_specialAbility ? 'N' : 'Y';
 	msg._lines.push_back(Line(0, 2, line));
 
-	line = STRING["spells.info.max_damage"];
+	line = "maximum damage = ";
 	line += Common::String::format("%d", _monsterP->_maxDamage);
 	while (line.size() < COL2)
 		line += ' ';
-	line += STRING["spells.info.magic_resistance"];
+	line += "magic resistance ";
 	line += Common::String::format("%d",
 		_monsterP->_resistUndead & MAGIC_RESISTANCE);
 	msg._lines.push_back(Line(0, 3, line));
@@ -1314,29 +1385,13 @@ void Combat::identifyMonster() {
 }
 #undef COL2
 
-void Combat::fireball() {
-	SpellsState &ss = g_globals->_spellsState;
+bool Combat::fireball() {
+	// Fireball cannot target monsters engaged in hand-to-hand combat.
+	if (_attackersCount >= (int)_remainingMonsters.size())
+		return false;
 
-	if (_destMonsterNum < _attackersCount) {
-		Common::String line1 = Common::String::format("%s %s",
-			g_globals->_currCharacter->_name,
-			STRING["spells.casts_spell"].c_str());
-
-		ss._damage = g_globals->_currCharacter->_level * 2 + 4;
-		ss._mmVal1++;
-		ss._resistanceIndex++;
-		ss._resistanceTypeOrTargetCount++;
-		handlePartyDamage();
-
-		InfoMessage msg(0, 0, line1);
-		msg._delaySeconds = 3;
-		msg._callback = []() {
-			g_globals->_combat->fireball2();
-		};
-		displaySpellResult(msg);
-	} else {
-		fireball2();
-	}
+	fireball2();
+	return true;
 }
 
 void Combat::lightningBolt() {
@@ -1344,6 +1399,7 @@ void Combat::lightningBolt() {
 	ss._mmVal1++;
 	ss._resistanceTypeOrTargetCount = 3;
 	ss._resistanceIndex = 2;
+	ss._damage = 0;
 
 	levelAdjust();
 }
@@ -1353,15 +1409,68 @@ void Combat::makeRoom() {
 		g_globals->_combatParty[i]->_canAttack = true;
 }
 
+
+int Combat::getHeroismBonus(uint index) const {
+	return index < MAX_PARTY_SIZE ? _heroismBonus[index] : 0;
+}
+
+bool Combat::isSuperHeroism(uint index) const {
+	return index < MAX_PARTY_SIZE && _heroismIsSuper[index];
+}
+
+int Combat::getPowerBonus(uint index) const {
+	return index < MAX_PARTY_SIZE ? _powerBonus[index] : -1;
+}
+
+int Combat::getQuicknessBonus(uint index) const {
+	return index < MAX_PARTY_SIZE ? _quicknessBonus[index] : -1;
+}
+
+void Combat::recordHeroism(Character *character, int bonus, bool isSuper) {
+	for (uint i = 0; i < g_globals->_party.size(); ++i) {
+		if (&g_globals->_party[i] == character) {
+			_heroismBonus[i] = bonus;
+			_heroismIsSuper[i] = isSuper;
+			return;
+		}
+	}
+}
+
+void Combat::recordPower(Character *character, int bonus) {
+	for (uint i = 0; i < g_globals->_party.size(); ++i) {
+		if (&g_globals->_party[i] == character) {
+			if (_powerBonus[i] < 0)
+				_powerBonus[i] = 0;
+			_powerBonus[i] += bonus;
+			return;
+		}
+	}
+}
+
+void Combat::recordQuickness(Character *character, int bonus) {
+	for (uint i = 0; i < g_globals->_party.size(); ++i) {
+		if (&g_globals->_party[i] == character) {
+			if (_quicknessBonus[i] < 0)
+				_quicknessBonus[i] = 0;
+			_quicknessBonus[i] += bonus;
+			return;
+		}
+	}
+}
+
 void Combat::slow() {
 	for (uint i = 0; i < _remainingMonsters.size(); ++i) {
 		monsterSetPtr(i);
 		_monsterP->_speed = MAX(_monsterP->_speed / 2, 1);
 	}
+
+	// Slow can be cast repeatedly; record this only for the current battle.
+	++_slowCasts;
 }
 
 void Combat::weaken() {
 	SpellsState &ss = g_globals->_spellsState;
+	++_weakenCasts;
 
 	for (uint i = 0; i < _remainingMonsters.size(); ++i) {
 		monsterSetPtr(i);
@@ -1376,9 +1485,6 @@ void Combat::weaken() {
 
 bool Combat::web() {
 	SpellsState &ss = g_globals->_spellsState;
-	if (_destMonsterNum < _attackersCount)
-		return false;
-
 	ss._mmVal1++;
 	ss._resistanceIndex = 0;
 	ss._resistanceTypeOrTargetCount = 5;
@@ -1405,14 +1511,17 @@ bool Combat::acidRain() {
 	for (int i = 0; i < 5; ++i)
 		ss._damage += getRandomNumber(10);
 
-	iterateMonsters2();
+	// Acid Rain affects only monsters outside hand-to-hand combat. Keep the
+	// starting monster chosen above instead of resetting it to the first one
+	_selectedSpellMonster = -1;
+	_spellMonsterCount = _remainingMonsters.size();
+	iterateMonsters2Inner();
 	return true;
 }
 
 void Combat::fingerOfDeath() {
-	Common::String line1 = Common::String::format("%s %s",
-		g_globals->_currCharacter->_name,
-		STRING["spells.casts_spell"].c_str());
+	Common::String line1 = Common::String::format("%s casts a spell:",
+		g_globals->_currCharacter->_name);
 
 	const Common::String monsterName = _monsterP->_name;
 	bool kills = !(_monsterP->_resistUndead & IS_UNDEAD) &&
@@ -1428,8 +1537,8 @@ void Combat::fingerOfDeath() {
 
 	Common::String line2 = Common::String::format("%s %s",
 		monsterName.c_str(),
-		kills ? STRING["spells.char_effects.7"].c_str() :
-		STRING["monster_spells.not_affected"].c_str()
+		kills ? "is killed" :
+		"is not affected!"
 	);
 
 	InfoMessage msg(0, 0, line1, 0, 2, line2);
@@ -1442,9 +1551,8 @@ void Combat::fingerOfDeath() {
 }
 
 void Combat::disintegration() {
-	Common::String line1 = Common::String::format("%s %s",
-		g_globals->_currCharacter->_name,
-		STRING["spells.casts_spell"].c_str());
+	Common::String line1 = Common::String::format("%s casts a spell:",
+		g_globals->_currCharacter->_name);
 
 	const Common::String monsterName = _monsterP->_name;
 	bool kills = !monsterLevelThreshold();
@@ -1459,8 +1567,8 @@ void Combat::disintegration() {
 
 	Common::String line2 = Common::String::format("%s %s",
 		monsterName.c_str(),
-		kills ? STRING["spells.char_effects.disintegrated"].c_str() :
-		STRING["monster_spells.not_affected"].c_str()
+		kills ? "is disintegrated!" :
+		"is not affected!"
 	);
 
 	InfoMessage msg(0, 0, line1, 0, 2, line2);
@@ -1494,7 +1602,9 @@ void Combat::monsterAttackInner() {
 	Encounter &enc = g_globals->_encounters;
 	Character &c = *g_globals->_currCharacter;
 
-	_destAC = c._ac._base;
+	// Use the level-based Leather Skin bonus in the actual enemy hit roll.
+	_destAC = c._ac._base +
+		g_globals->_activeSpells._s.leather_skin;
 	int monsterIndex = getMonsterIndex();
 	_attackerLevel = enc._monsterList[monsterIndex]._level * 2 + 4;
 
@@ -1552,7 +1662,7 @@ void Combat::selectMonsterTarget() {
 			}
 		}
 		_partyIndex = idx;
-		Character &c = g_globals->_party[_partyIndex];
+		Character &c = *g_globals->_combatParty[_partyIndex];
 		g_globals->_currCharacter = &c;
 
 		if (!(c._condition & BAD_CONDITION) && !(c._condition & UNCONSCIOUS)) {
@@ -1591,6 +1701,7 @@ void Combat::exchangeWith(int charNum) {
 	g_globals->_combatParty[_currentChar]->_checked = true;
 	Character *c1 = g_globals->_combatParty[_currentChar];
 	Character *c2 = g_globals->_combatParty[charNum];
+	SWAP(c1->_canAttack, c2->_canAttack);
 	g_globals->_combatParty[_currentChar] = c2;
 	g_globals->_combatParty[charNum] = c1;
 
@@ -1626,7 +1737,18 @@ void Combat::use() {
 	g_events->send("CharacterInfo", GameMessage("USE"));
 }
 
+void Combat::endCombat() {
+	combatDone();
+}
+
 void Combat::combatDone() {
+	_slowCasts = 0;
+	_weakenCasts = 0;
+	Common::fill(&_heroismBonus[0], &_heroismBonus[MAX_PARTY_SIZE], 0);
+	Common::fill(&_heroismIsSuper[0], &_heroismIsSuper[MAX_PARTY_SIZE], false);
+	Common::fill(&_powerBonus[0], &_powerBonus[MAX_PARTY_SIZE], -1);
+	Common::fill(&_quicknessBonus[0], &_quicknessBonus[MAX_PARTY_SIZE], -1);
+
 	// Reset several active spells
 	g_globals->_activeSpells._s.bless = 0;
 	g_globals->_activeSpells._s.invisbility = 0;
@@ -1654,16 +1776,14 @@ Common::String Combat::subtractDamageFromChar() {
 		if (!(c._condition & (BAD_CONDITION | UNCONSCIOUS))) {
 			c._condition |= UNCONSCIOUS;
 
-			result = Common::String::format("%s %s", c._name,
-				STRING["dialogs.combat.goes_down"].c_str());
+			result = Common::String::format("%s goes down!!!", c._name);
 			Sound::sound2(SOUND_8);
 
 		} else {
 			if (c._condition & BAD_CONDITION)
 				c._condition = BAD_CONDITION | DEAD;
 
-			result = Common::String::format("%s %s", c._name,
-				STRING["dialogs.combat.dies"].c_str());
+			result = Common::String::format("%s dies!", c._name);
 			Sound::sound2(SOUND_8);
 		}
 	}

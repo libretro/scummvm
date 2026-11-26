@@ -20,6 +20,7 @@
  */
 
 #include "mm/mm1/views_enh/character_inventory.h"
+#include "mm/mm1/data/text.h"
 #include "mm/mm1/views_enh/combat.h"
 #include "mm/mm1/views_enh/game_messages.h"
 #include "mm/mm1/views_enh/trade.h"
@@ -31,6 +32,16 @@ namespace MM {
 namespace MM1 {
 namespace ViewsEnh {
 
+// Existing inventory buttons end at x=239 and Exit begins at x=275. The G/S
+// control fits in the spare gap without moving any existing control. Its icon
+// is drawn from the engine's native blank-button surface with a vertical split,
+// avoiding the unrelated necklace art previously borrowed from ITEMS.ICN.
+static const int GS_BUTTON_X = 245;
+static const int GS_BUTTON_Y = 101;
+static const int GS_BUTTON_W = 24;
+static const int GS_BUTTON_H = 36;
+static const int GS_ICON_SIZE = 20;
+
 CharacterInventory::CharacterInventory() : ItemsView("CharacterInventory") {
 	setup();
 }
@@ -41,14 +52,14 @@ CharacterInventory::CharacterInventory(const Common::String &name) : ItemsView(n
 
 void CharacterInventory::setup() {
 	_btnSprites.load("items.icn");
-	addButton(2, STRING["enhdialogs.items.buttons.arms"], Common::KEYCODE_a);
-	addButton(6, STRING["enhdialogs.items.buttons.backpack"], Common::KEYCODE_b);
-	addButton(8, STRING["enhdialogs.items.buttons.equip"], Common::KEYCODE_e);
-	addButton(10, STRING["enhdialogs.items.buttons.remove"], Common::KEYCODE_r);
-	addButton(12, STRING["enhdialogs.items.buttons.discard"], Common::KEYCODE_d);
-	addButton(6, STRING["enhdialogs.items.buttons.trade"], Common::KEYCODE_t);
-	addButton(14, STRING["enhdialogs.items.buttons.use"], Common::KEYCODE_u);
-	addButton(16, STRING["enhdialogs.misc.exit"], Common::KEYCODE_ESCAPE);
+	addButton(2, "\x01""37Arms", Common::KEYCODE_a);
+	addButton(6, "\x01""37BkPack", Common::KEYCODE_b);
+	addButton(8, "\x01""37Equip", Common::KEYCODE_e);
+	addButton(10, "\x01""37Rem", Common::KEYCODE_r);
+	addButton(12, "\x01""37Disc", Common::KEYCODE_d);
+	addButton(6, "\x01""37Trade", Common::KEYCODE_t);
+	addButton(14, "\x01""37Use", Common::KEYCODE_u);
+	addButton(16, "Exit", Common::KEYCODE_ESCAPE);
 }
 
 bool CharacterInventory::msgFocus(const FocusMessage &msg) {
@@ -96,18 +107,69 @@ bool CharacterInventory::msgGame(const GameMessage &msg) {
 
 void CharacterInventory::draw() {
 	ItemsView::draw();
+	drawGatherShare();
 	drawTitle();
+}
+
+void CharacterInventory::drawGatherShare() {
+	if (g_events->isInCombat())
+		return;
+
+	Graphics::ManagedSurface s = getSurface();
+	const int pressOffset = _gsPressed != GS_NONE ? 1 : 0;
+	const int iconX = GS_BUTTON_X + (GS_BUTTON_W - GS_ICON_SIZE) / 2 +
+		_bounds.borderSize() + pressOffset;
+	const int iconY = GS_BUTTON_Y + _bounds.borderSize() + pressOffset;
+
+	// Native blank button + a simple center divider. This reads as two halves
+	// without requiring a new ICN resource and keeps the UI style consistent.
+	s.blitFrom(g_globals->_blankButton, Common::Point(iconX, iconY));
+	s.vLine(iconX + GS_ICON_SIZE / 2, iconY + 3,
+		iconY + GS_ICON_SIZE - 4, 0);
+
+	setReduced(true);
+	writeString(GS_BUTTON_X + GS_BUTTON_W / 2, 123,
+		"\x01""37G/\x01""37S", ALIGN_MIDDLE);
+}
+
+CharacterInventory::GatherShareButton CharacterInventory::gatherShareAt(
+		const Common::Point &pos) const {
+	if (g_events->isInCombat())
+		return GS_NONE;
+
+	Common::Rect r(GS_BUTTON_X, GS_BUTTON_Y,
+		GS_BUTTON_X + GS_BUTTON_W, GS_BUTTON_Y + GS_BUTTON_H);
+	r.translate(_innerBounds.left, _innerBounds.top);
+	if (!r.contains(pos))
+		return GS_NONE;
+
+	return pos.x < r.left + GS_BUTTON_W / 2 ? GS_GATHER : GS_SHARE;
+}
+
+void CharacterInventory::gatherShare(GatherShareButton action) {
+	if (action == GS_GATHER) {
+		InfoMessage msg(Common::String::format(
+			"Gather all gold, gems and food onto %s?",
+			g_globals->_currCharacter->_name));
+		msg._fontReduced = true;
+		msg._callback = []() {
+			g_globals->_currCharacter->gatherResources();
+			g_events->redraw();
+		};
+		send(msg);
+	} else if (action == GS_SHARE) {
+		addView("Trade");
+		send("Trade", GameMessage("SHARE"));
+	}
 }
 
 void CharacterInventory::drawTitle() {
 	const Character &c = *g_globals->_currCharacter;
-	const Common::String fmt = STRING[(_mode == ARMS_MODE) ?
-		"enhdialogs.items.arms_for" :
-		"enhdialogs.items.backpack_for"];
+	const Common::String fmt = ((_mode == ARMS_MODE) ? "Equipment for %s the %s" : "Backpack for %s the %s");
 
 	const Common::String title = Common::String::format(fmt.c_str(),
 		c._name,
-		STRING[Common::String::format("stats.classes.%d", c._class)].c_str()
+		CLASS_NAMES[c._class - 1]
 	);
 
 	setReduced(false);
@@ -150,12 +212,48 @@ bool CharacterInventory::msgKeypress(const KeypressMessage &msg) {
 		case Common::KEYCODE_u:
 			selectButton(BTN_USE);
 			return true;
+		case Common::KEYCODE_g:
+			gatherShare(GS_GATHER);
+			return true;
+		case Common::KEYCODE_s:
+			gatherShare(GS_SHARE);
+			return true;
 		default:
 			break;
 		}
 	}
 
 	return ItemsView::msgKeypress(msg);
+}
+
+bool CharacterInventory::msgMouseDown(const MouseDownMessage &msg) {
+	if (msg._button == MouseMessage::MB_LEFT) {
+		const GatherShareButton action = gatherShareAt(msg._pos);
+		if (action != GS_NONE) {
+			_gsPressed = action;
+			draw();
+			return true;
+		}
+	}
+
+	return ItemsView::msgMouseDown(msg);
+}
+
+bool CharacterInventory::msgMouseUp(const MouseUpMessage &msg) {
+	if (_gsPressed != GS_NONE) {
+		const GatherShareButton pressed = _gsPressed;
+		const GatherShareButton released =
+			msg._button == MouseMessage::MB_LEFT ? gatherShareAt(msg._pos) : GS_NONE;
+
+		_gsPressed = GS_NONE;
+		draw();
+
+		if (released == pressed)
+			gatherShare(pressed);
+		return true;
+	}
+
+	return ItemsView::msgMouseUp(msg);
 }
 
 bool CharacterInventory::msgAction(const ActionMessage &msg) {
@@ -225,19 +323,18 @@ void CharacterInventory::selectButton(SelectedButton btnMode) {
 		performAction();
 
 	} else {
-		Common::String btn = STRING["enhdialogs.items.equip"];
+		Common::String btn = "Equip";
 		if (btnMode == BTN_REMOVE)
-			btn = STRING["enhdialogs.items.remove"];
+			btn = "Remove";
 		else if (btnMode == BTN_DISCARD)
-			btn = STRING["enhdialogs.items.discard"];
+			btn = "Discard";
 		else if (btnMode == BTN_USE)
-			btn = STRING["enhdialogs.items.use"];
+			btn = "Use";
 		else if (btnMode == BTN_CHARGE)
-			btn = STRING["enhdialogs.items.charge"];
+			btn = "Charge";
 
 		send("WhichItem", GameMessage("DISPLAY",
-			Common::String::format("%s %s", btn.c_str(),
-				STRING["enhdialogs.items.which_item"].c_str())
+			Common::String::format("%s which item?", btn.c_str())
 		));
 	}
 }
@@ -346,14 +443,27 @@ void CharacterInventory::trade(const Common::String &mode, int amount, Character
 	Character &src = *g_globals->_currCharacter;
 
 	if (mode == "GEMS") {
-		amount = MIN<uint16>(amount, src._gems);
-		src._gems -= amount;
-		destChar->_gems = MIN(destChar->_gems + amount, 0xffff);
+		// Gems are serialized as uint16 (maximum 65,535).  Keep the
+		// calculation wide enough for a five-digit entered amount and cap
+		// the transfer to both the source balance and destination capacity.
+		// This prevents truncation above 65,535 and prevents excess gems
+		// from disappearing when the recipient is near the cap.
+		uint32 transfer = MIN<uint32>((uint32)amount, (uint32)src._gems);
+		transfer = MIN<uint32>(transfer, 0xffffU - (uint32)destChar->_gems);
+		src._gems -= (uint16)transfer;
+		destChar->_gems += (uint16)transfer;
 
 	} else if (mode == "GOLD") {
-		amount = MIN<uint16>(amount, src._gold);
-		src._gold -= amount;
-		destChar->_gold += amount;
+		// Gold is a 24-bit value. The old 16-bit limit truncated both the
+		// requested amount and the source gold above 65,535
+		uint32 transfer = MIN<uint32>((uint32)amount, src._gold);
+		if (destChar->_gold >= 0xffffff) {
+			transfer = 0;
+		} else {
+			transfer = MIN<uint32>(transfer, 0xffffff - destChar->_gold);
+		}
+		src._gold -= transfer;
+		destChar->_gold += transfer;
 
 	} else if (mode == "FOOD") {
 		amount = MIN<uint16>(amount, src._food);

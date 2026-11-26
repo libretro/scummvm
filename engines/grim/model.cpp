@@ -35,6 +35,60 @@
 
 namespace Grim {
 
+void ScreenBounds::addPoint(const Math::Matrix4 &mvpMatrix, const Math::Vector3d &point) {
+	Math::Vector4d v = mvpMatrix * Math::Vector4d(point.x(), point.y(), point.z(), 1.0f);
+	if (v.w() <= 0.0f)
+		return;
+	v /= v.w();
+
+	float x = (1 + v.x()) / 2.0f * 640;
+	float y = (1 - v.y()) / 2.0f * 480;
+	extend(x, y, x, y);
+}
+
+void ScreenBounds::addBounds(const ScreenBounds &other) {
+	if (!other.isEmpty())
+		extend(other._left, other._top, other._right, other._bottom);
+}
+
+void ScreenBounds::extend(float left, float top, float right, float bottom) {
+	if (_empty) {
+		_left = left;
+		_top = top;
+		_right = right;
+		_bottom = bottom;
+		_empty = false;
+		return;
+	}
+
+	_left = MIN(_left, left);
+	_top = MIN(_top, top);
+	_right = MAX(_right, right);
+	_bottom = MAX(_bottom, bottom);
+}
+
+bool ScreenBounds::clipToScreen() {
+	if (isEmpty() || _top >= 480 || _left >= 640 || _bottom < 0 || _right < 0)
+		return false;
+
+	_left = MAX(_left, 0.0f);
+	_right = MIN(_right, 640 - 1.0f);
+	_top = MAX(_top, 0.0f);
+	_bottom = MIN(_bottom, 480 - 1.0f);
+	return true;
+}
+
+bool ScreenBounds::overlapsScreen() const {
+	if (isEmpty())
+		return false;
+
+	int x = getLeft();
+	int y = getTop();
+	int w = toPixel(_right - _left);
+	int h = toPixel(_bottom - _top);
+	return x + w >= 0 && x <= 640 && y + h >= 0 && y <= 480;
+}
+
 /**
  * @class Model
  */
@@ -48,40 +102,10 @@ Model::Model(const Common::String &filename, Common::SeekableReadStream *data, C
 		loadText(&ts);
 	}
 
-	Math::Vector3d max;
-
-	_rootHierNode->update();
-	bool first = true;
 	for (int i = 0; i < _numHierNodes; ++i) {
-		ModelNode &node = _rootHierNode[i];
-		if (node._mesh) {
-			g_driver->createMesh(node._mesh);
-			Mesh &mesh = *node._mesh;
-			Math::Vector3d p = mesh._matrix.getPosition();
-			float x = p.x();
-			float y = p.y();
-			float z = p.z();
-			for (int k = 0; k < mesh._numVertices * 3; k += 3) {
-				if (first || mesh._vertices[k] + x < _bboxPos.x())
-					_bboxPos.x() = mesh._vertices[k] + x;
-				if (first || mesh._vertices[k + 1] + y < _bboxPos.y())
-					_bboxPos.y() = mesh._vertices[k + 1] + y;
-				if (first || mesh._vertices[k + 2] + z < _bboxPos.z())
-					_bboxPos.z() = mesh._vertices[k + 2] + z;
-
-				if (first || mesh._vertices[k] + x > max.x())
-					max.x() = mesh._vertices[k] + x;
-				if (first || mesh._vertices[k + 1] + y > max.y())
-					max.y() = mesh._vertices[k + 1] + y;
-				if (first || mesh._vertices[k + 2] + z > max.z())
-					max.z() = mesh._vertices[k + 2] + z;
-
-				first = false;
-			}
-		}
+		if (_rootHierNode[i]._mesh)
+			g_driver->createMesh(_rootHierNode[i]._mesh);
 	}
-
-	_bboxSize = max - _bboxPos;
 }
 
 Model::~Model() {
@@ -122,7 +146,11 @@ void Model::loadBinary(Common::SeekableReadStream *data) {
 		_rootHierNode[i].loadBinary(data, _rootHierNode, &_geosets[0]);
 	}
 	_radius = data->readFloatLE();
-	data->seek(36, SEEK_CUR);
+	_bboxPos.readFromStream(data);
+	Math::Vector3d bboxMax;
+	bboxMax.readFromStream(data);
+	_bboxSize = bboxMax - _bboxPos;
+	_center.readFromStream(data);
 	_insertOffset.readFromStream(data);
 }
 
@@ -204,6 +232,41 @@ void Model::loadText(TextSplitter *ts) {
 
 	if (!ts->isEof())
 		Debug::warning(Debug::Models, "Unexpected junk at end of model text");
+
+	Math::Vector3d max;
+
+	_rootHierNode->update();
+	bool first = true;
+	for (int i = 0; i < _numHierNodes; ++i) {
+		ModelNode &node = _rootHierNode[i];
+		if (node._mesh) {
+			Mesh &mesh = *node._mesh;
+			Math::Vector3d p = mesh._matrix.getPosition();
+			float x = p.x();
+			float y = p.y();
+			float z = p.z();
+			for (int k = 0; k < mesh._numVertices * 3; k += 3) {
+				if (first || mesh._vertices[k] + x < _bboxPos.x())
+					_bboxPos.x() = mesh._vertices[k] + x;
+				if (first || mesh._vertices[k + 1] + y < _bboxPos.y())
+					_bboxPos.y() = mesh._vertices[k + 1] + y;
+				if (first || mesh._vertices[k + 2] + z < _bboxPos.z())
+					_bboxPos.z() = mesh._vertices[k + 2] + z;
+
+				if (first || mesh._vertices[k] + x > max.x())
+					max.x() = mesh._vertices[k] + x;
+				if (first || mesh._vertices[k + 1] + y > max.y())
+					max.y() = mesh._vertices[k + 1] + y;
+				if (first || mesh._vertices[k + 2] + z > max.z())
+					max.z() = mesh._vertices[k + 2] + z;
+
+				first = false;
+			}
+		}
+	}
+
+	_bboxSize = max - _bboxPos;
+	_center = _bboxPos + _bboxSize / 2.f;
 }
 
 void Model::draw() const {
@@ -559,16 +622,19 @@ void Mesh::draw() const {
 		g_driver->enableLights();
 }
 
-void Mesh::getBoundingBox(int *x1, int *y1, int *x2, int *y2) const {
-	int winX1, winY1, winX2, winY2;
-	g_driver->getScreenBoundingBox(this, &winX1, &winY1, &winX2, &winY2);
-	if (winX1 != -1 && winY1 != -1 && winX2 != -1 && winY2 != -1) {
-		*x1 = MIN(*x1, winX1);
-		*y1 = MIN(*y1, winY1);
-		*x2 = MAX(*x2, winX2);
-		*y2 = MAX(*y2, winY2);
+void Mesh::getBoundingBox(const Math::Matrix4 &mvpMatrix, ScreenBounds &bounds) const {
+	ScreenBounds meshBounds;
+	for (int i = 0; i < _numFaces; i++) {
+		for (int j = 0; j < _faces[i].getNumVertices(); j++) {
+			const float *v = _vertices + 3 * _faces[i].getVertex(j);
+			meshBounds.addPoint(mvpMatrix, Math::Vector3d(v[0], v[1], v[2]));
+		}
 	}
+
+	if (meshBounds.clipToScreen())
+		bounds.addBounds(meshBounds);
 }
+
 
 /**
  * @class ModelNode
@@ -672,33 +738,30 @@ void ModelNode::draw() const {
 	}
 }
 
-void ModelNode::getBoundingBox(int *x1, int *y1, int *x2, int *y2) const {
-	if (_sibling || _child) {
-		translateViewpointStart();
-	}
-	translateViewpoint();
+void ModelNode::getBoundingBox(const Math::Matrix4 &matrix, ScreenBounds &bounds) const {
 	if (_hierVisible) {
-		if (_child) {
-			translateViewpointStart();
-		}
-		g_driver->translateViewpoint(_pivot);
+		Math::Matrix4 nodeMatrix = matrix * getAnimMatrix();
 
 		if (_mesh && _meshVisible) {
-			_mesh->getBoundingBox(x1, y1, x2, y2);
+			Math::Matrix4 pivotMatrix;
+			pivotMatrix.setPosition(_pivot);
+			_mesh->getBoundingBox(nodeMatrix * pivotMatrix, bounds);
 		}
 
 		if (_child) {
-			translateViewpointFinish();
-			_child->getBoundingBox(x1, y1, x2, y2);
+			_child->getBoundingBox(nodeMatrix, bounds);
 		}
 	}
 
-	if (_sibling || _child) {
-		translateViewpointFinish();
-	}
 	if (_sibling) {
-		_sibling->getBoundingBox(x1, y1, x2, y2);
+		_sibling->getBoundingBox(matrix, bounds);
 	}
+}
+
+Math::Matrix4 ModelNode::getAnimMatrix() const {
+	Math::Matrix4 matrix = _animRot.toMatrix();
+	matrix.setPosition(_animPos);
+	return matrix;
 }
 
 void ModelNode::addChild(ModelNode *child) {
@@ -730,8 +793,7 @@ void ModelNode::update() {
 		return;
 
 	if (_hierVisible && _needsUpdate) {
-		_localMatrix = _animRot.toMatrix();
-		_localMatrix.setPosition(_animPos);
+		_localMatrix = getAnimMatrix();
 
 		_matrix = _matrix * _localMatrix;
 

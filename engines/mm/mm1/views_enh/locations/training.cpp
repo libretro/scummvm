@@ -37,8 +37,11 @@ Training::Training() : Location("Training", LOC_TRAINING) {
 }
 
 bool Training::msgFocus(const FocusMessage &msg) {
-	Location::msgFocus(msg);
+	if (!g_globals->_currCharacter && !g_globals->_party.empty())
+		g_globals->_currCharacter = &g_globals->_party[0];
+
 	checkCharacter();
+	Location::msgFocus(msg);
 	return true;
 }
 
@@ -47,37 +50,42 @@ void Training::draw() {
 	const Character &c = *g_globals->_currCharacter;
 
 	setReduced(false);
-	writeLine(0, STRING["enhdialogs.training.title"], ALIGN_MIDDLE);
-	writeLine(1, STRING["enhdialogs.location.options"], ALIGN_MIDDLE);
+	writeLine(0, "Training", ALIGN_MIDDLE);
+	writeLine(1, "options", ALIGN_MIDDLE);
 
 	if (_currLevel >= MAX_LEVEL) {
 		writeLine(3, c._name, ALIGN_MIDDLE);
-		writeLine(5, STRING["dialogs.training.no_way"], ALIGN_MIDDLE);
+		writeLine(5, "No way!", ALIGN_MIDDLE);
 
 	} else if (_remainingExp > 0) {
 		writeLine(3, Common::String::format(
-			STRING["enhdialogs.training.needs"].c_str(),
+			"%s\nneeds %d experience for level %d.",
 			c._name, _remainingExp, _currLevel + 1), ALIGN_MIDDLE);
 
 	} else {
 		writeLine(3, Common::String::format(
-			STRING["enhdialogs.training.eligible"].c_str(),
+			"%s\nis eligible for level %d.",
 			c._name, _currLevel + 1), ALIGN_MIDDLE);
 	}
 
-	writeLine(10, STRING["enhdialogs.location.gold"]);
+	writeLine(10, "Gold");
 	writeLine(10, Common::String::format("%d", c._gold), ALIGN_RIGHT);
 
 	setReduced(true);
-	writeString(5, 122, STRING["enhdialogs.training.train"]);
-	writeString(43, 122, STRING["enhdialogs.training.esc"]);
+	writeString(5, 122, "\x01""37Train");
+	writeString(43, 122, "ESC");
 }
 
 bool Training::msgGame(const GameMessage &msg) {
-	Location::msgGame(msg);
 	if (msg._name == "UPDATE")
 		checkCharacter();
+	Location::msgGame(msg);
 	return true;
+}
+
+void Training::charSwitched(Character *priorChar) {
+	checkCharacter();
+	PartyView::charSwitched(priorChar);
 }
 
 bool Training::msgKeypress(const KeypressMessage &msg) {
@@ -134,31 +142,17 @@ void Training::checkCharacter() {
 	_class = c._class;
 
 	if (_class == KNIGHT || _class == CLERIC || _class == ROBBER) {
-		_expTotal = 1500;
-		_expAmount = 150000;
-
 		if (_currLevel != 0) {
 			_cost = _currLevel >= 8 ? 3000 :
 				TRAINING_COSTS1[_currLevel - 1];
 		}
 	} else {
-		_expTotal = 2000;
-		_expAmount = 200000;
 		_cost = _currLevel >= 8 ? 4000 :
 			TRAINING_COSTS2[_currLevel - 1];
 	}
 
-	for (int level = _currLevel - 1, ctr = 0; level > 0; --level) {
-		_expTotal *= 16;
-
-		if (++ctr >= 7) {
-			while (--level > 0)
-				_expTotal += _expAmount;
-			break;
-		}
-	}
-
-	_remainingExp = _expTotal - c._exp;
+	_expTotal = c.experienceForNextLevel();
+	_remainingExp = (int)_expTotal - (int)c._exp;
 	_canTrain = _remainingExp <= 0;
 	_canAfford = (int)c._gold >= _cost;
 }
@@ -169,7 +163,7 @@ void Training::train() {
 	if (c._condition) {
 		// Having a condition prevents characters from training
 		Sound::sound(SOUND_3);
-		displayMessage(STRING["dialogs.training.condition"]);
+		displayMessage("*** Check condition ***");
 
 	} else if (!_canAfford) {
 		// Can't afford training
@@ -181,16 +175,15 @@ void Training::train() {
 		Character::LevelIncrease lvl = c.increaseLevel();
 		Sound::sound(SOUND_2);
 
-		Common::String msg = Common::String::format("%s%d",
-			STRING["dialogs.training.congrats"].c_str(),
+		Common::String msg = Common::String::format("Congratulations! you are now level %d",
 			c._level._base);
 
-		msg = Common::String::format(STRING["dialogs.training.hp"].c_str(),
+		msg = Common::String::format("You gained %d hit points",
 			lvl._numHP);
 
 		if (lvl._numSpells != 0) {
 			msg += ". ";
-			msg += STRING["dialogs.training.new_spells"];
+			msg += "You gained new spells!";
 		}
 
 		displayMessage(msg);

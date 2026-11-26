@@ -139,6 +139,14 @@ SpellResult SpellsParty::cast(uint spell, Character *destChar) {
 	assert(spell < SPELLS_COUNT);
 	_destChar = destChar;
 
+	// Reset transient party-spell calculation state. These fields
+	// must never carry damage or resistance data between spells.
+	SpellsState &ss = g_globals->_spellsState;
+	ss._mmVal1 = 0;
+	ss._resistanceIndex = 0;
+	ss._resistanceTypeOrTargetCount = RESISTANCE_MAGIC;
+	ss._damage = 0;
+
 	return SPELLS[spell]();
 }
 
@@ -166,9 +174,9 @@ SpellResult SpellsParty::cleric13_blind() {
 	s._mmVal1++;
 	s._resistanceIndex = 7;
 	s._damage = BLINDED;
-	s._resistanceTypeOrTargetCount = static_cast<Resistance>((int)s._resistanceTypeOrTargetCount + 1);
+	s._resistanceTypeOrTargetCount = 1;
 
-	g_globals->_combat->iterateMonsters1();
+	g_globals->_combat->iterateSelectedMonster1();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -217,8 +225,11 @@ SpellResult SpellsParty::cleric22_heroism() {
 		_destChar->_level._current != _destChar->_level._base)
 		return SR_FAILED;
 
+	const int priorLevel = _destChar->_level._current;
 	_destChar->_level._current = MIN(
 		(int)_destChar->_level._current + 2, 255);
+	g_globals->_combat->recordHeroism(_destChar,
+		_destChar->_level._current - priorLevel, false);
 	restoreHp(6);
 	return SR_SUCCESS_DONE;
 }
@@ -227,10 +238,10 @@ SpellResult SpellsParty::cleric23_pain() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._damage = getRandomNumber(6) + getRandomNumber(6);
 	ss._mmVal1++;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 	ss._resistanceIndex = 6;
 
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -257,9 +268,9 @@ SpellResult SpellsParty::cleric27_silence() {
 	ss._mmVal1++;
 	ss._resistanceIndex = 7;
 	ss._damage = SILENCED;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 
-	g_globals->_combat->iterateMonsters1();
+	g_globals->_combat->iterateSelectedMonster1();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -268,9 +279,9 @@ SpellResult SpellsParty::cleric28_suggestion() {
 	ss._mmVal1++;
 	ss._resistanceIndex = 6;
 	ss._damage = PARALYZED;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 
-	g_globals->_combat->iterateMonsters1();
+	g_globals->_combat->iterateSelectedMonster1();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -309,21 +320,22 @@ SpellResult SpellsParty::cleric34_lastingLight() {
 SpellResult SpellsParty::cleric35_produceFlame() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._mmVal1++;
-	ss._resistanceTypeOrTargetCount++;
-	ss._resistanceIndex = 4;
+	ss._resistanceTypeOrTargetCount = 1;
+	ss._resistanceIndex = 1;
 	ss._damage = getRandomNumber(6) +
 		getRandomNumber(6) + getRandomNumber(6);
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
 SpellResult SpellsParty::cleric36_produceFrost() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._mmVal1++;
-	ss._resistanceIndex++;
+	ss._resistanceTypeOrTargetCount = 1;
+	ss._resistanceIndex = 4;
 	ss._damage = getRandomNumber(6) +
 		getRandomNumber(6) + getRandomNumber(6);
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -383,8 +395,11 @@ SpellResult SpellsParty::cleric47_superHeroism() {
 	if (_destChar->_level._current != _destChar->_level._base)
 		return SR_FAILED;
 
+	const int priorLevel = _destChar->_level._current;
 	_destChar->_level._current = MIN(
 		(int)_destChar->_level._current + 3, 255);
+	g_globals->_combat->recordHeroism(_destChar,
+		_destChar->_level._current - priorLevel, true);
 	restoreHp(10);
 	return SR_SUCCESS_DONE;
 }
@@ -488,19 +503,27 @@ SpellResult SpellsParty::cleric61_moonRay() {
 }
 
 SpellResult SpellsParty::cleric62_raiseDead() {
-	if ((_destChar->_condition == ERADICATED) ||
-		(_destChar->_condition & (BAD_CONDITION | DEAD)) ==
+	// Raise Dead is valid only for a character who is actually Dead.
+	// Eradicated characters require Resurrection.
+	if (_destChar->_condition == ERADICATED ||
+		(_destChar->_condition & (BAD_CONDITION | DEAD)) !=
 		(BAD_CONDITION | DEAD))
 		return SR_FAILED;
+
 	int rnd = g_engine->getRandomNumber(100);
 	if (rnd == 100) {
-		// This is such a minute chance, why even have it?
+		// Original spell description: a remote chance of eradicating
+		// the character instead of raising them.
+		_destChar->_condition = ERADICATED;
+		_destChar->_hpCurrent = 0;
 		Sound::sound(SOUND_3);
 		return SR_FAILED;
 	} else if (rnd > 90) {
+		// Moderate ordinary failure chance: target remains Dead.
 		return SR_FAILED;
 	}
 
+	// A character who was both Dead and Stoned is raised but remains Stoned.
 	if (_destChar->_condition == (BAD_CONDITION | DEAD | STONE))
 		_destChar->_condition = BAD_CONDITION | STONE;
 	else
@@ -512,12 +535,12 @@ SpellResult SpellsParty::cleric62_raiseDead() {
 
 SpellResult SpellsParty::cleric63_rejuvinate() {
 	if (g_engine->getRandomNumber(100) < 75) {
-		_destChar->_age = MIN(_destChar->_age - g_engine->getRandomNumber(10),
-			200);
-		return SR_FAILED;
+		const int ageReduction = g_engine->getRandomNumber(10);
+		_destChar->_age = MAX((int)_destChar->_age - ageReduction, 0);
+		return SR_SUCCESS_DONE;
 	} else {
-		// Failed, increase the user's age
-		_destChar->_age = MIN(_destChar->_age + 10, 200);
+		// Failed, increase the recipient's age.
+		_destChar->_age = MIN((int)_destChar->_age + 10, 200);
 		return SR_FAILED;
 	}
 }
@@ -540,7 +563,7 @@ SpellResult SpellsParty::cleric64_stoneToFlesh() {
 SpellResult SpellsParty::cleric65_townPortal() {
 	Sound::sound(SOUND_2);
 	InfoMessage msg(
-		STRING["spells.which_town"],
+		"Which town (1-5)?",
 		[](const Common::KeyState &keyState) {
 			switch (keyState.keycode) {
 			case Common::KEYCODE_ESCAPE:
@@ -559,7 +582,7 @@ SpellResult SpellsParty::cleric65_townPortal() {
 				maps._mapPos.y = TownData::TOWN_MAP_Y[townIndex];
 				maps.changeMap(
 					TownData::TOWN_MAP_ID1[townIndex] |
-					(TownData::TOWN_MAP_ID1[townIndex] << 8),
+					(TownData::TOWN_MAP_ID2[townIndex] << 8),
 					1);
 
 				g_events->close();
@@ -571,6 +594,12 @@ SpellResult SpellsParty::cleric65_townPortal() {
 			}
 		}
 	);
+
+	msg._largeMessage = true;
+	msg._lines.push_back(Line("1) Sorpigal  2) Portsmith"));
+	msg._lines.push_back(Line("3) Algary  4) Dusk"));
+	msg._lines.push_back(Line("5) Erliquin"));
+	g_events->send(msg);
 
 	return SR_SUCCESS_SILENT;
 }
@@ -599,7 +628,8 @@ SpellResult SpellsParty::cleric73_protectionFromElements() {
 }
 
 SpellResult SpellsParty::cleric74_resurrection() {
-	if (_destChar->_condition == ERADICATED)
+	// Only an eradicated character can be resurrected
+	if (_destChar->_condition != ERADICATED)
 		return SR_FAILED;
 
 	if (_destChar->_age < 10 || _destChar->_age > 200)
@@ -619,10 +649,10 @@ SpellResult SpellsParty::cleric75_sunRay() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._damage = getRandomNumber(51) + 49;
 	ss._mmVal1++;
-	ss._resistanceIndex++;
+	ss._resistanceIndex = 1;
 	ss._resistanceTypeOrTargetCount = RESISTANCE_FIRE;
 
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -639,9 +669,9 @@ SpellResult SpellsParty::wizard13_energyBlast() {
 
 	ss._damage = MIN(damage, 255);
 	ss._resistanceIndex = 5;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -650,9 +680,9 @@ SpellResult SpellsParty::wizard14_flameArrow() {
 	ss._damage = getRandomNumber(6);
 	ss._mmVal1++;
 	ss._resistanceIndex = 1;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -681,10 +711,10 @@ SpellResult SpellsParty::wizard21_electricArrow() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._damage = getRandomNumber(6) + getRandomNumber(6);
 	ss._mmVal1++;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 	ss._resistanceIndex = 2;
 
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -733,12 +763,16 @@ SpellResult SpellsParty::wizard25_levitate() {
 }
 
 SpellResult SpellsParty::wizard26_power() {
-	g_globals->_currCharacter->_might._current += getRandomNumber(4);
+	const int bonus = getRandomNumber(4);
+	_destChar->_might._current += bonus;
+	g_globals->_combat->recordPower(_destChar, bonus);
 	return SR_SUCCESS_DONE;
 }
 
 SpellResult SpellsParty::wizard27_quickness() {
-	g_globals->_currCharacter->_speed._current += getRandomNumber(4);
+	const int bonus = getRandomNumber(4);
+	_destChar->_speed._current += bonus;
+	g_globals->_combat->recordQuickness(_destChar, bonus);
 	return SR_SUCCESS_DONE;
 }
 
@@ -746,16 +780,16 @@ SpellResult SpellsParty::wizard28_scare() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._mmVal1++;
 	ss._resistanceIndex = 7;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 	ss._damage = 1;
 
-	g_globals->_combat->iterateMonsters1();
+	g_globals->_combat->iterateSelectedMonster1();
 	return SR_SUCCESS_SILENT;
 }
 
 SpellResult SpellsParty::wizard31_fireball() {
-	g_globals->_combat->fireball();
-	return SR_SUCCESS_SILENT;
+	return g_globals->_combat->fireball() ?
+		SR_SUCCESS_SILENT : SR_FAILED;
 }
 
 SpellResult SpellsParty::wizard32_fly() {
@@ -795,25 +829,25 @@ SpellResult SpellsParty::wizard38_web() {
 SpellResult SpellsParty::wizard41_acidArrow() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._mmVal1++;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 	ss._resistanceIndex = 3;
-	ss._damage += getRandomNumber(10) +
+	ss._damage = getRandomNumber(10) +
 		getRandomNumber(10) + getRandomNumber(10);
 
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
 SpellResult SpellsParty::wizard42_coldBeam() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._mmVal1++;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 	ss._resistanceIndex = 4;
 
 	ss._damage = getRandomNumber(10) + getRandomNumber(10) +
 		getRandomNumber(10) + getRandomNumber(10);
 
-	g_globals->_combat->iterateMonsters2();
+	g_globals->_combat->iterateSelectedMonster2();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -821,10 +855,10 @@ SpellResult SpellsParty::wizard43_feebleMind() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._mmVal1++;
 	ss._resistanceIndex = 0;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 	ss._damage = 8;
 
-	g_globals->_combat->iterateMonsters1();
+	g_globals->_combat->iterateSelectedMonster1();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -832,10 +866,10 @@ SpellResult SpellsParty::wizard44_freeze() {
 	SpellsState &ss = g_globals->_spellsState;
 	ss._mmVal1 = 0;
 	ss._resistanceIndex = 6;
-	ss._resistanceTypeOrTargetCount++;
+	ss._resistanceTypeOrTargetCount = 1;
 	ss._damage = 128;
 
-	g_globals->_combat->iterateMonsters1();
+	g_globals->_combat->iterateSelectedMonster1();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -862,8 +896,8 @@ SpellResult SpellsParty::wizard48_timeDistortion() {
 	if (getRandomNumber(100) < map[Maps::MAP_DISPEL_THRESHOLD])
 		return SR_FAILED;
 
-	// End combat by closing the combat view
-	g_events->focusedView()->close();
+	// End combat through the normal cleanup and view-transition path.
+	g_globals->_combat->endCombat();
 	return SR_SUCCESS_SILENT;
 }
 
@@ -907,9 +941,24 @@ SpellResult SpellsParty::wizard62_disintegration() {
 }
 
 SpellResult SpellsParty::wizard63_etherialize() {
-	g_events->draw();
-	g_maps->_currentState = 0;
-	g_maps->step(Common::Point(1, 0));
+	Maps::Maps &maps = *g_maps;
+
+	// Etherealize moves exactly one square in the direction the party is
+	// facing, ignoring walls and special barriers.
+	const Common::Point delta = maps.getMoveDelta(maps._forwardMask);
+	const Common::Point newPos = maps._mapPos + delta;
+
+	// Maps::step() performs its own changeMap() + UPDATE when crossing a
+	// map boundary. On an in-map move, explicitly refresh the Game view
+	// so _mapOffset, _currentWalls and _currentState match the new square.
+	const bool crossesMapBoundary =
+		newPos.x < 0 || newPos.y < 0 ||
+		newPos.x >= MAP_W || newPos.y >= MAP_H;
+
+	maps.step(delta);
+
+	if (!crossesMapBoundary)
+		g_events->send("Game", GameMessage("UPDATE"));
 
 	return SR_SUCCESS_SILENT;
 }
@@ -963,6 +1012,12 @@ SpellResult SpellsParty::wizard75_prismaticLight() {
 
 	if (getRandomNumber(100) < 20)
 		return SR_FAILED;
+
+	// Generate a new unpredictable effect for this cast rather
+	// than reusing state left behind by an earlier spell.
+	ss._mmVal1 = getRandomNumber(100);
+	ss._resistanceIndex = 0;
+	ss._damage = 1;
 
 	if (ss._mmVal1 < 50) {
 		uint count = getRandomNumber(4);

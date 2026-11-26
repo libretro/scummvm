@@ -45,9 +45,10 @@ namespace Script {
 // A description gets written out the way a chunk has it, and read by the panel
 // or control it is for.
 //
-// TODO: The textShadow and captureClicks fields, the ways of arranging controls
-// other than left to right and right to left, and the events the controls don't
-// send yet: enable, disable, mouseEnter and mouseLeave.
+// TODO: The textShadow field, the ways of arranging controls other than left to
+// right and right to left, and the events the controls don't send yet: mouseEnter,
+// mouseLeave, and enable and disable for a control of its own; only whole panels
+// send those.
 
 static const char *const kPanelType = "ND.Panel";
 
@@ -75,7 +76,10 @@ static const NamedValue kEventNames[] = {
 	{ "scrollBarValueChanged", UI::NDUI::kEventScrolled },
 	{ "show", UI::NDUI::kEventShow },
 	{ "hide", UI::NDUI::kEventHide },
-	{ "load", UI::NDUI::kEventUpdate }
+	{ "load", UI::NDUI::kEventUpdate },
+	{ "enable", UI::NDUI::kEventEnable },
+	{ "disable", UI::NDUI::kEventDisable },
+	{ "setLocation", UI::NDUI::kEventSetLocation }
 };
 
 static const NamedValue kInitialStates[] = {
@@ -212,7 +216,7 @@ static void readRectField(lua_State *L, int tableIndex, const char *name, Script
 	}
 }
 
-static void readPointField(lua_State *L, int tableIndex, const char *name, ScriptPoint &point) {
+static void readPointField(lua_State *L, int tableIndex, const char *name, Common::Point32 &point) {
 	if (pushField(L, tableIndex, name)) {
 		if (!readPoint(L, -1, point)) {
 			luaL_error(L, "field %s must be a point", name);
@@ -341,7 +345,13 @@ void writeTextElement(lua_State *L, int tableIndex, const Common::String &fontNa
 	int32 horizontalAlignment = kAlignCenter;
 	int32 verticalAlignment = kAlignTop;
 
+	// A font named in the font table takes the place of the one by number
+	Common::String name = fontName;
+	bool bold = isBold;
+
 	pushTableField(L, tableIndex, "font");
+	readField(L, -1, "name", name);
+	readField(L, -1, "bold", bold);
 	readNamedField(L, -1, "horzAlign", kHorizontalAlignments, ARRAYSIZE(kHorizontalAlignments), horizontalAlignment);
 	readNamedField(L, -1, "vertAlign", kVerticalAlignments, ARRAYSIZE(kVerticalAlignments), verticalAlignment);
 	readField(L, -1, "wrap", wraps);
@@ -354,8 +364,8 @@ void writeTextElement(lua_State *L, int tableIndex, const Common::String &fontNa
 		out.writeUint32BE(kDefaultColor);
 	}
 
-	writeName(out, fontName);
-	out.writeByte(isBold);
+	writeName(out, name);
+	out.writeByte(bold);
 	out.writeSint32LE(horizontalAlignment);
 	out.writeSint32LE(verticalAlignment);
 	out.writeByte(wraps);
@@ -445,9 +455,11 @@ static UI::NDUI::Control *addControl(lua_State *L, int32 type, Common::MemoryWri
 	return control;
 }
 
-// The text kept under a key, or the key itself when there is none
+// The text kept under a key. A key that isn't there gives no text, as the
+// engine doesn't answer the control's request for it: Nancy24's coin counter
+// names "PennyCounter", which isn't in the autotext.
 static Common::String resolveText(const Common::String &key) {
-	Common::String text = key;
+	Common::String text;
 	findText(key, text);
 	return text;
 }
@@ -476,6 +488,12 @@ static int panelAddBg(lua_State *L) {
 	setEventHandler(L, 2, panel->getBackground());
 
 	panel->place();
+
+	// The panel takes the whole onScreen rect, but its background is drawn at the
+	// size of its picture. Dossier2's hint dialog puts a picture of 452x229 in a
+	// rect of 468x241, and places its buttons on the ones in the picture.
+	panel->getBackground()->fitToPicture();
+
 	panel->registerGraphics();
 	return 0;
 }
@@ -493,7 +511,7 @@ static int panelAddButton(lua_State *L) {
 	writeControl(L, 2, kAlignCenter, data);
 	writeOverlay(L, 2, "foregroundOverlay", data);
 
-	ScriptPoint pressedOffset;
+	Common::Point32 pressedOffset;
 	readPointField(L, 2, "pressedOffset", pressedOffset);
 	data.writeSint32LE(pressedOffset.x);
 	data.writeSint32LE(pressedOffset.y);
@@ -650,7 +668,7 @@ static int newPanel(lua_State *L, byte kind) {
 	int32 initialState = UI::NDUI::kStartVisible;
 	int32 primaryOrder = 0;
 	int32 secondaryOrder = 0;
-	ScriptPoint spacing;
+	Common::Point32 spacing;
 	ScriptRect margins;
 	uint32 color = 0;
 
@@ -699,6 +717,11 @@ static int newPanel(lua_State *L, byte kind) {
 	bool savesState = true;
 	if (readField(L, 2, "save", savesState)) {
 		panel->setSavesState(savesState);
+	}
+
+	bool capturesClicks = true;
+	if (readField(L, 2, "captureClicks", capturesClicks)) {
+		panel->setCapturesClicks(capturesClicks);
 	}
 
 	if (pushField(L, 2, "createObject")) {

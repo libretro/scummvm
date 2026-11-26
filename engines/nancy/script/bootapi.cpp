@@ -25,11 +25,16 @@
 #include "engines/nancy/nancy.h"
 
 #include "engines/nancy/script/api.h"
+#include "engines/nancy/script/bootapi.h"
 #include "engines/nancy/script/luabind.h"
 #include "engines/nancy/script/luastate.h"
 #include "engines/nancy/script/types.h"
 
 #include "engines/nancy/ui/ndui/button.h"
+
+#ifdef ENABLE_NANCY_V5
+#include "engines/nancy/script/v5/bootobjects.h"
+#endif
 
 namespace Nancy {
 namespace Script {
@@ -45,18 +50,24 @@ namespace Script {
 
 static const BootTables *s_tables = nullptr;
 
+const BootTables *getBootTables() {
+	return s_tables;
+}
+
 bool runBootScript(const char *name, const BootTables &tables) {
 	LuaState state;
 
+	// Nancy26's font list runs the file of every font from within itself
+	const BootTables *outerTables = s_tables;
 	s_tables = &tables;
 	bool result = state.runScript(name);
-	s_tables = nullptr;
+	s_tables = outerTables;
 
 	return result;
 }
 
 // Every Create function takes the object itself and one table
-static void checkCreateArguments(lua_State *L, const char *typeName, bool hasTable) {
+void checkCreateArguments(lua_State *L, const char *typeName, bool hasTable) {
 	checkUserData(L, 1, typeName);
 	luaL_checktype(L, 2, LUA_TTABLE);
 
@@ -86,7 +97,7 @@ static bool compareNames(const Common::String &a, const Common::String &b) {
 }
 
 // The keys of a table that are strings, in alphabetical order
-static void getSortedKeys(lua_State *L, int tableIndex, Common::Array<Common::String> &keys) {
+void getSortedKeys(lua_State *L, int tableIndex, Common::Array<Common::String> &keys) {
 	lua_pushnil(L);
 	while (lua_next(L, tableIndex)) {
 		if (lua_type(L, -2) == LUA_TSTRING) {
@@ -109,7 +120,7 @@ static int bootCreate(lua_State *L) {
 	requireField(L, readField(L, 2, "playerTimeScale", boot.playerTimeScale), "playerTimeScale");
 	requireField(L, readField(L, 2, "diagFontNum", boot.diagnosticFontID), "diagFontNum");
 
-	if (g_nancy->getGameType() <= kGameTypeNancy19) {
+	if (g_nancy->getGameType() < kGameTypeNancy20) {
 		requireField(L, readField(L, 2, "saveFolderName", boot.saveFolderName), "saveFolderName");
 		return 0;
 	}
@@ -210,18 +221,34 @@ static int envCreate(lua_State *L) {
 
 	for (const Common::String &code : codes) {
 		lua_getfield(L, 2, code.c_str());
-		luaL_checktype(L, -1, LUA_TTABLE);
+		if (!lua_isstring(L, -1)) {
+			luaL_checktype(L, -1, LUA_TTABLE);
+		}
+
 		int env = lua_gettop(L);
 
 		ENVS::Environment environment;
 		environment.code = code;
 
+		// Nancy26 only names the ambient script of each environment
+		if (lua_isstring(L, env)) {
+			environment.name = code;
+			environment.ambientScriptName = Common::Path(lua_tostring(L, env));
+			envs.environments.push_back(environment);
+			lua_pop(L, 1);
+			continue;
+		}
+
 		if (!readField(L, env, "fullName", environment.name)) {
 			luaL_error(L, "Environments must specify the 'fullName' field");
 		}
 
+		// Nancy22 calls the script of the environment its "sceneName"
 		Common::String name;
-		readField(L, env, "onEnterScene", name);
+		if (!readField(L, env, "onEnterScene", name)) {
+			readField(L, env, "sceneName", name);
+		}
+
 		environment.ambientScriptName = Common::Path(name);
 
 		name.clear();
@@ -251,6 +278,24 @@ static int loadSaveCreate(lua_State *L) {
 	requireField(L, readField(L, 2, "defaultSaveName", boot.defaultSaveName), "defaultSaveName");
 	requireField(L, readField(L, 2, "savePromptFlag", boot.savePromptFlag), "savePromptFlag");
 	requireField(L, readField(L, 2, "savePromptFlagState", boot.savePromptFlagState), "savePromptFlagState");
+
+	// Lights, Camera, Curses: the profiles of the players
+	readField(L, 2, "currentPlayerObject", boot.currentPlayerObject);
+	readField(L, 2, "loadToScene", boot.loadToScene);
+	readField(L, 2, "arcadeSave", boot.arcadeSave);
+	readField(L, 2, "profileButtonPrefix", boot.profileButtonPrefix);
+	readField(L, 2, "newProfileButton", boot.newProfileButton);
+	if (pushField(L, 2, "puzzlesUnlocked")) {
+		readStringList(L, -1, boot.puzzlesUnlocked);
+		lua_pop(L, 1);
+	}
+
+	readField(L, 2, "autoSaveName", boot.autoSaveName);
+	if (pushField(L, 2, "specialSaves")) {
+		readStringList(L, -1, boot.specialSaves);
+		lua_pop(L, 1);
+	}
+
 	return 0;
 }
 
@@ -264,6 +309,7 @@ static int viewportCreate(lua_State *L) {
 	// The viewport, and the resolution the game gets drawn at
 	viewport.screenPosition = readRectField(L, 2, "location");
 	viewport.bounds = readRectField(L, 2, "windowRes");
+	readField(L, 2, "uiHeight", boot.viewportUIHeight);
 
 	boot.leftNodeHotspot = readRectField(L, 2, "leftNodeHotspot");
 	boot.rightNodeHotspot = readRectField(L, 2, "rightNodeHotspot");
@@ -282,11 +328,40 @@ static int flagsCreate(lua_State *L) {
 	return 0;
 }
 
+// VarTableInit and StrTableInit, Nancy1New: the names of the values and the
+// texts the scripts keep
+
+static void readNames(lua_State *L, ScriptBootData::NameSet &names) {
+	Common::Array<Common::String> list;
+	readStringList(L, 2, list);
+	for (const Common::String &name : list) {
+		names.setVal(name, true);
+	}
+}
+
+static int varTableCreate(lua_State *L) {
+	checkCreateArguments(L, "ND.VarTableInit", s_tables && s_tables->boot);
+	readNames(L, s_tables->boot->valueNames);
+	return 0;
+}
+
+static int strTableCreate(lua_State *L) {
+	checkCreateArguments(L, "ND.StrTableInit", s_tables && s_tables->boot);
+	readNames(L, s_tables->boot->textNames);
+	return 0;
+}
+
 // InventoryInit
 
 static int inventoryCreate(lua_State *L) {
 	checkCreateArguments(L, "ND.InventoryInit", s_tables && s_tables->inventory && s_tables->boot);
 	INVD &inventory = *s_tables->inventory;
+
+#ifdef ENABLE_NANCY_V5
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		return createNancy26Inventory(L, inventory, *s_tables->boot);
+	}
+#endif
 
 	Common::String imageName;
 	if (!readField(L, 2, "ovl", imageName)) {
@@ -294,6 +369,11 @@ static int inventoryCreate(lua_State *L) {
 	}
 
 	s_tables->boot->inventoryImageName = Common::Path(imageName);
+
+	// Lights, Camera, Curses has no addToFront, and puts new items last
+	if (g_nancy->getGameType() == kGameTypeNancyDossier1) {
+		s_tables->boot->isInventoryAddedToFront = false;
+	}
 
 	Common::Array<Common::String> names;
 	getSortedKeys(L, 2, names);
@@ -360,13 +440,13 @@ static void readCursor(lua_State *L, int cursorTable, ScriptBootData::Cursor &cu
 			hasAll = false;
 		}
 
-		ScriptPoint hotspot;
+		Common::Point32 hotspot;
 		if (pushField(L, cursorTable, kHotspotNames[i])) {
 			if (!readPoint(L, -1, hotspot)) {
 				hasAll = false;
 			}
 
-			cursor.hotspots[i] = hotspot.toPoint();
+			cursor.hotspots[i] = Common::Point(hotspot.x, hotspot.y);
 			lua_pop(L, 1);
 		} else {
 			hasAll = false;
@@ -380,13 +460,13 @@ static void readCursor(lua_State *L, int cursorTable, ScriptBootData::Cursor &cu
 	readField(L, cursorTable, "overrideInv", cursor.overridesItem);
 }
 
-static void requireCursorField(lua_State *L, const char *name, Common::String &value) {
+void requireCursorField(lua_State *L, const char *name, Common::String &value) {
 	if (!readField(L, 2, name, value)) {
 		luaL_error(L, "CursorInit:Create fed with table that has no '%s' field", name);
 	}
 }
 
-static bool hasCursor(const ScriptBootData &boot, const Common::String &name) {
+bool hasCursor(const ScriptBootData &boot, const Common::String &name) {
 	for (const ScriptBootData::Cursor &cursor : boot.cursors) {
 		if (cursor.name.equalsIgnoreCase(name)) {
 			return true;
@@ -399,6 +479,12 @@ static bool hasCursor(const ScriptBootData &boot, const Common::String &name) {
 static int cursorCreate(lua_State *L) {
 	checkCreateArguments(L, "ND.CursorInit", s_tables && s_tables->boot);
 	ScriptBootData &boot = *s_tables->boot;
+
+#ifdef ENABLE_NANCY_V5
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		return createNancy26Cursors(L, boot);
+	}
+#endif
 
 	Common::String imageName;
 	requireCursorField(L, "ovl", imageName);
@@ -464,6 +550,13 @@ static int cursorCreateInv(lua_State *L) {
 // FontsInit and ColorsInit, whose tables go by number
 
 static int fontsCreate(lua_State *L) {
+#ifdef ENABLE_NANCY_V5
+	// Nancy26: the file of a font made of pictures describes it
+	if (s_tables && s_tables->font) {
+		return createBitmapFont(L, *s_tables->font);
+	}
+#endif
+
 	checkCreateArguments(L, "ND.FontsInit", s_tables && s_tables->boot);
 	ScriptBootData &boot = *s_tables->boot;
 
@@ -488,6 +581,27 @@ static int fontsCreate(lua_State *L) {
 		}
 
 		boot.fonts.push_back(font);
+		lua_pop(L, 1);
+	}
+
+	return 0;
+}
+
+// FontsInit:CustomFonts({ file, ... }), Nancy23, which makes the fonts in the
+// files known before the fonts get made
+static int fontsCustomFonts(lua_State *L) {
+	checkUserData(L, 1, "ND.FontsInit");
+	if (!lua_istable(L, 2)) {
+		luaL_argerror(L, 2, "Expected parameter to be a table");
+	}
+
+	if (!s_tables || !s_tables->boot) {
+		luaL_error(L, "ND.FontsInit cannot be used by this script");
+	}
+
+	lua_pushnil(L);
+	while (lua_next(L, 2)) {
+		s_tables->boot->customFontFiles.push_back(luaL_checkstring(L, -1));
 		lua_pop(L, 1);
 	}
 
@@ -561,15 +675,15 @@ static const InitObject kInitObjects[] = {
 	{ "LoadSaveInit", "ND.LoadSaveInit", loadSaveCreate },
 	{ "ViewportInit", "ND.ViewportInit", viewportCreate },
 	{ "FlagsInit", "ND.FlagsInit", flagsCreate },
+	{ "VarTableInit", "ND.VarTableInit", varTableCreate },
+	{ "StrTableInit", "ND.StrTableInit", strTableCreate },
 	{ "InventoryInit", "ND.InventoryInit", inventoryCreate },
-	{ "FontsInit", "ND.FontsInit", fontsCreate },
 	{ "ColorsInit", "ND.ColorsInit", colorsCreate },
 	{ "AutotextInit", "ND.AutotextInit", autotextCreate }
 };
 
 // Nancy20 sets InventoryInit.addToFront before the items get made. It picks
-// where new item buttons go in the inventory, and the only value used is the
-// one the earlier games always had, so it is only taken in.
+// where new items go in the inventory: first, as in the earlier games, or last.
 static int inventorySetField(lua_State *L) {
 	checkUserData(L, 1, "ND.InventoryInit");
 	const char *name = luaL_checkstring(L, 2);
@@ -578,6 +692,10 @@ static int inventorySetField(lua_State *L) {
 	}
 
 	luaL_checktype(L, 3, LUA_TBOOLEAN);
+	if (s_tables && s_tables->boot) {
+		s_tables->boot->isInventoryAddedToFront = lua_toboolean(L, 3) != 0;
+	}
+
 	return 0;
 }
 
@@ -605,6 +723,21 @@ void registerBootAPI(lua_State *L) {
 	};
 
 	registerGlobal(L, "CursorInit", "ND.CursorInit", kCursorInitFunctions);
+
+	static const luaL_Reg kFontsInitFunctions[] = {
+		{ "__index", indexFunctions },
+		{ "Create", fontsCreate },
+		{ "CustomFonts", fontsCustomFonts },
+		{ nullptr, nullptr }
+	};
+
+	registerGlobal(L, "FontsInit", "ND.FontsInit", kFontsInitFunctions);
+
+#ifdef ENABLE_NANCY_V5
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		registerNancy26BootAPI(L);
+	}
+#endif
 }
 
 } // End of namespace Script

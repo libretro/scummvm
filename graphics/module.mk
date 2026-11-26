@@ -60,7 +60,7 @@ MODULE_OBJS := \
 	scaler/thumbnail_intern.o \
 	screen.o \
 	scaler/normal.o \
-	sjis.o \
+	segagfx.o \
 	surface.o \
 	svg.o \
 	transform_struct.o \
@@ -90,6 +90,10 @@ MODULE_OBJS += \
 	mactoolbox/utils.o
 endif
 
+ifdef USE_SJIS
+MODULE_OBJS += \
+	sjis.o
+endif
 
 ifdef USE_MFC
 MODULE_OBJS += \
@@ -208,6 +212,14 @@ MODULE_OBJS += \
 	scaler/edge.o
 endif
 
+endif
+
+ifdef USE_VIEWS
+MODULE_OBJS += \
+	views/events.o \
+	views/gfx_surface.o \
+	views/messages.o \
+	views/view.o
 endif
 
 ifeq ($(BACKEND),atari)

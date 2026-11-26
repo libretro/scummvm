@@ -156,7 +156,9 @@ project.xcworkspace
 /devtools/create_cryomni3d/create_cryomni3d_dat
 /devtools/create_drascula/create_drascula
 /devtools/create_glk/create_glk
+/devtools/create_hollywood/create_hollywood
 /devtools/create_hugo/create_hugo
+/devtools/create_igor/create_igortbl
 /devtools/create_kyradat/create_kyradat
 /devtools/create_lure/create_lure
 /devtools/create_mm/create_xeen/create_mm
@@ -173,7 +175,7 @@ project.xcworkspace
 /devtools/create_tony/create_tony
 /devtools/create_toon/create_toon
 /devtools/create_translations/create_translations
-/devtools/create_ultima/create_ultima
+/devtools/create_ultima/ultima4/create_ultima
 /devtools/extract_mort/extract_mort
 /devtools/qtable/qtable
 /devtools/skycpt/skycpt

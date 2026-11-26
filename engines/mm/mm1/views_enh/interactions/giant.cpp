@@ -31,7 +31,7 @@ namespace ViewsEnh {
 namespace Interactions {
 
 Giant::Giant() : Interaction("Giant", 8) {
-	_title = STRING["maps.emap30.giant_title"];
+	_title = "Giant";
 	_animated = false;
 }
 
@@ -39,7 +39,8 @@ bool Giant::msgFocus(const FocusMessage &msg) {
 	PartyView::msgFocus(msg);
 
 	_charSelected = false;
-	addText(STRING["maps.map30.giant"]);
+	addText("Statue of a giant holding the Scale of Judgement. "
+		"Who will climb on (F1-F6)?");
 	return true;
 }
 
@@ -53,6 +54,10 @@ void Giant::charSwitched(Character *priorChar) {
 	Common::String line = map.worthiness();
 	addText(line);
 	Sound::sound(SOUND_2);
+
+	// Map30 may have changed XP and a primary attribute. Repaint any visible
+	// character/party views immediately rather than waiting for a later refresh.
+	g_events->redrawViews();
 
 	delaySeconds(5);
 	redraw();

@@ -19,24 +19,45 @@
  *
  */
 
+#include "common/config-manager.h"
 #include "common/memstream.h"
 #include "common/random.h"
 #include "common/textconsole.h"
+
+#include "engines/metaengine.h"
+
+#include "image/png.h"
 
 #include "engines/nancy/cursor.h"
 #include "engines/nancy/enginedata.h"
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/nancy.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/puzzledata.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/sound.h"
 
 #include "engines/nancy/script/api.h"
 #include "engines/nancy/script/convo.h"
+#include "engines/nancy/script/graphnode.h"
 #include "engines/nancy/script/luabind.h"
+#include "engines/nancy/script/particles.h"
+#include "engines/nancy/script/physics.h"
 #include "engines/nancy/script/records.h"
 #include "engines/nancy/script/ref.h"
 #include "engines/nancy/script/scenecontext.h"
+#include "engines/nancy/script/timer.h"
+#include "engines/nancy/script/transformer.h"
 #include "engines/nancy/script/types.h"
+#include "engines/nancy/script/xsheet.h"
+
+#ifdef ENABLE_NANCY_V5
+#include "engines/nancy/script/v5/cliptransformer.h"
+#include "engines/nancy/script/v5/messaging.h"
+#include "engines/nancy/script/v5/overlaycombiner.h"
+#include "engines/nancy/script/v5/streamtree.h"
+#include "engines/nancy/script/v5/textrecord.h"
+#include "engines/nancy/script/v5/widgets.h"
+#endif
 
 #include "engines/nancy/state/scene.h"
 
@@ -51,7 +72,7 @@ struct RecordKindNames {
 	const char *typeName;
 };
 
-static const RecordKindNames kRecordKindNames[kNumRecordKinds] = {
+static const RecordKindNames kRecordKindNames[kNumRecordTypes] = {
 	{ "NavLogic", "ND.NavLogic" },
 	{ "Summary", "ND.Summary" },
 	{ "Overlay", "ND.Overlay" },
@@ -62,21 +83,59 @@ static const RecordKindNames kRecordKindNames[kNumRecordKinds] = {
 	{ "Text", "ND.TextAR" },
 	{ "Override", "ND.OverrideAR" },
 	{ "Particle", "ND.ParticleAR" },
-	{ "AnimOverlay", "ND.AnimOvlAR" }
+	{ "AnimOverlay", "ND.AnimOvlAR" },
+	{ "Physics", "ND.PhysicsAR" },
+	{ "Xsheet", "ND.XsheetAR" },
+	{ "Transformer", "ND.TransformerAR" },
+	{ "Timer", "ND.TimerAR" },
+	{ "Hotspot", "ND.Hotspot" },
+	{ "Sink", "ND.SinkAR" },
+	{ "Button", "ND.ButtonAR" },
+	{ "EditBox", "ND.EditBoxAR" },
+	{ "RadioButton", "ND.RadioButton" },
+	{ "CheckBox", "ND.CheckBox" },
+	{ "Slider", "ND.Slider" },
+	{ "OverlayCombiner", "ND.OverlayCombiner" },
+	{ "Flashlight", "ND.FlashlightAR" }
 };
 
-const char *getRecordKindName(RecordKind kind) {
-	return kRecordKindNames[kind].kindName;
+const char *getRecordKindName(RecordType type) {
+	return kRecordKindNames[type].kindName;
 }
 
-const char *getRecordTypeName(RecordKind kind) {
-	return kRecordKindNames[kind].typeName;
+const char *getRecordTypeName(RecordType type) {
+	return kRecordKindNames[type].typeName;
 }
 
-Record *makeRecord(RecordKind kind, SceneContext &context) {
-	switch (kind) {
+Record *makeRecord(RecordType type, SceneContext &context) {
+	switch (type) {
 	case kRecordNavLogic:
+#ifdef ENABLE_NANCY_V5
+		// Nancy26's NavLogic is another name for a Hotspot
+		if (g_nancy->getGameType() >= kGameTypeNancy26) {
+			return new HotspotRecord(context);
+		}
+#endif
+
 		return new NavLogicRecord(context);
+#ifdef ENABLE_NANCY_V5
+	case kRecordHotspot:
+		return new HotspotRecord(context);
+	case kRecordSink:
+		return new SinkRecord(context);
+	case kRecordButton:
+		return new WidgetRecord(context, kRecordButton);
+	case kRecordRadioButton:
+		return new WidgetRecord(context, kRecordRadioButton);
+	case kRecordCheckBox:
+		return new WidgetRecord(context, kRecordCheckBox);
+	case kRecordSlider:
+		return new SliderRecord(context);
+	case kRecordEditBox:
+		return new EditBoxRecord(context);
+	case kRecordOverlayCombiner:
+		return new OverlayCombinerRecord(context);
+#endif
 	case kRecordSummary:
 		return new SummaryRecord(context);
 	case kRecordOverlay:
@@ -94,9 +153,37 @@ Record *makeRecord(RecordKind kind, SceneContext &context) {
 	case kRecordSoundConvo:
 		return new ConvoRecord(context, false);
 	case kRecordText:
+#ifdef ENABLE_NANCY_V5
+		if (g_nancy->getGameType() >= kGameTypeNancy26) {
+			return new BitmapTextRecord(context);
+		}
+#endif
+
 		return new TextRecord(context);
+	case kRecordParticle:
+		// The Dossier games have the older kind
+		if (g_nancy->getGameType() <= kGameTypeNancyDossier2) {
+			return new ParticleEmitterRecord(context);
+		}
+
+		return new ParticleRecord(context);
+	case kRecordFlashlight:
+		return new FlashlightRecord(context);
+	case kRecordPhysics:
+		return new PhysicsRecord(context);
+	case kRecordXsheet:
+		return new XsheetRecord(context);
+	case kRecordTransformer:
+#ifdef ENABLE_NANCY_V5
+		if (g_nancy->getGameType() >= kGameTypeNancy26) {
+			return new ClipTransformerRecord(context);
+		}
+#endif
+
+		return new TransformerRecord(context);
+	case kRecordTimer:
+		return new TimerRecord(context);
 	default:
-		// TODO: The Particle record
 		return nullptr;
 	}
 }
@@ -107,16 +194,86 @@ Record *makeRecord(RecordKind kind, SceneContext &context) {
 static const double kBackgroundScriptZ = -5.0;
 static const int kBackgroundZ = 6;
 
-void RecordGraphic::setScriptZ(double z, int32 streamZOffset) {
-	const int engineZ = kBackgroundZ + (int)(z - kBackgroundScriptZ) + streamZOffset;
-	setZOrder((uint16)CLIP<int>(engineZ, 0, 0xFFFF));
+// The steps of the z order. Records closer together than this are told apart
+// by their exact z.
+static const double kStepsPerScriptZ = 1000.0;
+
+// Nancy19 to Nancy20 keep the streams in an order of their own, and draw the
+// records of each z there together, sorted by their z: the z of a stream is a
+// layer of what is drawn. Later games add it to the z of the records.
+static bool hasStreamLayers() {
+	return g_nancy->getGameType() < kGameTypeNancyDossier2;
 }
 
-// Where something that was placed in the viewport ends up once the transform
-// of its record has moved it.
-// TODO: Movies only take their place from the transform. Draw what it rotates
-// and scales as well.
-static Common::Rect getTransformedDest(const ScriptRect &dest, const ScriptMatrix &transform, int width, int height) {
+int32 RecordGraphic::getScriptLayer(int32 zOffset) {
+	return hasStreamLayers() ? zOffset : 0;
+}
+
+double RecordGraphic::getBackgroundExactZ() {
+	return hasStreamLayers() ? kBackgroundScriptZ : RenderObject::kNoExactZ;
+}
+
+uint16 RecordGraphic::getScriptZOrder(double z, int32 zOffset) {
+#ifdef ENABLE_NANCY_V5
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		return getBandZOrder(z, zOffset);
+	}
+#endif
+
+	if (hasStreamLayers()) {
+		zOffset = 0;
+	}
+
+	const double steps = (z - kBackgroundScriptZ + zOffset) * kStepsPerScriptZ;
+	return (uint16)CLIP<int>(kBackgroundZ + (int)floor(steps + 0.5), 0, kMaxScriptZOrder);
+}
+
+uint16 RecordGraphic::getBackgroundZOrder(int32 zOffset) {
+#ifdef ENABLE_NANCY_V5
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		return getBandBackgroundZOrder(zOffset);
+	}
+#endif
+
+	return getScriptZOrder(kBackgroundScriptZ, zOffset);
+}
+
+bool RecordGraphic::isViewportRelative() const {
+	return g_nancy->getGameType() < kGameTypeNancy26;
+}
+
+Common::Rect RecordGraphic::getDrawArea() {
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		return g_nancy->_graphics->getScreenBounds();
+	}
+
+	const VIEW *viewport = GetEngineData(VIEW);
+	assert(viewport);
+	return Common::Rect(viewport->screenPosition.width(), viewport->screenPosition.height());
+}
+
+void RecordGraphic::setScriptZ(double z, const SceneContext &context, uint32 recordOrder) {
+	const uint32 tieOrder = g_nancy->getGameType() < kGameTypeNancy26 ? recordOrder : 0;
+	if (tieOrder != getTieOrder()) {
+		setTieOrder(tieOrder);
+		g_nancy->_graphics->reorderObject(this);
+	}
+
+	setLayer(getScriptLayer(context.getZOffset()));
+	// The games sort the records by their z as a double. Dossier2 scene 3500 puts
+	// the fish at 1e-10, under the floor at 1e-5. Nancy26 gives each record a z
+	// order of its own from that sort, by its rank, so it doesn't need this.
+	if (hasStreamLayers()) {
+		setExactZ(z);
+	} else if (g_nancy->getGameType() < kGameTypeNancy26) {
+		setExactZ(z + context.getZOffset());
+	}
+
+	setZOrder(getScriptZOrder(z, context.getZOffset()));
+	setViewTransform(context.getViewTransform());
+}
+
+Common::Rect getTransformedDest(const ScriptRect &dest, const ScriptMatrix &transform, int width, int height) {
 	// Far enough for anything a script moves around, and safe to add a size to
 	const int kLimit = 16000;
 
@@ -135,9 +292,7 @@ static const uint32 kNoModColor = 0xFFFFFFFF;
 // that turns or resizes the picture has it drawn anew, into the area its corners
 // end up around, and so does a color the picture gets multiplied with, which
 // can darken it or make it see-through.
-static void placePicture(RecordGraphic &graphic, Graphics::ManagedSurface &image, const Common::Rect &source, const ScriptRect &dest, const ScriptMatrix &transform, uint32 modColor) {
-	// Larger than anything a script shows, and small enough to draw quickly
-	const int kMaxSize = 2048;
+void placePicture(RecordGraphic &graphic, Graphics::ManagedSurface &image, const Common::Rect &source, const ScriptRect &dest, const ScriptMatrix &transform, uint32 modColor) {
 	const int kLimit = 16000;
 
 	const bool isMovedOnly = transform.isTranslation();
@@ -159,7 +314,8 @@ static void placePicture(RecordGraphic &graphic, Graphics::ManagedSurface &image
 	const double offsetY = transform.m[3][1];
 	const double determinant = a * d - b * c;
 
-	Common::Rect area = getTransformedDest(dest, transform, source.width(), source.height());
+	const Common::Rect placed = getTransformedDest(dest, transform, source.width(), source.height());
+	Common::Rect area = placed;
 	if (!isMovedOnly) {
 		double minX = 0.0;
 		double minY = 0.0;
@@ -178,8 +334,17 @@ static void placePicture(RecordGraphic &graphic, Graphics::ManagedSurface &image
 
 		area.left = CLIP<int>((int)floor(minX), -kLimit, kLimit);
 		area.top = CLIP<int>((int)floor(minY), -kLimit, kLimit);
-		area.right = area.left + CLIP<int>((int)ceil(maxX) - area.left, 1, kMaxSize);
-		area.bottom = area.top + CLIP<int>((int)ceil(maxY) - area.top, 1, kMaxSize);
+		area.right = CLIP<int>((int)ceil(maxX), area.left, kLimit);
+		area.bottom = CLIP<int>((int)ceil(maxY), area.top, kLimit);
+	}
+
+	// Nothing shows outside the viewport, so only the part inside it gets drawn.
+	// The map of Nancy25 is far larger than the viewport when zoomed in.
+	// A color without any alpha shows nothing either.
+	area.clip(RecordGraphic::getDrawArea());
+	const bool isOnScreen = !area.isEmpty() && (modColor >> 24) != 0;
+	if (!isOnScreen) {
+		area = Common::Rect(1, 1);
 	}
 
 	// Drawn with an alpha of its own, in place of the color that stands for
@@ -189,6 +354,9 @@ static void placePicture(RecordGraphic &graphic, Graphics::ManagedSurface &image
 	out.clear(0);
 	graphic.setTransparent(false);
 
+	// A picture with an alpha channel uses only that for transparency, like
+	// when it is shown unchanged. The color key is black from Nancy16 on, and
+	// pictures such as Nancy28's task checkboxes are drawn in black.
 	byte transR, transG, transB;
 	image.format.colorToRGB(g_nancy->_graphics->getTransColor(), transR, transG, transB);
 	const bool hasAlpha = image.format.aBits() != 0;
@@ -199,33 +367,84 @@ static void placePicture(RecordGraphic &graphic, Graphics::ManagedSurface &image
 	const uint modB = modColor & 0xFF;
 
 	// A picture squashed flat, or one without a size, shows nothing
-	const bool canDraw = isMovedOnly || (fabs(determinant) > 1e-9 && dest.width() != 0 && dest.height() != 0);
+	const bool canDraw = isOnScreen && (isMovedOnly || (fabs(determinant) > 1e-9 && dest.width() != 0 && dest.height() != 0));
 	const double scaleX = dest.width() != 0 ? (double)source.width() / dest.width() : 0.0;
 	const double scaleY = dest.height() != 0 ? (double)source.height() / dest.height() : 0.0;
 
+	// Back from the viewport to where a pixel is in the picture, which moves by
+	// the same steps from one pixel to the next
+	const double stepXAcross = d / determinant * scaleX;
+	const double stepYAcross = -b / determinant * scaleY;
+	const double stepXDown = -c / determinant * scaleX;
+	const double stepYDown = a / determinant * scaleY;
+	const double firstX = area.left + 0.5 - offsetX;
+	const double firstY = area.top + 0.5 - offsetY;
+	const double rowStartX = ((firstX * d - firstY * c) / determinant - dest.left) * scaleX;
+	const double rowStartY = ((firstY * a - firstX * b) / determinant - dest.top) * scaleY;
+
+	// A picture in the format drawn into, which keeps its colors, gets copied
+	// as it is
+	const bool isCopied = image.format == out.format && modColor == kNoModColor;
+	const uint32 colorMask = ~(uint32)(image.format.aMax() << image.format.aShift);
+	const uint32 transColor = g_nancy->_graphics->getTransColor() & colorMask;
+
+	// A picture that is only moved gets copied with its tint by a faster way,
+	// when its pixel format allows: the intro of Resorting to Danger fades many
+	// large ones at once
+	if (canDraw && isMovedOnly && !isCopied) {
+		// The part of the picture that shows in the area drawn
+		const int offsetLeft = area.left - placed.left;
+		const int offsetTop = area.top - placed.top;
+		const int left = MAX<int>(0, offsetLeft);
+		const int top = MAX<int>(0, offsetTop);
+		const int right = MIN<int>(source.width(), offsetLeft + out.w);
+		const int bottom = MIN<int>(source.height(), offsetTop + out.h);
+
+		// Done when none of it shows, or once it has been copied
+		bool isDone = left >= right || top >= bottom;
+		if (!isDone) {
+			const Common::Rect from(source.left + left, source.top + top, source.left + right, source.top + bottom);
+			const Common::Point to(left - offsetLeft, top - offsetTop);
+			isDone = GraphicsManager::copyTinted(out, to, image, from, modColor, g_nancy->_graphics->getTransColor());
+		}
+
+		if (isDone) {
+			graphic.moveTo(area);
+			graphic.setNeedsRedraw(true);
+			return;
+		}
+	}
+
 	for (int y = 0; canDraw && y < out.h; ++y) {
-		for (int x = 0; x < out.w; ++x) {
-			int sourceX = x;
-			int sourceY = y;
+		uint32 *outRow = (uint32 *)out.getBasePtr(0, y);
+		double pictureX = rowStartX + y * stepXDown;
+		double pictureY = rowStartY + y * stepYDown;
+
+		for (int x = 0; x < out.w; ++x, pictureX += stepXAcross, pictureY += stepYAcross) {
+			int sourceX = area.left - placed.left + x;
+			int sourceY = area.top - placed.top + y;
 
 			if (!isMovedOnly) {
-				// Back from the viewport to where the pixel is in the picture
-				const double movedX = area.left + x + 0.5 - offsetX;
-				const double movedY = area.top + y + 0.5 - offsetY;
-				const double placedX = (movedX * d - movedY * c) / determinant;
-				const double placedY = (movedY * a - movedX * b) / determinant;
-
-				sourceX = (int)floor((placedX - dest.left) * scaleX);
-				sourceY = (int)floor((placedY - dest.top) * scaleY);
+				sourceX = (int)floor(pictureX);
+				sourceY = (int)floor(pictureY);
 			}
 
 			if (sourceX < 0 || sourceX >= source.width() || sourceY < 0 || sourceY >= source.height()) {
 				continue;
 			}
 
+			const uint32 pixel = image.getPixel(source.left + sourceX, source.top + sourceY);
+			if (isCopied) {
+				if (hasAlpha || (pixel & colorMask) != transColor) {
+					outRow[x] = pixel;
+				}
+
+				continue;
+			}
+
 			byte alpha, red, green, blue;
-			image.format.colorToARGB(image.getPixel(source.left + sourceX, source.top + sourceY), alpha, red, green, blue);
-			if (red == transR && green == transG && blue == transB) {
+			image.format.colorToARGB(pixel, alpha, red, green, blue);
+			if (!hasAlpha && red == transR && green == transG && blue == transB) {
 				continue;
 			}
 
@@ -233,12 +452,54 @@ static void placePicture(RecordGraphic &graphic, Graphics::ManagedSurface &image
 				alpha = 0xFF;
 			}
 
-			out.setPixel(x, y, out.format.ARGBToColor(alpha * modA / 255, red * modR / 255, green * modG / 255, blue * modB / 255));
+			outRow[x] = out.format.ARGBToColor(alpha * modA / 255, red * modR / 255, green * modG / 255, blue * modB / 255);
 		}
 	}
 
 	graphic.moveTo(area);
 	graphic.setNeedsRedraw(true);
+}
+
+// Lays a picture placePicture() made over another surface, as it would show
+// on the screen. The origin is where the surface is in the viewport.
+static void blendPicture(Graphics::ManagedSurface &target, const RecordGraphic &picture, bool isKeyed, const Common::Point &origin) {
+	const Graphics::ManagedSurface &image = picture._drawSurface;
+	Common::Rect area = picture.getScreenPositionRaw();
+	area.translate(-origin.x, -origin.y);
+
+	byte transR, transG, transB;
+	image.format.colorToRGB(g_nancy->_graphics->getTransColor(), transR, transG, transB);
+	const bool hasAlpha = image.format.aBits() != 0;
+
+	for (int y = MAX<int>(0, -area.top); y < image.h && area.top + y < target.h; ++y) {
+		for (int x = MAX<int>(0, -area.left); x < image.w && area.left + x < target.w; ++x) {
+			byte alpha, red, green, blue;
+			image.format.colorToARGB(image.getPixel(x, y), alpha, red, green, blue);
+			if (isKeyed && !hasAlpha) {
+				if (red == transR && green == transG && blue == transB) {
+					continue;
+				}
+
+				alpha = 0xFF;
+			}
+
+			if (alpha == 0) {
+				continue;
+			}
+
+			const int targetX = area.left + x;
+			const int targetY = area.top + y;
+			byte oldAlpha, oldRed, oldGreen, oldBlue;
+			target.format.colorToARGB(target.getPixel(targetX, targetY), oldAlpha, oldRed, oldGreen, oldBlue);
+
+			const uint rest = 255 - alpha;
+			target.setPixel(targetX, targetY, target.format.ARGBToColor(
+				alpha + oldAlpha * rest / 255,
+				(red * alpha + oldRed * rest) / 255,
+				(green * alpha + oldGreen * rest) / 255,
+				(blue * alpha + oldBlue * rest) / 255));
+		}
+	}
 }
 
 static Graphics::ManagedSurface *s_drawTarget = nullptr;
@@ -256,7 +517,9 @@ void SummaryRecord::readTable(int tableIndex) {
 		luaL_error(L, "No environment specified");
 	}
 
-	if (!readField(L, tableIndex, "bg", _backgroundName)) {
+	// Nancy21 can leave the background out, e.g. for a scene that keeps the
+	// picture of the one before as its facade
+	if (!readField(L, tableIndex, "bg", _backgroundName) && g_nancy->getGameType() < kGameTypeNancy21) {
 		luaL_error(L, "No background specified");
 	}
 
@@ -271,6 +534,13 @@ void SummaryRecord::readTable(int tableIndex) {
 
 	lua_pop(L, 1);
 
+	// Whether turning goes on past the first and the last frame, and Nancy22:
+	// whether the player can turn around
+	readField(L, tableIndex, "wrap", _wraps);
+	readField(L, tableIndex, "enableUturn", _hasUturn);
+	readField(L, tableIndex, "enableRotate", _canRotate);
+	readField(L, tableIndex, "facade", _isFacade);
+
 	// The background is behind everything else
 	limitZ(kBackgroundScriptZ);
 }
@@ -279,9 +549,12 @@ void SummaryRecord::readTable(int tableIndex) {
 static const uint16 kThemeChannel = 0;
 static const uint16 kThemeVolume = 85;
 
-// Starts one of the themes of the area, unless one is playing
+// Starts one of the themes of the area. Nancy19 plays it once, unless a theme
+// is playing. Lights, Camera, Curses plays it over and over, in place of the
+// theme playing, unless that is the same.
 void SummaryRecord::playTheme() {
-	if (g_nancy->_sound->isSoundPlaying(kThemeChannel)) {
+	const bool isLooped = g_nancy->getGameType() == kGameTypeNancyDossier1;
+	if (!isLooped && g_nancy->_sound->isSoundPlaying(kThemeChannel)) {
 		return;
 	}
 
@@ -297,8 +570,13 @@ void SummaryRecord::playTheme() {
 
 		SoundDescription sound;
 		sound.name = environment.musicNames[g_nancy->_randomSource->getRandomNumber(environment.musicNames.size() - 1)];
+		if (isLooped && g_nancy->_sound->isSoundPlaying(kThemeChannel) &&
+				g_nancy->_sound->getSoundName(kThemeChannel).equalsIgnoreCase(sound.name)) {
+			return;
+		}
+
 		sound.channelID = kThemeChannel;
-		sound.numLoops = 1;
+		sound.numLoops = isLooped ? 0 : 1;
 		sound.volume = kThemeVolume;
 
 		g_nancy->_sound->loadSound(sound);
@@ -329,12 +607,70 @@ void SummaryRecord::updateTheme(double sceneTime) {
 
 void SummaryRecord::runOnce() {
 	playTheme();
+
+	if (_isFacade) {
+		showFacade();
+	}
 }
 
+// Nancy22: a scene with a facade keeps what the viewport showed when it started
+// as its background, e.g. the character after a conversation is over
+void SummaryRecord::showFacade() {
+	const Graphics::ManagedSurface &image = g_nancy->_graphics->getGameImage();
+	Common::Rect area = NancySceneState.getViewport().getScreenPosition();
+	area.clip(Common::Rect(image.w, image.h));
+	if (area.isEmpty()) {
+		return;
+	}
+
+	_facade._drawSurface.copyFrom(image.rawSurface().getSubArea(area));
+	_facade.init();
+	_facade.moveTo(Common::Rect(area.width(), area.height()));
+	_facade.setTransparent(false);
+	_facade.setScriptZ(kBackgroundScriptZ, getContext());
+	_facade.setVisible(true);
+	_facade.registerGraphics();
+}
+
+void SummaryRecord::registerGraphics() {
+	// The facade is only there once it has been shown
+	if (_facade._drawSurface.getPixels()) {
+		_facade.registerGraphics();
+	}
+}
+
+// Only turning changes the frame of the background, so a background of several
+// frames is a panorama. Its frames are cached from the start, as in the
+// panorama scenes of the earlier games.
 void SummaryRecord::setBackground(UI::Viewport *background) {
 	_background = background;
 	_numFrames = background ? background->getFrameCount() : 0;
 	_frame = getContext().getFrame();
+
+	if (_numFrames > 1) {
+		_background->enableFrameCache();
+	}
+
+	onTransformChanged();
+}
+
+// The Dossier games scroll a background wider than the viewport by moving the
+// summary to the left, e.g. in the parallax scenes of Lights, Camera, Curses
+void SummaryRecord::onTransformChanged() {
+	if (!_background) {
+		return;
+	}
+
+	const ScriptMatrix transform = getTransform();
+	_background->setHorizontalScroll(MAX<int>(0, (int)-transform.m[3][0]));
+
+	// A background taller than the viewport, like the one of Dossier1 scene
+	// 2400, scrolls down as far as the transform moves it up
+	const int verticalScroll = (int)-transform.m[3][1];
+	if (verticalScroll > 0 || _background->getCurVerticalScroll() != 0) {
+		const int maxScroll = (int)_background->getFullFrameHeight() - (int)_background->getScreenPositionRaw().height();
+		_background->setVerticalScroll(CLIP<int>(verticalScroll, 0, MAX<int>(maxScroll, 0)));
+	}
 }
 
 void SummaryRecord::setFrame(uint frame) {
@@ -347,7 +683,7 @@ void SummaryRecord::setFrame(uint frame) {
 	}
 }
 
-SummaryRecord::Turn SummaryRecord::getTurnAt(const ScriptPoint &point, bool inViewport) const {
+SummaryRecord::Turn SummaryRecord::getTurnAt(const Common::Point32 &point, bool inViewport) const {
 	// Only a background with several frames can be turned around in
 	if (_numFrames <= 1 || !inViewport) {
 		return kNoTurn;
@@ -356,19 +692,29 @@ SummaryRecord::Turn SummaryRecord::getTurnAt(const ScriptPoint &point, bool inVi
 	const ScriptBootData *boot = GetEngineData(ScriptBootData);
 	assert(boot);
 
-	const Common::Point place = point.toPoint();
-	if (boot->leftNodeHotspot.contains(place)) {
-		return kTurnLeft;
-	} else if (boot->rightNodeHotspot.contains(place)) {
-		return kTurnRight;
+	const Common::Point place(point.x, point.y);
+	if (_canRotate && boot->leftNodeHotspot.contains(place)) {
+		return canTurn(kTurnLeft) ? kTurnLeft : kNoTurn;
+	} else if (_canRotate && boot->rightNodeHotspot.contains(place)) {
+		return canTurn(kTurnRight) ? kTurnRight : kNoTurn;
 	} else if (boot->uturnNodeHotspot.contains(place)) {
-		return kTurnAround;
+		return _hasUturn ? kTurnAround : kNoTurn;
 	}
 
 	return kNoTurn;
 }
 
-void SummaryRecord::onMouseMove(const ScriptPoint &point, bool inViewport) {
+// Turning left goes to the next frame, and right to the one before. A node that
+// doesn't wrap stops at its first and last frame.
+bool SummaryRecord::canTurn(Turn turn) const {
+	if (_wraps) {
+		return true;
+	}
+
+	return turn == kTurnLeft ? _frame + 1 < _numFrames : _frame > 0;
+}
+
+void SummaryRecord::onMouseMove(const Common::Point32 &point, bool inViewport) {
 	// The view turns by itself while the mouse stays on a side, after a first wait
 	Turn turn = getTurnAt(point, inViewport);
 	if (turn == kTurnAround) {
@@ -382,7 +728,7 @@ void SummaryRecord::onMouseMove(const ScriptPoint &point, bool inViewport) {
 	_turn = turn;
 }
 
-bool SummaryRecord::getCursor(const ScriptPoint &point, bool inViewport, uint &cursorType, bool &isHot) {
+bool SummaryRecord::getCursor(const Common::Point32 &point, bool inViewport, uint &cursorType, bool &isHot) {
 	const ScriptBootData *boot = GetEngineData(ScriptBootData);
 	assert(boot);
 
@@ -410,7 +756,7 @@ bool SummaryRecord::getCursor(const ScriptPoint &point, bool inViewport, uint &c
 	return true;
 }
 
-bool SummaryRecord::onMouseEvent(RecordEvent event, const ScriptPoint &point, bool inViewport) {
+bool SummaryRecord::onMouseEvent(RecordEvent event, const Common::Point32 &point, bool inViewport) {
 	switch (event) {
 	case kEventRightDown:
 		_isTurningFast = true;
@@ -438,11 +784,49 @@ bool SummaryRecord::onMouseEvent(RecordEvent event, const ScriptPoint &point, bo
 	}
 }
 
+#ifdef ENABLE_NANCY_V5
+bool SummaryRecord::turnByKey(Common::KeyCode key) {
+	if (_numFrames <= 1 || !_canRotate) {
+		return false;
+	}
+
+	switch (key) {
+	case Common::KEYCODE_LEFT:
+		if (!canTurn(kTurnLeft)) {
+			return false;
+		}
+
+		setFrame((_frame + 1) % _numFrames);
+		return true;
+	case Common::KEYCODE_RIGHT:
+		if (!canTurn(kTurnRight)) {
+			return false;
+		}
+
+		setFrame((_frame + _numFrames - 1) % _numFrames);
+		return true;
+	case Common::KEYCODE_DOWN:
+		if (!_hasUturn) {
+			return false;
+		}
+
+		setFrame((_frame + _numFrames / 2) % _numFrames);
+		return true;
+	default:
+		return false;
+	}
+}
+#endif
+
 void SummaryRecord::run(double sceneTime, double elapsedTime) {
 	_sceneTime = sceneTime;
 	updateTheme(sceneTime);
 
-	if (_numFrames <= 1 || _turn == kNoTurn) {
+	if (_numFrames <= 1 || _turn == kNoTurn || !_canRotate) {
+		return;
+	}
+
+	if (!canTurn(_turn)) {
 		return;
 	}
 
@@ -458,6 +842,25 @@ void SummaryRecord::run(double sceneTime, double elapsedTime) {
 bool SummaryRecord::getField(const Common::String &key) {
 	if (key == "frame") {
 		lua_pushinteger(getLua(), _frame);
+		return true;
+	} else if (key == "enableRotate") {
+		lua_pushboolean(getLua(), _canRotate);
+		return true;
+	} else if (key == "enableUturn") {
+		lua_pushboolean(getLua(), _hasUturn);
+		return true;
+	}
+
+	return false;
+}
+
+// Nancy24 scripts stop the player from turning while something is going on
+bool SummaryRecord::setField(const Common::String &key) {
+	if (key == "enableRotate") {
+		_canRotate = lua_toboolean(getLua(), 3) != 0;
+		return true;
+	} else if (key == "enableUturn") {
+		_hasUturn = lua_toboolean(getLua(), 3) != 0;
 		return true;
 	}
 
@@ -528,6 +931,19 @@ void NavLogicRecord::readTable(int tableIndex) {
 
 	readField(L, tableIndex, "rightClick", _isRightClick);
 
+	// Nancy22: a hotspot can act like a button, which goes off when the button
+	// of the mouse that went down over it comes up over it again
+	Common::String mouseMode;
+	if (readField(L, tableIndex, "mouseMode", mouseMode)) {
+		if (mouseMode == "OnClick") {
+			_isPressedAndReleased = false;
+		} else if (mouseMode == "OnDownAndUp") {
+			_isPressedAndReleased = true;
+		} else {
+			luaL_error(L, "Mouse mode set to unrecognized value '%s'", mouseMode.c_str());
+		}
+	}
+
 	// The flags to set, by name
 	if (pushField(L, tableIndex, "flags")) {
 		luaL_checktype(L, -1, LUA_TTABLE);
@@ -556,17 +972,19 @@ void NavLogicRecord::run(double sceneTime, double elapsedTime) {
 	}
 }
 
-bool NavLogicRecord::isOver(const ScriptPoint &point) const {
-	if (!_ref) {
-		return transformRect(_hotspot, getTransform()).contains(point.x, point.y);
-	}
-
+// The mouse is taken back to where the hotspot was before the transform, so a
+// turned hotspot is turned with its picture
+bool NavLogicRecord::isOver(const Common::Point32 &point) const {
 	double x = point.x;
 	double y = point.y;
 	getTransform().inverse().transformPoint(x, y);
 
 	int refX = (int)x;
 	int refY = (int)y;
+	if (!_ref) {
+		return _hotspot.contains(refX, refY);
+	}
+
 	if (!_source.isEmpty() || !_hotspot.isEmpty()) {
 		if (!_hotspot.contains(refX, refY)) {
 			return false;
@@ -584,11 +1002,20 @@ bool NavLogicRecord::isOver(const ScriptPoint &point) const {
 	return _hasRefColor ? pixel == _refColor : (pixel >> 24) != 0;
 }
 
-void NavLogicRecord::onMouseMove(const ScriptPoint &point, bool inViewport) {
+// A hotspot that is held down tells its scripts when the mouse leaves it and
+// comes back, with OnUp and OnDown
+void NavLogicRecord::onMouseMove(const Common::Point32 &point, bool inViewport) {
+	const bool wasMouseOver = _isMouseOver;
 	_isMouseOver = inViewport && isOver(point);
+
+	if (_isDown && _isMouseOver && !wasMouseOver) {
+		callFunction("OnDown");
+	} else if (_isDown && !_isMouseOver && wasMouseOver) {
+		callFunction("OnUp");
+	}
 }
 
-bool NavLogicRecord::getCursor(const ScriptPoint &point, bool inViewport, uint &cursorType, bool &isHot) {
+bool NavLogicRecord::getCursor(const Common::Point32 &point, bool inViewport, uint &cursorType, bool &isHot) {
 	if (!_hasCursor || !isOver(point)) {
 		return false;
 	}
@@ -598,13 +1025,36 @@ bool NavLogicRecord::getCursor(const ScriptPoint &point, bool inViewport, uint &
 	return true;
 }
 
-bool NavLogicRecord::onMouseEvent(RecordEvent event, const ScriptPoint &point, bool inViewport) {
+bool NavLogicRecord::onMouseEvent(RecordEvent event, const Common::Point32 &point, bool inViewport) {
+	if (_isPressedAndReleased) {
+		const RecordEvent downEvent = _isRightClick ? kEventRightDown : kEventLeftDown;
+		const RecordEvent upEvent = _isRightClick ? kEventRightUp : kEventLeftUp;
+
+		if (event == downEvent && _isMouseOver) {
+			callFunction("OnDown");
+			_isDown = true;
+		} else if (event == upEvent) {
+			const bool wasDown = _isDown;
+			_isDown = false;
+			if (wasDown && _isMouseOver) {
+				trigger();
+			}
+		}
+
+		return false;
+	}
+
 	const RecordEvent clickEvent = _isRightClick ? kEventRightClick : kEventLeftClick;
 	if (event != clickEvent || !isOver(point)) {
 		return false;
 	}
 
 	trigger();
+	return true;
+}
+
+bool NavLogicRecord::prepareReset() {
+	_isDown = false;
 	return true;
 }
 
@@ -635,6 +1085,8 @@ bool NavLogicRecord::getField(const Common::String &key) {
 		pushRect(L, _hotspot);
 	} else if (key == "mouseOver") {
 		lua_pushboolean(L, _isMouseOver);
+	} else if (key == "down") {
+		lua_pushboolean(L, _isDown);
 	} else if (key == "refColor" && _hasRefColor) {
 		pushColor(L, _refColor);
 	} else if (key == "source") {
@@ -697,7 +1149,38 @@ static bool isOverrideFunctionName(const Common::String &name) {
 }
 
 OverrideRecord::~OverrideRecord() {
+	setMessagingName(Common::String(), true);
 	delete _canvas;
+}
+
+bool OverrideRecord::setMessagingName(const Common::String &name, bool takeOver) {
+	if (name.equalsIgnoreCase(_messagingName) && !name.empty()) {
+		return true;
+	}
+
+	NancyEngine::MessagingNameMap &names = g_nancy->_messagingNames;
+
+	if (!_messagingName.empty()) {
+		NancyEngine::MessagingNameMap::iterator it = names.find(_messagingName);
+		if (it != names.end() && it->_value == this) {
+			names.erase(it);
+		}
+	}
+
+	_messagingName.clear();
+
+	if (name.empty()) {
+		return true;
+	}
+
+	if (!takeOver && names.contains(name)) {
+		warning("Name '%s' already registered for messaging.", name.c_str());
+		return false;
+	}
+
+	names.setVal(name, this);
+	_messagingName = name;
+	return true;
 }
 
 void OverrideRecord::readTable(int tableIndex) {
@@ -714,6 +1197,12 @@ void OverrideRecord::readTable(int tableIndex) {
 }
 
 bool OverrideRecord::hasMessagingName(const Common::String &name) {
+	const NancyEngine::MessagingNameMap &names = g_nancy->_messagingNames;
+	NancyEngine::MessagingNameMap::const_iterator it = names.find(name);
+	if (it != names.end()) {
+		return it->_value == this;
+	}
+
 	lua_State *L = getLua();
 
 	pushStoredValue("messagingName");
@@ -722,15 +1211,63 @@ bool OverrideRecord::hasMessagingName(const Common::String &name) {
 	return isNamed;
 }
 
+void OverrideRecord::registerGraphics() {
+	if (_canvas) {
+		_canvas->registerGraphics();
+	}
+}
+
 void OverrideRecord::onZChanged() {
 	if (_canvas) {
-		_canvas->setScriptZ(getZ(), getContext().getZOffset());
+		_canvas->setScriptZ(getZ(), getContext(), getCreationOrder());
 	}
+}
+
+// The smallest rect around the pixels that differ between two pictures of the
+// same size and 32 bit format. Empty when they are the same.
+static Common::Rect findChangedArea(const Graphics::ManagedSurface &a, const Graphics::ManagedSurface &b) {
+	const uint rowSize = a.w * 4;
+
+	int top = 0;
+	while (top < a.h && memcmp(a.getBasePtr(0, top), b.getBasePtr(0, top), rowSize) == 0) {
+		++top;
+	}
+
+	if (top == a.h) {
+		return Common::Rect();
+	}
+
+	int bottom = a.h;
+	while (memcmp(a.getBasePtr(0, bottom - 1), b.getBasePtr(0, bottom - 1), rowSize) == 0) {
+		--bottom;
+	}
+
+	int left = a.w;
+	int right = 0;
+	for (int y = top; y < bottom; ++y) {
+		const uint32 *rowA = (const uint32 *)a.getBasePtr(0, y);
+		const uint32 *rowB = (const uint32 *)b.getBasePtr(0, y);
+		for (int x = 0; x < left; ++x) {
+			if (rowA[x] != rowB[x]) {
+				left = x;
+			}
+		}
+
+		for (int x = a.w - 1; x >= right; --x) {
+			if (rowA[x] != rowB[x]) {
+				right = x + 1;
+			}
+		}
+	}
+
+	return Common::Rect(left, top, right, bottom);
 }
 
 // An override draws by having its "Render" function called every frame, which
 // draws through the "Draw" object. Here that goes onto a picture as large as
-// the viewport, which is started over every frame.
+// the viewport, which is started over every frame. The picture is only shown
+// again when it changed: the menus darken all the screen behind them, and
+// drawing all of it every frame made them slow.
 void OverrideRecord::updateGraphics() {
 	lua_State *L = getLua();
 
@@ -738,36 +1275,53 @@ void OverrideRecord::updateGraphics() {
 	const bool hasRender = lua_isfunction(L, -1);
 	lua_pop(L, 1);
 
-	if (!hasRender || !isActive()) {
+	if (!hasRender || !isShown()) {
 		if (_canvas) {
-			_canvas->setVisible(false);
+			_canvas->setVisible(false, false);
 		}
 
 		return;
 	}
 
 	if (!_canvas) {
-		const VIEW *viewport = GetEngineData(VIEW);
-		assert(viewport);
-
-		const Common::Rect bounds(viewport->screenPosition.width(), viewport->screenPosition.height());
+		const Common::Rect bounds = RecordGraphic::getDrawArea();
 
 		_canvas = new RecordGraphic();
 		_canvas->init();
 		_canvas->_drawSurface.create(bounds.width(), bounds.height(), g_nancy->_graphics->getTransparentPixelFormat());
+		_canvas->_drawSurface.clear(0);
 		_canvas->moveTo(bounds);
-		_canvas->setScriptZ(getZ(), getContext().getZOffset());
+		_canvas->setScriptZ(getZ(), getContext(), getCreationOrder());
 		_canvas->registerGraphics();
+		_renderSurface.create(bounds.width(), bounds.height(), _canvas->_drawSurface.format);
 	}
 
-	_canvas->_drawSurface.clear(0);
+	_renderSurface.clear(0);
+	_canvas->setMasked(isMasked());
 
-	s_drawTarget = &_canvas->_drawSurface;
+	// From Nancy26 on, a picture the function takes shows what is below it
+	const bool isDrawnInPlace = g_nancy->getGameType() >= kGameTypeNancy26;
+	if (isDrawnInPlace) {
+		g_nancy->_graphics->beginScriptDrawing(_canvas->getZOrder());
+	}
+
+	s_drawTarget = &_renderSurface;
 	callFunction("Render");
 	s_drawTarget = nullptr;
 
-	_canvas->setVisible(true);
-	_canvas->setNeedsRedraw(true);
+	if (isDrawnInPlace) {
+		g_nancy->_graphics->endScriptDrawing();
+	}
+
+	Graphics::ManagedSurface &shown = _canvas->_drawSurface;
+	const Common::Rect changed = findChangedArea(shown, _renderSurface);
+	if (!changed.isEmpty()) {
+		memcpy(shown.getPixels(), _renderSurface.getPixels(), shown.pitch * shown.h);
+		_canvas->addChangedArea(changed);
+		_canvas->setNeedsRedraw(true);
+	}
+
+	_canvas->setVisible(true, false);
 }
 
 // this:Done()
@@ -776,11 +1330,35 @@ static int overrideDone(lua_State *L) {
 	return 0;
 }
 
+// this:SetMessagingName(name[, takeOver]), Nancy22: the name the record gets
+// messages under from now on; an empty one for none. A name that another record
+// has stays with it unless the record takes it over. Gives whether it got the name.
+static int overrideSetMessagingName(lua_State *L) {
+	OverrideRecord *record = dynamic_cast<OverrideRecord *>(checkRecord(L, 1));
+	const char *name = luaL_checkstring(L, 2);
+	const bool takeOver = lua_gettop(L) > 2 && lua_toboolean(L, 3);
+
+	lua_pushboolean(L, record && record->setMessagingName(name, takeOver));
+	return 1;
+}
+
 bool OverrideRecord::getField(const Common::String &key) {
 	if (key == "Done") {
 		lua_pushcfunction(getLua(), overrideDone);
 		return true;
 	}
+
+	// Nancy22
+	if (key == "SetMessagingName") {
+		lua_pushcfunction(getLua(), overrideSetMessagingName);
+		return true;
+	}
+
+#ifdef ENABLE_NANCY_V5
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		return pushRecordDrawFunction(getLua(), key);
+	}
+#endif
 
 	return false;
 }
@@ -798,6 +1376,135 @@ bool OverrideRecord::setField(const Common::String &key) {
 
 // Overlay
 
+// The "LOADSAVE" tree holds the pictures the camera took, which are kept with
+// the saved game
+static const char *const kPictureTreeName = "LOADSAVE";
+
+// Nancy26: the "SaveFile" tree holds the pictures of the saved games, by their
+// names. They are the thumbnails of ScummVM's saved games, at the size the save
+// and load screens show them at.
+static const char *const kSaveFileTreeName = "SaveFile";
+static const int kSavePictureWidth = 184;
+static const int kSavePictureHeight = 124;
+
+static bool loadSavePicture(const Common::String &name, Graphics::ManagedSurface &image) {
+	const MetaEngine *metaEngine = g_nancy->getMetaEngine();
+	const Common::String target = ConfMan.getActiveDomainName();
+	const SaveStateList saves = metaEngine->listSaves(target.c_str());
+	for (const SaveStateDescriptor &save : saves) {
+		if (save.getSaveSlot() == metaEngine->getMaximumSaveSlot() || save.getSaveSlot() == g_nancy->getAutosaveSlot() ||
+				!save.getDescription().equalsIgnoreCase(name)) {
+			continue;
+		}
+
+		const SaveStateDescriptor info = metaEngine->querySaveMetaInfos(target.c_str(), save.getSaveSlot());
+		const Graphics::Surface *thumbnail = info.getThumbnail();
+		if (!thumbnail) {
+			return false;
+		}
+
+		Graphics::Surface *scaled = thumbnail->scale(kSavePictureWidth, kSavePictureHeight, true);
+		Graphics::Surface *converted = scaled->convertTo(g_nancy->_graphics->getInputPixelFormat(32));
+		GraphicsManager::copyToManaged(*converted, image);
+		converted->free();
+		delete converted;
+		scaled->free();
+		delete scaled;
+		return true;
+	}
+
+	warning("There is no saved game named %s", name.c_str());
+	return false;
+}
+
+bool loadTreeImage(const Common::String &name, const Common::String &treeName, Graphics::ManagedSurface &image) {
+	if (treeName.equalsIgnoreCase(kSaveFileTreeName)) {
+		return loadSavePicture(name, image);
+	}
+
+	if (!treeName.equalsIgnoreCase(kPictureTreeName)) {
+		return g_nancy->_resource->loadImage(Common::Path(name), image, treeName);
+	}
+
+#ifdef USE_PNG
+	const ScriptPictureData *pictures = (const ScriptPictureData *)NancySceneState.getPuzzleData(ScriptPictureData::getTag());
+	if (!pictures->pictures.contains(name)) {
+		warning("Could not find picture %s amongst the saved ones", name.c_str());
+		return false;
+	}
+
+	const Common::Array<byte> &data = pictures->pictures[name];
+	Common::MemoryReadStream stream(data.data(), data.size());
+	Image::PNGDecoder decoder;
+	if (!decoder.loadStream(stream)) {
+		return false;
+	}
+
+	Graphics::Surface *converted = decoder.getSurface()->convertTo(g_nancy->_graphics->getInputPixelFormat(32));
+	GraphicsManager::copyToManaged(*converted, image);
+	converted->free();
+	delete converted;
+	return true;
+#else
+	return false;
+#endif
+}
+
+// Nancy30 takes the picture of an overlay from the first frame of a movie
+// when its name says it's one: a background, an animation or a conversation
+static bool isMovieName(const Common::String &name) {
+	if (g_nancy->getGameType() < kGameTypeNancy30) {
+		return false;
+	}
+
+	Common::String upperName = name;
+	upperName.toUppercase();
+	return upperName.hasSuffix("_BG") || upperName.hasSuffix("_ANIM") || upperName.hasSuffix("_CNV");
+}
+
+static bool loadMovieFrame(const Common::String &name, Graphics::ManagedSurface &image) {
+	MoviePlayer player;
+	if (!player.loadFile(Common::Path(name))) {
+		return false;
+	}
+
+	player.goToFrame(0);
+	image.create(player.getWidth(), player.getHeight(), g_nancy->_graphics->getInputPixelFormat(32));
+	image.clear(image.format.ARGBToColor(255, 0, 0, 0));
+	player.drawFrame(image, Common::Point(0, 0));
+	return true;
+}
+
+// Overlays get their pictures from the image cache of the resource manager,
+// and hold on to the cached picture while they use it. Saved pictures aren't
+// cached: every record has its own.
+bool loadCachedImage(const Common::String &name, const Common::String &treeName, Common::SharedPtr<Graphics::ManagedSurface> &cached, Graphics::ManagedSurface &image, Common::Rect *outDest) {
+	if (outDest) {
+		*outDest = Common::Rect();
+	}
+
+	if (treeName.equalsIgnoreCase(kPictureTreeName) || treeName.equalsIgnoreCase(kSaveFileTreeName)) {
+		image.free();
+		cached.reset();
+		return loadTreeImage(name, treeName, image);
+	}
+
+	if (isMovieName(name)) {
+		image.free();
+		cached.reset();
+		return loadMovieFrame(name, image);
+	}
+
+	cached = g_nancy->_resource->loadCachedImage(name, treeName, outDest);
+	if (!cached) {
+		return false;
+	}
+
+	// The record draws from the cached picture, without a copy of its own
+	image.create(*cached, Common::Rect(cached->w, cached->h));
+	return true;
+}
+
 void OverlayRecord::readTable(int tableIndex) {
 	lua_State *L = getLua();
 
@@ -806,20 +1513,30 @@ void OverlayRecord::readTable(int tableIndex) {
 		luaL_error(L, "OverlayAR must be created with a ovl parameter");
 	}
 
-	if (!g_nancy->_resource->loadImage(Common::Path(imageName), _image)) {
+	// Nancy21 can name the tree the image is in
+	Common::String treeName;
+	readField(L, tableIndex, "tree", treeName);
+
+	Common::Rect defaultDest;
+	if (!loadCachedImage(imageName, treeName, _cachedImage, _image, &defaultDest)) {
 		luaL_error(L, "Could not load overlay %s", imageName.c_str());
 	}
 
-	// Both default to the whole image
+	_imageName = imageName;
+	_treeName = treeName;
+	_defaultDest = defaultDest;
+
+	// Both default to the whole image. From Nancy30 on, an image can say
+	// where it goes.
 	_source = ScriptRect(0, 0, _image.w, _image.h);
 	if (pushField(L, tableIndex, "source")) {
 		_source = checkRect(L, -1);
 		lua_pop(L, 1);
 	}
 
-	_dest = _source;
+	_dest = _defaultDest.isEmpty() ? _source : _defaultDest;
 	if (pushField(L, tableIndex, "onScreen")) {
-		_dest = checkRect(L, -1);
+		readDest(-1);
 		lua_pop(L, 1);
 	}
 
@@ -835,34 +1552,267 @@ void OverlayRecord::readTable(int tableIndex) {
 	_graphic.registerGraphics();
 }
 
+// The onScreen of an overlay is a rect, or in Nancy24 also a table of rects;
+// the picture is then shown at each of them. The scripts change the rects in
+// the table as they go, so the table is kept as it is.
+void OverlayRecord::readDest(int index) {
+	lua_State *L = getLua();
+
+	_hasDestTable = lua_istable(L, index);
+	if (_hasDestTable) {
+		lua_pushvalue(L, index);
+		storeValue("onScreen");
+		readDestTable(_tableDests);
+	} else {
+		_dest = checkRect(L, index);
+	}
+}
+
+void OverlayRecord::readDestTable(Common::Array<ScriptRect> &dests) {
+	lua_State *L = getLua();
+
+	dests.clear();
+	pushStoredValue("onScreen");
+	if (lua_istable(L, -1)) {
+		lua_pushnil(L);
+		while (lua_next(L, -2)) {
+			const ScriptRect *dest = testRect(L, -1);
+			if (dest) {
+				dests.push_back(*dest);
+			}
+
+			lua_pop(L, 1);
+		}
+	}
+
+	lua_pop(L, 1);
+}
+
+// A picture gets placed when the frame is drawn, and a hidden one once it shows
+// again. The map of Nancy25 moves many hidden ones with its camera.
+void OverlayRecord::onTransformChanged() {
+	_isPlacementStale = true;
+}
+
 void OverlayRecord::applyRects() {
+	_isPlacementStale = false;
+
 	Common::Rect source = _source.toRect();
 	source.clip(Common::Rect(_image.w, _image.h));
 
 	// A script can leave the picture out until it knows what to show
-	_hasPicture = !source.isEmpty();
+	_hasPicture = !source.isEmpty() && (!_hasDestTable || !_tableDests.empty());
 	if (!_hasPicture) {
 		return;
 	}
 
-	placePicture(_graphic, _image, source, _dest, getTransform(), _modColor);
+	const uint32 modColor = takeModColor(_modColor);
+	if (!_hasDestTable) {
+		placePicture(_graphic, _image, source, _dest, getTransform(), modColor);
+		return;
+	}
+
+	// The copies of the picture are drawn into one surface that covers them all
+	const ScriptMatrix transform = getTransform();
+	const bool isKeyed = transform.isTranslation() && modColor == kNoModColor;
+	Common::Array<RecordGraphic> pictures(_tableDests.size());
+	Common::Rect area;
+	for (uint i = 0; i < _tableDests.size(); ++i) {
+		placePicture(pictures[i], _image, source, _tableDests[i], transform, modColor);
+		if (i == 0) {
+			area = pictures[i].getScreenPositionRaw();
+		} else {
+			area.extend(pictures[i].getScreenPositionRaw());
+		}
+	}
+
+	Graphics::ManagedSurface &out = _graphic._drawSurface;
+	out.create(MAX<int>(area.width(), 1), MAX<int>(area.height(), 1), g_nancy->_graphics->getTransparentPixelFormat());
+	out.clear(0);
+	_graphic.setTransparent(false);
+	for (const RecordGraphic &picture : pictures) {
+		blendPicture(out, picture, isKeyed, Common::Point(area.left, area.top));
+	}
+
+	_graphic.moveTo(area);
+	_graphic.setNeedsRedraw(true);
 }
 
-void OverlayRecord::onZChanged() {
-	_graphic.setScriptZ(getZ(), getContext().getZOffset());
+// Flashlight
+
+void FlashlightRecord::readTable(int tableIndex) {
+	lua_State *L = getLua();
+
+	Common::String imageName;
+	if (!readField(L, tableIndex, "ovl", imageName)) {
+		luaL_error(L, "OverlayAR must be created with a ovl parameter");
+	}
+
+	if (!loadCachedImage(imageName, Common::String(), _cachedImage, _image)) {
+		luaL_error(L, "Could not load flashlight %s", imageName.c_str());
+	}
+
+	if (!pushField(L, tableIndex, "source")) {
+		luaL_error(L, "Flashlight AR requires field 'source' to be a rect");
+	}
+
+	_source = checkRect(L, -1);
+	lua_pop(L, 1);
+
+	_dest = _source;
+	if (pushField(L, tableIndex, "onScreen")) {
+		_dest = checkRect(L, -1);
+		lua_pop(L, 1);
+	}
+
+	readField(L, tableIndex, "on", _isOn);
+	readField(L, tableIndex, "followMouse", _followsMouse);
+
+	_graphic.init();
+	_graphic.setStencil(true);
+	_graphic.setVisible(false);
+	applyRects();
+	onZChanged();
+	_graphic.registerGraphics();
 }
 
-void OverlayRecord::updateGraphics() {
-	_graphic.setVisible(isActive() && _hasPicture);
+void FlashlightRecord::applyRects() {
+	_isPlacementStale = false;
 
-	if (_hasAttachment) {
-		_attachment.setVisible(_isAttachmentDrawn);
-		_isAttachmentDrawn = false;
+	Common::Rect source = _source.toRect();
+	source.clip(Common::Rect(_image.w, _image.h));
+	if (!source.isEmpty()) {
+		placePicture(_graphic, _image, source, _dest, _followsMouse ? ScriptMatrix() : getTransform(), kNoModColor);
 	}
 }
 
+void FlashlightRecord::onZChanged() {
+	_graphic.setScriptZ(getZ(), getContext(), getCreationOrder());
+}
+
+void FlashlightRecord::registerGraphics() {
+	_graphic.registerGraphics();
+}
+
+void FlashlightRecord::updateGraphics() {
+	if (_isPlacementStale) {
+		applyRects();
+	}
+
+	_graphic.setClipRect(getScreenClip());
+	_graphic.setVisible(isShown() && _isOn && !_source.isEmpty(), false);
+}
+
+// The light is centered on the mouse, while it is in the viewport
+void FlashlightRecord::onMouseMove(const Common::Point32 &point, bool inViewport) {
+	if (!inViewport || !_followsMouse) {
+		return;
+	}
+
+	const double halfWidth = _source.width() * 0.5;
+	const double halfHeight = _source.height() * 0.5;
+	const ScriptRect dest(point.x - (int32)ceil(halfWidth), point.y - (int32)ceil(halfHeight),
+		point.x + (int32)floor(halfWidth), point.y + (int32)floor(halfHeight));
+
+	if (dest != _dest) {
+		_dest = dest;
+		_isPlacementStale = true;
+	}
+}
+
+bool FlashlightRecord::getField(const Common::String &key) {
+	lua_State *L = getLua();
+
+	if (key == "onScreen") {
+		pushRect(L, _dest);
+	} else if (key == "on") {
+		lua_pushboolean(L, _isOn);
+	} else if (key == "followMouse") {
+		lua_pushboolean(L, _followsMouse);
+	} else {
+		return false;
+	}
+
+	return true;
+}
+
+bool FlashlightRecord::setField(const Common::String &key) {
+	lua_State *L = getLua();
+
+	if (key == "onScreen") {
+		_dest = checkRect(L, 3);
+	} else if (key == "on") {
+		_isOn = lua_toboolean(L, 3) != 0;
+	} else if (key == "followMouse") {
+		_followsMouse = lua_toboolean(L, 3) != 0;
+	} else {
+		return false;
+	}
+
+	_isPlacementStale = true;
+	return true;
+}
+
+void OverlayRecord::onZChanged() {
+	_graphic.setScriptZ(getZ(), getContext(), getCreationOrder());
+#ifdef ENABLE_NANCY_V5
+	if (_hasCopyGraphic) {
+		_copyGraphic.setScriptZ(getZ(), getContext(), getCreationOrder());
+	}
+#endif
+}
+
+void OverlayRecord::registerGraphics() {
+	_graphic.registerGraphics();
+#ifdef ENABLE_NANCY_V5
+	if (_hasCopyGraphic) {
+		_copyGraphic.registerGraphics();
+	}
+#endif
+}
+
+void OverlayRecord::updateGraphics() {
+	_graphic.setMasked(isMasked());
+#ifdef ENABLE_NANCY_V5
+	_copyGraphic.setMasked(isMasked());
+#endif
+
+	if (_hasDestTable && isShown()) {
+		Common::Array<ScriptRect> dests;
+		readDestTable(dests);
+		if (dests != _tableDests) {
+			_tableDests = dests;
+			applyRects();
+		}
+	}
+
+	if ((_isPlacementStale || hasAlphaChanged()) && isShown()) {
+		applyRects();
+	}
+
+	_graphic.setClipRect(getScreenClip());
+	_graphic.setVisible(isShown() && _hasPicture, false);
+
+	if (_hasAttachment) {
+		_attachment.setVisible(_isAttachmentDrawn, false);
+		_isAttachmentDrawn = false;
+	}
+
+#ifdef ENABLE_NANCY_V5
+	// The copies show even while the overlay itself is hidden
+	if (_hasCopyGraphic) {
+		if (_areCopiesStale) {
+			applyCopies();
+		}
+
+		_copyGraphic.setClipRect(getScreenClip());
+		_copyGraphic.setVisible(getContext().isStreamVisible() && _freeCopies.size() < _copies.size(), false);
+	}
+#endif
+}
+
 // What a script draws by itself goes over everything else the scene shows
-static const uint16 kAttachmentZ = 999;
+static const uint16 kAttachmentZ = 59999;
 
 // TODO: The picture is cut off at the edges of the viewport
 void OverlayRecord::renderNow() {
@@ -876,6 +1826,7 @@ void OverlayRecord::renderNow() {
 		_hasAttachment = true;
 		_attachment.init();
 		_attachment.setVisible(false);
+		_attachment.setLayer(RenderObject::kUILayer);
 		_attachment.setZOrder(kAttachmentZ);
 		_attachment.registerGraphics();
 	}
@@ -893,15 +1844,279 @@ void OverlayRecord::renderNow() {
 	_isAttachmentDrawn = true;
 }
 
+// Draws the picture of the overlay once more. The source, onScreen, transform
+// and modColor in the table of Draw:OVL replace the overlay's own.
+void OverlayRecord::drawCopy(int tableIndex) {
+	lua_State *L = getLua();
+
+	ScriptRect source = _source;
+	ScriptRect dest = _dest;
+	ScriptMatrix transform = getTransform();
+	uint32 modColor = _modColor;
+
+	if (pushField(L, tableIndex, "source")) {
+		source = checkRect(L, -1);
+		lua_pop(L, 1);
+	}
+
+	if (pushField(L, tableIndex, "onScreen")) {
+		dest = checkRect(L, -1);
+		lua_pop(L, 1);
+	}
+
+	// A transform from the table is still combined with those of the nodes
+	// the overlay is attached to
+	if (pushField(L, tableIndex, "transform")) {
+		transform = checkMatrix(L, -1);
+		lua_pop(L, 1);
+
+		if (getParentNode()) {
+			transform = transform * getParentNode()->getTransform();
+		}
+	}
+
+	if (pushField(L, tableIndex, "modColor")) {
+		modColor = checkColor(L, -1);
+		lua_pop(L, 1);
+	}
+
+	Graphics::ManagedSurface *target = getDrawTarget();
+	if (!target) {
+		luaL_error(L, "Draw can only be used while a record is rendering");
+	}
+
+	Common::Rect from = source.toRect();
+	from.clip(Common::Rect(_image.w, _image.h));
+	if (from.isEmpty()) {
+		return;
+	}
+
+	// The target canvas covers the viewport, and record positions are
+	// already relative to the viewport
+	RecordGraphic picture;
+	placePicture(picture, _image, from, dest, transform, modColor);
+	blendPicture(*target, picture, transform.isTranslation() && modColor == kNoModColor, Common::Point());
+}
+
+// Draw:OVL(table), Nancy24: table.ar is the Overlay record to draw
+int drawOverlay(lua_State *L) {
+	luaL_checktype(L, 2, LUA_TTABLE);
+
+	lua_getfield(L, 2, "ar");
+	if (lua_isnil(L, -1)) {
+		return luaL_argerror(L, 2, "Reference to existing overlay AR must be provided (ar field is nil)");
+	}
+
+	OverlayRecord *overlay = dynamic_cast<OverlayRecord *>(checkRecord(L, -1));
+	if (!overlay) {
+		return luaL_typerror(L, -1, "ND.Overlay");
+	}
+
+	lua_pop(L, 1);
+	overlay->drawCopy(2);
+	return 0;
+}
+
+void OverlayRecord::setDefaultRects() {
+	_source = ScriptRect(0, 0, _image.w, _image.h);
+	_dest = _defaultDest.isEmpty() ? _source : _defaultDest;
+	_hasDestTable = false;
+	applyRects();
+}
+
+static int overlayDefaultRects(lua_State *L) {
+	OverlayRecord *record = dynamic_cast<OverlayRecord *>(checkRecord(L, 1));
+	if (record) {
+		record->setDefaultRects();
+	}
+
+	return 0;
+}
+
+#ifdef ENABLE_NANCY_V5
+// Returns the index of the copy, counting from 0
+int OverlayRecord::addCopy() {
+	Copy copy;
+	copy.source = _source;
+	copy.dest = _dest;
+	copy.modColor = _modColor;
+	copy.alpha = getAlpha();
+	copy.transform = getTransform();
+
+	uint index;
+	if (_freeCopies.empty()) {
+		index = _copies.size();
+		_copies.push_back(copy);
+	} else {
+		index = _freeCopies.back();
+		_freeCopies.pop_back();
+		_copies[index] = copy;
+	}
+
+	if (!_hasCopyGraphic) {
+		_hasCopyGraphic = true;
+		_copyGraphic.init();
+		_copyGraphic.setVisible(false);
+		_copyGraphic.setScriptZ(getZ(), getContext(), getCreationOrder());
+		_copyGraphic.registerGraphics();
+	}
+
+	_areCopiesStale = true;
+	return index;
+}
+
+void OverlayRecord::deleteCopy(int index) {
+	if (index < 0 || index >= (int)_copies.size() || !_copies[index].isUsed) {
+		return;
+	}
+
+	_copies[index].isUsed = false;
+	_freeCopies.push_back(index);
+	_areCopiesStale = true;
+}
+
+// A table of the copies by their index, each with its source, onScreen,
+// modColor, alpha and transform
+void OverlayRecord::pushCopies() {
+	lua_State *L = getLua();
+
+	lua_newtable(L);
+	for (uint i = 0; i < _copies.size(); ++i) {
+		const Copy &copy = _copies[i];
+		if (!copy.isUsed) {
+			continue;
+		}
+
+		lua_pushinteger(L, i);
+		lua_newtable(L);
+		pushRect(L, copy.source);
+		lua_setfield(L, -2, "source");
+		pushRect(L, copy.dest);
+		lua_setfield(L, -2, "onScreen");
+		pushColor(L, copy.modColor);
+		lua_setfield(L, -2, "modColor");
+		lua_pushnumber(L, copy.alpha);
+		lua_setfield(L, -2, "alpha");
+		pushMatrix(L, copy.transform);
+		lua_setfield(L, -2, "transform");
+		lua_settable(L, -3);
+	}
+}
+
+// The copies are drawn into one surface that covers them all
+void OverlayRecord::applyCopies() {
+	_areCopiesStale = false;
+
+	Common::Array<const Copy *> shown;
+	for (const Copy &copy : _copies) {
+		if (copy.isUsed) {
+			shown.push_back(&copy);
+		}
+	}
+
+	Common::Array<RecordGraphic> pictures(shown.size());
+	Common::Array<bool> areKeyed(shown.size());
+	Common::Rect area;
+	bool hasArea = false;
+	for (uint i = 0; i < shown.size(); ++i) {
+		const Copy &copy = *shown[i];
+		Common::Rect source = copy.source.toRect();
+		source.clip(Common::Rect(_image.w, _image.h));
+		areKeyed[i] = false;
+		if (source.isEmpty()) {
+			continue;
+		}
+
+		uint32 modColor = copy.modColor;
+		if (copy.alpha < 1.0) {
+			const uint32 a = (uint32)CLIP<double>((modColor >> 24) * copy.alpha + 0.5, 0.0, 255.0);
+			modColor = (a << 24) | (modColor & 0xFFFFFF);
+		}
+
+		placePicture(pictures[i], _image, source, copy.dest, copy.transform, modColor);
+		areKeyed[i] = copy.transform.isTranslation() && modColor == kNoModColor;
+		if (!hasArea) {
+			area = pictures[i].getScreenPositionRaw();
+			hasArea = true;
+		} else {
+			area.extend(pictures[i].getScreenPositionRaw());
+		}
+	}
+
+	if (!hasArea) {
+		_copyGraphic._drawSurface.free();
+		return;
+	}
+
+	Graphics::ManagedSurface &out = _copyGraphic._drawSurface;
+	out.create(MAX<int>(area.width(), 1), MAX<int>(area.height(), 1), g_nancy->_graphics->getTransparentPixelFormat());
+	out.clear(0);
+	_copyGraphic.setTransparent(false);
+	for (uint i = 0; i < pictures.size(); ++i) {
+		blendPicture(out, pictures[i], areKeyed[i], Common::Point(area.left, area.top));
+	}
+
+	_copyGraphic.moveTo(area);
+	_copyGraphic.setNeedsRedraw(true);
+}
+
+static int overlayCopy(lua_State *L) {
+	OverlayRecord *record = dynamic_cast<OverlayRecord *>(checkRecord(L, 1));
+	if (!record) {
+		return luaL_typerror(L, 1, "ND.Overlay");
+	}
+
+	lua_pushinteger(L, record->addCopy());
+	return 1;
+}
+
+static int overlayDeleteCopy(lua_State *L) {
+	OverlayRecord *record = dynamic_cast<OverlayRecord *>(checkRecord(L, 1));
+	if (record) {
+		record->deleteCopy(luaL_checkint(L, 2));
+	}
+
+	return 0;
+}
+
+static int overlayGetCopies(lua_State *L) {
+	OverlayRecord *record = dynamic_cast<OverlayRecord *>(checkRecord(L, 1));
+	if (!record) {
+		return luaL_typerror(L, 1, "ND.Overlay");
+	}
+
+	record->pushCopies();
+	return 1;
+}
+#endif
+
 bool OverlayRecord::getField(const Common::String &key) {
 	lua_State *L = getLua();
 
 	if (key == "onScreen") {
-		pushRect(L, _dest);
+		if (_hasDestTable) {
+			pushStoredValue("onScreen");
+		} else {
+			pushRect(L, _dest);
+		}
 	} else if (key == "source") {
 		pushRect(L, _source);
 	} else if (key == "modColor") {
 		pushColor(L, _modColor);
+	} else if (key == "ovl") {
+		lua_pushstring(L, _imageName.c_str());
+	} else if (key == "tree") {
+		lua_pushstring(L, _treeName.c_str());
+	} else if (key == "DefaultRects") {
+		lua_pushcfunction(L, overlayDefaultRects);
+#ifdef ENABLE_NANCY_V5
+	} else if (key == "Copy") {
+		lua_pushcfunction(L, overlayCopy);
+	} else if (key == "DeleteCopy") {
+		lua_pushcfunction(L, overlayDeleteCopy);
+	} else if (key == "GetCopies") {
+		lua_pushcfunction(L, overlayGetCopies);
+#endif
 	} else {
 		return false;
 	}
@@ -909,20 +2124,89 @@ bool OverlayRecord::getField(const Common::String &key) {
 	return true;
 }
 
+// The scripts change the picture by its name, after naming the tree it is in:
+// the save and load screens show the pictures of the saved games this way. The
+// part of it that shows stays as it was.
+bool OverlayRecord::setPicture(const Common::String &imageName) {
+	Common::SharedPtr<Graphics::ManagedSurface> cached;
+	Graphics::ManagedSurface image;
+	if (!loadCachedImage(imageName, _treeName, cached, image)) {
+		warning("Could not load overlay %s", imageName.c_str());
+		return false;
+	}
+
+	_image = Common::move(image);
+	_cachedImage = cached;
+	_imageName = imageName;
+#ifdef ENABLE_NANCY_V5
+	_areCopiesStale = true;
+#endif
+	return true;
+}
+
+// Scripts can move a picture by less than a pixel per frame, like the pieces of
+// the Dossier1 DataMine puzzle. A plain picture only looks different once it
+// reaches another whole pixel. From Nancy26 on, records can also have an alpha.
+bool OverlayRecord::staysOnSamePixels(const ScriptRect &dest) {
+	if (g_nancy->getGameType() >= kGameTypeNancy26 || _modColor != kNoModColor) {
+		return false;
+	}
+
+	const ScriptMatrix transform = getTransform();
+	return transform.isTranslation() &&
+		getTransformedDest(dest, transform, 0, 0) == getTransformedDest(_dest, transform, 0, 0);
+}
+
 bool OverlayRecord::setField(const Common::String &key) {
 	lua_State *L = getLua();
 
-	if (key == "onScreen") {
-		_dest = checkRect(L, 3);
+	if (key == "tree") {
+		_treeName = lua_isnil(L, 3) ? Common::String() : Common::String(luaL_checkstring(L, 3));
+		return true;
+	}
+
+	// Only a change gets the picture drawn anew
+	if (key == "ovl") {
+		const Common::String imageName = luaL_checkstring(L, 3);
+		if (!setPicture(imageName)) {
+			return true;
+		}
+	} else if (key == "onScreen") {
+		if (lua_istable(L, 3) || _hasDestTable) {
+			readDest(3);
+		} else {
+			const ScriptRect dest = checkRect(L, 3);
+			if (dest == _dest) {
+				return true;
+			}
+
+			const bool isOnSamePixels = staysOnSamePixels(dest);
+			_dest = dest;
+			if (isOnSamePixels) {
+				return true;
+			}
+		}
 	} else if (key == "source") {
-		_source = checkRect(L, 3);
+		const ScriptRect source = checkRect(L, 3);
+		if (source == _source) {
+			return true;
+		}
+
+		_source = source;
 	} else if (key == "modColor") {
-		_modColor = checkColor(L, 3);
+		const uint32 modColor = checkColor(L, 3);
+		if (modColor == _modColor) {
+			return true;
+		}
+
+		_modColor = modColor;
 	} else {
 		return false;
 	}
 
-	applyRects();
+	// Drawn anew once a frame at most, and only while it shows: the intro of
+	// Resorting to Danger fades dozens of large overlays every frame
+	_isPlacementStale = true;
 	return true;
 }
 
@@ -989,7 +2273,11 @@ void AnimOverlayRecord::readTable(int tableIndex) {
 		luaL_error(L, "AnimOverlays must have a ovl field");
 	}
 
-	if (!g_nancy->_resource->loadImage(Common::Path(imageName), _image)) {
+	// Nancy21 can name the tree the image is in
+	Common::String treeName;
+	readField(L, tableIndex, "tree", treeName);
+
+	if (!loadCachedImage(imageName, treeName, _cachedImage, _image)) {
 		luaL_error(L, "Could not load overlay %s", imageName.c_str());
 	}
 
@@ -1014,7 +2302,7 @@ void AnimOverlayRecord::applyFrame() {
 		return;
 	}
 
-	placePicture(_graphic, _image, source, _dest, getTransform(), _modColor);
+	placePicture(_graphic, _image, source, _dest, getTransform(), takeModColor(_modColor));
 }
 
 // Starts over from the first frame
@@ -1066,11 +2354,21 @@ bool AnimOverlayRecord::prepareReset() {
 }
 
 void AnimOverlayRecord::onZChanged() {
-	_graphic.setScriptZ(getZ(), getContext().getZOffset());
+	_graphic.setScriptZ(getZ(), getContext(), getCreationOrder());
+}
+
+void AnimOverlayRecord::registerGraphics() {
+	_graphic.registerGraphics();
 }
 
 void AnimOverlayRecord::updateGraphics() {
-	_graphic.setVisible(isActive() && _isVisible && _hasPicture);
+	if (hasAlphaChanged() && isShown() && _hasPicture) {
+		applyFrame();
+	}
+
+	_graphic.setMasked(isMasked());
+	_graphic.setClipRect(getScreenClip());
+	_graphic.setVisible(isShown() && _isVisible && _hasPicture, false);
 }
 
 // anim:Play() and anim:Pause(), for the records that play something
@@ -1119,6 +2417,9 @@ bool AnimOverlayRecord::getField(const Common::String &key) {
 		lua_pushinteger(L, _sources.size());
 	} else if (key == "fps") {
 		lua_pushnumber(L, _framesPerSecond);
+	} else if (key == "source") {
+		// Nancy22: the part of the image that shows now
+		pushRect(L, _frame >= 1 && _frame <= (int)_sources.size() ? _sources[_frame - 1] : ScriptRect());
 	} else {
 		return false;
 	}
@@ -1130,11 +2431,17 @@ bool AnimOverlayRecord::setField(const Common::String &key) {
 	lua_State *L = getLua();
 
 	if (key == "onScreen") {
-		_dest = checkRect(L, 3);
-		applyFrame();
+		const ScriptRect dest = checkRect(L, 3);
+		if (dest != _dest) {
+			_dest = dest;
+			applyFrame();
+		}
 	} else if (key == "modColor") {
-		_modColor = checkColor(L, 3);
-		applyFrame();
+		const uint32 modColor = checkColor(L, 3);
+		if (modColor != _modColor) {
+			_modColor = modColor;
+			applyFrame();
+		}
 	} else if (key == "pauseOnLastFrame") {
 		_pausesOnLastFrame = lua_toboolean(L, 3) != 0;
 	} else if (key == "visible") {
@@ -1155,7 +2462,8 @@ bool AnimOverlayRecord::setField(const Common::String &key) {
 void SoundRecord::readTable(int tableIndex) {
 	lua_State *L = getLua();
 
-	if (pushField(L, tableIndex, "channel")) {
+	const bool hasChannel = pushField(L, tableIndex, "channel");
+	if (hasChannel) {
 		_channel = checkSoundChannel(L, -1);
 		lua_pop(L, 1);
 	}
@@ -1164,14 +2472,142 @@ void SoundRecord::readTable(int tableIndex) {
 	readField(L, tableIndex, "loop", _isLooping);
 	readField(L, tableIndex, "useCC", _usesCaption);
 
+	if (g_nancy->getGameType() >= kGameTypeNancy29) {
+		// Nancy29 renames channelType to group. A record that only plays
+		// instances has no channel.
+		readField(L, tableIndex, "volumeVariance", _volumeVariance);
+		readField(L, tableIndex, "pitch", _pitch);
+		readField(L, tableIndex, "pitchVariance", _pitchVariance);
+		if (!readField(L, tableIndex, "group", _group) && !hasChannel) {
+			luaL_error(L, "Sound AR must have either 'channel' or 'group' defined.");
+		}
+	} else {
+		lua_getfield(L, tableIndex, "channelType");
+		readChannelType(-1);
+		lua_pop(L, 1);
+	}
+
 	if (pushField(L, tableIndex, "sounds")) {
-		readStringList(L, -1, _names);
+		readNames(L, -1);
 		lua_pop(L, 1);
 	}
 
 	if (_names.empty()) {
 		luaL_error(L, "sounds must have one or more fields in its table");
 	}
+
+	pickVariation();
+}
+
+// Up to Nancy25, the names are kept in capitals, and given back that way. The
+// phone game of Dossier2 compares them with names in capitals.
+void SoundRecord::readNames(lua_State *L, int index) {
+	_names.clear();
+	readStringList(L, index, _names);
+	if (g_nancy->getGameType() < kGameTypeNancy26) {
+		for (Common::String &name : _names) {
+			name.toUppercase();
+		}
+	}
+}
+
+SoundRecord::SoundRecord(SceneContext &context) : Record(context, "ND.SoundAR") {
+	// FX1, which moves with the channel tables
+	const GameType gameType = g_nancy->getGameType();
+	if (gameType >= kGameTypeNancy29) {
+		_channel = 12;
+	} else if (gameType >= kGameTypeNancy27) {
+		_channel = 11;
+	} else if (gameType >= kGameTypeNancy22 && gameType <= kGameTypeNancy23) {
+		_channel = 16;
+	} else {
+		_channel = 14;
+	}
+}
+
+// The value, changed at random by up to the variance either way
+static double vary(double value, double variance) {
+	const double random = g_nancy->_randomSource->getRandomNumber(0xFFFF) / (double)0xFFFF;
+	return value + (random * 2.0 - 1.0) * variance;
+}
+
+void SoundRecord::pickVariation() {
+	_playVolume = CLIP(vary(_volume, _volumeVariance), 0.0, 1.0);
+	_playPitch = MAX(vary(_pitch, _pitchVariance), 0.01);
+}
+
+bool SoundRecord::getGroupType(Audio::Mixer::SoundType &type) const {
+	const Common::String &group = g_nancy->getGameType() >= kGameTypeNancy29 ? _group : _channelType;
+	if (group.equalsIgnoreCase("VOICE")) {
+		type = Audio::Mixer::kSpeechSoundType;
+	} else if (group.equalsIgnoreCase("MUSIC")) {
+		type = Audio::Mixer::kMusicSoundType;
+	} else if (group.equalsIgnoreCase("EFFECTS")) {
+		type = Audio::Mixer::kSFXSoundType;
+	} else {
+		return false;
+	}
+
+	return true;
+}
+
+void SoundRecord::playInstance() {
+	Audio::Mixer::SoundType type;
+	if (!getGroupType(type)) {
+		luaL_error(getLua(), "Sound AR cannot play an instance because its 'group' field is not a valid group");
+	}
+
+	const Common::String &name = _names[g_nancy->_randomSource->getRandomNumber(_names.size() - 1)];
+	const double volume = CLIP(vary(_volume, _volumeVariance), 0.0, 1.0);
+	Audio::SoundHandle handle;
+	if (g_nancy->_sound->playInstance(name, type, (uint16)(volume * 100.0), MAX(vary(_pitch, _pitchVariance), 0.01), handle)) {
+		_instances.push_back(handle);
+	}
+}
+
+void SoundRecord::onFrame() {
+	uint numDone = 0;
+	for (uint i = 0; i < _instances.size(); ) {
+		if (g_nancy->_sound->isInstancePlaying(_instances[i])) {
+			++i;
+		} else {
+			_instances.remove_at(i);
+			++numDone;
+		}
+	}
+
+	for (uint i = 0; i < numDone; ++i) {
+		callFunction("OnInstanceDone");
+	}
+}
+
+void SoundRecord::readChannelType(int index) {
+	lua_State *L = getLua();
+
+	if (lua_isnoneornil(L, index)) {
+		_channelType.clear();
+		return;
+	}
+
+	_channelType = luaL_checkstring(L, index);
+	if (_channelType != "VOICE" && _channelType != "EFFECTS" && _channelType != "MUSIC") {
+		luaL_error(L, "%s was passed an invalid value", "channelType");
+	}
+}
+
+// A sound without a channelType set by the script uses the type of its channel
+const char *SoundRecord::getChannelType() const {
+	if (!_channelType.empty()) {
+		return _channelType.c_str();
+	} else if (_channel >= 26 && _channel <= 29) {
+		return "VOICE";
+	} else if (_channel >= 3 && _channel <= 25) {
+		return "EFFECTS";
+	} else if (_channel <= 2) {
+		return "MUSIC";
+	}
+
+	return "";
 }
 
 // A sound that is playing while a movie gets skipped is cut short
@@ -1180,6 +2616,19 @@ void SoundRecord::onSkip() {
 		g_nancy->_sound->stopSound(_sound);
 		_endTime = 0.0;
 	}
+}
+
+bool SoundRecord::skipSpeech() {
+	if (!isActive() || !hasStarted() || _isLooping || !_isPlaying ||
+			!isVoiceChannel(_channel) ||
+			!g_nancy->_sound->isSoundPlaying(_sound)) {
+		return false;
+	}
+
+	// The record ends with its next run, and takes the caption with it
+	g_nancy->_sound->stopSound(_sound);
+	_endTime = 0.0;
+	return true;
 }
 
 void SoundRecord::runOnce() {
@@ -1194,21 +2643,45 @@ void SoundRecord::runOnce() {
 		return;
 	}
 
+	// Nancy29 varies the volume and the pitch from play to play
+	const bool isVaried = g_nancy->getGameType() >= kGameTypeNancy29;
+
 	_sound = SoundDescription();
 	_sound.name = _names[g_nancy->_randomSource->getRandomNumber(_names.size() - 1)];
 	_sound.channelID = _channel;
 	_sound.numLoops = _isLooping ? 0 : 1;
-	_sound.volume = (uint16)CLIP<int>((int)(_volume * 100.0), 0, 100);
+	_sound.volume = (uint16)CLIP<int>((int)((isVaried ? _playVolume : _volume) * 100.0), 0, 100);
 
 	g_nancy->_sound->loadSound(_sound);
-	g_nancy->_sound->playSound(_sound);
+	Audio::Mixer::SoundType type;
+	if (getGroupType(type)) {
+		g_nancy->_sound->playSound(_channel, type);
+	} else {
+		g_nancy->_sound->playSound(_sound);
+	}
+
+	const double pitch = isVaried ? _playPitch : 1.0;
+	if (pitch != 1.0) {
+		g_nancy->_sound->setRate(_channel, (uint32)(g_nancy->_sound->getBaseRate(_channel) * pitch));
+	}
 
 	_isPlaying = g_nancy->_sound->isSoundPlaying(_sound);
 	_wasPreempted = false;
+	_channelSerial = g_nancy->_sound->getChannelSerial(_channel);
 
 	// The record is done once the sound has played through, whether it loops or not
-	const double length = _isPlaying ? g_nancy->_sound->getLength(_sound).msecs() / 1000.0 : 0.0;
-	_endTime = getContext().getTime() + length;
+	_duration = _isPlaying ? g_nancy->_sound->getLength(_sound).msecs() / 1000.0 / pitch : 0.0;
+	_endTime = getContext().getTime() + _duration;
+
+#ifdef ENABLE_NANCY_V5
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		if (_isPlaying && _usesCaption) {
+			sendCaption(true);
+		}
+
+		return;
+	}
+#endif
 
 	// What the sound says is kept under its name
 	UI::NDUI::Manager *ui = NancySceneState.getNDUI();
@@ -1218,13 +2691,34 @@ void SoundRecord::runOnce() {
 	}
 }
 
+#ifdef ENABLE_NANCY_V5
+void SoundRecord::sendCaption(bool isShown) {
+	lua_State *L = getLua();
+	const int top = lua_gettop(L);
+
+	if (isShown) {
+		lua_pushstring(L, _sound.name.c_str());
+		sendMessage(L, getName(), "CC", "SetIfExists", top + 1, 1);
+	} else {
+		sendMessage(L, getName(), "CC", "Clear", top + 1, 0);
+	}
+
+	lua_settop(L, top);
+	_hasSentCaption = isShown;
+}
+#endif
+
 void SoundRecord::run(double sceneTime, double elapsedTime) {
-	// Something else taking over the channel ends the record early
-	if (_isPlaying && !_isLooping && !g_nancy->_sound->isSoundPlaying(_sound) && sceneTime < _endTime) {
+	// The sound is cut off when another sound starts on its channel, or the
+	// channel is stopped. Ending a little before its length doesn't count.
+	if (_isPlaying && g_nancy->_sound->getChannelSerial(_channel) != _channelSerial && (sceneTime < _endTime || _isLooping)) {
 		_wasPreempted = true;
 	}
 
-	if (_endTime <= sceneTime || _wasPreempted) {
+	// From Resorting to Danger on, a sound that loops keeps the record going
+	const bool hasPlayedThrough = _endTime <= sceneTime && !(_isLooping && g_nancy->getGameType() >= kGameTypeNancyDossier2);
+
+	if (hasPlayedThrough || _wasPreempted) {
 		// The caption goes with the sound, unless another one has replaced it
 		UI::NDUI::Manager *ui = NancySceneState.getNDUI();
 		if (!_caption.empty() && ui && ui->getCaption() == _caption) {
@@ -1232,6 +2726,12 @@ void SoundRecord::run(double sceneTime, double elapsedTime) {
 		}
 
 		_caption.clear();
+#ifdef ENABLE_NANCY_V5
+		if (_hasSentCaption) {
+			sendCaption(false);
+		}
+#endif
+
 		finish();
 	}
 }
@@ -1240,14 +2740,110 @@ bool SoundRecord::prepareReset() {
 	_endTime = 0.0;
 	_wasPreempted = false;
 	_isPlaying = false;
+	pickVariation();
 	return true;
+}
+
+// Scripts hand a record other sounds, or move it to another channel, and then
+// restart it. A record that plays stops when it moves.
+bool SoundRecord::setField(const Common::String &key) {
+	lua_State *L = getLua();
+
+	if (key == "channel") {
+		if (_isPlaying && hasStarted() && !isDone()) {
+			g_nancy->_sound->stopSound(_sound);
+		}
+
+		_channel = checkSoundChannel(L, 3);
+	} else if (key == "channelType" && g_nancy->getGameType() < kGameTypeNancy29) {
+		readChannelType(3);
+	} else if (key == "group") {
+		_group = lua_isnil(L, 3) ? Common::String() : Common::String(luaL_checkstring(L, 3));
+	} else if (key == "volumeVariance") {
+		_volumeVariance = luaL_checknumber(L, 3);
+	} else if (key == "pitch") {
+		_pitch = luaL_checknumber(L, 3);
+	} else if (key == "pitchVariance") {
+		_pitchVariance = luaL_checknumber(L, 3);
+	} else if (key == "PlayInstance") {
+		luaL_error(L, "Field 'PlayInstance' of sound AR is not settable");
+	} else if (key == "volume") {
+		_volume = luaL_checknumber(L, 3);
+	} else if (key == "useCC") {
+		_usesCaption = lua_toboolean(L, 3) != 0;
+	} else if (key == "loop") {
+		_isLooping = lua_toboolean(L, 3) != 0;
+	} else if (key == "sounds") {
+		readNames(L, 3);
+		if (_names.empty()) {
+			luaL_error(L, "sounds must have one or more fields in its table");
+		}
+	} else {
+		return false;
+	}
+
+	return true;
+}
+
+// sound:StopIfPlaying(), Nancy23: stops the channel, unless another sound has
+// started on it since this one did
+static int soundStopIfPlaying(lua_State *L) {
+	((SoundRecord *)checkRecord(L, 1))->stopIfPlaying();
+	return 0;
+}
+
+void SoundRecord::onStreamPaused(bool isPaused) {
+	uint16 channel = 0;
+	if (isActive() && getPlayingChannel(channel)) {
+		g_nancy->_sound->pauseSound(channel, isPaused);
+	}
+}
+
+bool SoundRecord::getPlayingChannel(uint16 &channel) const {
+	if (!_isPlaying || g_nancy->_sound->getChannelSerial(_channel) != _channelSerial ||
+			!g_nancy->_sound->isSoundPlaying(_channel)) {
+		return false;
+	}
+
+	channel = _channel;
+	return true;
+}
+
+// sound:PlayInstance(), Nancy29
+static int soundPlayInstance(lua_State *L) {
+	((SoundRecord *)checkRecord(L, 1))->playInstance();
+	return 0;
+}
+
+void SoundRecord::stopIfPlaying() {
+	if (_isPlaying && g_nancy->_sound->getChannelSerial(_channel) == _channelSerial) {
+		g_nancy->_sound->stopSound(_sound);
+	}
 }
 
 bool SoundRecord::getField(const Common::String &key) {
 	lua_State *L = getLua();
 
-	if (key == "channel") {
+	if (key == "StopIfPlaying") {
+		lua_pushcfunction(L, soundStopIfPlaying);
+	} else if (key == "channel") {
 		pushSoundChannel(L, _channel);
+	} else if (key == "channelType" && g_nancy->getGameType() < kGameTypeNancy29) {
+		lua_pushstring(L, getChannelType());
+	} else if (key == "PlayInstance") {
+		lua_pushcfunction(L, soundPlayInstance);
+	} else if (key == "group") {
+		if (_group.empty()) {
+			lua_pushnil(L);
+		} else {
+			lua_pushstring(L, _group.c_str());
+		}
+	} else if (key == "volumeVariance") {
+		lua_pushnumber(L, _volumeVariance);
+	} else if (key == "pitch") {
+		lua_pushnumber(L, _pitch);
+	} else if (key == "pitchVariance") {
+		lua_pushnumber(L, _pitchVariance);
 	} else if (key == "volume") {
 		lua_pushnumber(L, _volume);
 	} else if (key == "loop") {
@@ -1256,6 +2852,19 @@ bool SoundRecord::getField(const Common::String &key) {
 		lua_pushnumber(L, _endTime);
 	} else if (key == "preempted") {
 		lua_pushboolean(L, _wasPreempted);
+	} else if (key == "duration") {
+		lua_pushnumber(L, _duration);
+	} else if (key == "sounds") {
+		// A single sound comes back as its name
+		if (_names.size() == 1) {
+			lua_pushstring(L, _names[0].c_str());
+		} else {
+			lua_createtable(L, _names.size(), 0);
+			for (uint i = 0; i < _names.size(); ++i) {
+				lua_pushstring(L, _names[i].c_str());
+				lua_rawseti(L, -2, i + 1);
+			}
+		}
 	} else {
 		return false;
 	}
@@ -1278,6 +2887,9 @@ void TextRecord::readTable(int tableIndex) {
 
 	readField(L, tableIndex, "yOffset", _yOffset);
 	readField(L, tableIndex, "yVelocity", _yVelocity);
+	// Scripts use the opposite sign for yOffset and yVelocity
+	_yOffset = -_yOffset;
+	_yVelocity = -_yVelocity;
 	readField(L, tableIndex, "useAutotext", _usesAutotext);
 	readField(L, tableIndex, "revealAll", _revealsAll);
 
@@ -1285,8 +2897,9 @@ void TextRecord::readTable(int tableIndex) {
 	_initialYOffset = _yOffset;
 	_initialYVelocity = _yVelocity;
 
-	int fontNumber = 0;
-	int colorNumber = 0;
+	// Without a font or a color, the text uses number 4 of each
+	int fontNumber = 4;
+	int colorNumber = 4;
 	bool isBold = false;
 	readField(L, tableIndex, "fontNum", fontNumber);
 	readField(L, tableIndex, "fontColor", colorNumber);
@@ -1329,11 +2942,19 @@ void TextRecord::readTable(int tableIndex) {
 	_graphic.registerGraphics();
 }
 
+// The transform moves the text, like the scrolling lists of the UI do with theirs
 void TextRecord::applyDest() {
 	const Common::Rect dest = _dest.toRect();
-	_graphic._drawSurface.create(MAX<int>(dest.width(), 1), MAX<int>(dest.height(), 1), g_nancy->_graphics->getTransparentPixelFormat());
-	_graphic.moveTo(dest);
-	_isDirty = true;
+	const int width = MAX<int>(dest.width(), 1);
+	const int height = MAX<int>(dest.height(), 1);
+	if (_graphic._drawSurface.w != width || _graphic._drawSurface.h != height) {
+		_graphic._drawSurface.create(width, height, g_nancy->_graphics->getTransparentPixelFormat());
+		_isDirty = true;
+		_isScrollingTextDirty = true;
+	}
+
+	_graphic.moveTo(getTransformedDest(_dest, getTransform(), width, height));
+	_graphic.setNeedsRedraw(true);
 }
 
 void TextRecord::setText(const Common::String &text) {
@@ -1345,6 +2966,7 @@ void TextRecord::setText(const Common::String &text) {
 	_numRevealed = 0;
 	_shownText = _revealsAll ? _text : Common::String();
 	_isDirty = true;
+	_isScrollingTextDirty = true;
 }
 
 bool TextRecord::revealNext() {
@@ -1371,12 +2993,14 @@ bool TextRecord::revealNext() {
 	_shownText += _text.substr(_numRevealed, end - _numRevealed);
 	_numRevealed = end;
 	_isDirty = true;
+	_isScrollingTextDirty = true;
 	return true;
 }
 
 void TextRecord::run(double sceneTime, double elapsedTime) {
 	if (_element.blend(UI::NDUI::kStateNormal, (float)elapsedTime, kTextBlendRate)) {
 		_isDirty = true;
+		_isScrollingTextDirty = true;
 	}
 
 	if (_yVelocity == 0.0) {
@@ -1388,29 +3012,68 @@ void TextRecord::run(double sceneTime, double elapsedTime) {
 
 	// A text that moves is done once it has left its place
 	const Common::Rect dest = _dest.toRect();
-	const int textHeight = _element.measureTextHeight(_shownText, dest.width());
+	const int textHeight = _isScrollingTextDirty ? _element.getDrawnTextHeight(_shownText, dest.width()) : _scrollingText.h;
 	if ((_yOffset > textHeight && _yVelocity > 0.0) || (_yOffset < -dest.height() && _yVelocity < 0.0)) {
 		finish();
 	}
 }
 
 void TextRecord::onZChanged() {
-	_graphic.setScriptZ(getZ(), getContext().getZOffset());
+	_graphic.setScriptZ(getZ(), getContext(), getCreationOrder());
+}
+
+void TextRecord::registerGraphics() {
+	_graphic.registerGraphics();
 }
 
 void TextRecord::updateGraphics() {
-	_graphic.setVisible(isActive());
+	_graphic.setVisible(isActive(), false);
+	_graphic.setMasked(isMasked());
 
 	if (_isDirty) {
 		_isDirty = false;
 
-		Common::Rect area(_graphic._drawSurface.w, _graphic._drawSurface.h);
-		area.translate(0, -(int)_yOffset);
-
 		_graphic._drawSurface.clear(0);
-		_element.drawText(_graphic._drawSurface, _shownText, area, false);
+		if (!drawScrollingText()) {
+			Common::Rect area(_graphic._drawSurface.w, _graphic._drawSurface.h);
+			area.translate(0, -(int)_yOffset);
+			_element.drawText(_graphic._drawSurface, _shownText, area, false);
+		}
+
 		_graphic.setNeedsRedraw(true);
 	}
+}
+
+// Returns false for a text that fits in the record, which gets drawn as usual
+bool TextRecord::drawScrollingText() {
+	if (_yVelocity == 0.0) {
+		return false;
+	}
+
+	const int width = _graphic._drawSurface.w;
+	const int height = _graphic._drawSurface.h;
+	if (_isScrollingTextDirty) {
+		_isScrollingTextDirty = false;
+
+		const int textHeight = MAX<int>(_element.getDrawnTextHeight(_shownText, width), 1);
+		_scrollingText.create(width, textHeight, _graphic._drawSurface.format);
+		_scrollingText.clear(0);
+		if (textHeight > height) {
+			_element.drawText(_scrollingText, _shownText, Common::Rect(width, textHeight), false);
+		}
+	}
+
+	if (_scrollingText.h <= height) {
+		return false;
+	}
+
+	const int scroll = (int)_yOffset;
+	const Common::Rect source(0, MAX<int>(scroll, 0), width, MIN<int>(scroll + height, _scrollingText.h));
+	if (source.top < source.bottom) {
+		_graphic._drawSurface.copyRectToSurface(_scrollingText.rawSurface(), 0, source.top - scroll, source);
+	}
+
+	return true;
 }
 
 bool TextRecord::prepareReset() {
@@ -1438,9 +3101,9 @@ bool TextRecord::getField(const Common::String &key) {
 	if (key == "onScreen") {
 		pushRect(L, _dest);
 	} else if (key == "yOffset") {
-		lua_pushnumber(L, _yOffset);
+		lua_pushnumber(L, -_yOffset);
 	} else if (key == "yVelocity") {
-		lua_pushnumber(L, _yVelocity);
+		lua_pushnumber(L, -_yVelocity);
 	} else if (key == "RevealNext") {
 		lua_pushcfunction(L, textRevealNext);
 	} else {
@@ -1459,10 +3122,10 @@ bool TextRecord::setField(const Common::String &key) {
 	} else if (key == "text") {
 		setText(luaL_checkstring(L, 3));
 	} else if (key == "yOffset") {
-		_yOffset = luaL_checknumber(L, 3);
+		_yOffset = -luaL_checknumber(L, 3);
 		_isDirty = true;
 	} else if (key == "yVelocity") {
-		_yVelocity = luaL_checknumber(L, 3);
+		_yVelocity = -luaL_checknumber(L, 3);
 	} else {
 		return false;
 	}
@@ -1479,15 +3142,30 @@ void MovieRecord::readTable(int tableIndex) {
 		luaL_error(L, "MovieAR must be created with a movie parameter");
 	}
 
-	if (!pushField(L, tableIndex, "onScreen")) {
+	// Without an onScreen, or with an empty one, Nancy30 shows a .bk2 movie at
+	// the rect stored in its file, and any other movie whole at the top left
+	const bool hasDest = pushField(L, tableIndex, "onScreen");
+	if (!hasDest && g_nancy->getGameType() < kGameTypeNancy30) {
 		luaL_error(L, "MovieAR must be created with an 'onScreen' parameter");
 	}
 
-	_dest = checkRect(L, -1);
-	lua_pop(L, 1);
+	if (hasDest) {
+		_dest = checkRect(L, -1);
+		lua_pop(L, 1);
+	}
 
 	if (!_player.loadFile(Common::Path(_name))) {
 		luaL_error(L, "Could not load movie %s", _name.c_str());
+	}
+
+	bool isEmbeddedDest = false;
+	if (g_nancy->getGameType() >= kGameTypeNancy30 && _dest.isEmpty()) {
+		if (_player.hasEmbeddedDest()) {
+			_dest = ScriptRect(_player.getEmbeddedDest());
+			isEmbeddedDest = true;
+		} else {
+			_dest = ScriptRect(0, 0, _player.getWidth(), _player.getHeight());
+		}
 	}
 
 	_firstFrame = 0;
@@ -1497,10 +3175,51 @@ void MovieRecord::readTable(int tableIndex) {
 	readField(L, tableIndex, "pauseOnLastFrame", _pausesOnLastFrame);
 	readField(L, tableIndex, "visible", _isVisible);
 
+	// The whole of every frame, unless a part of it is asked for
+	// An empty source, like Nancy26's (-1, -1, -1, -1), shows the whole movie
+	_source = ScriptRect(0, 0, _player.getWidth(), _player.getHeight());
+	if (isEmbeddedDest) {
+		// The frames can be larger than the stored rect; their top left part shows
+		_source = ScriptRect(0, 0, _dest.width(), _dest.height());
+	} else if (pushField(L, tableIndex, "source")) {
+		if (!checkRect(L, -1).isEmpty()) {
+			_source = checkRect(L, -1);
+		}
+
+		lua_pop(L, 1);
+	}
+
+	double volume = 0.85;
+	readField(L, tableIndex, "volume", volume);
+	_player.setVolume((byte)CLIP<int>((int)(volume * 100.0 + 0.5), 0, 100));
+
+	// Nancy28 plays the movies at 15 frames a second, or what the script asks
+	// for, whatever the frame rate of the movie
+	if (g_nancy->getGameType() >= kGameTypeNancy28) {
+		_frameRate = 15.0;
+		readField(L, tableIndex, "framerate", _frameRate);
+		_player.setFrameRate(_frameRate);
+	}
+
+	// true is forever, false once, and a number that many times
+	lua_getfield(L, tableIndex, "loop");
+	if (lua_isboolean(L, -1)) {
+		_numLoops = lua_toboolean(L, -1) ? 0 : 1;
+	} else if (lua_isnumber(L, -1)) {
+		_numLoops = lua_tointeger(L, -1);
+	} else if (!lua_isnil(L, -1)) {
+		luaL_error(L, "loop must be either a boolean or a number");
+	}
+
+	lua_pop(L, 1);
+
+	if (pushField(L, tableIndex, "modColor")) {
+		_modColor = checkColor(L, -1);
+		lua_pop(L, 1);
+	}
+
 	_graphic.init();
-	_graphic._drawSurface.create(_player.getWidth(), _player.getHeight(), g_nancy->_graphics->getScreenPixelFormat());
 	_graphic.setVisible(false);
-	applyPosition();
 	onZChanged();
 	_graphic.registerGraphics();
 
@@ -1508,54 +3227,158 @@ void MovieRecord::readTable(int tableIndex) {
 	drawFrame();
 }
 
-void MovieRecord::applyPosition() {
-	_graphic.moveTo(getTransformedDest(_dest, getTransform(), _player.getWidth(), _player.getHeight()));
+// Scripts hide a movie that keeps playing with a color without any alpha
+bool MovieRecord::isSeeThrough() const {
+	return (applyAlpha(_modColor) >> 24) == 0;
 }
 
 void MovieRecord::drawFrame() {
-	// A frame with see-through parts would let the one before it show
-	_graphic._drawSurface.clear(0);
-	_player.drawFrame(_graphic._drawSurface, Common::Point(0, 0));
-	_graphic.setNeedsRedraw(true);
+	_hasFrame = false;
+	applyPosition();
+}
+
+void MovieRecord::applyPosition() {
+	if (isSeeThrough()) {
+		return;
+	}
+
+	const ScriptMatrix transform = getTransform();
+	const Common::Rect source = _source.toRect();
+	const uint32 modColor = takeModColor(_modColor);
+
+	if (transform.isTranslation() && modColor == kNoModColor) {
+		Graphics::ManagedSurface &surface = _graphic._drawSurface;
+		if (surface.w != source.width() || surface.h != source.height() || !surface.getPixels()) {
+			surface.create(MAX<int>(source.width(), 1), MAX<int>(source.height(), 1), g_nancy->_graphics->getScreenPixelFormat());
+		}
+
+		// A frame with see-through parts would let the one before it show
+		surface.clear(0);
+		_player.drawFrame(surface, source, Common::Point(0, 0));
+		_graphic.setTransparent(false);
+		_graphic.moveTo(getTransformedDest(_dest, transform, source.width(), source.height()));
+		_graphic.setNeedsRedraw(true);
+		return;
+	}
+
+	// Turned, resized or colored frames get drawn anew, the way overlays are
+	if (!_hasFrame || _frame.w != _player.getWidth() || _frame.h != _player.getHeight()) {
+		if (_frame.w != _player.getWidth() || _frame.h != _player.getHeight()) {
+			_frame.create(_player.getWidth(), _player.getHeight(), g_nancy->_graphics->getScreenPixelFormat());
+		}
+
+		_frame.clear(0);
+		_player.drawFrame(_frame, Common::Point(0, 0));
+		_hasFrame = true;
+	}
+
+	Common::Rect clipped = source;
+	clipped.clip(Common::Rect(_frame.w, _frame.h));
+	placePicture(_graphic, _frame, clipped, _dest, transform, modColor);
 }
 
 void MovieRecord::runOnce() {
 	_player.playRange(_firstFrame, _lastFrame);
 	drawFrame();
+	_hasJustStarted = true;
 }
 
-// A movie that plays through and ends
+// A movie that plays through and ends; one that loops forever never does. One
+// that stops on its last frame can be skipped until it gets there: Nancy23's
+// cinematics are made of those, each starting when the one before is done.
 bool MovieRecord::isSkippable() const {
-	return isActive() && hasStarted() && !_isPaused && !_pausesOnLastFrame;
+	if (!isActive() || !hasStarted() || _isPaused || _numLoops == 0) {
+		return false;
+	}
+
+#ifdef ENABLE_NANCY_V5
+	// Nancy26: not while the movie is hidden or paused with what it hangs under
+	if (g_nancy->getGameType() >= kGameTypeNancy26 && (!isNodeVisible() || isNodePaused())) {
+		return false;
+	}
+#endif
+
+	return !_pausesOnLastFrame || (_player.isRangePlaying() && !_hasCalledOnPause);
+}
+
+// The sound of a movie that a script didn't pause holds still with its stream
+void MovieRecord::onStreamPaused(bool isPaused) {
+	if (isActive() && !_isPaused) {
+		_player.pauseVideo(isPaused);
+	}
 }
 
 void MovieRecord::run(double sceneTime, double elapsedTime) {
-	// A movie that is being skipped moves on by one frame every time it runs
-	if (getContext().isSkipping() && isSkippable()) {
-		const int frame = _player.getCurrentFrame();
-		bool hasEnded = frame == _lastFrame;
+	// The frame that starts a movie went by before it, and can be a long one
+	// when the scene just loaded. The movie would skip ahead of its sound.
+	const double playedTime = _hasJustStarted ? 0.0 : elapsedTime;
+	_hasJustStarted = false;
 
-		if (!hasEnded && _lastFrame > frame) {
-			hasEnded = _player.decodeNextFrame() == nullptr;
-		} else if (!hasEnded) {
-			_player.goToFrame(frame - 1);
+	// A movie that is being skipped moves on by one frame every time it runs, so
+	// the scripts that wait for one of its frames still see it. The frames on the
+	// way aren't decoded, and neither is the last one: a skipped movie ends, which
+	// hides it, and getting to its last frame can take decoding all of it, since
+	// some have no other keyframe than their first one.
+	if (getContext().isSkipping() && canBeSkipped()) {
+		if (_skipFrame < 0) {
+			_skipFrame = _player.getCurrentFrame();
 		}
 
-		if (hasEnded) {
-			_player.goToFrame(_lastFrame);
-			drawFrame();
-			_endTime = sceneTime;
-			finish();
+		if (_skipFrame < _lastFrame) {
+			++_skipFrame;
+		} else if (_skipFrame > _lastFrame) {
+			--_skipFrame;
+		}
+
+		// The movie stays at its last frame for the scripts until it starts over.
+		// One that stops there shows it, as the next movie takes over from it.
+		if (_skipFrame == _lastFrame) {
+			if (_pausesOnLastFrame) {
+				_player.goToFrame(_lastFrame);
+				drawFrame();
+				_hasCalledOnPause = true;
+				callFunction("OnPause");
+			} else {
+				_endTime = sceneTime;
+				finish();
+			}
 		}
 
 		return;
 	}
 
-	if (!_isPaused && _player.update()) {
+	_skipFrame = -1;
+
+	if (_player.advance(playedTime * 1000.0)) {
 		drawFrame();
 	}
 
 	if (_player.isRangePlaying()) {
+		return;
+	}
+
+	// A movie of one frame shows it for as long as a frame lasts before it is
+	// played, as the original's player waits for the next frame first. The
+	// parallax scenes of the Dossier games pause their layers in the meantime,
+	// which keeps them up.
+	if (_firstFrame == _lastFrame && _singleFrameTime * 1000.0 < _player.getFrameMillis()) {
+		_singleFrameTime += playedTime;
+		return;
+	}
+
+	_singleFrameTime = 0.0;
+
+	// Another time through
+	++_numPlayed;
+	if (_numLoops == 0 || _numPlayed < _numLoops) {
+		// Nancy30 shows still pictures as looping movies of one frame, which would
+		// be decoded again every time through
+		if (_firstFrame == _lastFrame && _player.getCurrentFrame() == _firstFrame) {
+			return;
+		}
+
+		_player.playRange(_firstFrame, _lastFrame);
+		drawFrame();
 		return;
 	}
 
@@ -1571,6 +3394,9 @@ void MovieRecord::run(double sceneTime, double elapsedTime) {
 
 bool MovieRecord::prepareReset() {
 	_endTime = 0.0;
+	_numPlayed = 0;
+	_skipFrame = -1;
+	_singleFrameTime = 0.0;
 	_isPaused = false;
 	_hasCalledOnPause = false;
 	_player.goToFrame(_firstFrame);
@@ -1578,12 +3404,36 @@ bool MovieRecord::prepareReset() {
 	return true;
 }
 
+void MovieRecord::registerGraphics() {
+	_graphic.registerGraphics();
+}
+
 void MovieRecord::onZChanged() {
-	_graphic.setScriptZ(getZ(), getContext().getZOffset());
+	_graphic.setScriptZ(getZ(), getContext(), getCreationOrder());
 }
 
 void MovieRecord::updateGraphics() {
-	_graphic.setVisible(isActive() && _isVisible);
+	if (hasAlphaChanged() && isShown()) {
+		applyPosition();
+	}
+
+	_graphic.setMasked(isMasked());
+	_graphic.setClipRect(getScreenClip());
+	_graphic.setVisible(isShown() && _isVisible && !isSeeThrough(), false);
+}
+
+void MovieRecord::describeState(Common::Array<Common::String> &lines) const {
+	lines.push_back(Common::String::format("[movie] frame %d of %d..%d, %s%s, played %d of %d",
+		_player.getCurrentFrame(), _firstFrame, _lastFrame,
+		_player.isRangePlaying() ? "playing" : "stopped", _isPaused ? ", paused" : "",
+		_numPlayed, _numLoops));
+
+	const Common::Rect position = _graphic.getScreenPosition();
+	lines.push_back(Common::String::format("[graphic] %s, %s, z %u, at (%d, %d, %d, %d), surface %dx%d%s",
+		g_nancy->_graphics->hasObject(&_graphic) ? "registered" : "NOT registered",
+		_graphic.isVisible() ? "visible" : "hidden", _graphic.getZOrder(),
+		position.left, position.top, position.right, position.bottom,
+		_graphic._drawSurface.w, _graphic._drawSurface.h, isSeeThrough() ? ", see-through" : ""));
 }
 
 // movie:Play() and movie:Pause()
@@ -1612,18 +3462,28 @@ bool MovieRecord::getField(const Common::String &key) {
 		lua_pushstring(L, _name.c_str());
 	} else if (key == "onScreen") {
 		pushRect(L, _dest);
+	} else if (key == "source") {
+		pushRect(L, _source);
+	} else if (key == "modColor") {
+		pushColor(L, _modColor);
 	} else if (key == "Play") {
 		lua_pushcfunction(L, moviePlay);
 	} else if (key == "Pause") {
 		lua_pushcfunction(L, moviePause);
 	} else if (key == "paused") {
-		lua_pushboolean(L, _isPaused || !_player.isRangePlaying());
+		// Up to Nancy20, a movie that hasn't started yet isn't paused: Dossier1
+		// scene 3010 shows its pillars until a light movie stops on its last frame
+		if (g_nancy->getGameType() < kGameTypeNancyDossier2) {
+			lua_pushboolean(L, _isPaused || _hasCalledOnPause);
+		} else {
+			lua_pushboolean(L, _isPaused || !_player.isRangePlaying());
+		}
 	} else if (key == "pauseOnLastFrame") {
 		lua_pushboolean(L, _pausesOnLastFrame);
 	} else if (key == "visible") {
 		lua_pushboolean(L, _isVisible);
 	} else if (key == "frame") {
-		lua_pushinteger(L, _player.getCurrentFrame());
+		lua_pushinteger(L, _skipFrame >= 0 ? _skipFrame : _player.getCurrentFrame());
 	} else if (key == "endTime") {
 		lua_pushnumber(L, _endTime);
 	} else if (key == "firstFrame") {
@@ -1632,6 +3492,8 @@ bool MovieRecord::getField(const Common::String &key) {
 		lua_pushinteger(L, _lastFrame);
 	} else if (key == "frames") {
 		lua_pushinteger(L, _player.getFrameCount());
+	} else if (key == "framerate" && _frameRate > 0.0) {
+		lua_pushnumber(L, _frameRate);
 	} else {
 		return false;
 	}
@@ -1642,11 +3504,36 @@ bool MovieRecord::getField(const Common::String &key) {
 bool MovieRecord::setField(const Common::String &key) {
 	lua_State *L = getLua();
 
+	// Scripts set these every frame, mostly to what they already are
 	if (key == "onScreen") {
-		_dest = checkRect(L, 3);
-		applyPosition();
+		const ScriptRect dest = checkRect(L, 3);
+		if (dest != _dest) {
+			_dest = dest;
+			applyPosition();
+		}
+	} else if (key == "source" && g_nancy->getGameType() >= kGameTypeNancyDossier2) {
+		// Earlier games only take the part of the frames when the movie is made
+		const ScriptRect source = checkRect(L, 3);
+		if (source != _source) {
+			_source = source;
+			drawFrame();
+		}
+	} else if (key == "modColor") {
+		const uint32 modColor = checkColor(L, 3);
+		if (modColor != _modColor) {
+			_modColor = modColor;
+			drawFrame();
+		}
+	} else if (key == "volume") {
+		_player.setVolume((byte)CLIP<int>((int)(luaL_checknumber(L, 3) * 100.0 + 0.5), 0, 100));
 	} else if (key == "pauseOnLastFrame") {
 		_pausesOnLastFrame = lua_toboolean(L, 3) != 0;
+	} else if (key == "framerate" && g_nancy->getGameType() >= kGameTypeNancy28) {
+		_frameRate = MAX(luaL_checknumber(L, 3), 0.0);
+		_player.setFrameRate(_frameRate);
+	} else if (key == "paused") {
+		// Nancy24 has no Play and Pause anymore
+		_isPaused = lua_toboolean(L, 3) != 0;
 	} else if (key == "visible") {
 		_isVisible = lua_toboolean(L, 3) != 0;
 	} else if (key == "frame") {

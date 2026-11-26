@@ -27,10 +27,10 @@
 namespace NGI {
 
 class PictureObject;
-class Picture;
+class Texture;
 class Sound;
 
-struct FileInfo {
+struct SavegameItem {
 	char filename[260];
 	bool empty;
 	char date[16];
@@ -53,7 +53,7 @@ class BaseModalObject {
 	void deleteObject();
 
 	virtual bool pollEvent() = 0;
-	virtual bool handleMessage(ExCommand *message) = 0;
+	virtual bool handleMessage(Command *message) = 0;
 	virtual bool init(int counterdiff) = 0;
 	virtual void update() = 0;
 
@@ -72,7 +72,7 @@ class ModalIntro : public BaseModalObject {
 	~ModalIntro() override;
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	void update() override;
 	void saveload() override {}
@@ -92,7 +92,7 @@ class ModalIntroDemo : public BaseModalObject {
 	~ModalIntroDemo() override;
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	void update() override;
 	void saveload() override {}
@@ -104,7 +104,7 @@ class ModalVideoPlayer : public BaseModalObject {
 public:
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override { return true; }
+	bool handleMessage(Command *message) override { return true; }
 	bool init(int counterdiff) override { return false; }
 	void update() override {}
 	void saveload() override {}
@@ -115,7 +115,7 @@ private:
 	Video::AVIDecoder _decoder;
 };
 
-class ModalMap : public BaseModalObject {
+class MapWindow : public BaseModalObject {
 	Scene *_mapScene;
 	PictureObject *_pic;
 	PictureObject *_picI03;
@@ -133,11 +133,11 @@ class ModalMap : public BaseModalObject {
 	Common::Rect _rect2;
 
  public:
-	ModalMap();
-	~ModalMap() override;
+	MapWindow();
+	~MapWindow() override;
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	virtual bool init2(int counterdiff);
 	void update() override;
@@ -151,7 +151,7 @@ private:
 	bool checkScenePass(PreloadItem *item);
 	bool isSceneEnabled(int sceneId);
 
-	int findMapSceneId(int picId);
+	int getSceneId(int picId);
 	void clickButton(PictureObject *pic);
 };
 
@@ -165,7 +165,7 @@ class ModalFinal : public BaseModalObject {
 	~ModalFinal() override;
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	void update() override;
 	void saveload() override {}
@@ -173,7 +173,7 @@ class ModalFinal : public BaseModalObject {
 	void unloadScenes();
 };
 
-class ModalCredits : public BaseModalObject {
+class CreditsController : public BaseModalObject {
 	Scene *_sceneTitles;
 	PictureObject *_creditsPic;
 	bool _fadeIn;
@@ -185,11 +185,11 @@ class ModalCredits : public BaseModalObject {
 	int _maxY;
 
  public:
-	ModalCredits();
-	~ModalCredits() override;
+	CreditsController();
+	~CreditsController() override;
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	void update() override;
 	void saveload() override {}
@@ -201,7 +201,7 @@ struct MenuArea {
 	PictureObject *picObjL;
 };
 
-class ModalMainMenu : public BaseModalObject {
+class MainMenu : public BaseModalObject {
 public:
 	Scene *_scene;
 	int _hoverAreaId;
@@ -210,25 +210,25 @@ public:
 	int _musicSliderIdx;
 	MenuArea *_lastArea;
 	int _sliderOffset;
-	int _mfield_34;
+	int _restartOnContinue;
 	Common::Rect _screct;
 	int _bgX;
 	int _bgY;
 	int _debugKeyCount;
 
 public:
-	ModalMainMenu();
-	~ModalMainMenu() override {}
+	MainMenu();
+	~MainMenu() override {}
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	void update() override;
 	void saveload() override {}
 
 private:
 	bool isSaveAllowed();
-	void enableDebugMenuButton();
+	void enableDebugMenu();
 	void setSliderPos();
 	void enableDebugMenu(char c);
 	int checkHover(Common::Point &point);
@@ -241,7 +241,7 @@ private:
 class ModalHelp : public BaseModalObject {
 public:
 	Scene *_mainMenuScene;
-	Picture *_bg;
+	Texture *_bg;
 	bool _isRunning;
 	Common::Rect _rect;
 	int _hx;
@@ -252,7 +252,7 @@ public:
 	~ModalHelp() override;
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	void update() override;
 	void saveload() override {}
@@ -266,7 +266,7 @@ public:
 	~ModalQuery() override;
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	void update() override;
 	void saveload() override {}
@@ -284,13 +284,13 @@ private:
 
 };
 
-class ModalSaveGame : public BaseModalObject {
+class SaveGameDlg : public BaseModalObject {
 public:
-	ModalSaveGame();
-	~ModalSaveGame() override;
+	SaveGameDlg();
+	~SaveGameDlg() override;
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	void update() override;
 	void saveload() override;
@@ -302,7 +302,7 @@ public:
 	void processKey(int action);
 
 	char *getSaveName();
-	bool getFileInfo(int slot, FileInfo *fileinfo);
+	bool getFileInfo(int slot, SavegameItem *fileinfo);
 
 	Common::Rect _rect;
 	int _oldBgX;
@@ -319,7 +319,7 @@ public:
 	Scene *_menuScene;
 	int _mode;
 	ModalQuery *_queryDlg;
-	Common::Array <FileInfo> _files;
+	Common::Array <SavegameItem> _files;
 	Common::Array <PictureObject *> _arrayL;
 	Common::Array <PictureObject *> _arrayD;
 	int _queryRes;
@@ -340,7 +340,7 @@ class ModalDemo : public BaseModalObject {
 	bool launch();
 
 	bool pollEvent() override { return true; }
-	bool handleMessage(ExCommand *message) override;
+	bool handleMessage(Command *message) override;
 	bool init(int counterdiff) override;
 	bool init2(int counterdiff);
 	void update() override;

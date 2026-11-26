@@ -88,7 +88,9 @@ void SpiderEngine::runMatrix(Code *code) {
 		v = new MVideo("puz_ally/matintro.smk", Common::Point(0, 0), false, false, false);
 	}
 
-	playVideo(*v);
+	disableCursor();
+	runIntro(*v);
+	defaultCursor();
 	delete v;
 	Graphics::Surface *menu;
 	Common::Rect menuArea(0, 0, 0, 0);
@@ -103,6 +105,8 @@ void SpiderEngine::runMatrix(Code *code) {
 
 	menuArea = Common::Rect(0, 0, menu->w, menu->h);
 	drawImage(*menu, 0, 0, transparent);
+	if (isDemo())
+		playMusic("demo/sound.lib/hpuzloop.raw");
 
 	while (!shouldQuit() && _nextLevel.empty()) {
 
@@ -140,7 +144,7 @@ void SpiderEngine::runMatrix(Code *code) {
 				}
 
 				if (isDemo())
-					playSound("sixdemo/demo/sound.lib/matrix.raw", 1);
+					playSound("demo/sound.lib/matrix.raw", 1);
 				else
 					playSound("sound.lib/matrix.raw", 1);
 
@@ -172,7 +176,7 @@ void SpiderEngine::runMatrix(Code *code) {
 
 		if (found) {
 			if (isDemo())
-				playSound("sixdemo/demo/sound.lib/matrix_2.raw", 1);
+				playSound("demo/sound.lib/matrix_2.raw", 1);
 			else {
 				MVideo video("cine/shv001s.smk", Common::Point(0, 0), false, false, false);
 				runIntro(video);

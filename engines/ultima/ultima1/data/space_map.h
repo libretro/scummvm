@@ -1,0 +1,283 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef ULTIMA1_DATA_SPACE_MAP_H
+#define ULTIMA1_DATA_SPACE_MAP_H
+
+#include "common/scummsys.h"
+#include "common/random.h"
+#include "common/serializer.h"
+
+namespace Ultima {
+namespace Ultima1 {
+namespace Data {
+
+// The galaxy is a 7x7 grid of sectors
+constexpr int SPACE_SECTOR_COUNT = 7;
+
+// The station sector, where the player arrives and can dock/land
+constexpr int SPACE_STATION_X = 3;
+constexpr int SPACE_STATION_Y = 3;
+
+// Up to 4 ships can be present in a sector at once (parked fighters, the
+// player's own ship, spawned attackers)
+constexpr int SPACE_SHIPS_PER_SECTOR = 4;
+
+// The overhead sector view's playable area - a ship drifting past this
+// seamlessly wraps around to the opposite edge, Asteroids-style. Matches
+// the drawable viewport setupView itself clears each frame (its own inset
+// frame within the outer game border, not the outer border itself), so a
+// ship's sprite is only ever actually invisible right as it wraps rather
+// than jumping there from comfortably mid-screen
+constexpr int SPACE_SECTOR_MIN_X = 16, SPACE_SECTOR_MAX_X = 303;
+constexpr int SPACE_SECTOR_MIN_Y = 16, SPACE_SECTOR_MAX_Y = 143;
+constexpr int SPACE_SECTOR_WRAP_WIDTH = SPACE_SECTOR_MAX_X - SPACE_SECTOR_MIN_X + 1;
+constexpr int SPACE_SECTOR_WRAP_HEIGHT = SPACE_SECTOR_MAX_Y - SPACE_SECTOR_MIN_Y + 1;
+
+// The station's fixed screen position/size within its own sector (3,3) -
+// drawStationGraphic's (x,y) and the raw bitmap's dimensions
+constexpr int SPACE_STATION_SCREEN_X = 60, SPACE_STATION_SCREEN_Y = 75;
+constexpr int SPACE_STATION_WIDTH = 21, SPACE_STATION_HEIGHT = 18;
+
+// The star/heat hazard and docking/encounter anchor bitmaps' dimensions, and
+// the raw bitmaps of all three sector graphics (row-major, 0 is transparent).
+// The collision checks need the same pixels the overhead view draws
+constexpr int SPACE_STAR_WIDTH = 19, SPACE_STAR_HEIGHT = 18;
+constexpr int SPACE_PLANET_WIDTH = 20, SPACE_PLANET_HEIGHT = 20;
+extern const int8 SPACE_STAR_BITMAP[SPACE_STAR_HEIGHT][SPACE_STAR_WIDTH];
+extern const int8 SPACE_PLANET_BITMAP[SPACE_PLANET_HEIGHT][SPACE_PLANET_WIDTH];
+extern const int8 SPACE_STATION_BITMAP[SPACE_STATION_HEIGHT][SPACE_STATION_WIDTH];
+
+// Direction names shown in the cockpit view, indexed by Data::Direction
+// (1-4): the arrow keys read as Left / Right / Climb / Dive rather than the
+// overhead view's West / East / North / South
+extern const char *SPACE_COCKPIT_DIRECTION_NAMES[5];
+
+// Ship types (SHIP_* in the disassembly)
+enum SpaceShipType {
+	SHIP_NONE = -1,
+	SHIP_SHUTTLE = 0,			// the only type that can land back on Sosaria
+	SHIP_LARGE_FIGHTER = 1,		// "Fighter 1" - high fuel
+	SHIP_SMALL_FIGHTER = 2		// "Fighter 2" - heavy shields
+};
+
+// A ship icon's facing in the overhead sector view (distinct from the
+// cockpit's Data::Direction) - also the order of drawShipSprite's own
+// per-facing jump table
+enum SpaceShipFacing {
+	FACING_LEFT = 0,
+	FACING_RIGHT = 1,
+	FACING_UP = 2,
+	FACING_DOWN = 3
+};
+
+// Unit vector for a given facing, indexed by SpaceShipFacing
+extern const int16 SPACE_FACING_DX[4];
+extern const int16 SPACE_FACING_DY[4];
+
+// The 4 station/encounter docking edges (EDGE_NAMES), and the [edge][shipType]
+// offsets from a sector's anchor for a ship of that type parked at that edge
+// (checkOverlapX/Y's own DELTA_X/DELTA_Y tables)
+constexpr int SPACE_DOCK_EDGE_COUNT = 4;
+extern const int16 SPACE_DOCK_DELTA_X[SPACE_DOCK_EDGE_COUNT][3];
+extern const int16 SPACE_DOCK_DELTA_Y[SPACE_DOCK_EDGE_COUNT][3];
+
+// The facing a ship parked at a given edge should have - always facing
+// inward toward the station/anchor (checkOverlapFacing)
+extern const SpaceShipFacing SPACE_DOCK_EDGE_FACING[SPACE_DOCK_EDGE_COUNT];
+
+// Edge names used in docking prompts/messages (EDGE_NAMES)
+extern const char *SPACE_DOCK_EDGE_NAMES[SPACE_DOCK_EDGE_COUNT];
+
+// Number of stages a cockpit-view combat encounter's target progresses
+// through as it closes in (targetApproachStage, 0..6)
+constexpr int SPACE_TARGET_STAGE_COUNT = 7;
+
+// Per-stage hit-test window for the Fire command (handleFireCommand): a
+// shot only registers as a hit if (viewCenterX - targetX) falls between
+// SPACE_TARGET_HIT_MIN_X[stage] and SPACE_TARGET_HIT_MAX_X[stage], and
+// likewise for Y - the window widens on X and tightens toward zero on Y
+// as the target closes in
+extern const int16 SPACE_TARGET_HIT_MIN_X[SPACE_TARGET_STAGE_COUNT];
+extern const int16 SPACE_TARGET_HIT_MAX_X[SPACE_TARGET_STAGE_COUNT];
+extern const int16 SPACE_TARGET_HIT_MIN_Y[SPACE_TARGET_STAGE_COUNT];
+extern const int16 SPACE_TARGET_HIT_MAX_Y[SPACE_TARGET_STAGE_COUNT];
+
+/**
+ * Max fuel/shield for a ship type (getShipFuelCapacity/getShipShieldCapacity)
+ */
+int16 shipFuelCapacity(int shipType);
+int16 shipShieldCapacity(int shipType);
+
+/**
+ * A single ship occupying one of a sector's ship slots
+ */
+struct SpaceMapShip {
+	int16 _x = 0, _y = 0;
+	int16 _shipType = SHIP_NONE;
+	int16 _fuel = 0;
+	int16 _shield = 0;
+	int16 _facing = 0;
+
+	void synchronize(Common::Serializer &s);
+};
+
+/**
+ * One sector of the galaxy grid
+ */
+struct SpaceMapCell {
+	// Hostile ships that will attack in this sector (0-3)
+	int16 _enemyCount = 0;
+	// A star / heat hazard - flying within 25 units destroys the ship.
+	// (0, 0) means none in this sector
+	int16 _hazardX = 0, _hazardY = 0;
+	// The docking / encounter anchor that any ships in the sector cluster
+	// around (the space station itself in sector 3,3). (0, 0) means the
+	// sector has no ships
+	int16 _anchorX = 0, _anchorY = 0;
+
+	SpaceMapShip _ships[SPACE_SHIPS_PER_SECTOR];
+
+	void synchronize(Common::Serializer &s);
+
+	/**
+	 * Returns which docking edge (0-3) the given ship slot is currently
+	 * sitting in - an exact position and inward-facing match for its own
+	 * ship type - or -1 if it isn't docked anywhere (collisionCheck)
+	 */
+	int dockedEdge(int shipIndex) const;
+
+	/**
+	 * Returns which ship slot (0-3) is currently docked at the given edge,
+	 * or -1 if none is (findDockedShipAtEdge)
+	 */
+	int shipAtEdge(int edge) const;
+};
+
+/**
+ * The whole galaxy. Regenerated from the savegame's random seed each time
+ * the player lifts off into space (it isn't itself part of the savegame),
+ * matching the original SPACE.EXE's setupSpaceMap
+ */
+struct SpaceMap {
+private:
+	uint16 _randomSeed = 0;
+
+	/**
+	 * The original's own LFSR, seeded from the savegame - kept separate
+	 * from the engine RNG so a given seed always lays out the same galaxy
+	 */
+	int getRandomNumber(int minVal, int maxVal);
+
+	/**
+	 * Rolls the contents of one sector (setupSpaceSector)
+	 */
+	void setupSector(int x, int y);
+
+public:
+	// Indexed [x][y], matching the original's column-major layout
+	SpaceMapCell _sectors[SPACE_SECTOR_COUNT][SPACE_SECTOR_COUNT];
+
+	/**
+	 * (Re)generates the whole galaxy
+	 */
+	void setup();
+
+	/**
+	 * Synchronizes the current state of every sector - called from the
+	 * savegame while the player is actually in space, since the galaxy
+	 * isn't just regenerated from the seed once ships/fuel/hazards diverge
+	 */
+	void synchronize(Common::Serializer &s);
+};
+
+// The highest cockpit flight speed, and how many screen refreshes (60 a
+// second) a cockpit frame waits for at each speed - so frames come faster as
+// the ship does. The engine ticks 20 times a second, 3 refreshes each
+constexpr int SPACE_COCKPIT_MAX_SPEED = 8;
+constexpr int SPACE_COCKPIT_VBLANKS_PER_TICK = 3;
+extern const int SPACE_COCKPIT_FRAME_DELAY[SPACE_COCKPIT_MAX_SPEED + 1];
+
+// The cockpit view's warp starfield holds this many stars
+constexpr int SPACE_STAR_COUNT = 40;
+
+/**
+ * The panning warp starfield drawn in the first-person cockpit view -
+ * SPACE.EXE's setupStars / advanceStarfield. Purely visual (not saved)
+ */
+struct SpaceStarfield {
+	// The viewport centre the stars radiate from and the aiming crosshair
+	// sits at (viewCenterX/Y), and the pan velocity applied to it each
+	// frame while steering (viewPanDeltaX/Y)
+	int16 _centerX = 0x9f, _centerY = 0x4f;
+	int16 _panX = 0, _panY = 0;
+
+	// Each star is an offset from the centre that accelerates outward
+	int16 _starX[SPACE_STAR_COUNT] = {};
+	int16 _starY[SPACE_STAR_COUNT] = {};
+
+	// Where each star sat on screen after the last advance(), and whether it
+	// was in view rather than just respawned - what the hyperjump needs to
+	// leave trails behind them or erase them again
+	int16 _prevX[SPACE_STAR_COUNT] = {};
+	int16 _prevY[SPACE_STAR_COUNT] = {};
+	bool _visible[SPACE_STAR_COUNT] = {};
+
+	SpaceStarfield();
+
+	/**
+	 * Fresh random stars, centre and pan back to their defaults (setupStars)
+	 */
+	void reset();
+
+	/**
+	 * Replaces every star with new ones rolled from a seed. The same seed
+	 * always gives the same stars, and the same ones replacing them as they
+	 * leave the view, so a run of advance() calls can be replayed exactly
+	 */
+	void reseed(uint32 seed);
+
+	/**
+	 * One frame: every star drifts further from the centre (respawning at
+	 * an edge once it leaves the viewport), then the centre pans by the
+	 * current pan velocity, which is zeroed on hitting a viewport edge
+	 * (advanceStarfield, normal-cruise path)
+	 */
+	void advance();
+
+	/**
+	 * True if a screen point is inside the cockpit viewport (starWithinView)
+	 */
+	static bool withinView(int x, int y) {
+		return x > 20 && x < 300 && y > 20 && y < 140;
+	}
+
+private:
+	Common::RandomSource _rnd;
+
+	void spawnStar(int index);
+};
+
+} // namespace Data
+} // namespace Ultima1
+} // namespace Ultima
+
+#endif

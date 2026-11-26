@@ -32,7 +32,6 @@
 #include "engines/grim/costume/chore.h"
 #include "engines/grim/costume/head.h"
 #include "engines/grim/emi/costume/emianim_component.h"
-#include "engines/grim/emi/costume/emimesh_component.h"
 #include "engines/grim/emi/costume/emiskel_component.h"
 #include "engines/grim/costume/main_model_component.h"
 #include "engines/grim/costume/colormap_component.h"
@@ -220,7 +219,7 @@ Component *Costume::loadComponent (tag32 tag, Component *parent, int parentID, c
 		return new MeshComponent(parent, parentID, name, tag);
 	else if (tag == MKTAG('L','U','A','V'))
 		return new LuaVarComponent(parent, parentID, name, tag);
-	else if (tag == MKTAG('I','M','L','S'))
+	else if (tag == MKTAG('I','M','L','S') || tag == MKTAG('I','M','S','S'))
 		return new SoundComponent(parent, parentID, name, tag);
 	else if (tag == MKTAG('B','K','N','D'))
 		return new BitmapComponent(parent, parentID, name, tag);
@@ -359,7 +358,7 @@ void Costume::setColormap(const Common::String &map) {
 	_cmap = g_resourceloader->getColormap(map);
 	for (int i = 0; i < _numComponents; i++)
 		if (_components[i])
-			_components[i]->setColormap(nullptr);
+			_components[i]->refreshColormap();
 }
 
 void Costume::stopChores(bool ignoreLoopingChores, int msecs) {
@@ -422,17 +421,12 @@ void Costume::draw() {
 			_components[i]->draw();
 }
 
-void Costume::getBoundingBox(int *x1, int *y1, int *x2, int *y2) {
+void Costume::getBoundingBox(const Math::Matrix4 &matrix, ScreenBounds &bounds) {
 	for (int i = 0; i < _numComponents; i++) {
 		if (_components[i] &&(_components[i]->isComponentType('M','M','D','L') ||
 							  _components[i]->isComponentType('M','O','D','L'))) {
 			ModelComponent *c = static_cast<ModelComponent *>(_components[i]);
-			c->getBoundingBox(x1, y1, x2, y2);
-		}
-
-		if (_components[i] &&(_components[i]->isComponentType('m','e','s','h'))) {
-			EMIMeshComponent *c = static_cast<EMIMeshComponent *>(_components[i]);
-			c->getBoundingBox(x1, y1, x2, y2);
+			c->getBoundingBox(matrix, bounds);
 		}
 	}
 }

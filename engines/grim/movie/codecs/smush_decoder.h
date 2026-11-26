@@ -22,30 +22,29 @@
 #ifndef GRIM_SMUSH_DECODER_H
 #define GRIM_SMUSH_DECODER_H
 
-#include "audio/audiostream.h"
+#include "common/stream.h"
 
 #include "video/video_decoder.h"
 
 #include "graphics/surface.h"
 
-namespace Audio {
-class QueuingAudioStream;
-}
-
 namespace Grim {
 
-class Codec48Decoder;
-class Blocky8;
 class Blocky16;
+class SmushWave;
 
 class SmushDecoder : public Video::VideoDecoder {
 public:
 	SmushDecoder();
 	~SmushDecoder();
 
-	int getX() const { return _videoTrack->_x; }
-	int getY() const { return _videoTrack->_y; }
-	void setLooping(bool l);
+	void setWave(SmushWave *wave) { _wave = wave; }
+	int getFrameDelay() const { return _frameDelay; }
+	Common::SeekableReadStream *getFile() { return _file; }
+	void decodeFrameBlock(const byte *block, uint32 size, int flags);
+	const Graphics::Surface *getFrameSurface();
+	void resetBlocky16Frames() { _blocky16Frames = 0; }
+	int getBlocky16Frames() const { return _blocky16Frames; }
 	bool isRewindable() const override { return true; }
 	bool isSeekable() const override { return true; }
 	bool rewind() override;
@@ -54,16 +53,12 @@ public:
 
 protected:
 	bool readHeader();
-	void handleFrameDemo();
-	void handleFrame();
 	bool handleFramesHeader();
-	void handleFRME(Common::SeekableReadStream *stream, uint32 size);
 	void init();
 	void close() override;
-	const Graphics::Surface *decodeNextFrame() override;
 	class SmushVideoTrack : public FixedRateVideoTrack {
 	public:
-		SmushVideoTrack(int width, int height, int fps, int numFrames, bool is16Bit);
+		SmushVideoTrack(int width, int height, int fps, int numFrames);
 		~SmushVideoTrack();
 
 		uint16 getWidth() const override { return _width; }
@@ -73,82 +68,34 @@ protected:
 		void setCurFrame(int frame) { _curFrame = frame; }
 		int getFrameCount() const override { return _nbframes; }
 		Common::Rational getFrameRate() const override { return _frameRate; }
-		void setMsPerFrame(int ms);
 
 		void finishFrame();
 		bool isSeekable() const override { return true; }
 		bool seek(const Audio::Timestamp &time) override { return true; }
-		void setFrameStart(int frame);
 
-		void handleBlocky16(Common::SeekableReadStream *stream, uint32 size);
-		void handleFrameObject(Common::SeekableReadStream *stream, uint32 size);
-		void handleDeltaPalette(Common::SeekableReadStream *stream, int32 size);
+		void handleBlocky16(Common::SeekableReadStream *stream, uint32 size, int flags);
 		void init();
 		Graphics::Surface *decodeNextFrame() override;
-		const byte *getPalette() const override { _dirtyPalette = false; return _palette; }
-		bool hasDirtyPalette() const override { return _dirtyPalette; }
 
-		byte *getPal() { _dirtyPalette = true; return _palette; }
-		int _x, _y;
 	private:
-		void convertDemoFrame();
-		bool _is16Bit;
 		int32 _curFrame;
-		byte _palette[0x300];
-		int16 _deltaPal[0x300];
-		mutable bool _dirtyPalette;
 		int _width, _height;
 		Graphics::Surface _surface;
 		Graphics::PixelFormat _format;
 		Common::Rational _frameRate;
-		Blocky8 *_blocky8;
 		Blocky16 *_blocky16;
-		Codec48Decoder *_codec48;
 		int32 _nbframes;
-		int _frameStart;
 	};
 
-	class SmushAudioTrack : public AudioTrack {
-	public:
-		SmushAudioTrack(Audio::Mixer::SoundType soundType, bool isVima, int freq = 22050, int channels = -1);
-		~SmushAudioTrack();
-
-		Audio::AudioStream *getAudioStream() const override { return _queueStream; }
-		bool isSeekable() const override { return true; }
-		bool seek(const Audio::Timestamp &time) override;
-		void skipSamples(int samples);
-		inline int getRate() const { return _queueStream->getRate(); }
-
-		void handleVIMA(Common::SeekableReadStream *stream, uint32 size);
-		void handleIACT(Common::SeekableReadStream *stream, int32 size);
-		void init();
-	private:
-		bool _isVima;
-		byte _IACToutput[4096];
-		int32 _IACTpos;
-		int _channels;
-		int _freq;
-		Audio::QueuingAudioStream *_queueStream;
-	};
 private:
-	void initFrames();
-
-	SmushAudioTrack *_audioTrack;
 	SmushVideoTrack *_videoTrack;
+	SmushWave *_wave;
+	int _blocky16Frames;
+	int _frameDelay;
 
 	Common::SeekableReadStream *_file;
 
 	uint32 _startPos;
-
-	bool _videoPause;
-	bool _videoLooping;
-	struct Frame {
-		int frame;
-		int pos;
-		bool keyframe;
-	};
-	Frame *_frames;
-	static bool _demo;
 };
 
 } // end of namespace Grim

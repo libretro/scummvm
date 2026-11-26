@@ -22,31 +22,45 @@
 #ifndef NGI_OBJECTS_H
 #define NGI_OBJECTS_H
 
+#include "common/hashmap.h"
 #include "common/ptr.h"
 #include "ngi/utils.h"
 
 namespace NGI {
 
 class MessageQueue;
+class Scene;
 class SceneTagList;
+
+class ObjectIdList {
+public:
+	bool load(const Common::Path &path);
+	bool findId(const Common::String &symbol, uint32 &id) const;
+
+private:
+	Common::HashMap<Common::String, uint32> _ids;
+};
 
 class GameProject : public CObject {
  public:
 	int _field_4;
 	Common::String _headerFilename;
 	Common::ScopedPtr<SceneTagList> _sceneTagList;
+	ObjectIdList _objectIds;
+	Common::HashMap<Common::Path, Common::Point, Common::Path::Hash> _textureSizes;
 	int _field_10;
 
  public:
 	GameProject();
 	bool load(MfcArchive &file) override;
+	Scene *findScene(int sceneId);
 };
 
 struct PicAniInfo {
 	uint32 type;
 	int16 objectId;
 	int16 field_6;
-	int32 field_8;
+	int32 copyId;
 	int16 sceneId;
 	int16 field_E;
 	int32 ox;
@@ -54,10 +68,10 @@ struct PicAniInfo {
 	int32 priority;
 	int16 staticsId;
 	int16 movementId;
-	int16 dynamicPhaseIndex;
+	int16 curFrame;
 	int16 flags;
-	int32 field_24;
-	int32 someDynamicPhaseIndex;
+	int32 objectFlags;
+	int32 targetFrame;
 
 	bool load(MfcArchive &file);
 	void save(MfcArchive &file);
@@ -79,7 +93,7 @@ class GameVar : public CObject {
 	GameVar *_prevVarObj;
 	GameVar *_parentVarObj;
 	GameVar *_subVars;
-	GameVar *_field_14;
+	GameVar *_firstChild;
 	Common::String _varName;
 	VarValue _value;
 	int _varType;

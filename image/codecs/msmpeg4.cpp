@@ -30,10 +30,13 @@
  * or later. The migrated path includes the complete frame flow used by MP43:
  * picture header parsing, macroblock decoding, VLC/RL tables, DC/AC
  * prediction, dequantization, IDCT, motion compensation, and YUV420 output.
+ * Later MP43 corrections checked against FFmpeg revision fa4daf630e:
+ * https://github.com/FFmpeg/FFmpeg/tree/fa4daf630eb52235b1b3d0e9b1cc08392b87e9a8/libavcodec
  */
 
 #include "image/codecs/msmpeg4.h"
 
+#include "common/bitstream.h"
 #include "common/endian.h"
 #include "common/memstream.h"
 #include "common/stream.h"
@@ -67,11 +70,8 @@ enum {
 };
 
 struct GetBitContext {
-	uint32 bitBuf = 0;
-	int bitCount = 0;
-	const byte *buf = nullptr;
-	const byte *bufPtr = nullptr;
-	const byte *bufEnd = nullptr;
+	Common::BitStreamMemory8MSB *reader = nullptr;
+	bool error = false;
 };
 
 struct VLC {
@@ -112,52 +112,12 @@ static inline byte clipByte(int value) {
 	return (byte)CLIP(value, 0, 255);
 }
 
-static void initGetBits(GetBitContext *bits, const byte *buffer, int bufferSize) {
-	bits->buf = buffer;
-	bits->bufPtr = buffer;
-	bits->bufEnd = buffer + bufferSize;
-	bits->bitCount = 0;
-	bits->bitBuf = 0;
-	while (bits->bufPtr < bits->bufEnd && bits->bitCount < 32) {
-		bits->bitBuf |= (uint32)(*bits->bufPtr++) << (24 - bits->bitCount);
-		bits->bitCount += 8;
-	}
-}
-
-static uint getBitsLong(GetBitContext *bits, int n) {
-	uint32 bitBuf = bits->bitBuf;
-	int bitCount = bits->bitCount - n;
-	uint value = bitBuf >> (32 - n);
-	const byte *bufPtr = bits->bufPtr + 4;
-	if (bufPtr <= bits->bufEnd) {
-		bitBuf = ((uint32)bufPtr[-4] << 24) | ((uint32)bufPtr[-3] << 16) | ((uint32)bufPtr[-2] << 8) | bufPtr[-1];
-	} else {
-		bufPtr -= 4;
-		bitBuf = 0;
-		if (bufPtr < bits->bufEnd)
-			bitBuf |= (uint32)*bufPtr++ << 24;
-		if (bufPtr < bits->bufEnd)
-			bitBuf |= (uint32)*bufPtr++ << 16;
-		if (bufPtr < bits->bufEnd)
-			bitBuf |= (uint32)*bufPtr++ << 8;
-		if (bufPtr < bits->bufEnd)
-			bitBuf |= *bufPtr++;
-	}
-	bits->bufPtr = bufPtr;
-	value |= bitBuf >> (32 + bitCount);
-	bits->bitBuf = bitBuf << -bitCount;
-	bits->bitCount = bitCount + 32;
-	return value;
-}
-
 static inline uint getBits(GetBitContext *bits, int n) {
-	if (bits->bitCount >= n) {
-		uint value = bits->bitBuf >> (32 - n);
-		bits->bitBuf <<= n;
-		bits->bitCount -= n;
-		return value;
+	if (bits->error || (uint)n > bits->reader->size() - bits->reader->pos()) {
+		bits->error = true;
+		return 0;
 	}
-	return getBitsLong(bits, n);
+	return bits->reader->getBits(n);
 }
 
 static inline uint getBits1(GetBitContext *bits) {
@@ -165,7 +125,7 @@ static inline uint getBits1(GetBitContext *bits) {
 }
 
 static int getBitsCount(const GetBitContext *bits) {
-	return (int)(bits->bufPtr - bits->buf) * 8 - bits->bitCount;
+	return bits->reader->pos();
 }
 
 static int getDataValue(const void *table, int index, int wrap, int size) {
@@ -173,8 +133,8 @@ static int getDataValue(const void *table, int index, int wrap, int size) {
 	if (size == 1)
 		return *(const uint8 *)ptr;
 	if (size == 2)
-		return READ_LE_UINT16(ptr);
-	return READ_LE_UINT32(ptr);
+		return READ_UINT16(ptr);
+	return READ_UINT32(ptr);
 }
 
 static int allocVlcTable(VLC *vlc, int size) {
@@ -265,33 +225,23 @@ static int initVlc(VLC *vlc, int bits, int codeCount, const void *bitSizes, int 
 }
 
 static int getVlc(GetBitContext *bits, VLC *vlc) {
-	int bitCount = bits->bitCount;
-	uint32 bitBuf = bits->bitBuf;
-	const byte *bufPtr = bits->bufPtr;
 	int nbBits = vlc->bits;
 	int16 *tableCodes = vlc->tableCodes;
 	int8 *tableBits = vlc->tableBits;
 
 	for (;;) {
-		while (bitCount < nbBits && bufPtr < bits->bufEnd) {
-			bitBuf |= (uint32)*bufPtr++ << (24 - bitCount);
-			bitCount += 8;
-		}
-		int index = bitBuf >> (32 - nbBits);
+		if (bits->error)
+			return -1;
+		int index = bits->reader->peekBits(nbBits);
 		int code = tableCodes[index];
 		int n = tableBits[index];
 		if (n > 0) {
-			bitBuf <<= n;
-			bitCount -= n;
-			bits->bufPtr = bufPtr;
-			bits->bitBuf = bitBuf;
-			bits->bitCount = bitCount;
-			return code;
+			getBits(bits, n);
+			return bits->error ? -1 : code;
 		}
 		if (n == 0)
 			return -1;
-		bitBuf <<= nbBits;
-		bitCount -= nbBits;
+		getBits(bits, nbBits);
 		nbBits = -n;
 		tableCodes = vlc->tableCodes + code;
 		tableBits = vlc->tableBits + code;
@@ -2317,7 +2267,7 @@ static void idct(int16 data[64])
     if ((d1 | d2 | d3 | d4 | d5 | d6 | d7) == 0) {
       /* AC terms all zero */
       if (d0) {
-	  int16 dcval = (int16)(d0 << PASS1_BITS);
+	  int16 dcval = (int16)(d0 * (1 << PASS1_BITS));
 	  dataptr[0] = dcval;
 	  dataptr[1] = dcval;
 	  dataptr[2] = dcval;
@@ -2344,8 +2294,8 @@ static void idct(int16 data[64])
 		    tmp2 = z1 + MULTIPLY(-d6, FIX_1_847759065);
 		    tmp3 = z1 + MULTIPLY(d2, FIX_0_765366865);
 
-		    tmp0 = (d0 + d4) << CONST_BITS;
-		    tmp1 = (d0 - d4) << CONST_BITS;
+		    tmp0 = (d0 + d4) * (1 << CONST_BITS);
+		    tmp1 = (d0 - d4) * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2357,7 +2307,7 @@ static void idct(int16 data[64])
 		    tmp2 = z1 + MULTIPLY(-d6, FIX_1_847759065);
 		    tmp3 = z1 + MULTIPLY(d2, FIX_0_765366865);
 
-		    tmp0 = d4 << CONST_BITS;
+		    tmp0 = d4 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2370,8 +2320,8 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(-d6, FIX_1_306562965);
 		    tmp3 = MULTIPLY(d6, FIX_0_541196100);
 
-		    tmp0 = (d0 + d4) << CONST_BITS;
-		    tmp1 = (d0 - d4) << CONST_BITS;
+		    tmp0 = (d0 + d4) * (1 << CONST_BITS);
+		    tmp1 = (d0 - d4) * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2382,7 +2332,7 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(-d6, FIX_1_306562965);
 		    tmp3 = MULTIPLY(d6, FIX_0_541196100);
 
-		    tmp0 = d4 << CONST_BITS;
+		    tmp0 = d4 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2398,7 +2348,7 @@ static void idct(int16 data[64])
 		    tmp2 = z1 + MULTIPLY(-d6, FIX_1_847759065);
 		    tmp3 = z1 + MULTIPLY(d2, FIX_0_765366865);
 
-		    tmp0 = d0 << CONST_BITS;
+		    tmp0 = d0 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2421,7 +2371,7 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(-d6, FIX_1_306562965);
 		    tmp3 = MULTIPLY(d6, FIX_0_541196100);
 
-		    tmp0 = d0 << CONST_BITS;
+		    tmp0 = d0 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2447,8 +2397,8 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(d2, FIX_0_541196100);
 		    tmp3 = MULTIPLY(d2, FIX_1_306562965);
 
-		    tmp0 = (d0 + d4) << CONST_BITS;
-		    tmp1 = (d0 - d4) << CONST_BITS;
+		    tmp0 = (d0 + d4) * (1 << CONST_BITS);
+		    tmp1 = (d0 - d4) * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2459,7 +2409,7 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(d2, FIX_0_541196100);
 		    tmp3 = MULTIPLY(d2, FIX_1_306562965);
 
-		    tmp0 = d4 << CONST_BITS;
+		    tmp0 = d4 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2469,11 +2419,11 @@ static void idct(int16 data[64])
 	    } else {
 		if (d0) {
 		    /* d0 != 0, d2 == 0, d4 != 0, d6 == 0 */
-		    tmp10 = tmp13 = (d0 + d4) << CONST_BITS;
-		    tmp11 = tmp12 = (d0 - d4) << CONST_BITS;
+		    tmp10 = tmp13 = (d0 + d4) * (1 << CONST_BITS);
+		    tmp11 = tmp12 = (d0 - d4) * (1 << CONST_BITS);
 		} else {
 		    /* d0 == 0, d2 == 0, d4 != 0, d6 == 0 */
-		    tmp10 = tmp13 = d4 << CONST_BITS;
+		    tmp10 = tmp13 = d4 * (1 << CONST_BITS);
 		    tmp11 = tmp12 = -tmp10;
 		}
 	    }
@@ -2484,7 +2434,7 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(d2, FIX_0_541196100);
 		    tmp3 = MULTIPLY(d2, FIX_1_306562965);
 
-		    tmp0 = d0 << CONST_BITS;
+		    tmp0 = d0 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2503,7 +2453,7 @@ static void idct(int16 data[64])
 	    } else {
 		if (d0) {
 		    /* d0 != 0, d2 == 0, d4 == 0, d6 == 0 */
-		    tmp10 = tmp13 = tmp11 = tmp12 = d0 << CONST_BITS;
+		    tmp10 = tmp13 = tmp11 = tmp12 = d0 * (1 << CONST_BITS);
 		} else {
 		    /* d0 == 0, d2 == 0, d4 == 0, d6 == 0 */
 		    tmp10 = tmp13 = tmp11 = tmp12 = 0;
@@ -2820,8 +2770,8 @@ static void idct(int16 data[64])
 		    tmp2 = z1 + MULTIPLY(-d6, FIX_1_847759065);
 		    tmp3 = z1 + MULTIPLY(d2, FIX_0_765366865);
 
-		    tmp0 = (d0 + d4) << CONST_BITS;
-		    tmp1 = (d0 - d4) << CONST_BITS;
+		    tmp0 = (d0 + d4) * (1 << CONST_BITS);
+		    tmp1 = (d0 - d4) * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2833,7 +2783,7 @@ static void idct(int16 data[64])
 		    tmp2 = z1 + MULTIPLY(-d6, FIX_1_847759065);
 		    tmp3 = z1 + MULTIPLY(d2, FIX_0_765366865);
 
-		    tmp0 = d4 << CONST_BITS;
+		    tmp0 = d4 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2846,8 +2796,8 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(-d6, FIX_1_306562965);
 		    tmp3 = MULTIPLY(d6, FIX_0_541196100);
 
-		    tmp0 = (d0 + d4) << CONST_BITS;
-		    tmp1 = (d0 - d4) << CONST_BITS;
+		    tmp0 = (d0 + d4) * (1 << CONST_BITS);
+		    tmp1 = (d0 - d4) * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2858,7 +2808,7 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(-d6, FIX_1_306562965);
 		    tmp3 = MULTIPLY(d6, FIX_0_541196100);
 
-		    tmp0 = d4 << CONST_BITS;
+		    tmp0 = d4 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2874,7 +2824,7 @@ static void idct(int16 data[64])
 		    tmp2 = z1 + MULTIPLY(-d6, FIX_1_847759065);
 		    tmp3 = z1 + MULTIPLY(d2, FIX_0_765366865);
 
-		    tmp0 = d0 << CONST_BITS;
+		    tmp0 = d0 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2897,7 +2847,7 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(-d6, FIX_1_306562965);
 		    tmp3 = MULTIPLY(d6, FIX_0_541196100);
 
-		    tmp0 = d0 << CONST_BITS;
+		    tmp0 = d0 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2923,8 +2873,8 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(d2, FIX_0_541196100);
 		    tmp3 = MULTIPLY(d2, FIX_1_306562965);
 
-		    tmp0 = (d0 + d4) << CONST_BITS;
-		    tmp1 = (d0 - d4) << CONST_BITS;
+		    tmp0 = (d0 + d4) * (1 << CONST_BITS);
+		    tmp1 = (d0 - d4) * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2935,7 +2885,7 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(d2, FIX_0_541196100);
 		    tmp3 = MULTIPLY(d2, FIX_1_306562965);
 
-		    tmp0 = d4 << CONST_BITS;
+		    tmp0 = d4 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2945,11 +2895,11 @@ static void idct(int16 data[64])
 	    } else {
 		if (d0) {
 		    /* d0 != 0, d2 == 0, d4 != 0, d6 == 0 */
-		    tmp10 = tmp13 = (d0 + d4) << CONST_BITS;
-		    tmp11 = tmp12 = (d0 - d4) << CONST_BITS;
+		    tmp10 = tmp13 = (d0 + d4) * (1 << CONST_BITS);
+		    tmp11 = tmp12 = (d0 - d4) * (1 << CONST_BITS);
 		} else {
 		    /* d0 == 0, d2 == 0, d4 != 0, d6 == 0 */
-		    tmp10 = tmp13 = d4 << CONST_BITS;
+		    tmp10 = tmp13 = d4 * (1 << CONST_BITS);
 		    tmp11 = tmp12 = -tmp10;
 		}
 	    }
@@ -2960,7 +2910,7 @@ static void idct(int16 data[64])
 		    tmp2 = MULTIPLY(d2, FIX_0_541196100);
 		    tmp3 = MULTIPLY(d2, FIX_1_306562965);
 
-		    tmp0 = d0 << CONST_BITS;
+		    tmp0 = d0 * (1 << CONST_BITS);
 
 		    tmp10 = tmp0 + tmp3;
 		    tmp13 = tmp0 - tmp3;
@@ -2979,7 +2929,7 @@ static void idct(int16 data[64])
 	    } else {
 		if (d0) {
 		    /* d0 != 0, d2 == 0, d4 == 0, d6 == 0 */
-		    tmp10 = tmp13 = tmp11 = tmp12 = d0 << CONST_BITS;
+		    tmp10 = tmp13 = tmp11 = tmp12 = d0 * (1 << CONST_BITS);
 		} else {
 		    /* d0 == 0, d2 == 0, d4 == 0, d6 == 0 */
 		    tmp10 = tmp13 = tmp11 = tmp12 = 0;
@@ -3334,9 +3284,21 @@ static void initMsmpeg4Tables() {
 } // End of namespace
 
 struct MSMPEG4Decoder::Context {
+	~Context() {
+		for (int i = 0; i < 3; ++i) {
+			free(lastPictureBase[i]);
+			free(nextPictureBase[i]);
+		}
+		free(motionVal);
+		free(dcVal[0]);
+		free(acVal[0]);
+		free(codedBlock);
+		free(mbSkipTable);
+	}
+
 	GetBitContext bits;
-	int width = 0;
-	int height = 0;
+	int codedWidth = 0;
+	int codedHeight = 0;
 	int mbWidth = 0;
 	int mbHeight = 0;
 	int lineSize = 0;
@@ -3363,6 +3325,8 @@ struct MSMPEG4Decoder::Context {
 	int mv[2][4][2] = {};
 	int blockLastIndex[6] = {};
 	int noRounding = 0;
+	bool flipflopRounding = false;
+	bool referenceValid = false;
 	int acPred = 0;
 	int mvTableIndex = 0;
 	int rlTableIndex = 0;
@@ -3423,6 +3387,10 @@ static int msmpeg4PredDc(MSMPEG4Decoder::Context *ctx, int blockIndex, int16 **d
 	return pred;
 }
 
+static int blockPermuteOp(int index) {
+	return (index & 0x38) | ((index & 6) >> 1) | ((index & 1) << 2);
+}
+
 static void mpeg4PredAc(MSMPEG4Decoder::Context *ctx, int16 *block, int blockIndex, int direction) {
 	int x, y, wrap;
 	int16 (*acVal)[16];
@@ -3442,17 +3410,17 @@ static void mpeg4PredAc(MSMPEG4Decoder::Context *ctx, int16 *block, int blockInd
 		if (direction == 0) {
 			int16 *left = current - 16;
 			for (int i = 1; i < 8; ++i)
-				block[i * 8] += left[i];
+				block[blockPermuteOp(i * 8)] += left[i];
 		} else {
 			int16 *top = current - 16 * wrap;
 			for (int i = 1; i < 8; ++i)
-				block[i] += top[i + 8];
+				block[blockPermuteOp(i)] += top[i + 8];
 		}
 	}
 	for (int i = 1; i < 8; ++i)
-		current[i] = block[i * 8];
+		current[i] = block[blockPermuteOp(i * 8)];
 	for (int i = 1; i < 8; ++i)
-		current[8 + i] = block[i];
+		current[8 + i] = block[blockPermuteOp(i)];
 }
 
 static int16 *h263PredMotion(MSMPEG4Decoder::Context *ctx, int block, int *px, int *py) {
@@ -3493,10 +3461,17 @@ static void msmpeg4DcScale(MSMPEG4Decoder::Context *ctx) {
 		scale = 8;
 	else if (ctx->qscale < 9)
 		scale = 2 * ctx->qscale;
-	else
+	else if (ctx->qscale < 25)
 		scale = ctx->qscale + 8;
+	else
+		scale = 2 * ctx->qscale - 16;
 	ctx->yDcScale = scale;
-	ctx->cDcScale = (ctx->qscale + 13) / 2;
+	if (ctx->qscale < 5)
+		ctx->cDcScale = 8;
+	else if (ctx->qscale < 25)
+		ctx->cDcScale = (ctx->qscale + 13) / 2;
+	else
+		ctx->cDcScale = ctx->qscale - 6;
 }
 
 static void dctUnquantizeH263(MSMPEG4Decoder::Context *ctx, int16 *block, int blockIndex, int qscale) {
@@ -3527,15 +3502,6 @@ MSMPEG4Decoder::~MSMPEG4Decoder() {
 		_surface->free();
 		delete _surface;
 	}
-	for (int i = 0; i < 3; ++i) {
-		free(_ctx->lastPictureBase[i]);
-		free(_ctx->nextPictureBase[i]);
-	}
-	free(_ctx->motionVal);
-	free(_ctx->dcVal[0]);
-	free(_ctx->acVal[0]);
-	free(_ctx->codedBlock);
-	free(_ctx->mbSkipTable);
 	delete _ctx;
 }
 
@@ -3549,14 +3515,19 @@ bool MSMPEG4Decoder::setOutputPixelFormat(const Graphics::PixelFormat &format) {
 bool MSMPEG4Decoder::initialize() {
 	if (_tablesInitialized)
 		return true;
+	if (_width <= 0 || _height <= 0 || _width > 32766 || _height > 32766 ||
+		(_width & 1) || (_height & 1) || (uint64)_width * _height * 4 > 0x7fffffff) {
+		warning("MSMPEG4Decoder: unsupported frame dimensions %dx%d", _width, _height);
+		return false;
+	}
 	if (_bitsPerPixel != 24 && _bitsPerPixel != 16 && _bitsPerPixel != 32)
 		warning("MSMPEG4Decoder: unexpected AVI bit depth %d", _bitsPerPixel);
 	initMsmpeg4Tables();
 	Context *ctx = _ctx;
-	ctx->width = _width;
-	ctx->height = _height;
 	ctx->mbWidth = (_width + 15) / 16;
 	ctx->mbHeight = (_height + 15) / 16;
+	ctx->codedWidth = ctx->mbWidth * 16;
+	ctx->codedHeight = ctx->mbHeight * 16;
 	ctx->lineSize = ctx->mbWidth * 16 + 2 * kEdgeWidth;
 	int yPlaneSize = ctx->lineSize * (ctx->mbHeight * 16 + 2 * kEdgeWidth);
 	int cPlaneSize = (ctx->lineSize / 2) * (ctx->mbHeight * 8 + kEdgeWidth);
@@ -3567,8 +3538,11 @@ bool MSMPEG4Decoder::initialize() {
 		int start = pitch * edge + edge;
 		ctx->lastPictureBase[i] = (byte *)calloc(planeSize, 1);
 		ctx->nextPictureBase[i] = (byte *)calloc(planeSize, 1);
-		if (!ctx->lastPictureBase[i] || !ctx->nextPictureBase[i])
+		if (!ctx->lastPictureBase[i] || !ctx->nextPictureBase[i]) {
+			delete _ctx;
+			_ctx = new Context();
 			return false;
+		}
 		ctx->lastPicture[i] = ctx->lastPictureBase[i] + start;
 		ctx->nextPicture[i] = ctx->nextPictureBase[i] + start;
 		ctx->currentPicture[i] = ctx->nextPicture[i];
@@ -3582,8 +3556,11 @@ bool MSMPEG4Decoder::initialize() {
 	ctx->acVal[0] = (int16 (*)[16])calloc(predictSize, sizeof(int16[16]));
 	ctx->codedBlock = (byte *)calloc(yPredictSize, 1);
 	ctx->mbSkipTable = (byte *)calloc(ctx->mbWidth * ctx->mbHeight, 1);
-	if (!ctx->motionVal || !ctx->dcVal[0] || !ctx->acVal[0] || !ctx->codedBlock || !ctx->mbSkipTable)
+	if (!ctx->motionVal || !ctx->dcVal[0] || !ctx->acVal[0] || !ctx->codedBlock || !ctx->mbSkipTable) {
+		delete _ctx;
+		_ctx = new Context();
 		return false;
+	}
 	ctx->dcVal[1] = ctx->dcVal[0] + yPredictSize;
 	ctx->dcVal[2] = ctx->dcVal[1] + cPredictSize;
 	ctx->acVal[1] = ctx->acVal[0] + yPredictSize;
@@ -3595,14 +3572,28 @@ bool MSMPEG4Decoder::initialize() {
 }
 
 const Graphics::Surface *MSMPEG4Decoder::decodeFrame(Common::SeekableReadStream &stream) {
+	const int64 remaining = stream.size() - stream.pos();
+	if (remaining <= 0 || remaining > 0x0fffffff) {
+		_ctx->referenceValid = false;
+		return nullptr;
+	}
 	if (!initialize())
 		return nullptr;
-	uint32 dataSize = stream.size() - stream.pos();
+	uint32 dataSize = remaining;
 	byte *frameData = (byte *)malloc(dataSize);
-	if (!frameData)
+	if (!frameData) {
+		_ctx->referenceValid = false;
 		return nullptr;
-	stream.read(frameData, dataSize);
-	initGetBits(&_ctx->bits, frameData, dataSize);
+	}
+	if (stream.read(frameData, dataSize) != dataSize || stream.err()) {
+		free(frameData);
+		_ctx->referenceValid = false;
+		return nullptr;
+	}
+	Common::BitStreamMemoryStream memory(frameData, dataSize);
+	Common::BitStreamMemory8MSB reader(memory);
+	_ctx->bits.reader = &reader;
+	_ctx->bits.error = false;
 	bool ok = decodePictureHeader();
 	if (ok) {
 		frameStart();
@@ -3613,20 +3604,33 @@ const Graphics::Surface *MSMPEG4Decoder::decodeFrame(Common::SeekableReadStream 
 				memset(block, 0, sizeof(block));
 				_ctx->mvDir = kMvDirForward;
 				_ctx->mvType = kMvType16x16;
-				ok = decodeMacroblock(block);
+				ok = decodeMacroblock(block) && !_ctx->bits.error;
 				if (ok)
 					decodeMacroblockPixels(block);
 			}
 		}
 		if (ok) {
+			if (_ctx->pictType == kIFrame) {
+				const uint left = reader.size() - reader.pos();
+				if (left >= 17 && left < 25) {
+					getBits(&_ctx->bits, 5);
+					getBits(&_ctx->bits, 11);
+					_ctx->flipflopRounding = getBits1(&_ctx->bits);
+				} else if (left < 17) {
+					_ctx->flipflopRounding = false;
+				}
+			}
 			frameEnd();
 			convertToSurface();
 		}
 	}
+	_ctx->referenceValid = ok;
+	const int bitsRead = getBitsCount(&_ctx->bits);
+	_ctx->bits.reader = nullptr;
 	free(frameData);
 	if (!ok) {
 		warning("MSMPEG4Decoder: failed to decode MP43 frame at macroblock %d,%d bit %d/%d",
-			_ctx->mbX, _ctx->mbY, getBitsCount(&_ctx->bits), dataSize * 8);
+			_ctx->mbX, _ctx->mbY, bitsRead, dataSize * 8);
 		return nullptr;
 	}
 	return _surface;
@@ -3638,13 +3642,16 @@ bool MSMPEG4Decoder::decodePictureHeader() {
 	if (ctx->pictType != kIFrame && ctx->pictType != kPFrame)
 		return false;
 	ctx->qscale = getBits(&ctx->bits, 5);
+	if (!ctx->qscale || ctx->bits.error ||
+		(ctx->pictType == kPFrame && !ctx->referenceValid))
+		return false;
 	if (ctx->pictType == kIFrame) {
 		int code = getBits(&ctx->bits, 5);
 		if (code < 0x17)
 			return false;
 		ctx->sliceHeight = ctx->mbHeight / (code - 0x16);
 		if (ctx->sliceHeight <= 0)
-			ctx->sliceHeight = ctx->mbHeight;
+			return false;
 		ctx->rlChromaTableIndex = decode012(&ctx->bits);
 		ctx->rlTableIndex = decode012(&ctx->bits);
 		ctx->dcTableIndex = getBits1(&ctx->bits);
@@ -3655,17 +3662,20 @@ bool MSMPEG4Decoder::decodePictureHeader() {
 		ctx->rlChromaTableIndex = ctx->rlTableIndex;
 		ctx->dcTableIndex = getBits1(&ctx->bits);
 		ctx->mvTableIndex = getBits1(&ctx->bits);
-		ctx->noRounding ^= 1;
+		ctx->noRounding = ctx->flipflopRounding ? ctx->noRounding ^ 1 : 0;
 	}
-	return ctx->rlTableIndex <= 2 && ctx->rlChromaTableIndex <= 2;
+	return !ctx->bits.error && ctx->rlTableIndex <= 2 && ctx->rlChromaTableIndex <= 2;
 }
 
 void MSMPEG4Decoder::resetPredictorsForSlice() {
 	Context *ctx = _ctx;
 	int wrap = 2 * ctx->mbWidth + 2;
+	memset(ctx->acVal[0] + 2 * ctx->mbY * wrap, 0, wrap * sizeof(*ctx->acVal[0]));
 	for (int i = 0; i < 2 * ctx->mbWidth; ++i)
 		ctx->dcVal[0][1 + i + 2 * ctx->mbY * wrap] = 1024;
 	wrap = ctx->mbWidth + 2;
+	memset(ctx->acVal[1] + ctx->mbY * wrap, 0, wrap * sizeof(*ctx->acVal[1]));
+	memset(ctx->acVal[2] + ctx->mbY * wrap, 0, wrap * sizeof(*ctx->acVal[2]));
 	for (int i = 0; i < ctx->mbWidth; ++i) {
 		ctx->dcVal[1][1 + i + ctx->mbY * wrap] = 1024;
 		ctx->dcVal[2][1 + i + ctx->mbY * wrap] = 1024;
@@ -3739,10 +3749,6 @@ bool MSMPEG4Decoder::decodeMacroblock(int16 block[6][64]) {
 			return false;
 	}
 	return true;
-}
-
-static int blockPermuteOp(int index) {
-	return (index & 0x38) | ((index & 6) >> 1) | ((index & 1) << 2);
 }
 
 bool MSMPEG4Decoder::decodeBlock(int16 *block, int blockIndex, bool coded) {
@@ -3864,7 +3870,10 @@ int MSMPEG4Decoder::decodeDc(int blockIndex, int *direction) {
 	int16 *dcVal;
 	int pred = msmpeg4PredDc(ctx, blockIndex, &dcVal, direction);
 	level += pred;
-	*dcVal = level * (blockIndex < 4 ? ctx->yDcScale : ctx->cDcScale);
+	const int scale = blockIndex < 4 ? ctx->yDcScale : ctx->cDcScale;
+	if (ctx->bits.error || level < 0 || level * scale > 32767)
+		return -1;
+	*dcVal = level * scale;
 	return level;
 }
 
@@ -3925,9 +3934,9 @@ void MSMPEG4Decoder::drawEdges(byte *plane, int pitch, int width, int height, in
 
 void MSMPEG4Decoder::frameEnd() {
 	Context *ctx = _ctx;
-	drawEdges(ctx->currentPicture[0], ctx->lineSize, ctx->width, ctx->height, kEdgeWidth);
-	drawEdges(ctx->currentPicture[1], ctx->lineSize / 2, ctx->width / 2, ctx->height / 2, kEdgeWidth / 2);
-	drawEdges(ctx->currentPicture[2], ctx->lineSize / 2, ctx->width / 2, ctx->height / 2, kEdgeWidth / 2);
+	drawEdges(ctx->currentPicture[0], ctx->lineSize, ctx->codedWidth, ctx->codedHeight, kEdgeWidth);
+	drawEdges(ctx->currentPicture[1], ctx->lineSize / 2, ctx->codedWidth / 2, ctx->codedHeight / 2, kEdgeWidth / 2);
+	drawEdges(ctx->currentPicture[2], ctx->lineSize / 2, ctx->codedWidth / 2, ctx->codedHeight / 2, kEdgeWidth / 2);
 }
 
 static void putPixels(byte *dst, const byte *src, int pitch, int h, int mode, bool noRounding) {
@@ -4048,20 +4057,20 @@ void MSMPEG4Decoder::decodeMacroblockPixels(int16 block[6][64]) {
 		int motionX = ctx->mv[0][0][0];
 		int motionY = ctx->mv[0][0][1];
 		bool noRounding = ctx->noRounding != 0;
-		motionCompensatePlane(destY, ctx->lastPicture[0], ctx->lineSize, ctx->lineSize, mbX * 16, mbY * 16, ctx->width, ctx->height, motionX, motionY, 8, noRounding);
-		motionCompensatePlane(destY + 8, ctx->lastPicture[0], ctx->lineSize, ctx->lineSize, mbX * 16 + 8, mbY * 16, ctx->width, ctx->height, motionX, motionY, 8, noRounding);
-		motionCompensatePlane(destY + 8 * ctx->lineSize, ctx->lastPicture[0], ctx->lineSize, ctx->lineSize, mbX * 16, mbY * 16 + 8, ctx->width, ctx->height, motionX, motionY, 8, noRounding);
-		motionCompensatePlane(destY + 8 * ctx->lineSize + 8, ctx->lastPicture[0], ctx->lineSize, ctx->lineSize, mbX * 16 + 8, mbY * 16 + 8, ctx->width, ctx->height, motionX, motionY, 8, noRounding);
-		int chromaX = motionX / 2;
-		int chromaY = motionY / 2;
+		motionCompensatePlane(destY, ctx->lastPicture[0], ctx->lineSize, ctx->lineSize, mbX * 16, mbY * 16, ctx->codedWidth, ctx->codedHeight, motionX, motionY, 8, noRounding);
+		motionCompensatePlane(destY + 8, ctx->lastPicture[0], ctx->lineSize, ctx->lineSize, mbX * 16 + 8, mbY * 16, ctx->codedWidth, ctx->codedHeight, motionX, motionY, 8, noRounding);
+		motionCompensatePlane(destY + 8 * ctx->lineSize, ctx->lastPicture[0], ctx->lineSize, ctx->lineSize, mbX * 16, mbY * 16 + 8, ctx->codedWidth, ctx->codedHeight, motionX, motionY, 8, noRounding);
+		motionCompensatePlane(destY + 8 * ctx->lineSize + 8, ctx->lastPicture[0], ctx->lineSize, ctx->lineSize, mbX * 16 + 8, mbY * 16 + 8, ctx->codedWidth, ctx->codedHeight, motionX, motionY, 8, noRounding);
+		int chromaX = (motionX >> 1) | (motionX & 1);
+		int chromaY = (motionY >> 1) | (motionY & 1);
 		int dxy = ((chromaY & 1) << 1) | (chromaX & 1);
 		chromaX >>= 1;
 		chromaY >>= 1;
-		int srcX = clipInt(mbX * 8 + chromaX, -8, ctx->width / 2);
-		int srcY = clipInt(mbY * 8 + chromaY, -8, ctx->height / 2);
-		if (srcX == ctx->width / 2)
+		int srcX = clipInt(mbX * 8 + chromaX, -8, ctx->codedWidth / 2);
+		int srcY = clipInt(mbY * 8 + chromaY, -8, ctx->codedHeight / 2);
+		if (srcX == ctx->codedWidth / 2)
 			dxy &= ~1;
-		if (srcY == ctx->height / 2)
+		if (srcY == ctx->codedHeight / 2)
 			dxy &= ~2;
 		putPixels(destCb, ctx->lastPicture[1] + srcY * (ctx->lineSize / 2) + srcX, ctx->lineSize / 2, 8, dxy, noRounding);
 		putPixels(destCr, ctx->lastPicture[2] + srcY * (ctx->lineSize / 2) + srcX, ctx->lineSize / 2, 8, dxy, noRounding);

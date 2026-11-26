@@ -26,9 +26,9 @@
 #include "common/str.h"
 
 #include "engines/nancy/commontypes.h"
-#include "engines/nancy/movieplayer.h"
 
 #include "engines/nancy/script/records.h"
+#include "engines/nancy/script/xsheet.h"
 
 #include "engines/nancy/ui/ndui/manager.h"
 
@@ -49,10 +49,8 @@ struct ConvoResponse {
 // runs, which as a rule moves on to the scene with the next line. A line without
 // responses runs its default record when it is over.
 //
-// A video conversation shows the character with movies, one for each part of it
-// (body, head). An XSheet with the name of the line's sound lists the parts, and
-// the frame of each part's movie to show over time; a part without a frame number
-// plays through by itself. A sound conversation plays its sounds one after another.
+// A video conversation shows the character with the XSheet that has the name of
+// the line's sound. A sound conversation plays its sounds one after another.
 //
 // Only one conversation runs in a scene: the ones that turn active afterwards are
 // done at once. Its responses stay up until the scene goes away.
@@ -61,10 +59,16 @@ public:
 	ConvoRecord(SceneContext &context, bool isVideo);
 	virtual ~ConvoRecord();
 
+	RecordType getType() const override { return _isVideo ? kRecordVideoConvo : kRecordSoundConvo; }
+
 	void updateGraphics() override;
+	void registerGraphics() override;
 
 	// Responses can be added while the scripts named by the record are run
 	void addResponse(ConvoResponse *response) { _responses.push_back(response); }
+
+	// Enhancement: ends the line that is being said
+	bool skipSpeech() override;
 
 	// The UI reports the response the player picked
 	void onEngineAction(const UI::NDUI::Action &action) override;
@@ -86,22 +90,6 @@ private:
 		kPlayResponse
 	};
 
-	// One part of the character
-	struct Tree {
-		MoviePlayer player;
-		RecordGraphic graphic;
-		Common::Rect dest;
-		Common::Array<int32> frames;	// the movie frame to show at each frame of the XSheet
-		int32 shownFrame = -1;
-	};
-
-	static const int32 kFreeRunning = -1;
-
-	bool loadXSheet(const Common::String &name);
-	void showFrame(uint frame);
-	void showMovieFrame(Tree &tree, int32 movieFrame);
-	void drawTree(Tree &tree, const Graphics::Surface &frame);
-	bool isTreeFreeRunning(const Tree &tree) const;
 	bool isVideoDone() const;
 
 	void playSound(const Common::String &name, uint16 channel);
@@ -114,16 +102,14 @@ private:
 	Common::Array<ConvoResponse *> _responses;
 	Record *_default = nullptr;
 
-	Common::Array<Tree *> _trees;
-	uint _numFrames = 0;
-	uint32 _framesPerSecond = 0;
-	uint _frame = 0;
+	XSheet _xsheet;
 
 	State _state = kStartLine;
 	uint _curSound = 0;
 	SoundDescription _sound;
 	bool _hasSoundStarted = false;
 	double _lineStartTime = 0.0;
+	bool _isLineSkipped = false;
 
 	Common::Array<ConvoResponse *> _offeredResponses;
 	int _pickedResponse = -1;

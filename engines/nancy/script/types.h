@@ -55,19 +55,10 @@ struct ScriptRect {
 		return left == other.left && top == other.top && right == other.right && bottom == other.bottom;
 	}
 
+	bool operator!=(const ScriptRect &other) const { return !(*this == other); }
+
 	// An empty or inside out rectangle becomes an empty one
 	Common::Rect toRect() const;
-};
-
-struct ScriptPoint {
-	int32 x = 0;
-	int32 y = 0;
-
-	ScriptPoint() {}
-	ScriptPoint(int32 px, int32 py) : x(px), y(py) {}
-	ScriptPoint(const Common::Point &point) : x(point.x), y(point.y) {}
-
-	Common::Point toPoint() const { return Common::Point(x, y); }
 };
 
 void registerTypes(lua_State *L);
@@ -76,11 +67,21 @@ void pushRect(lua_State *L, const ScriptRect &rect);
 ScriptRect *testRect(lua_State *L, int index);		// null when it is something else
 ScriptRect &checkRect(lua_State *L, int index);
 
-void pushPoint(lua_State *L, const ScriptPoint &point);
+void pushPoint(lua_State *L, const Common::Point32 &point);
+
+// A point that keeps the fractions of its coordinates when the game has them
+void pushPointCoordinates(lua_State *L, double x, double y);
 
 // Reads anything that has an x and a y: a point, a vector or a table.
 // Returns false when the value has neither.
-bool readPoint(lua_State *L, int index, ScriptPoint &point);
+bool readPoint(lua_State *L, int index, Common::Point32 &point);
+
+// The same, keeping the fractions a point can have from Nancy26 on
+bool readPointCoordinates(lua_State *L, int index, double &x, double &y);
+
+// Pushes a copy of a point, or of something else with an x and a y, onto
+// another Lua state. Returns false when the value has neither.
+bool copyPoint(lua_State *from, int index, lua_State *to);
 
 // Colors are 0xAARRGGBB
 void pushColor(lua_State *L, uint32 argb);

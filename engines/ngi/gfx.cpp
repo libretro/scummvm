@@ -28,8 +28,11 @@
 #include "ngi/interaction.h"
 #include "ngi/gameloader.h"
 
+#include "common/file.h"
 #include "common/memstream.h"
 #include "graphics/managed_surface.h"
+
+#include "image/png.h"
 
 namespace NGI {
 
@@ -40,7 +43,7 @@ Background::Background() {
 }
 
 Background::~Background() {
-	Common::for_each(_picObjList.begin(), _picObjList.end(), Common::DefaultDeleter<PictureObject>());
+	Common::for_each(_pictureObjects.begin(), _pictureObjects.end(), Common::DefaultDeleter<PictureObject>());
 	Common::for_each(_bigPictureArray.begin(), _bigPictureArray.end(), Common::DefaultDeleter<BigPicture>());
 }
 
@@ -54,7 +57,7 @@ bool Background::load(MfcArchive &file) {
 		PictureObject *pct = new PictureObject();
 
 		pct->load(file, i == 0);
-		addPictureObject(pct);
+		addPicture(pct);
 	}
 
 	assert(g_nmi->_gameProjectVersion >= 5);
@@ -72,27 +75,27 @@ bool Background::load(MfcArchive &file) {
 	return true;
 }
 
-void Background::addPictureObject(PictureObject *pct) {
-	if (pct->_odelay)
-		pct->renumPictures(&_picObjList);
+void Background::addPicture(PictureObject *pct) {
+	if (pct->_copyId)
+		pct->assignCopyId(&_pictureObjects);
 
 	bool inserted = false;
-	for (uint i = 1; i < _picObjList.size(); i++) {
-		if (_picObjList[i]->_priority <= pct->_priority) {
-			_picObjList.insert_at(i, pct);
+	for (uint i = 1; i < _pictureObjects.size(); i++) {
+		if (_pictureObjects[i]->_z <= pct->_z) {
+			_pictureObjects.insert_at(i, pct);
 			inserted = true;
 			break;
 		}
 	}
 
 	if (!inserted) {
-		_picObjList.push_back(pct);
+		_pictureObjects.push_back(pct);
 	}
 }
 
 PictureObject::PictureObject() {
-	_ox = 0;
-	_oy = 0;
+	_x = 0;
+	_y = 0;
 	_ox2 = 0;
 	_oy2 = 0;
 	_objtype = kObjTypePictureObject;
@@ -101,8 +104,8 @@ PictureObject::PictureObject() {
 
 PictureObject::PictureObject(PictureObject *src) : GameObject(src) {
 	_picture = src->_picture;
-	_ox2 = _ox;
-	_oy2 = _oy;
+	_ox2 = _x;
+	_oy2 = _y;
 	_pictureObject2List = src->_pictureObject2List;
 	_objtype = kObjTypePictureObject;
 }
@@ -118,7 +121,7 @@ bool PictureObject::load(MfcArchive &file, bool bigPicture) {
 	if (bigPicture)
 		_picture = new BigPicture();
 	else
-		_picture = new Picture();
+		_picture = new Texture();
 
 	_picture->load(file);
 
@@ -129,8 +132,8 @@ bool PictureObject::load(MfcArchive &file, bool bigPicture) {
 		_pictureObject2List.back().load(file);
 	}
 
-	_ox2 = _ox;
-	_oy2 = _oy;
+	_ox2 = _x;
+	_oy2 = _y;
 
 #if 0
 	_picture->displayPicture();
@@ -139,26 +142,26 @@ bool PictureObject::load(MfcArchive &file, bool bigPicture) {
 	return true;
 }
 
-void PictureObject::draw() {
+void PictureObject::render() {
 	if (_flags & 1)
-		_picture->draw(_ox, _oy, 2, 0);
+		_picture->render(_x, _y, 2, 0);
 	else
-		_picture->draw(_ox, _oy, 0, 0);
+		_picture->render(_x, _y, 0, 0);
 }
 
-void PictureObject::drawAt(int x, int y) {
+void PictureObject::renderAtPos(int x, int y) {
 	if (x == -1)
-		x = _ox;
+		x = _x;
 	if (y == -1)
-		y = _oy;
+		y = _y;
 
 	_picture->_x = x;
 	_picture->_y = y;
 
 	if (_flags & 1)
-		_picture->draw(x, y, 2, 0);
+		_picture->render(x, y, 2, 0);
 	else
-		_picture->draw(x, y, 0, 0);
+		_picture->render(x, y, 0, 0);
 }
 
 bool PictureObject::setPicAniInfo(const PicAniInfo &picAniInfo) {
@@ -167,11 +170,11 @@ bool PictureObject::setPicAniInfo(const PicAniInfo &picAniInfo) {
 	}
 
 	if (picAniInfo.type & 2) {
-		setOXY(picAniInfo.ox, picAniInfo.oy);
-		_priority = picAniInfo.priority;
-		_odelay = picAniInfo.field_8;
+		setPos(picAniInfo.ox, picAniInfo.oy);
+		_z = picAniInfo.priority;
+		_copyId = picAniInfo.copyId;
 		setFlags(picAniInfo.flags);
-		_field_8 = picAniInfo.field_24;
+		_objectFlags = picAniInfo.objectFlags;
 
 		return true;
 	}
@@ -184,8 +187,8 @@ bool PictureObject::isPointInside(int x, int y) {
 	int oldx = _picture->_x;
 	int oldy = _picture->_y;
 
-	_picture->_x = _ox;
-	_picture->_y = _oy;
+	_picture->_x = _x;
+	_picture->_y = _y;
 
 	res = _picture->isPointInside(x, y);
 
@@ -195,13 +198,13 @@ bool PictureObject::isPointInside(int x, int y) {
 	return res;
 }
 
-bool PictureObject::isPixelHitAtPos(int x, int y) {
+bool PictureObject::hit(int x, int y) {
 	int oldx = _picture->_x;
 	int oldy = _picture->_y;
 
-	_picture->_x = _ox;
-	_picture->_y = _oy;
-	bool res = _picture->isPixelHitAtPos(x, y);
+	_picture->_x = _x;
+	_picture->_y = _y;
+	bool res = _picture->hit(x, y);
 	_picture->_x = oldx;
 	_picture->_y = oldy;
 
@@ -209,96 +212,96 @@ bool PictureObject::isPixelHitAtPos(int x, int y) {
 }
 
 void PictureObject::setOXY2() {
-	_ox2 = _ox;
-	_oy2 = _oy;
+	_ox2 = _x;
+	_oy2 = _y;
 }
 
 GameObject::GameObject() {
-	_odelay = 0;
+	_copyId = 0;
 	_flags = 0;
 	_id = 0;
-	_ox = 0;
-	_oy = 0;
-	_priority = 0;
+	_x = 0;
+	_y = 0;
+	_z = 0;
 	_field_20 = 0;
-	_field_8 = 0;
+	_objectFlags = 0;
 }
 
 GameObject::GameObject(GameObject *src) {
-	_odelay = 1;
+	_copyId = 1;
 	_flags = 0;
 	_id = src->_id;
 
-	_objectName = src->_objectName;
+	_title = src->_title;
 
-	_ox = src->_ox;
-	_oy = src->_oy;
-	_priority = src->_priority;
+	_x = src->_x;
+	_y = src->_y;
+	_z = src->_z;
 	_field_20 = 1;
-	_field_8 = src->_field_8;
+	_objectFlags = src->_objectFlags;
 }
 
 Common::String GameObject::toXML() {
 	return Common::String::format("id=\"%s\" name=\"%s\" x=%d y=%d priority=%d f8=%d",
-		g_nmi->gameIdToStr(_id).c_str(), transCyrillic(_objectName), _ox, _oy, _priority, _field_8);
+		g_nmi->gameIdToStr(_id).c_str(), transCyrillic(_title), _x, _y, _z, _objectFlags);
 }
 
 bool GameObject::load(MfcArchive &file) {
 	debugC(5, kDebugLoading, "GameObject::load()");
-	_odelay = 0;
+	_copyId = 0;
 	_flags = 0;
 	_field_20 = 0;
 
 	_id = file.readUint16LE();
 
-	_objectName = file.readPascalString();
-	_ox = file.readSint32LE();
-	_oy = file.readSint32LE();
-	_priority = file.readUint16LE();
+	_title = file.readPascalString();
+	_x = file.readSint32LE();
+	_y = file.readSint32LE();
+	_z = file.readUint16LE();
 
 	if (g_nmi->_gameProjectVersion >= 11) {
-		_field_8 = file.readUint32LE();
+		_objectFlags = file.readUint32LE();
 	}
 
 	return true;
 }
 
-void GameObject::setOXY(int x, int y) {
-	_ox = x;
-	_oy = y;
+void GameObject::setPos(int x, int y) {
+	_x = x;
+	_y = y;
 }
 
-void GameObject::renumPictures(Common::Array<StaticANIObject *> *lst) {
+void GameObject::assignCopyId(Common::Array<AniObject *> *lst) {
 	int *buf = (int *)calloc(lst->size() + 2, sizeof(int));
 
 	for (uint i = 0; i < lst->size(); i++) {
 		if (_id == (*lst)[i]->_id)
-			buf[(*lst)[i]->_odelay] = 1;
+			buf[(*lst)[i]->_copyId] = 1;
 	}
 
-	if (buf[_odelay]) {
+	if (buf[_copyId]) {
 		uint count;
 		for (count = 1; buf[count] && count < lst->size() + 2; count++)
 			;
-		_odelay = count;
+		_copyId = count;
 	}
 
 	free(buf);
 }
 
-void GameObject::renumPictures(Common::Array<PictureObject *> *lst) {
+void GameObject::assignCopyId(Common::Array<PictureObject *> *lst) {
 	int *buf = (int *)calloc(lst->size() + 2, sizeof(int));
 
 	for (uint i = 0; i < lst->size(); i++) {
 		if (_id == (*lst)[i]->_id)
-			buf[(*lst)[i]->_odelay] = 1;
+			buf[(*lst)[i]->_copyId] = 1;
 	}
 
-	if (buf[_odelay]) {
+	if (buf[_copyId]) {
 		uint count;
 		for (count = 1; buf[count] && count < lst->size() + 2; count++)
 			;
-		_odelay = count;
+		_copyId = count;
 	}
 
 	free(buf);
@@ -309,43 +312,43 @@ bool GameObject::getPicAniInfo(PicAniInfo &info) {
 		info.type = 2;
 		info.objectId = _id;
 		info.sceneId = 0;
-		info.field_8 = _odelay;
+		info.copyId = _copyId;
 		info.flags = _flags;
-		info.field_24 = _field_8;
-		info.ox = _ox;
-		info.oy = _oy;
-		info.priority = _priority;
+		info.objectFlags = _objectFlags;
+		info.ox = _x;
+		info.oy = _y;
+		info.priority = _z;
 
 		return true;
 	}
 
 	if (_objtype == kObjTypeStaticANIObject) {
-		StaticANIObject *ani = static_cast<StaticANIObject *>(this);
+		AniObject *ani = static_cast<AniObject *>(this);
 
 		info.type = (ani->_messageQueueId << 16) | 1;
 		info.objectId = ani->_id;
-		info.field_8 = ani->_odelay;
+		info.copyId = ani->_copyId;
 		info.sceneId = ani->_sceneId;
 		info.flags = ani->_flags;
-		info.field_24 = ani->_field_8;
+		info.objectFlags = ani->_objectFlags;
 		if (ani->_movement) {
-			info.ox = ani->_movement->_ox;
-			info.oy = ani->_movement->_oy;
+			info.ox = ani->_movement->_x;
+			info.oy = ani->_movement->_y;
 		} else {
-			info.ox = ani->_ox;
-			info.oy = ani->_oy;
+			info.ox = ani->_x;
+			info.oy = ani->_y;
 		}
-		info.priority = ani->_priority;
+		info.priority = ani->_z;
 
 		if (ani->_statics)
 			info.staticsId = ani->_statics->_staticsId;
 
 		if (ani->_movement) {
 			info.movementId = ani->_movement->_id;
-			info.dynamicPhaseIndex = ani->_movement->_currDynamicPhaseIndex;
+			info.curFrame = ani->_movement->_curFrame;
 		}
 
-		info.someDynamicPhaseIndex = ani->_someDynamicPhaseIndex;
+		info.targetFrame = ani->_targetFrame;
 
 		return true;
 	}
@@ -355,47 +358,47 @@ bool GameObject::getPicAniInfo(PicAniInfo &info) {
 
 bool GameObject::setPicAniInfo(const PicAniInfo &picAniInfo) {
 	if (!(picAniInfo.type & 3)) {
-		warning("StaticANIObject::setPicAniInfo(): Wrong type: %d", picAniInfo.type);
+		warning("AniObject::setPicAniInfo(): Wrong type: %d", picAniInfo.type);
 
 		return false;
 	}
 
 	if (picAniInfo.type & 2) {
-		setOXY(picAniInfo.ox, picAniInfo.oy);
-		_priority = picAniInfo.priority;
-		_odelay = picAniInfo.field_8;
+		setPos(picAniInfo.ox, picAniInfo.oy);
+		_z = picAniInfo.priority;
+		_copyId = picAniInfo.copyId;
 		setFlags(picAniInfo.flags);
-		_field_8 = picAniInfo.field_24;
+		_objectFlags = picAniInfo.objectFlags;
 
 		return true;
 	}
 
 	if (picAniInfo.type & 1 && _objtype == kObjTypeStaticANIObject) {
-		StaticANIObject *ani = static_cast<StaticANIObject *>(this);
+		AniObject *ani = static_cast<AniObject *>(this);
 
 		ani->_messageQueueId = (picAniInfo.type >> 16) & 0xffff;
-		ani->_odelay = picAniInfo.field_8;
+		ani->_copyId = picAniInfo.copyId;
 		ani->setFlags(picAniInfo.flags);
-		ani->_field_8 = picAniInfo.field_24;
+		ani->_objectFlags = picAniInfo.objectFlags;
 
 		if (picAniInfo.staticsId) {
-			ani->_statics = ani->getStaticsById(picAniInfo.staticsId);
+			ani->_statics = ani->getStatic(picAniInfo.staticsId);
 		} else {
 			ani->_statics = nullptr;
 		}
 
 		if (picAniInfo.movementId) {
-			ani->_movement = ani->getMovementById(picAniInfo.movementId);
+			ani->_movement = ani->getMovement(picAniInfo.movementId);
 			if (ani->_movement)
-				ani->_movement->setDynamicPhaseIndex(picAniInfo.dynamicPhaseIndex);
+				ani->_movement->setCurFrame(picAniInfo.curFrame);
 		} else {
 			ani->_movement = nullptr;
 		}
 
-		ani->setOXY(picAniInfo.ox, picAniInfo.oy);
-		ani->_priority = picAniInfo.priority;
+		ani->setPos(picAniInfo.ox, picAniInfo.oy);
+		ani->_z = picAniInfo.priority;
 
-		ani->setSomeDynamicPhaseIndex(picAniInfo.someDynamicPhaseIndex);
+		ani->setTargetFrame(picAniInfo.targetFrame);
 
 		return true;
 	}
@@ -403,24 +406,60 @@ bool GameObject::setPicAniInfo(const PicAniInfo &picAniInfo) {
 	return false;
 }
 
-Picture::Picture() :
+Texture::Texture() :
 	_x(0),
 	_y(0),
 	_field_44(0),
-	_field_54(0),
+	_hasMirroredBitmap(0),
 	_alpha(-1),
 	_width(0),
 	_height(0) {}
 
-Picture::~Picture() {
+Texture::~Texture() {
 	freePicture();
 }
 
-void Picture::freePicture() {
-	debugC(5, kDebugMemory, "Picture::freePicture(): file: %s", _memfilename.toString().c_str());
+void Texture::loadPNG(const Common::Path &path, const Dims &sizeHint) {
+	freePicture();
+	_width = sizeHint.x;
+	_height = sizeHint.y;
+	Common::File file;
+	Image::PNGDecoder png;
+	if (!file.open(path) || !png.loadStream(file)) {
+		warning("Could not load scene texture %s (%d x %d)", path.toString().c_str(), _width, _height);
+		return;
+	}
+
+	const Graphics::Surface &source = *png.getSurface();
+	_width = source.w;
+	_height = source.h;
+	_bitmap.reset(new Bitmap());
+	_bitmap->_width = _width;
+	_bitmap->_height = _height;
+	_bitmap->_surface = new Graphics::ManagedSurface();
+	_bitmap->_surface->copyFrom(source);
+	const Graphics::Palette &palette = png.getPalette();
+	if (!palette.empty())
+		_bitmap->_surface->setPalette(palette.data(), 0, palette.size());
+	if (png.hasTransparentColor())
+		_bitmap->_surface->setTransparentColor(png.getTransparentColor());
+	debugC(2, kDebugLoading, "Loaded scene texture %s (%d x %d)", path.toString().c_str(), _width, _height);
+}
+
+void Texture::blitTo(Graphics::ManagedSurface &target, const Common::Point &position, bool mirror) const {
+	if (!_bitmap || !_bitmap->_surface)
+		return;
+	if (mirror)
+		target.simpleBlitFrom(*_bitmap->_surface, position, Graphics::FLIP_H, true);
+	else
+		target.blitFrom(*_bitmap->_surface, position);
+}
+
+void Texture::freePicture() {
+	debugC(5, kDebugMemory, "Texture::freePicture(): file: %s", _memfilename.toString().c_str());
 
 	if (_bitmap) {
-		if (testFlags() && !_field_54) {
+		if (testFlags() && !_hasMirroredBitmap) {
 			freeData();
 		}
 		_bitmap.reset();
@@ -430,13 +469,13 @@ void Picture::freePicture() {
 	_convertedBitmap.reset();
 }
 
-void Picture::freePixelData() {
+void Texture::unload() {
 	freePicture();
 	freeData();
 }
 
-bool Picture::load(MfcArchive &file) {
-	debugC(5, kDebugLoading, "Picture::load()");
+bool Texture::load(MfcArchive &file) {
+	debugC(5, kDebugLoading, "Texture::load()");
 	MemoryObject::load(file);
 
 	_x = file.readSint32LE();
@@ -448,7 +487,7 @@ bool Picture::load(MfcArchive &file) {
 	_width = file.readUint32LE();
 	_height = file.readUint32LE();
 
-	debug(7, "Picture::load: x: %d y: %d, w: %d, h: %d", _x, _y, _width, _height);
+	debug(7, "Texture::load: x: %d y: %d, w: %d, h: %d", _x, _y, _width, _height);
 
 	_mflags |= 1;
 
@@ -474,13 +513,13 @@ bool Picture::load(MfcArchive &file) {
 
 	getData();
 
-	debugC(5, kDebugLoading, "Picture::load: loaded memobject=\"%s\" x=%d y=%d f44=%d width=%d height=%d alpha=%d memobject2=\"%s\"", _memfilename.toString().c_str(),
+	debugC(5, kDebugLoading, "Texture::load: loaded memobject=\"%s\" x=%d y=%d f44=%d width=%d height=%d alpha=%d memobject2=\"%s\"", _memfilename.toString().c_str(),
 				_x, _y, _field_44, _width, _height, _alpha, _memoryObject2->_memfilename.toString().c_str());
 
 	return true;
 }
 
-void Picture::setAOIDs() {
+void Texture::setAOIDs() {
 	int w = (g_nmi->_pictureScale + _width - 1) / g_nmi->_pictureScale;
 	int h = (g_nmi->_pictureScale + _height - 1) / g_nmi->_pictureScale;
 
@@ -494,8 +533,13 @@ void Picture::setAOIDs() {
 	}
 }
 
-void Picture::init() {
-	debugC(5, kDebugLoading, "Picture::init(), %s", _memfilename.toString().c_str());
+void Texture::blitTo(Graphics::ManagedSurface &target, const Common::Rect &source, const Common::Point &position) const {
+	if (_bitmap && _bitmap->_surface)
+		target.blitFrom(*_bitmap->_surface, source, position);
+}
+
+void Texture::init() {
+	debugC(5, kDebugLoading, "Texture::init(), %s", _memfilename.toString().c_str());
 
 	MemoryObject::getData();
 
@@ -506,13 +550,13 @@ void Picture::init() {
 	_bitmap->_flags |= 0x1000000;
 }
 
-void Picture::getDibInfo() {
+void Texture::getDibInfo() {
 	int off = _dataSize & ~0xf;
 
-	debugC(9, kDebugLoading, "Picture::getDibInfo: _dataSize: %d", _dataSize);
+	debugC(9, kDebugLoading, "Texture::getDibInfo: _dataSize: %d", _dataSize);
 
 	if (!_dataSize) {
-		warning("Picture::getDibInfo(): Empty data size");
+		warning("Texture::getDibInfo(): Empty data size");
 		return;
 	}
 
@@ -521,12 +565,12 @@ void Picture::getDibInfo() {
 	}
 
 	if (!_data) {
-		warning("Picture::getDibInfo: data is empty <%s>", _memfilename.toString().c_str());
+		warning("Texture::getDibInfo: data is empty <%s>", _memfilename.toString().c_str());
 
 		MemoryObject::load();
 
 		if (!_data)
-			error("Picture::getDibInfo: error loading object #%d", _cnum);
+			error("Texture::getDibInfo: error loading object #%d", _cnum);
 	}
 
 	Common::MemoryReadStream *s = new Common::MemoryReadStream(_data + off - 32, 32);
@@ -536,18 +580,18 @@ void Picture::getDibInfo() {
 	_bitmap->decode(_data, _paletteData.size ? _paletteData : *g_nmi->_globalPalette);
 }
 
-const Bitmap *Picture::getPixelData() {
+const Bitmap *Texture::getPixelData() {
 	if (!_bitmap)
 		init();
 
 	return _bitmap.get();
 }
 
-void Picture::draw(int x, int y, int style, int angle) {
+void Texture::render(int x, int y, int style, int angle) {
 	int x1 = x;
 	int y1 = y;
 
-	debugC(7, kDebugDrawing, "Picture::draw(%d, %d, %d, %d) (%s)", x, y, style, angle, _memfilename.toString().c_str());
+	debugC(7, kDebugDrawing, "Texture::render(%d, %d, %d, %d) (%s)", x, y, style, angle, _memfilename.toString().c_str());
 
 	if (x != -1)
 		x1 = x;
@@ -562,14 +606,14 @@ void Picture::draw(int x, int y, int style, int angle) {
 		return;
 
 	if ((_alpha & 0xff) < 0xff) {
-		debugC(7, kDebugDrawing, "Picture:draw: alpha = %0x", _alpha);
+		debugC(7, kDebugDrawing, "Texture:draw: alpha = %0x", _alpha);
 	}
 
 	const Palette *pal;
 	if (_paletteData.size) {
 		pal = &_paletteData;
 	} else {
-		//warning("Picture:draw: using global palette");
+		//warning("Texture:draw: using global palette");
 		pal = g_nmi->_globalPalette;
 	}
 
@@ -591,18 +635,18 @@ void Picture::draw(int x, int y, int style, int angle) {
 		break;
 	default:
 		if (angle)
-			drawRotated(x1, y1, angle);
+			renderRotate(x1, y1, angle);
 		else {
 			_bitmap->putDib(x1, y1, *pal, _alpha);
 		}
 	}
 }
 
-void Picture::drawRotated(int x, int y, int angle) {
-	warning("STUB: Picture::drawRotated(%d, %d, %d)", x, y, angle);
+void Texture::renderRotate(int x, int y, int angle) {
+	warning("STUB: Texture::renderRotate(%d, %d, %d)", x, y, angle);
 }
 
-void Picture::displayPicture() {
+void Texture::displayPicture() {
 	if (g_nmi->shouldQuit())
 		return;
 
@@ -615,7 +659,7 @@ void Picture::displayPicture() {
 	g_nmi->_backgroundSurface.fillRect(Common::Rect(0, 0, 800, 600), 0);
 	g_nmi->_system->copyRectToScreen(g_nmi->_backgroundSurface.getBasePtr(0, 0), g_nmi->_backgroundSurface.pitch, 0, 0, 800, 600);
 
-	draw(0, 0, 0, 0);
+	render(0, 0, 0, 0);
 
 	g_nmi->updateEvents();
 	g_nmi->_system->delayMillis(10);
@@ -633,7 +677,7 @@ void Picture::displayPicture() {
 	}
 }
 
-void Picture::setPaletteData(const Palette &pal) {
+void Texture::setPaletteData(const Palette &pal) {
 	if (pal.size) {
 		_paletteData.copy(pal);
 	} else {
@@ -641,7 +685,7 @@ void Picture::setPaletteData(const Palette &pal) {
 	}
 }
 
-void Picture::copyMemoryObject2(Picture &src) {
+void Texture::copyMemoryObject2(Texture &src) {
 	if (_width == src._width && _height == src._height) {
 		if (src._memoryObject2 && src._memoryObject2->_rows && _memoryObject2) {
 			byte *data = loadData();
@@ -651,7 +695,7 @@ void Picture::copyMemoryObject2(Picture &src) {
 	}
 }
 
-bool Picture::isPointInside(int x, int y) {
+bool Texture::isPointInside(int x, int y) {
 	if (x >= _x) {
 		if (y >= _y && x < _x + _width && y < _y + _height)
 			return true;
@@ -659,7 +703,7 @@ bool Picture::isPointInside(int x, int y) {
 	return false;
 }
 
-bool Picture::isPixelHitAtPos(int x, int y) {
+bool Texture::hit(int x, int y) {
 	if (x < _x || y < _y || x >= _x + _width || y >= _y + _height)
 		return false;
 
@@ -672,17 +716,17 @@ bool Picture::isPixelHitAtPos(int x, int y) {
 	return _bitmap->isPixelHitAtPos(x, y);
 }
 
-int Picture::getPixelAtPos(int x, int y) {
+int Texture::getColor(int x, int y) {
 	return getPixelAtPosEx(x / g_nmi->_pictureScale, y / g_nmi->_pictureScale);
 
 	return false;
 }
 
-int Picture::getPixelAtPosEx(int x, int y) {
+int Texture::getPixelAtPosEx(int x, int y) {
 	if (x < 0 || y < 0)
 		return 0;
 
-	warning("STUB: Picture::getPixelAtPosEx(%d, %d)", x, y);
+	warning("STUB: Texture::getPixelAtPosEx(%d, %d)", x, y);
 
 	// TODO: It looks like this doesn't really work.
 	if (x < (g_nmi->_pictureScale + _width - 1) / g_nmi->_pictureScale &&
@@ -1087,12 +1131,12 @@ void Bitmap::drawRotated(int x, int y, int angle, const Palette &palette, int al
 
 bool BigPicture::load(MfcArchive &file) {
 	debugC(5, kDebugLoading, "BigPicture::load()");
-	Picture::load(file);
+	Texture::load(file);
 
 	return true;
 }
 
-void BigPicture::draw(int x, int y, int style, int angle) {
+void BigPicture::render(int x, int y, int style, int angle) {
 	if (!_bitmap)
 		init();
 
@@ -1128,41 +1172,41 @@ bool Shadows::load(MfcArchive &file) {
 }
 
 void Shadows::init() {
-	Scene *scene = g_nmi->accessScene(_sceneId);
+	Scene *scene = g_nmi->findScene(_sceneId);
 
-	StaticANIObject *st;
+	AniObject *st;
 	Movement *mov;
 
-	if (scene && (st = scene->getStaticANIObject1ById(_staticAniObjectId, -1)) != nullptr
-		&& ((mov = st->getMovementById(_movementId)) != nullptr))
-		initMovement(mov);
+	if (scene && (st = scene->findAniObjectById(_staticAniObjectId, -1)) != nullptr
+		&& ((mov = st->getMovement(_movementId)) != nullptr))
+		fillData(mov);
 }
 
-void Shadows::initMovement(Movement *mov) {
+void Shadows::fillData(Movement *mov) {
 	uint num;
 
 	if (mov->_currMovement)
-		num = mov->_currMovement->_dynamicPhases.size();
+		num = mov->_currMovement->_phases.size();
 	else
-		num = mov->_dynamicPhases.size();
+		num = mov->_phases.size();
 
 	_items.clear();
 	_items.resize(num);
 
-	_items[0].dynPhase = mov->_staticsObj1;
+	_items[0].dynPhase = mov->_prevStatic;
 	Dims dims = _items[0].dynPhase->getDimensions();
 	_items[0].width = dims.x;
 	_items[0].height = dims.y;
 
 	for (uint i = 1; i < num; i++) {
-		_items[i].dynPhase = mov->getDynamicPhaseByIndex(i - 1);
+		_items[i].dynPhase = mov->getPhase(i - 1);
 		dims = _items[i].dynPhase->getDimensions();
 		_items[i].width = dims.x;
 		_items[i].height = dims.y;
 	}
 }
 
-DynamicPhase *Shadows::findSize(int width, int height) {
+Phase *Shadows::findSize(int width, int height) {
 	int idx = 0;
 	int min = 1000;
 
@@ -1202,7 +1246,7 @@ void NGIEngine::drawAlphaRectangle(int x1, int y1, int x2, int y2, int alpha) {
 void NGIEngine::sceneFade(Scene *sc, bool direction) {
 	for (int dim = 0; dim < 255; dim += 20) {
 		int ticks = g_nmi->_system->getMillis();
-		sc->draw();
+		sc->render();
 
 		drawAlphaRectangle(0, 0, g_nmi->_backgroundSurface.w, g_nmi->_backgroundSurface.h, direction ? dim : 255 - dim);
 		g_nmi->_system->copyRectToScreen(g_nmi->_backgroundSurface.getBasePtr(0, 0), g_nmi->_backgroundSurface.pitch, 0, 0, 800, 600);

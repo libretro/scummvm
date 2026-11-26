@@ -1692,6 +1692,15 @@ void LC::call(const Common::String &name, int nargs, bool allowRetVal) {
 		}
 	}
 
+	bool useListBuiltin = false;
+	if (g_lingo->_builtinListHandlers.contains(name) && nargs >= 1) {
+		Datum firstArg = g_lingo->peek(nargs - 1);
+		if (firstArg.type == ARRAY || firstArg.type == PARRAY ||
+				firstArg.type == POINT || firstArg.type == RECT) {
+			useListBuiltin = true;
+		}
+	}
+
 	// If we're calling from within a me object, and it has a function handler with a
 	// matching name, include the me object in the CFrame (so we still get property lookups).
 	// Doesn't matter that the first arg isn't the me object (which would have been caught
@@ -1700,7 +1709,7 @@ void LC::call(const Common::String &name, int nargs, bool allowRetVal) {
 	// If the method is called from outside and without the object as the first arg,
 	// it will still work using the normal getHandler lookup.
 	// However properties will return garbage (the number 3??).
-	if (g_lingo->_state->me.type == OBJECT) {
+	if (!useListBuiltin && g_lingo->_state->me.type == OBJECT) {
 		AbstractObject *target = g_lingo->_state->me.u.obj;
 		funcSym = target->getMethod(name);
 		if (funcSym.type != VOIDSYM) {
@@ -1712,16 +1721,8 @@ void LC::call(const Common::String &name, int nargs, bool allowRetVal) {
 	// Handler
 	funcSym = g_lingo->getHandler(name);
 
-	if (g_lingo->_builtinListHandlers.contains(name) && nargs >= 1) {
-		// Lingo builtin functions in the "List" category have very strange override mechanics.
-		// If the first argument is an ARRAY or PARRAY, it will use the builtin.
-		// Otherwise, it will fall back to whatever handler is defined globally.
-		Datum firstArg = g_lingo->peek(nargs - 1);
-		if (firstArg.type == ARRAY || firstArg.type == PARRAY ||
-				firstArg.type == POINT || firstArg.type == RECT) {
-			funcSym = g_lingo->_builtinListHandlers[name];
-		}
-	}
+	if (useListBuiltin)
+		funcSym = g_lingo->_builtinListHandlers[name];
 
 	if (funcSym.type == VOIDSYM) { // The built-ins could be overridden
 		// Builtin
@@ -1803,7 +1804,7 @@ void LC::call(const Symbol &funcSym, int nargs, bool allowRetVal) {
 					nargs++;
 				}
 			}
-		} else if (funcSym.nargs > nargs || funcSym.maxArgs < nargs) {
+		} else if (funcSym.nargs > nargs) {
 			warning("Incorrect number of arguments for builtin '%s' (%d, expected %d to %d). Dropping %d stack items.",
 						funcSym.name->c_str(), nargs, funcSym.nargs, funcSym.maxArgs, nargs);
 
@@ -1815,6 +1816,31 @@ void LC::call(const Symbol &funcSym, int nargs, bool allowRetVal) {
 				g_lingo->pushVoid();
 
 			return;
+		} else if (funcSym.maxArgs < nargs) {
+			// Lingo silently ignores surplus (trailing) arguments to the LIST
+			// builtins (getLast/getAt/getOne/getPos/count), and games rely on it --
+			// Verified against real Director 5/6/7: only the list builtins tolerate extra arguments
+			// Drop the surplus only for list builtins;
+			if (funcSym.type == FBLTIN_LIST || funcSym.type == HBLTIN_LIST) {
+				debugC(1, kDebugLingoExec, "Dropping %d extra argument(s) for builtin '%s' (%d, expected %d to %d)",
+							nargs - funcSym.maxArgs, funcSym.name->c_str(), nargs, funcSym.nargs, funcSym.maxArgs);
+
+				while (nargs > funcSym.maxArgs) {
+					g_lingo->pop();
+					nargs--;
+				}
+			} else {
+				warning("Incorrect number of arguments for builtin '%s' (%d, expected %d to %d). Dropping %d stack items.",
+							funcSym.name->c_str(), nargs, funcSym.nargs, funcSym.maxArgs, nargs);
+
+				for (int i = 0; i < nargs; i++)
+					g_lingo->pop();
+
+				if (allowRetVal)
+					g_lingo->pushVoid();
+
+				return;
+			}
 		}
 	}
 

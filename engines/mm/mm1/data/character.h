@@ -437,7 +437,7 @@ struct Character : public PrimaryAttributes {
 	Race _race = HUMAN;
 	CharacterClass _class = NONE;
 
-	byte _age = 0;
+	byte _age = 18;
 	int _ageDayCtr = 0;
 	AttributePair16 _sp;
 	AttributePair _spellLevel;
@@ -508,6 +508,12 @@ struct Character : public PrimaryAttributes {
 	void gatherGold();
 
 	/**
+	 * Original character-profile Gather command: gathers gold, gems and
+	 * food into the character up to their carrying limits.
+	 */
+	void gatherResources();
+
+	/**
 	 * Trade an item to another
 	 */
 	enum TradeResult { TRADE_SUCCESS, TRADE_NO_ITEM, TRADE_FULL };
@@ -572,6 +578,17 @@ struct Character : public PrimaryAttributes {
 	 * Loads the face sprites for the character
 	 */
 	void loadFaceSprites();
+
+	/**
+	 * Experience required to train for the next level.
+	 * Uses the same progression as the Training Hall.
+	 */
+	uint32 experienceForNextLevel() const;
+
+	/**
+	 * Returns true when current experience is sufficient for training.
+	 */
+	bool canLevelUp() const;
 
 	/**
 	 * Returns the color to use in enhanced mode to

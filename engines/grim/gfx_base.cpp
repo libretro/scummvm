@@ -40,6 +40,7 @@
 #include "engines/grim/bitmap.h"
 #include "engines/grim/grim.h"
 #include "engines/grim/model.h"
+#include "engines/grim/set.h"
 
 #include "graphics/surface.h"
 
@@ -67,6 +68,19 @@ void GfxBase::clearShadowMode() {
 
 bool GfxBase::isShadowModeActive() {
 	return _shadowModeActive;
+}
+
+void GfxBase::setupLights(Common::List<Light *> &lightsList) {
+	int lightId = 0;
+	for (Light *l : lightsList) {
+		if (l->_enabled) {
+			setupLight(l, lightId);
+			lightId++;
+		}
+	}
+	for (int i = lightId; i < _maxLights; i++) {
+		turnOffLight(i);
+	}
 }
 
 void GfxBase::saveState(SaveGame *state) {
@@ -165,6 +179,10 @@ void GfxBase::createSpecialtyTexture(uint id, const uint8 *data, int width, int 
 	_specialtyTextures[id]._height = height;
 	_specialtyTextures[id]._bpp = 4;
 	createTexture(&_specialtyTextures[id], data, nullptr, true);
+}
+
+uint8 GfxBase::dimScreenRGB(uint8 r, uint8 g, uint8 b) {
+	return MAX(MAX(r, g), (uint8)(b >> 3)) >> 2;
 }
 
 Bitmap *GfxBase::createScreenshotBitmap(Graphics::Surface *src, int w, int h, bool flipOrientation) {

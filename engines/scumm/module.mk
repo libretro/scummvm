@@ -29,6 +29,7 @@ MODULE_OBJS := \
 	he/script_v70he.o \
 	he/sound_he.o \
 	help.o \
+	hotspots.o \
 	imuse/imuse.o \
 	imuse/imuse_part.o \
 	imuse/imuse_player.o \
@@ -142,12 +143,12 @@ MODULE_OBJS += \
 	imuse_digi/dimuse_utils.o \
 	imuse_digi/dimuse_wave.o \
 	imuse_digi/dimuse_waveout.o \
-	insane/insane.o \
-	insane/insane_ben.o \
-	insane/insane_enemy.o \
-	insane/insane_scenes.o \
-	insane/insane_iact.o \
 	insane/saveload.o \
+	insane/ft/insane.o \
+	insane/ft/insane_ben.o \
+	insane/ft/insane_enemy.o \
+	insane/ft/insane_scenes.o \
+	insane/ft/insane_iact.o \
 	insane/mortimer/campaign.o \
 	insane/mortimer/castle.o \
 	insane/mortimer/dialogs.o \

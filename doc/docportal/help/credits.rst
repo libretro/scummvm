@@ -261,6 +261,8 @@ Avalanche
      -
    * - Arnaud Boutonné
      -
+   * - Mohit Bankar
+     -
 
 awe
 ^^^
@@ -408,6 +410,15 @@ Colony
    * - Gustavo Grieco
      -
 
+Comfy
+^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Andrea Boscarino
+     -
+
 Composer
 ^^^^^^^^
 
@@ -519,6 +530,8 @@ DM
    * - Arnaud Boutonné
      -
    * - Bendegúz Nagy
+     -
+   * - Mohit Bankar
      -
 
 Draci
@@ -744,6 +757,15 @@ Hades Challenge
    * - Vladimir Serbinenko/Google
      -
 
+Harold
+^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Scorp
+     -
+
 Harvester
 ^^^^^^^^^
 
@@ -763,6 +785,15 @@ HDB
      -
    * - Nipun Garg
      - GSoC student
+
+Hollywood
+^^^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Gustavo Grieco
+     -
 
 Hopkins
 ^^^^^^^
@@ -818,6 +849,17 @@ ICB
      -
    * - Einar Johan T. Sømåen
      -
+
+Igor
+^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Gabriel Sanmartín
+     - engine implementation
+   * - Gregory Montoir
+     - original engine foundation & demo support
 
 Illusions
 ^^^^^^^^^
@@ -1140,10 +1182,10 @@ PhoenixVR
 
    * - Vladimir Menshakov
      -
-   * - Hermann Noll
-     - Help with 3D VR projections
    * - Scorp
      - Dracula 1/2 and Messenger support, Engine improvements
+   * - Hermann Noll
+     - Help with 3D VR projections
 
 Pink
 ^^^^
@@ -1625,6 +1667,10 @@ Ultima
      -
    * - Paul Robson
      - (Akalabeth)
+   * - Voyager Dragon
+     - (U2 Patch)
+   * - Voyager Dragon
+     - (U3 Patch)
    * - Daniel c. Würl
      - (Nuvie)
    * - Eric Fry
@@ -2747,6 +2793,15 @@ Drascula
 
    * - Thierry Crozat
      - Improve French translation
+
+Hollywood
+^^^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Nikos Daskos
+     - Hollywood Monsters English translation and translated graphics
 
 Mortevielle
 ^^^^^^^^^^^

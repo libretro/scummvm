@@ -27,21 +27,19 @@
 #include "engines/grim/actor.h"
 #include "engines/grim/savegame.h"
 #include "engines/grim/set.h"
-#include "engines/grim/imuse/imuse.h"
+#include "engines/grim/sound.h"
+#include "engines/grim/imuse/imuse_engine.h"
 #include "engines/grim/lua/lauxlib.h"
 
 namespace Grim {
 
-enum ImuseParam {
-	IM_SOUND_PLAY_COUNT = 0x100,
-	IM_SOUND_PEND_COUNT = 0x200,
-	IM_SOUND_GROUP = 0x400,
-	IM_SOUND_PRIORITY = 0x500,
-	IM_SOUND_VOL = 0x600,
-	IM_SOUND_PAN = 0x700
-};
+// Like the original, a sound is identified either by its name or by the number ImStartSound returned
+static const char *getSoundKey(lua_Object nameObj) {
+	if (lua_isnumber(nameObj))
+		return (const char *)(intptr)(int)lua_getnumber(nameObj);
 
-static float ImToMixer = 2.f;
+	return lua_getstring(nameObj);
+}
 
 void Lua_V1::ImStartSound() {
 	lua_Object nameObj = lua_getparam(1);
@@ -57,24 +55,20 @@ void Lua_V1::ImStartSound() {
 	int priority = (int)lua_getnumber(priorityObj);
 	int group = (int)lua_getnumber(groupObj);
 
-	// Start the sound with the appropriate settings
-	if (g_imuse->startSound(soundName, group, 0, 127, 64, priority, nullptr)) {
-		// FIXME actually it's pushnumber from result of startSound
-		lua_pushstring(soundName);
-	}
+	int result = g_imuse->soundsLoadStartSound(soundName, priority, group);
+
+	// The demo doesn't return anything
+	if (!(g_grim->getGameFlags() & ADGF_DEMO))
+		lua_pushnumber(result);
 }
 
 void Lua_V1::ImStopSound() {
 	lua_Object nameObj = lua_getparam(1);
-	if (lua_isnumber(nameObj))
-		error("ImStopsound: name from value not supported");
-
-	const char *soundName = lua_getstring(nameObj);
-	g_imuse->stopSound(soundName);
+	g_imuse->soundsStopSound(getSoundKey(nameObj));
 }
 
 void Lua_V1::ImStopAllSounds() {
-	g_imuse->stopAllSounds();
+	g_imuse->imStopAllSounds();
 }
 
 void Lua_V1::ImPause() {
@@ -89,40 +83,40 @@ void Lua_V1::ImSetVoiceEffect() {
 	const char *effectName;
 
 	effectName = luaL_check_string(1);
-	Debug::warning(Debug::Sound, "ImSetVoiceEffect(%s) Voice effects are not yet supported", effectName);
+	g_imuse->iMUSESetVoiceEffect(effectName);
 }
 
 void Lua_V1::ImSetMusicVol() {
 	lua_Object volObj = lua_getparam(1);
 	if (!lua_isnumber(volObj))
 		return;
-	g_system->getMixer()->setVolumeForSoundType(Audio::Mixer::kMusicSoundType, (int)(lua_getnumber(volObj) * ImToMixer));
+	g_imuse->setMusicGroupVol((int)lua_getnumber(volObj));
 }
 
 void Lua_V1::ImGetMusicVol() {
-	lua_pushnumber(g_system->getMixer()->getVolumeForSoundType(Audio::Mixer::kMusicSoundType) / ImToMixer);
+	lua_pushnumber(g_imuse->getMusicGroupVol());
 }
 
 void Lua_V1::ImSetVoiceVol() {
 	lua_Object volObj = lua_getparam(1);
 	if (!lua_isnumber(volObj))
 		return;
-	g_system->getMixer()->setVolumeForSoundType(Audio::Mixer::kSpeechSoundType, (int)(lua_getnumber(volObj) * ImToMixer));
+	g_imuse->setVoiceGroupVol((int)lua_getnumber(volObj));
 }
 
 void Lua_V1::ImGetVoiceVol() {
-	lua_pushnumber(g_system->getMixer()->getVolumeForSoundType(Audio::Mixer::kSpeechSoundType) / ImToMixer);
+	lua_pushnumber(g_imuse->getVoiceGroupVol());
 }
 
 void Lua_V1::ImSetSfxVol() {
 	lua_Object volObj = lua_getparam(1);
 	if (!lua_isnumber(volObj))
 		return;
-	g_system->getMixer()->setVolumeForSoundType(Audio::Mixer::kSFXSoundType, (int)(lua_getnumber(volObj) * ImToMixer));
+	g_imuse->setSFXGroupVol((int)lua_getnumber(volObj));
 }
 
 void Lua_V1::ImGetSfxVol() {
-	lua_pushnumber(g_system->getMixer()->getVolumeForSoundType(Audio::Mixer::kSFXSoundType) / ImToMixer);
+	lua_pushnumber(g_imuse->getSFXGroupVol());
 }
 
 void Lua_V1::ImSetParam() {
@@ -130,57 +124,30 @@ void Lua_V1::ImSetParam() {
 	lua_Object paramObj = lua_getparam(2);
 	lua_Object valueObj = lua_getparam(3);
 
-	if (lua_isnumber(nameObj)) {
-		warning("ImSetParam: getting name from number is not supported");
+	if (!lua_isnumber(nameObj) && !lua_isstring(nameObj))
 		return;
-	}
-	if (!lua_isstring(nameObj)) {
+	if (!lua_isnumber(paramObj) || !lua_isnumber(valueObj))
 		return;
-	}
 
-	const char *soundName = lua_getstring(nameObj);
 	int param = (int)lua_getnumber(paramObj);
 	int value = (int)lua_getnumber(valueObj);
-	if (value < 0)
+	if (value < 0 && !(g_grim->getGameFlags() & ADGF_DEMO))
 		value = 0;
-	switch (param) {
-	case IM_SOUND_VOL:
-		g_imuse->setVolume(soundName, value);
-		break;
-	case IM_SOUND_PAN:
-		g_imuse->setPan(soundName, value);
-		break;
-	default:
-		error("ImSetParam() Unimplemented %d", param);
-	}
+
+	g_imuse->soundsSetParam(getSoundKey(nameObj), param, value);
 }
 
 void Lua_V1::ImGetParam() {
 	lua_Object nameObj = lua_getparam(1);
 	lua_Object paramObj = lua_getparam(2);
 
-	if (lua_isnumber(nameObj)) {
-		warning("ImGetParam: getting name from number is not supported");
-		lua_pushnumber(-1.0);
-		return;
-	}
-	if (!lua_isstring(nameObj)) {
+	if (!lua_isnumber(nameObj) && !lua_isstring(nameObj)) {
 		lua_pushnumber(-1.0);
 		return;
 	}
 
-	const char *soundName = lua_getstring(nameObj);
 	int param = (int)lua_getnumber(paramObj);
-	switch (param) {
-	case IM_SOUND_PLAY_COUNT:
-		lua_pushnumber(g_imuse->getCountPlayedTracks(soundName));
-		break;
-	case IM_SOUND_VOL:
-		lua_pushnumber(g_imuse->getVolume(soundName));
-		break;
-	default:
-		error("ImGetParam() Unimplemented %d", param);
-	}
+	lua_pushnumber(g_imuse->soundsGetParam(getSoundKey(nameObj), param));
 }
 
 void Lua_V1::ImFadeParam() {
@@ -189,36 +156,35 @@ void Lua_V1::ImFadeParam() {
 	lua_Object valueObj = lua_getparam(3);
 	lua_Object durationObj = lua_getparam(4);
 
+	bool demo = g_grim->getGameFlags() & ADGF_DEMO;
+
 	if (!lua_isstring(nameObj) && !lua_isnumber(nameObj)) {
-		lua_pushnumber(0);
+		if (!demo)
+			lua_pushnumber(0);
 		return;
 	}
 	if (!lua_isnumber(opcodeObj) || !lua_isnumber(valueObj) || !lua_isnumber(durationObj))
 		return;
 
-	if (lua_isnumber(nameObj)) {
-		error("ImFadeParam: getting name from number is not supported");
-	}
-	const char *soundName = lua_getstring(nameObj);
 	int opcode = (int)lua_getnumber(opcodeObj);
 	int value = (int)lua_getnumber(valueObj);
-	if (value < 0)
+	if (value < 0 && !demo)
 		value = 0;
 	int duration = (int)lua_getnumber(durationObj);
-	switch (opcode) {
-	case IM_SOUND_PAN:
-		g_imuse->setFadePan(soundName, value, duration);
-		break;
-	default:
-		error("ImFadeParam(%s, %x, %d, %d)", soundName, opcode, value, duration);
-		break;
-	}
+
+	g_imuse->soundsFadeParam(getSoundKey(nameObj), opcode, value, duration);
 }
 
 void Lua_V1::ImSetState() {
 	lua_Object stateObj = lua_getparam(1);
 	if (!lua_isnumber(stateObj))
 		return;
+
+	// The demo sets the state right away and returns the new one
+	if (g_grim->getGameFlags() & ADGF_DEMO) {
+		lua_pushnumber(g_imuse->imSetState((int)lua_getnumber(stateObj)));
+		return;
+	}
 
 	g_imuseState = (int)lua_getnumber(stateObj);
 }
@@ -229,14 +195,14 @@ void Lua_V1::ImSetSequence() {
 		return;
 
 	int state = (int)lua_getnumber(stateObj);
-	lua_pushnumber(g_imuse->setMusicSequence(state));
+	lua_pushnumber(g_imuse->imSetSequence(state));
 }
 
 void Lua_V1::SaveIMuse() {
 	SaveGame *savedIMuse = SaveGame::openForSaving("grim.tmp");
 	if (!savedIMuse)
 		return;
-	g_imuse->saveState(savedIMuse);
+	g_sound->saveState(savedIMuse);
 	delete savedIMuse;
 }
 
@@ -244,9 +210,7 @@ void Lua_V1::RestoreIMuse() {
 	SaveGame *savedIMuse = SaveGame::openForLoading("grim.tmp");
 	if (!savedIMuse)
 		return;
-	g_imuse->stopAllSounds();
-	g_imuse->resetState();
-	g_imuse->restoreState(savedIMuse);
+	g_sound->restoreState(savedIMuse);
 	delete savedIMuse;
 	g_system->getSavefileManager()->removeSavefile("grim.tmp");
 }
@@ -255,13 +219,14 @@ void Lua_V1::SetSoundPosition() {
 	Math::Vector3d pos;
 	int minVolume = 10;
 	int maxVolume = 127;
-	float someParam = 0;
+	float maxDist = kSoundDefaultMaxDist;
+	float panFactor, maxRadius;
 	int argId = 1;
 	lua_Object paramObj;
 
-	if (g_grim->getCurrSet()) {
-		g_grim->getCurrSet()->getSoundParameters(&minVolume, &maxVolume);
-	}
+	// Use the room defaults if a room is currently set
+	if (g_grim->getCurrSet())
+		g_grim->getCurrSet()->getSoundParameters(&maxDist, &minVolume, &maxVolume, &panFactor, &maxRadius);
 
 	lua_Object nameObj = lua_getparam(argId++);
 	if (!lua_isnumber(nameObj) && !lua_isstring(nameObj))
@@ -297,18 +262,16 @@ void Lua_V1::SetSoundPosition() {
 
 	paramObj = lua_getparam(argId++);
 	if (lua_isnumber(paramObj)) {
-		someParam = (int)lua_getnumber(paramObj);
-		if (someParam < 0.0)
-			someParam = 0.0;
+		maxDist = lua_getnumber(paramObj);
+		if (maxDist < 0.0f)
+			maxDist = 0.0f;
 	}
 
 	if (g_grim->getCurrSet()) {
 		if (lua_isnumber(nameObj))
-			error("SetSoundPosition: number is not yet supported");
-		else {
-			const char *soundName = lua_getstring(nameObj);
-			g_grim->getCurrSet()->setSoundPosition(soundName, pos, minVolume, maxVolume);
-		}
+			g_grim->getCurrSet()->setSoundPosition((int)lua_getnumber(nameObj), pos, minVolume, maxVolume, maxDist, kSoundDefaultRadius);
+		else
+			g_grim->getCurrSet()->setSoundPosition(lua_getstring(nameObj), pos, minVolume, maxVolume, maxDist, kSoundDefaultRadius);
 	}
 }
 

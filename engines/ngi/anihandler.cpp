@@ -32,7 +32,7 @@ void AniHandler::detachAllObjects() {
 	_items.clear();
 }
 
-MessageQueue *AniHandler::makeQueue(StaticANIObject *ani, int staticsIndex, int, int *, Common::Point **) {
+MessageQueue *AniHandler::makeQueue(AniObject *ani, int staticsIndex, int, int *, Common::Point **) {
 	debugC(4, kDebugPathfinding, "AniHandler::makeQueue(*%d, %d, id, res, point)", ani->_id, staticsIndex);
 
 	int idx = getIndex(ani->_id);
@@ -48,7 +48,7 @@ MessageQueue *AniHandler::makeQueue(StaticANIObject *ani, int staticsIndex, int,
 	int stid;
 #endif
 		if (ani->_movement) {
-			stid = ani->_movement->_staticsObj2->_staticsId;
+			stid = ani->_movement->_nextStatic->_staticsId;
 		} else {
 			if (!ani->_statics)
 				return nullptr;
@@ -62,21 +62,21 @@ MessageQueue *AniHandler::makeQueue(StaticANIObject *ani, int staticsIndex, int,
 	if (stid == staticsIndex)
 		return new MessageQueue(g_nmi->_globalMessageQueueList->compact());
 
-	int startidx = getStaticsIndexById(idx, stid);
-	int endidx = getStaticsIndexById(idx, staticsIndex);
+	int startidx = getStaticIndex(idx, stid);
+	int endidx = getStaticIndex(idx, staticsIndex);
 	int subidx = startidx + endidx * _items[idx].statics.size();
 
-	if (!_items[idx].subItems[subidx].movement) {
+	if (!_items[idx].transitions[subidx].movement) {
 		clearVisitsList(idx);
 		seekWay(idx, startidx, endidx, 0, 1);
 	}
 
-	if (!_items[idx].subItems[subidx].movement)
+	if (!_items[idx].transitions[subidx].movement)
 		return nullptr;
 
 	MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
 	Common::Point point;
-	ExCommand *ex;
+	Command *ex;
 
 #if 0
 	int i = 0;
@@ -85,47 +85,47 @@ MessageQueue *AniHandler::makeQueue(StaticANIObject *ani, int staticsIndex, int,
 	do {
 		subidx = startidx + endidx * _items[idx].statics.size();
 
-		point = _items[idx].subItems[subidx].movement->calcSomeXY(0, -1);
+		point = _items[idx].transitions[subidx].movement->getMovementSize(0, -1);
 
 #if 0
 		if (pointArr) {
 			int sz;
 
-			if (_items[idx].subItems[subidx].movement->_currMovement)
-				sz = _items[idx].subItems[subidx].movement->_currMovement->_dynamicPhases.size();
+			if (_items[idx].transitions[subidx].movement->_currMovement)
+				sz = _items[idx].transitions[subidx].movement->_currMovement->_phases.size();
 			else
-				sz = _items[idx].subItems[subidx].movement->_dynamicPhases.size();
+				sz = _items[idx].transitions[subidx].movement->_phases.size();
 
 			ex = new ExCommand2(20, ani->_id, &pointArr[i], sz);
 
-			ex->_messageNum = _items[idx].subItems[subidx].movement->_id;
+			ex->_messageNum = _items[idx].transitions[subidx].movement->_id;
 		} else {
 #endif
-			ex = new ExCommand(ani->_id, 1, _items[idx].subItems[subidx].movement->_id, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(ani->_id, 1, _items[idx].transitions[subidx].movement->_id, 0, 0, 0, 1, 0, 0, 0);
 #if 0
 		}
 #endif
 
-		ex->_param = ani->_odelay;
+		ex->_param = ani->_copyId;
 		ex->_field_3C = 1;
-		ex->_field_24 = 1;
+		ex->_wait = 1;
 
-		mq->addExCommandToEnd(ex);
+		mq->addCommandToEnd(ex);
 
 #if 0
 		if (resStatId)
-			*resStatId = _items[idx].subItems[subidx].movement->_id;
+			*resStatId = _items[idx].transitions[subidx].movement->_id;
 #endif
 
-		startidx = _items[idx].subItems[subidx].staticsIndex;
+		startidx = _items[idx].transitions[subidx].staticsIndex;
 
 #if 0
 		uint step;
 
-		if (_items[idx].subItems[subidx].movement->_currMovement)
-			step = _items[idx].subItems[subidx].movement->_currMovement->_dynamicPhases.size();
+		if (_items[idx].transitions[subidx].movement->_currMovement)
+			step = _items[idx].transitions[subidx].movement->_currMovement->_phases.size();
 		else
-			step = _items[idx].subItems[subidx].movement->_dynamicPhases.size();
+			step = _items[idx].transitions[subidx].movement->_phases.size();
 
 		i += step;
 #endif
@@ -141,8 +141,8 @@ MGMItem::MGMItem() {
 MGMSubItem::MGMSubItem() {
 	movement = nullptr;
 	staticsIndex = 0;
-	field_8 = 0;
-	field_C = 0;
+	movementCount = 0;
+	frameCount = 0;
 	x = 0;
 	y = 0;
 }
@@ -163,14 +163,14 @@ void AniHandler::resetData(int objId) {
 	if (idx == -1)
 		return;
 
-	debugC(3, kDebugPathfinding, "AniHandler::resetData. (1) movements1 sz: %d movements2 sz: %d", _items[idx].movements1.size(), _items[idx].movements2.size());
+	debugC(3, kDebugPathfinding, "AniHandler::resetData. (1) movements sz: %d visitedMovements sz: %d", _items[idx].movements.size(), _items[idx].visitedMovements.size());
 
-	_items[idx].subItems.clear();
+	_items[idx].transitions.clear();
 	_items[idx].statics.clear();
-	_items[idx].movements1.clear();
-	_items[idx].movements2.clear();
+	_items[idx].movements.clear();
+	_items[idx].visitedMovements.clear();
 
-	StaticANIObject *obj = g_nmi->_currentScene->getStaticANIObject1ById(objId, -1);
+	AniObject *obj = g_nmi->_currentScene->findAniObjectById(objId, -1);
 
 	if (!obj)
 		return;
@@ -180,15 +180,15 @@ void AniHandler::resetData(int objId) {
 		_items[idx].statics.push_back(obj->_staticsList[i]);
 
 		for (uint j = 0; j < obj->_staticsList.size(); j++) // Yes, square
-			_items[idx].subItems.push_back(MGMSubItem());
+			_items[idx].transitions.push_back(MGMSubItem());
 	}
 
 	for (uint i = 0; i < obj->_movements.size(); i++) {
-		_items[idx].movements1.push_back(obj->_movements[i]);
-		_items[idx].movements2.push_back(0);
+		_items[idx].movements.push_back(obj->_movements[i]);
+		_items[idx].visitedMovements.push_back(0);
 	}
 
-	debugC(3, kDebugPathfinding, "AniHandler::resetData. (2) movements1 sz: %d movements2 sz: %d", _items[idx].movements1.size(), _items[idx].movements2.size());
+	debugC(3, kDebugPathfinding, "AniHandler::resetData. (2) movements sz: %d visitedMovements sz: %d", _items[idx].movements.size(), _items[idx].visitedMovements.size());
 }
 
 int AniHandler::getIndex(int objId) {
@@ -212,7 +212,7 @@ MessageQueue *AniHandler::makeRunQueue(MakeQueueStruct *mkQueue) {
 
 	if (!(mkQueue->flags & 1)) {
 		if (mov)
-			mkQueue->staticsId1 = mov->_staticsObj2->_staticsId;
+			mkQueue->staticsId1 = mov->_nextStatic->_staticsId;
 		else
 			mkQueue->staticsId1 = mkQueue->ani->_statics->_staticsId;
 	}
@@ -220,8 +220,8 @@ MessageQueue *AniHandler::makeRunQueue(MakeQueueStruct *mkQueue) {
 	Common::Point point;
 
 	if (!(mkQueue->flags & 0x10) || !(mkQueue->flags & 0x20)) {
-		int nx = mkQueue->ani->_ox;
-		int ny = mkQueue->ani->_oy;
+		int nx = mkQueue->ani->_x;
+		int ny = mkQueue->ani->_y;
 
 		if (mkQueue->ani->_movement) {
 			mkQueue->ani->calcNextStep(&point);
@@ -237,27 +237,27 @@ MessageQueue *AniHandler::makeRunQueue(MakeQueueStruct *mkQueue) {
 			mkQueue->y2 = ny;
 	}
 
-	mov = mkQueue->ani->getMovementById(mkQueue->movementId);
+	mov = mkQueue->ani->getMovement(mkQueue->movementId);
 
 	if (!mov)
 		return nullptr;
 
 
 	int itemIdx = getIndex(mkQueue->ani->_id);
-	int subIdx = getStaticsIndexById(itemIdx, mkQueue->staticsId1);
-	int st2idx = getStaticsIndexById(itemIdx, mov->_staticsObj1->_staticsId);
-	int st1idx = getStaticsIndexById(itemIdx, mov->_staticsObj2->_staticsId);
-	int subOffset = getStaticsIndexById(itemIdx, mkQueue->staticsId2);
+	int subIdx = getStaticIndex(itemIdx, mkQueue->staticsId1);
+	int st2idx = getStaticIndex(itemIdx, mov->_prevStatic->_staticsId);
+	int st1idx = getStaticIndex(itemIdx, mov->_nextStatic->_staticsId);
+	int subOffset = getStaticIndex(itemIdx, mkQueue->staticsId2);
 
-	debugC(3, kDebugPathfinding, "AniHandler::genMovement. (1) movements1 sz: %d movements2 sz: %d", _items[itemIdx].movements1.size(), _items[itemIdx].movements2.size());
+	debugC(3, kDebugPathfinding, "AniHandler::genMovement. (1) movements sz: %d visitedMovements sz: %d", _items[itemIdx].movements.size(), _items[itemIdx].visitedMovements.size());
 
 	clearVisitsList(itemIdx);
 	seekWay(itemIdx, subIdx, st2idx, 0, 1);
 	clearVisitsList(itemIdx);
 	seekWay(itemIdx, st1idx, subOffset, 0, 1);
 
-	const MGMSubItem &sub1 = _items[itemIdx].subItems[subIdx + st2idx * _items[itemIdx].statics.size()];
-	const MGMSubItem &sub2 = _items[itemIdx].subItems[st1idx + subOffset * _items[itemIdx].statics.size()];
+	const MGMSubItem &sub1 = _items[itemIdx].transitions[subIdx + st2idx * _items[itemIdx].statics.size()];
+	const MGMSubItem &sub2 = _items[itemIdx].transitions[st1idx + subOffset * _items[itemIdx].statics.size()];
 
 	if (subIdx != st2idx && !sub1.movement)
 		return nullptr;
@@ -268,7 +268,7 @@ MessageQueue *AniHandler::makeRunQueue(MakeQueueStruct *mkQueue) {
 	int n1x = mkQueue->x1 - mkQueue->x2 - sub1.x - sub2.x;
 	int n1y = mkQueue->y1 - mkQueue->y2 - sub1.y - sub2.y;
 
-	const Common::Point point1 = mov->calcSomeXY(0, -1);
+	const Common::Point point1 = mov->getMovementSize(0, -1);
 
 	int n2x = point1.x;
 	int n2y = point1.y;
@@ -276,7 +276,7 @@ MessageQueue *AniHandler::makeRunQueue(MakeQueueStruct *mkQueue) {
 	int len = -1;
 
 	if (mkQueue->flags & 0x40) {
-		mult = mkQueue->field_10;
+		mult = mkQueue->cycleCount;
 		len = -1;
 		n2x *= mult;
 		n2y *= mult;
@@ -358,13 +358,13 @@ MessageQueue *AniHandler::makeRunQueue(MakeQueueStruct *mkQueue) {
 	ExCommand2 *ex2;
 
 	for (int i = subIdx; i != st2idx;) {
-		const MGMSubItem &s = _items[itemIdx].subItems[i + st2idx * _items[itemIdx].statics.size()];
+		const MGMSubItem &s = _items[itemIdx].transitions[i + st2idx * _items[itemIdx].statics.size()];
 
 		ex2 = createCommand(s.movement, mkQueue->ani->_id, x1, y1, x2, y2, -1);
 		ex2->_parId = mq->_id;
-		ex2->_param = mkQueue->ani->_odelay;
+		ex2->_param = mkQueue->ani->_copyId;
 
-		mq->addExCommandToEnd(ex2);
+		mq->addCommandToEnd(ex2);
 
 		i = s.staticsIndex;
 	}
@@ -379,33 +379,33 @@ MessageQueue *AniHandler::makeRunQueue(MakeQueueStruct *mkQueue) {
 
 		ex2 = createCommand(mov, mkQueue->ani->_id, x1, y1, x2, y2, plen);
 		ex2->_parId = mq->_id;
-		ex2->_param = mkQueue->ani->_odelay;
+		ex2->_param = mkQueue->ani->_copyId;
 
-		mq->addExCommandToEnd(ex2);
+		mq->addCommandToEnd(ex2);
 	}
 
 	for (int j = st1idx; j != subOffset;) {
-		const MGMSubItem &s = _items[itemIdx].subItems[j + subOffset * _items[itemIdx].statics.size()];
+		const MGMSubItem &s = _items[itemIdx].transitions[j + subOffset * _items[itemIdx].statics.size()];
 
 		ex2 = createCommand(s.movement, mkQueue->ani->_id, x1, y1, x2, y2, -1);
 		ex2->_parId = mq->_id;
-		ex2->_param = mkQueue->ani->_odelay;
+		ex2->_param = mkQueue->ani->_copyId;
 
-		mq->addExCommandToEnd(ex2);
+		mq->addCommandToEnd(ex2);
 
 		j = s.staticsIndex;
 	}
 
-	ExCommand *ex = new ExCommand(mkQueue->ani->_id, 5, -1, mkQueue->x1, mkQueue->y1, 0, 1, 0, 0, 0);
+	Command *ex = new Command(mkQueue->ani->_id, 5, -1, mkQueue->x1, mkQueue->y1, 0, 1, 0, 0, 0);
 
-	ex->_z = mkQueue->field_1C;
-	ex->_param = mkQueue->ani->_odelay;
-	ex->_field_24 = 0;
+	ex->_z = mkQueue->destZ;
+	ex->_param = mkQueue->ani->_copyId;
+	ex->_wait = 0;
 	ex->_excFlags |= 3;
 
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	debugC(3, kDebugPathfinding, "AniHandler::genMovement. (2) movements1 sz: %d movements2 sz: %d", _items[itemIdx].movements1.size(), _items[itemIdx].movements2.size());
+	debugC(3, kDebugPathfinding, "AniHandler::genMovement. (2) movements sz: %d visitedMovements sz: %d", _items[itemIdx].movements.size(), _items[itemIdx].visitedMovements.size());
 
 	return mq;
 }
@@ -420,38 +420,38 @@ int AniHandler::getFramesCount(int idx, int subIdx, int endIdx, int flag) {
 		if (subIdx < 0)
 			break;
 
-		res += _items[idx].subItems[subIdx + endIdx * _items[idx].statics.size()].movement->countPhasesWithFlag(0xffffffff, flag);
+		res += _items[idx].transitions[subIdx + endIdx * _items[idx].statics.size()].movement->countPhasesWithFlag(0xffffffff, flag);
 
-		subIdx = _items[idx].subItems[subIdx + endIdx * _items[idx].statics.size()].staticsIndex;
+		subIdx = _items[idx].transitions[subIdx + endIdx * _items[idx].statics.size()].staticsIndex;
 	}
 
 	return res;
 }
-void AniHandler::putObjectToStatics(StaticANIObject *ani, int staticsId) {
-	debugC(4, kDebugPathfinding, "AniHandler::putObjectToStatics(*%d, %d)", ani->_id, staticsId);
+void AniHandler::putObjectToStatic(AniObject *ani, int staticsId) {
+	debugC(4, kDebugPathfinding, "AniHandler::putObjectToStatic(*%d, %d)", ani->_id, staticsId);
 
 	if (getIndex(ani->_id) == -1)
 		return;
 
 	if (ani->_movement) {
-		ani->queueMessageQueue(nullptr);
-		ani->_movement->gotoLastFrame();
-		ani->_statics = ani->_movement->_staticsObj2;
+		ani->setQueue(nullptr);
+		ani->_movement->setLast();
+		ani->_statics = ani->_movement->_nextStatic;
 
-		int x = ani->_movement->_ox;
-		int y = ani->_movement->_oy;
+		int x = ani->_movement->_x;
+		int y = ani->_movement->_y;
 
 		ani->_movement = nullptr;
 
-		ani->setOXY(x, y);
+		ani->setPos(x, y);
 	}
 
 	if (ani->_statics) {
 		const Common::Point point = getTransitionSize(ani->_id, ani->_statics->_staticsId, staticsId);
 
-		ani->setOXY(ani->_ox + point.x, ani->_oy + point.y);
+		ani->setPos(ani->_x + point.x, ani->_y + point.y);
 
-		ani->_statics = ani->getStaticsById(staticsId);
+		ani->_statics = ani->getStatic(staticsId);
 	}
 }
 
@@ -464,8 +464,8 @@ Common::Point AniHandler::getTransitionSize(int objectId, int staticsId1, int st
 		return Common::Point(-1, -1);
 	}
 
-	int st1idx = getStaticsIndexById(idx, staticsId1);
-	int st2idx = getStaticsIndexById(idx, staticsId2);
+	int st1idx = getStaticIndex(idx, staticsId1);
+	int st2idx = getStaticIndex(idx, staticsId2);
 
 	if (st1idx == st2idx) {
 		return Common::Point(0, 0);
@@ -473,17 +473,17 @@ Common::Point AniHandler::getTransitionSize(int objectId, int staticsId1, int st
 
 	int subidx = st1idx + st2idx * _items[idx].statics.size();
 
-	if (!_items[idx].subItems[subidx].movement) {
+	if (!_items[idx].transitions[subidx].movement) {
 		clearVisitsList(idx);
 		seekWay(idx, st1idx, st2idx, false, true);
 
-		if (!_items[idx].subItems[subidx].movement) {
+		if (!_items[idx].transitions[subidx].movement) {
 			clearVisitsList(idx);
 			seekWay(idx, st1idx, st2idx, true, false);
 		}
 	}
 
-	const MGMSubItem &sub = _items[idx].subItems[subidx];
+	const MGMSubItem &sub = _items[idx].transitions[subidx];
 
 	if (!sub.movement) {
 		return Common::Point(0, 0);
@@ -492,7 +492,7 @@ Common::Point AniHandler::getTransitionSize(int objectId, int staticsId1, int st
 	return Common::Point(sub.x, sub.y);
 }
 
-int AniHandler::getStaticsIndexById(int idx, int16 id) {
+int AniHandler::getStaticIndex(int idx, int16 id) {
 	if (!_items[idx].statics.size())
 		return -1;
 
@@ -504,7 +504,7 @@ int AniHandler::getStaticsIndexById(int idx, int16 id) {
 	return -1;
 }
 
-int AniHandler::getStaticsIndex(int idx, Statics *st) {
+int AniHandler::getStaticIndex(int idx, Statics *st) {
 	if (!_items[idx].statics.size())
 		return -1;
 
@@ -519,95 +519,95 @@ int AniHandler::getStaticsIndex(int idx, Statics *st) {
 void AniHandler::clearVisitsList(int idx) {
 	debugC(2, kDebugPathfinding, "AniHandler::clearVisitsList(%d)", idx);
 
-	for (uint i = 0; i < _items[idx].movements2.size(); i++)
-		_items[idx].movements2[i] = 0;
+	for (uint i = 0; i < _items[idx].visitedMovements.size(); i++)
+		_items[idx].visitedMovements[i] = 0;
 
-	debugC(3, kDebugPathfinding, "AniHandler::clearVisitsList. movements1 sz: %d movements2 sz: %d", _items[idx].movements1.size(), _items[idx].movements2.size());
+	debugC(3, kDebugPathfinding, "AniHandler::clearVisitsList. movements sz: %d visitedMovements sz: %d", _items[idx].movements.size(), _items[idx].visitedMovements.size());
 }
 
-int AniHandler::seekWay(int idx, int st1idx, int st2idx, bool flip, bool flop) {
+int AniHandler::seekWay(int idx, int st1idx, int st2idx, bool allowReverse, bool linkedOnly) {
 	MGMItem &item = _items[idx];
 	int subIdx = st1idx + st2idx * item.statics.size();
 
-	debugC(2, kDebugPathfinding, "AniHandler::seekWay(%d, %d, %d, %d, %d)", idx, st1idx, st2idx, flip, flop);
+	debugC(2, kDebugPathfinding, "AniHandler::seekWay(%d, %d, %d, %d, %d)", idx, st1idx, st2idx, allowReverse, linkedOnly);
 
 	if (st1idx == st2idx) {
-		item.subItems[subIdx].reset();
+		item.transitions[subIdx].reset();
 		return 0;
 	}
 
-	if (item.subItems[subIdx].movement)
-		return item.subItems[subIdx].field_8;
+	if (item.transitions[subIdx].movement)
+		return item.transitions[subIdx].movementCount;
 
 	Common::Point point;
 
-	debugC(3, kDebugPathfinding, "AniHandler::seekWay. movements1 sz: %d movements2 sz: %d", item.movements1.size(), item.movements2.size());
+	debugC(3, kDebugPathfinding, "AniHandler::seekWay. movements sz: %d visitedMovements sz: %d", item.movements.size(), item.visitedMovements.size());
 
-	for (uint i = 0; i < item.movements1.size(); i++) {
-		Movement *mov = item.movements1[i];
+	for (uint i = 0; i < item.movements.size(); i++) {
+		Movement *mov = item.movements[i];
 
-		if (mov->_staticsObj1 == item.statics[st1idx]) {
-			if (item.movements2[i] || (flop && !mov->_field_50))
+		if (mov->_prevStatic == item.statics[st1idx]) {
+			if (item.visitedMovements[i] || (linkedOnly && !mov->_link))
 				continue;
 
-			item.movements2[i] = 1;
+			item.visitedMovements[i] = 1;
 
-			int stidx = getStaticsIndex(idx, mov->_staticsObj2);
-			int recalc = seekWay(idx, stidx, st2idx, flip, flop);
-			int sz = mov->_currMovement ? mov->_currMovement->_dynamicPhases.size() : mov->_dynamicPhases.size();
-			debugC(1, kDebugPathfinding, "AniHandler::seekWay, want idx: %d, off: %d (%d + %d), sz: %d", idx, stidx + st2idx * _items[idx].statics.size(), stidx, st2idx, item.subItems.size());
+			int stidx = getStaticIndex(idx, mov->_nextStatic);
+			int recalc = seekWay(idx, stidx, st2idx, allowReverse, linkedOnly);
+			int sz = mov->_currMovement ? mov->_currMovement->_phases.size() : mov->_phases.size();
+			debugC(1, kDebugPathfinding, "AniHandler::seekWay, want idx: %d, off: %d (%d + %d), sz: %d", idx, stidx + st2idx * _items[idx].statics.size(), stidx, st2idx, item.transitions.size());
 
-			int newsz = sz + item.subItems[stidx + st2idx * _items[idx].statics.size()].field_C;
+			int newsz = sz + item.transitions[stidx + st2idx * _items[idx].statics.size()].frameCount;
 
 			if (recalc < 0)
 				continue;
 
-			if (!item.subItems[subIdx].movement || item.subItems[subIdx].field_8 > recalc + 1 ||
-				(item.subItems[subIdx].field_8 == recalc + 1 && item.subItems[subIdx].field_C > newsz)) {
-				item.subItems[subIdx].movement = mov;
-				item.subItems[subIdx].staticsIndex = stidx;
-				item.subItems[subIdx].field_8 = recalc + 1;
-				item.subItems[subIdx].field_C = newsz;
+			if (!item.transitions[subIdx].movement || item.transitions[subIdx].movementCount > recalc + 1 ||
+				(item.transitions[subIdx].movementCount == recalc + 1 && item.transitions[subIdx].frameCount > newsz)) {
+				item.transitions[subIdx].movement = mov;
+				item.transitions[subIdx].staticsIndex = stidx;
+				item.transitions[subIdx].movementCount = recalc + 1;
+				item.transitions[subIdx].frameCount = newsz;
 
-				point = mov->calcSomeXY(0, -1);
+				point = mov->getMovementSize(0, -1);
 
-				item.subItems[subIdx].x = item.subItems[stidx + st2idx * _items[idx].statics.size()].x + point.x;
-				item.subItems[subIdx].y = item.subItems[stidx + st2idx * _items[idx].statics.size()].y + point.y;
+				item.transitions[subIdx].x = item.transitions[stidx + st2idx * _items[idx].statics.size()].x + point.x;
+				item.transitions[subIdx].y = item.transitions[stidx + st2idx * _items[idx].statics.size()].y + point.y;
 			}
-		} else if (flip) {
-			if (mov->_staticsObj2 != item.statics[st1idx])
+		} else if (allowReverse) {
+			if (mov->_nextStatic != item.statics[st1idx])
 				continue;
 
-			if (item.movements2[i] || (flop && !mov->_field_50))
+			if (item.visitedMovements[i] || (linkedOnly && !mov->_link))
 				continue;
 
-			item.movements2[i] = 1;
+			item.visitedMovements[i] = 1;
 
-			int stidx = getStaticsIndex(idx, mov->_staticsObj1);
-			int recalc = seekWay(idx, stidx, st2idx, flip, flop);
+			int stidx = getStaticIndex(idx, mov->_prevStatic);
+			int recalc = seekWay(idx, stidx, st2idx, allowReverse, linkedOnly);
 
 			if (recalc < 0)
 				continue;
 
-			if (!item.subItems[subIdx].movement || item.subItems[subIdx].field_8 > recalc + 1) {
-				item.subItems[subIdx].movement = mov;
-				item.subItems[subIdx].staticsIndex = stidx;
-				item.subItems[subIdx].field_8 = recalc + 1;
+			if (!item.transitions[subIdx].movement || item.transitions[subIdx].movementCount > recalc + 1) {
+				item.transitions[subIdx].movement = mov;
+				item.transitions[subIdx].staticsIndex = stidx;
+				item.transitions[subIdx].movementCount = recalc + 1;
 
-				int sz = mov->_currMovement ? mov->_currMovement->_dynamicPhases.size() : mov->_dynamicPhases.size();
+				int sz = mov->_currMovement ? mov->_currMovement->_phases.size() : mov->_phases.size();
 
-				item.subItems[subIdx].field_C = sz + item.subItems[stidx + st2idx * _items[idx].statics.size()].field_C;
+				item.transitions[subIdx].frameCount = sz + item.transitions[stidx + st2idx * _items[idx].statics.size()].frameCount;
 
-				point = mov->calcSomeXY(0, -1);
+				point = mov->getMovementSize(0, -1);
 
-				item.subItems[subIdx].x = item.subItems[stidx + st2idx * _items[idx].statics.size()].x - point.x;
-				item.subItems[subIdx].y = item.subItems[stidx + st2idx * _items[idx].statics.size()].y - point.y;
+				item.transitions[subIdx].x = item.transitions[stidx + st2idx * _items[idx].statics.size()].x - point.x;
+				item.transitions[subIdx].y = item.transitions[stidx + st2idx * _items[idx].statics.size()].y - point.y;
 			}
 		}
 	}
 
-	if (item.subItems[subIdx].movement)
-		return item.subItems[subIdx].field_8;
+	if (item.transitions[subIdx].movement)
+		return item.transitions[subIdx].movementCount;
 
 	return -1;
 }
@@ -618,14 +618,14 @@ int AniHandler::getNumMovements(int objectId, int idx1, int idx2) {
 	int idx = getIndex(objectId);
 
 	if (idx != -1) {
-		int from = getStaticsIndexById(idx, idx1);
-		int to = getStaticsIndexById(idx, idx2);
+		int from = getStaticIndex(idx, idx1);
+		int to = getStaticIndex(idx, idx2);
 
 		debugC(1, kDebugPathfinding, "WWW 6, want idx: %d, off: %d", idx, from + to * _items[idx].statics.size());
-		const MGMSubItem &sub = _items[idx].subItems[from + to * _items[idx].statics.size()];
+		const MGMSubItem &sub = _items[idx].transitions[from + to * _items[idx].statics.size()];
 
 		if (sub.movement) {
-			idx = sub.field_8;
+			idx = sub.movementCount;
 		} else {
 			clearVisitsList(idx);
 			idx = seekWay(idx, from, to, 0, 1);
@@ -636,17 +636,17 @@ int AniHandler::getNumMovements(int objectId, int idx1, int idx2) {
 }
 
 Common::Point AniHandler::getNumCycles(Movement *mov, int x, int y, int *mult, int *len, int flag) {
-	Common::Point point = mov->calcSomeXY(0, -1);
+	Common::Point point = mov->getMovementSize(0, -1);
 	int p1x = point.x;
 	int p1y = point.y;
 
 	int newmult = 0;
 
 	if (abs(p1y) > abs(p1x)) {
-		if (mov->calcSomeXY(0, -1).y)
-			newmult = (int)((double)y / mov->calcSomeXY(0, -1).y);
-	} else if (mov->calcSomeXY(0, -1).x) {
-		newmult = (int)((double)x / mov->calcSomeXY(0, -1).x);
+		if (mov->getMovementSize(0, -1).y)
+			newmult = (int)((double)y / mov->getMovementSize(0, -1).y);
+	} else if (mov->getMovementSize(0, -1).x) {
+		newmult = (int)((double)x / mov->getMovementSize(0, -1).x);
 	}
 
 	if (newmult < 0)
@@ -659,8 +659,8 @@ Common::Point AniHandler::getNumCycles(Movement *mov, int x, int y, int *mult, i
 
 	if (flag) {
 		if (abs(p1y) > abs(p1x)) {
-			while (abs(p1y * newmult + mov->calcSomeXY(0, phase).y) < abs(y)) {
-				sz = mov->_currMovement ? mov->_currMovement->_dynamicPhases.size() : mov->_dynamicPhases.size();
+			while (abs(p1y * newmult + mov->getMovementSize(0, phase).y) < abs(y)) {
+				sz = mov->_currMovement ? mov->_currMovement->_phases.size() : mov->_phases.size();
 
 				if (phase > sz)
 					break;
@@ -668,8 +668,8 @@ Common::Point AniHandler::getNumCycles(Movement *mov, int x, int y, int *mult, i
 				phase++;
 			}
 		} else {
-			while (abs(p1x * newmult + mov->calcSomeXY(0, phase).x) < abs(x)) {
-				sz = mov->_currMovement ? mov->_currMovement->_dynamicPhases.size() : mov->_dynamicPhases.size();
+			while (abs(p1x * newmult + mov->getMovementSize(0, phase).x) < abs(x)) {
+				sz = mov->_currMovement ? mov->_currMovement->_phases.size() : mov->_phases.size();
 
 				if (phase >= sz)
 					break;
@@ -692,7 +692,7 @@ Common::Point AniHandler::getNumCycles(Movement *mov, int x, int y, int *mult, i
 	if (*len > 0) {
 		++*mult;
 
-		point = mov->calcSomeXY(0, *len);
+		point = mov->getMovementSize(0, *len);
 		p2x = point.x;
 		p2y = point.y;
 
@@ -711,9 +711,9 @@ ExCommand2 *AniHandler::createCommand(Movement *mov, int objId, int x1, int y1, 
 	uint cnt;
 
 	if (mov->_currMovement)
-		cnt = mov->_currMovement->_dynamicPhases.size();
+		cnt = mov->_currMovement->_phases.size();
 	else
-		cnt = mov->_dynamicPhases.size();
+		cnt = mov->_phases.size();
 
 	if (len > 0 && cnt > (uint)len)
 		cnt = len;
@@ -721,7 +721,7 @@ ExCommand2 *AniHandler::createCommand(Movement *mov, int objId, int x1, int y1, 
 	PointList points(cnt);
 
 	for (uint i = 0; i < cnt; i++) {
-		int flags = mov->getDynamicPhaseByIndex(i)->getDynFlags();
+		int flags = mov->getPhase(i)->getDynFlags();
 
 		if (flags & 1) {
 			points[i].x = x1 + x2.x;
@@ -746,7 +746,7 @@ ExCommand2 *AniHandler::createCommand(Movement *mov, int objId, int x1, int y1, 
 	ex->_excFlags = 2;
 	ex->_messageNum = mov->_id;
 	ex->_z = len;
-	ex->_field_24 = 1;
+	ex->_wait = 1;
 	ex->_param = -1;
 
 	return ex;

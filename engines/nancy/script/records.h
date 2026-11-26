@@ -23,7 +23,10 @@
 #define NANCY_SCRIPT_RECORDS_H
 
 #include "common/array.h"
+#include "common/ptr.h"
 #include "common/rect.h"
+
+#include "audio/mixer.h"
 
 #include "engines/nancy/commontypes.h"
 #include "engines/nancy/movieplayer.h"
@@ -43,33 +46,24 @@ namespace Script {
 
 struct RefImage;
 
-// The kinds of records a script can make, in the order of the names below
-enum RecordKind {
-	kRecordNavLogic		= 0,
-	kRecordSummary		= 1,
-	kRecordOverlay		= 2,
-	kRecordMovie		= 3,
-	kRecordSound		= 4,
-	kRecordVideoConvo	= 5,
-	kRecordSoundConvo	= 6,
-	kRecordText			= 7,
-	kRecordOverride		= 8,
-	kRecordParticle		= 9,
-	kRecordAnimOverlay	= 10,
+// What scripts call the type ("NavLogic"), and the Lua type of its objects ("ND.NavLogic")
+const char *getRecordKindName(RecordType type);
+const char *getRecordTypeName(RecordType type);
 
-	kNumRecordKinds		= 11
-};
-
-// What scripts call the kind ("NavLogic"), and the type of its objects ("ND.NavLogic")
-const char *getRecordKindName(RecordKind kind);
-const char *getRecordTypeName(RecordKind kind);
-
-// Returns null for the kinds that are not supported
-Record *makeRecord(RecordKind kind, SceneContext &context);
+// Returns null for the types that are not supported
+Record *makeRecord(RecordType type, SceneContext &context);
 
 // What the "Draw" object of the scripts draws on: the record whose "Render"
 // function is running. Null at any other time.
 Graphics::ManagedSurface *getDrawTarget();
+
+// Draw:OVL(table), Nancy24: draws the picture of an Overlay record onto what
+// the record that is rendering draws
+int drawOverlay(lua_State *L);
+
+// Where something that was placed in the viewport ends up once the transform
+// of its record has moved it
+Common::Rect getTransformedDest(const ScriptRect &dest, const ScriptMatrix &transform, int width, int height);
 
 // What a record draws. Records are placed in the coordinates of the viewport.
 class RecordGraphic : public RenderObject {
@@ -77,12 +71,40 @@ public:
 	RecordGraphic() : RenderObject(0) {}
 	virtual ~RecordGraphic() {}
 
-	// Scripts order what they draw with numbers of their own
-	void setScriptZ(double z, int32 streamZOffset);
+	// Scripts order what they draw with numbers of their own. The scene also
+	// tells which stream it is in, which can zoom into what it draws.
+	// Before Nancy26, records of the same z draw in the order they were made
+	void setScriptZ(double z, const SceneContext &context, uint32 recordOrder = 0);
+
+	// The z order of a script z in a stream that is the given steps in front
+	static uint16 getScriptZOrder(double z, int32 zOffset);
+	static uint16 getBackgroundZOrder(int32 zOffset);
+	static int32 getScriptLayer(int32 zOffset);
+	static double getBackgroundExactZ();
+
+	// The highest z order of what the records draw
+	static const int kMaxScriptZOrder = 59000;
+
+	// Where the records can draw: the viewport, and from Nancy26 on the whole
+	// screen
+	static Common::Rect getDrawArea();
 
 protected:
-	bool isViewportRelative() const override { return true; }
+	// Nancy26 has the viewport at the top left of the screen, and lets records
+	// draw on all of it, the UI along the bottom included
+	bool isViewportRelative() const override;
+	bool isMovedByViewportScroll() const override { return false; }
 };
+
+// Shows a part of an image where the record's transform places it. The part
+// is redrawn when the transform rotates or scales it, or when it is tinted.
+void placePicture(RecordGraphic &graphic, Graphics::ManagedSurface &image, const Common::Rect &source, const ScriptRect &dest, const ScriptMatrix &transform, uint32 modColor);
+
+// Gets an image from the resource manager's cache, and keeps a reference to it
+// in cached while the record uses it. Images from picture trees that aren't
+// cached are loaded directly.
+// outDest gets the rect a Nancy30 image is shown at by default, or an empty one
+bool loadCachedImage(const Common::String &name, const Common::String &treeName, Common::SharedPtr<Graphics::ManagedSurface> &cached, Graphics::ManagedSurface &image, Common::Rect *outDest = nullptr);
 
 // The first record of every scene, which names the area the scene belongs to
 // and its background. A background with more than one frame is a node the
@@ -94,31 +116,45 @@ class SummaryRecord : public Record {
 public:
 	SummaryRecord(SceneContext &context) : Record(context, "ND.Summary") {}
 
+	RecordType getType() const override { return kRecordSummary; }
+
 	const Common::String &getEnvironment() const { return _environment; }
 	const Common::String &getBackgroundName() const { return _backgroundName; }
 
 	// The viewport that shows the background, once it has been loaded
 	void setBackground(UI::Viewport *background);
 
+#ifdef ENABLE_NANCY_V5
+	// Nancy26: the left and right arrow keys turn the view, and the down
+	// arrow turns it around. Returns whether the key did something.
+	bool turnByKey(Common::KeyCode key);
+#endif
+
+	void registerGraphics() override;
+
 protected:
 	void readTable(int tableIndex) override;
 	void runOnce() override;
 	void run(double sceneTime, double elapsedTime) override;
 	bool hasTransform() const override { return true; }
+	void onTransformChanged() override;
 	bool getField(const Common::String &key) override;
+	bool setField(const Common::String &key) override;
 
-	void onMouseMove(const ScriptPoint &point, bool inViewport) override;
-	bool getCursor(const ScriptPoint &point, bool inViewport, uint &cursorType, bool &isHot) override;
-	bool onMouseEvent(RecordEvent event, const ScriptPoint &point, bool inViewport) override;
+	void onMouseMove(const Common::Point32 &point, bool inViewport) override;
+	bool getCursor(const Common::Point32 &point, bool inViewport, uint &cursorType, bool &isHot) override;
+	bool onMouseEvent(RecordEvent event, const Common::Point32 &point, bool inViewport) override;
 
 private:
 	enum Turn { kNoTurn, kTurnLeft, kTurnRight, kTurnAround };
 
 	// The side of the node the mouse is on
-	Turn getTurnAt(const ScriptPoint &point, bool inViewport) const;
+	Turn getTurnAt(const Common::Point32 &point, bool inViewport) const;
+	bool canTurn(Turn turn) const;
 	void setFrame(uint frame);
 	void playTheme();
 	void updateTheme(double sceneTime);
+	void showFacade();
 
 	Common::String _environment;
 	Common::String _backgroundName;
@@ -136,24 +172,37 @@ private:
 	bool _isTurningFast = false;
 	double _lastTurnTime = 0.0;
 	double _sceneTime = 0.0;
+
+	bool _wraps = true;
+	bool _hasUturn = true;
+	bool _canRotate = true;	// Nancy24: whether the sides turn the view
+	bool _isFacade = false;
+	RecordGraphic _facade;
 };
+
+// The record as a summary, or null for a record of another type
+inline SummaryRecord *toSummaryRecord(Record *record) {
+	return record && record->getType() == kRecordSummary ? static_cast<SummaryRecord *>(record) : nullptr;
+}
 
 // Changes the scene and sets flags, either right away or when its hotspot gets clicked
 class NavLogicRecord : public Record {
 public:
 	NavLogicRecord(SceneContext &context) : Record(context, "ND.NavLogic") {}
 
+	RecordType getType() const override { return kRecordNavLogic; }
+
 protected:
 	void readTable(int tableIndex) override;
 	void run(double sceneTime, double elapsedTime) override;
-	bool prepareReset() override { return true; }
+	bool prepareReset() override;
 	bool hasTransform() const override { return true; }
 	bool getField(const Common::String &key) override;
 	bool setField(const Common::String &key) override;
 
-	void onMouseMove(const ScriptPoint &point, bool inViewport) override;
-	bool getCursor(const ScriptPoint &point, bool inViewport, uint &cursorType, bool &isHot) override;
-	bool onMouseEvent(RecordEvent event, const ScriptPoint &point, bool inViewport) override;
+	void onMouseMove(const Common::Point32 &point, bool inViewport) override;
+	bool getCursor(const Common::Point32 &point, bool inViewport, uint &cursorType, bool &isHot) override;
+	bool onMouseEvent(RecordEvent event, const Common::Point32 &point, bool inViewport) override;
 
 private:
 	struct Flag {
@@ -164,7 +213,7 @@ private:
 	void readScene(int valueIndex);
 	void readCursor(int valueIndex);
 	void readRef(int valueIndex);
-	bool isOver(const ScriptPoint &point) const;
+	bool isOver(const Common::Point32 &point) const;
 	void trigger();
 
 	Common::String _sceneName;
@@ -187,6 +236,8 @@ private:
 
 	bool _isRightClick = false;	// Nancy20: the right button clicks it, not the left
 	bool _isMouseOver = false;
+	bool _isPressedAndReleased = false;	// Nancy22: goes off when the button comes up
+	bool _isDown = false;
 
 	Common::Array<Flag> _flags;
 };
@@ -196,12 +247,18 @@ private:
 class OverrideRecord : public Record {
 public:
 	OverrideRecord(SceneContext &context) : Record(context, "ND.OverrideAR") {}
+
+	RecordType getType() const override { return kRecordOverride; }
 	virtual ~OverrideRecord();
 
 	void updateGraphics() override;
+	void registerGraphics() override;
 	void onSave() override { callFunction("OnSave"); }
 	void onDie() override { callFunction("OnDie"); }
 	bool hasMessagingName(const Common::String &name) override;
+
+	// Nancy22: takes a name to get messages under, or gives it up with an empty one
+	bool setMessagingName(const Common::String &name, bool takeOver);
 
 protected:
 	void readTable(int tableIndex) override;
@@ -214,34 +271,92 @@ protected:
 	bool setField(const Common::String &key) override;
 
 private:
-	// What the "Render" function draws on, for the records that have one
+	// What the "Render" function draws on, for the records that have one, and
+	// what it shows
+	Graphics::ManagedSurface _renderSurface;
 	RecordGraphic *_canvas = nullptr;
+
+	Common::String _messagingName;	// Nancy22, from SetMessagingName
 };
+
+// Loads an image from a tree, or a picture the camera took from the "LOADSAVE" one
+bool loadTreeImage(const Common::String &name, const Common::String &treeName, Graphics::ManagedSurface &image);
 
 // Shows a part of an image
 class OverlayRecord : public Record {
 public:
 	OverlayRecord(SceneContext &context) : Record(context, "ND.Overlay") {}
 
+	RecordType getType() const override { return kRecordOverlay; }
+
 	void updateGraphics() override;
+	void registerGraphics() override;
+
+	// Nancy24: Draw:OVL draws the picture once more while another record
+	// renders. The table at tableIndex can replace its source, onScreen,
+	// transform and modColor.
+	void drawCopy(int tableIndex);
+
+	// Nancy30: ar:DefaultRects() shows the whole picture where the image says
+	// it goes (or at the top left), as when neither the source nor onScreen
+	// was given
+	void setDefaultRects();
+
+#ifdef ENABLE_NANCY_V5
+	// Nancy31: ar:Copy() keeps showing the picture as it is now, even after the
+	// overlay changes or hides, until ar:DeleteCopy(index) takes it away
+	int addCopy();
+	void deleteCopy(int index);
+	void pushCopies();
+#endif
 
 protected:
 	void readTable(int tableIndex) override;
 	void onZChanged() override;
 	bool hasTransform() const override { return true; }
-	void onTransformChanged() override { applyRects(); }
+	void onTransformChanged() override;
 	void renderNow() override;
 	bool getField(const Common::String &key) override;
 	bool setField(const Common::String &key) override;
 
 private:
+	void readDest(int index);
+	void readDestTable(Common::Array<ScriptRect> &dests);
 	void applyRects();
+	bool staysOnSamePixels(const ScriptRect &dest);
+	bool setPicture(const Common::String &imageName);
 
-	Graphics::ManagedSurface _image;
+#ifdef ENABLE_NANCY_V5
+	struct Copy {
+		ScriptRect source;
+		ScriptRect dest;
+		uint32 modColor = 0xFFFFFFFF;
+		double alpha = 1.0;
+		ScriptMatrix transform;
+		bool isUsed = true;
+	};
+
+	void applyCopies();
+
+	Common::Array<Copy> _copies;
+	Common::Array<uint> _freeCopies;	// the slots of deleted copies, reused last one first
+	RecordGraphic _copyGraphic;			// all the copies, drawn into one surface
+	bool _hasCopyGraphic = false;
+	bool _areCopiesStale = false;
+#endif
+
+	Common::SharedPtr<Graphics::ManagedSurface> _cachedImage;	// kept while the record uses it
+	Graphics::ManagedSurface _image;	// the cached picture, or a saved one
+	Common::String _imageName;
+	Common::String _treeName;
 	ScriptRect _source;
 	ScriptRect _dest;
+	ScriptRect _defaultDest;	// Nancy30: the rect stored in the image; empty if it has none
+	bool _hasDestTable = false;					// Nancy24: onScreen is a table of rects
+	Common::Array<ScriptRect> _tableDests;		// what it had when last drawn
 	uint32 _modColor = 0xFFFFFFFF;	// what the colors of the picture get multiplied with
 	bool _hasPicture = false;
+	bool _isPlacementStale = false;		// the transform changed while it was hidden
 	RecordGraphic _graphic;
 
 	// The picture as a script had it drawn by itself, which lasts for a frame
@@ -250,12 +365,50 @@ private:
 	bool _isAttachmentDrawn = false;
 };
 
+// Lights, Camera, Curses: a light the player shines around with the mouse, or
+// that its transform puts somewhere. The original draws its picture into the
+// stencil buffer only, and the masked records drawn after it leave out where
+// the picture isn't transparent, which shows what is behind them.
+class FlashlightRecord : public Record {
+public:
+	FlashlightRecord(SceneContext &context) : Record(context, "ND.FlashlightAR") {}
+
+	RecordType getType() const override { return kRecordFlashlight; }
+
+	void updateGraphics() override;
+	void registerGraphics() override;
+
+protected:
+	void readTable(int tableIndex) override;
+	void onZChanged() override;
+	void onMouseMove(const Common::Point32 &point, bool inViewport) override;
+	bool hasTransform() const override { return true; }
+	void onTransformChanged() override { _isPlacementStale = true; }
+	bool getField(const Common::String &key) override;
+	bool setField(const Common::String &key) override;
+
+private:
+	void applyRects();
+
+	Common::SharedPtr<Graphics::ManagedSurface> _cachedImage;	// kept while the record uses it
+	Graphics::ManagedSurface _image;
+	ScriptRect _source;
+	ScriptRect _dest;
+	bool _isOn = true;
+	bool _followsMouse = true;	// centered on the mouse, without the transform
+	bool _isPlacementStale = false;
+	RecordGraphic _graphic;
+};
+
 // Shows the parts of an image one after the other
 class AnimOverlayRecord : public Record {
 public:
 	AnimOverlayRecord(SceneContext &context) : Record(context, "ND.AnimOvlAR") {}
 
+	RecordType getType() const override { return kRecordAnimOverlay; }
+
 	void updateGraphics() override;
+	void registerGraphics() override;
 
 	void setPaused(bool isPaused) { _isPaused = isPaused; }
 
@@ -278,7 +431,8 @@ private:
 	void applyFrame();
 	void beginLoop();
 
-	Graphics::ManagedSurface _image;
+	Common::SharedPtr<Graphics::ManagedSurface> _cachedImage;	// kept while the record uses it
+	Graphics::ManagedSurface _image;	// the cached picture, or a saved one
 	Common::Array<ScriptRect> _sources;
 	ScriptRect _dest;
 	uint32 _modColor = 0xFFFFFFFF;
@@ -302,28 +456,75 @@ private:
 // Plays a sound, picked at random when it has several
 class SoundRecord : public Record {
 public:
-	SoundRecord(SceneContext &context) : Record(context, "ND.SoundAR") {}
+	SoundRecord(SceneContext &context);
+
+	RecordType getType() const override { return kRecordSound; }
 
 	void onSkip() override;
+	bool skipSpeech() override;
+	void stopIfPlaying();
+
+	// The channel the sound of the record plays on, while it does
+	bool getPlayingChannel(uint16 &channel) const;
+
+	// Nancy29: plays one of the sounds once, without a channel, so that it can
+	// overlap other sounds. The group of the record selects its volume setting.
+	// Nancy30 calls OnInstanceDone when one of them has ended.
+	void playInstance();
 
 protected:
 	void readTable(int tableIndex) override;
 	void runOnce() override;
 	void run(double sceneTime, double elapsedTime) override;
+	void onFrame() override;
 	bool prepareReset() override;
+	void onStreamPaused(bool isPaused) override;
 	bool getField(const Common::String &key) override;
+	bool setField(const Common::String &key) override;
 
 private:
+	// Nancy24: "VOICE", "MUSIC" or "EFFECTS", the volume the sound goes by
+	void readChannelType(int index);
+
+	// The names of the sounds at the index, a name or a table of them
+	void readNames(lua_State *L, int index);
+
+#ifdef ENABLE_NANCY_V5
+	// Nancy26 has the UI show what a sound says through messages to "CC": its
+	// text, if the sound has one, and taking it down again once the sound is over
+	void sendCaption(bool isShown);
+#endif
+	const char *getChannelType() const;
+
+	// The volume setting that the group or the channelType selects. Returns
+	// false when the sound uses the setting of its channel.
+	bool getGroupType(Audio::Mixer::SoundType &type) const;
+
+	// Nancy29: picks the volume and the pitch of the next play, each one changed
+	// at random by up to its variance
+	void pickVariation();
+
 	Common::Array<Common::String> _names;
-	uint16 _channel = 14;
+	uint16 _channel;	// FX1 unless the table says otherwise
+	Common::String _channelType;	// empty for the one of the channel
+	Common::String _group;			// Nancy29: "Voice", "Music" or "Effects"
 	double _volume = 1.0;
+	double _volumeVariance = 0.0;	// Nancy29
+	double _pitch = 1.0;			// Nancy29: 2 plays twice as fast
+	double _pitchVariance = 0.0;
+	double _playVolume = 1.0;
+	double _playPitch = 1.0;
 	bool _isLooping = false;
+	Common::Array<Audio::SoundHandle> _instances;	// the ones playInstance() started
 	bool _usesCaption = true;
 
 	SoundDescription _sound;
 	Common::String _caption;	// what the sound says, while it is the one on screen
+	bool _hasSentCaption = false;	// Nancy26: told the UI to show it
 	bool _isPlaying = false;
 	bool _wasPreempted = false;
+	uint32 _channelSerial = 0;	// of the channel, once the sound started
+	double _duration = 0.0;		// of the sound that plays, in seconds
 	double _endTime = 0.0;
 };
 
@@ -335,7 +536,10 @@ class TextRecord : public Record {
 public:
 	TextRecord(SceneContext &context) : Record(context, "ND.TextAR") {}
 
+	RecordType getType() const override { return kRecordText; }
+
 	void updateGraphics() override;
+	void registerGraphics() override;
 
 	// Shows the next letter of a text that isn't shown at once, along with the
 	// markup in front of it. Returns false when there is nothing left to show.
@@ -345,6 +549,8 @@ protected:
 	void readTable(int tableIndex) override;
 	void run(double sceneTime, double elapsedTime) override;
 	void onZChanged() override;
+	bool hasTransform() const override { return true; }
+	void onTransformChanged() override { applyDest(); }
 	bool prepareReset() override;
 	bool getField(const Common::String &key) override;
 	bool setField(const Common::String &key) override;
@@ -352,12 +558,20 @@ protected:
 private:
 	void setText(const Common::String &text);
 	void applyDest();
+	bool drawScrollingText();
 
 	UI::NDUI::Element _element;
 	RecordGraphic _graphic;
 	bool _isDirty = true;
 
+	// A text taller than the record, like the credits, is drawn once and then
+	// only the part that shows gets copied
+	Graphics::ManagedSurface _scrollingText;
+	bool _isScrollingTextDirty = true;
+
 	ScriptRect _dest;
+	// How far the text is scrolled up. Scripts use the opposite sign: a
+	// positive offset moves the text down.
 	double _yOffset = 0.0;
 	double _yVelocity = 0.0;	// per second
 
@@ -373,13 +587,16 @@ private:
 	uint _numRevealed = 0;
 };
 
-// Plays a movie in the viewport
-// TODO: Handle the source, volume, loop and modColor fields.
+// Plays a part of a movie in the viewport, once, a number of times or forever
 class MovieRecord : public Record {
 public:
 	MovieRecord(SceneContext &context) : Record(context, "ND.Movie") {}
 
+	RecordType getType() const override { return kRecordMovie; }
+
 	void updateGraphics() override;
+	void registerGraphics() override;
+	void describeState(Common::Array<Common::String> &lines) const override;
 	bool isSkippable() const override;
 
 	void setPaused(bool isPaused) { _isPaused = isPaused; }
@@ -390,19 +607,35 @@ protected:
 	void run(double sceneTime, double elapsedTime) override;
 	void onZChanged() override;
 	bool prepareReset() override;
+	bool isPaused() const override { return _isPaused; }
+	void onStreamPaused(bool isPaused) override;
 	bool hasTransform() const override { return true; }
 	void onTransformChanged() override { applyPosition(); }
 	bool getField(const Common::String &key) override;
 	bool setField(const Common::String &key) override;
 
 private:
+	bool isSeeThrough() const;
+	// The movie is at another frame, or shows another part of it
 	void drawFrame();
 	void applyPosition();
 
 	Common::String _name;
 	MoviePlayer _player;
 	RecordGraphic _graphic;
+	ScriptRect _source;
 	ScriptRect _dest;
+	uint32 _modColor = 0xFFFFFFFF;	// what the colors of the frames get multiplied with
+	double _frameRate = 0.0;		// Nancy28, 0 for the movie's own
+
+	// What a turned, resized or colored frame gets drawn from. It is kept while
+	// the movie stays at the frame, for the transform to move it around.
+	Graphics::ManagedSurface _frame;
+	bool _hasFrame = false;
+
+	int _numLoops = 1;		// 0 for forever
+	int _numPlayed = 0;
+	int _skipFrame = -1;	// the frame a skipped movie is at; -1 when not skipped
 
 	int _firstFrame = 0;
 	int _lastFrame = 0;
@@ -410,6 +643,8 @@ private:
 	bool _hasCalledOnPause = false;
 	bool _isPaused = false;
 	bool _isVisible = true;
+	bool _hasJustStarted = false;
+	double _singleFrameTime = 0.0;	// in seconds, how long a movie of one frame has shown it
 	double _endTime = 0.0;
 };
 

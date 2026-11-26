@@ -23,13 +23,14 @@
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/input.h"
 #include "engines/nancy/nancy.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/sound.h"
 #include "engines/nancy/util.h"
-#include "engines/nancy/video.h"
+#include "engines/nancy/resource/video.h"
 
 #include "engines/nancy/action/secondarymovie.h"
 #include "engines/nancy/state/scene.h"
+#include "engines/nancy/ui/ndui/manager.h"
 
 #include "common/random.h"
 #include "common/serializer.h"
@@ -55,6 +56,10 @@ PlaySecondaryMovie::~PlaySecondaryMovie() {
 
 	if (_playerCursorAllowed == kNoPlayerCursorAllowed) {
 		g_nancy->setMouseEnabled(true);
+	}
+
+	if (_hasLockedUIMouse && NancySceneState.getNDUI()) {
+		NancySceneState.getNDUI()->unlockMouseInput();
 	}
 }
 
@@ -371,7 +376,14 @@ void PlaySecondaryMovie::applyStartingRandomSequence() {
 			_lastFrame = src.lastFrame;
 			_videoFormat = kLargeVideoFormat;
 			_videoSceneChange = kMovieNoSceneChange;
-			_playerCursorAllowed = (byte)_randomPlayerCursorAllowed;
+			// In Nancy18 a random movie doesn't take the cursor away from the scene,
+			// only from the panels of the UI
+			if (g_nancy->getGameType() >= kGameTypeNancy18) {
+				_playerCursorAllowed = kPlayerCursorAllowed;
+				_locksUIMouse = _randomPlayerCursorAllowed == kNoPlayerCursorAllowed;
+			} else {
+				_playerCursorAllowed = (byte)_randomPlayerCursorAllowed;
+			}
 			_playDirection = kPlayMovieForward;
 		}
 	}
@@ -537,10 +549,9 @@ int PlaySecondaryMovie::beginRandomPause(const RandomSequence &seq) {
 		pauseMs += g_nancy->_randomSource->getRandomNumber(seq.maxPauseMs - seq.minPauseMs - 1);
 	}
 
+	// The movie holds its last frame for the length of the pause
 	_randomPauseMode = kPauseTimed;
 	_randomPauseEndTime = g_system->getMillis() + (uint32)MAX<int32>(0, pauseMs);
-	setVisible(false);
-	_mask.setVisible(false);
 	_decoder.pauseVideo(true);
 	return -1;
 }
@@ -698,6 +709,27 @@ int PlaySecondaryMovie::rollNextSequence() {
 	}
 
 	return -1;
+}
+
+// Movies whose data is damaged, and fails to decode in other players too
+struct BrokenMovie {
+	GameType gameType;
+	const char *name;
+};
+
+static const BrokenMovie kBrokenMovies[] = {
+	{ kGameTypeNancy14, "OFF0007_Water_OVLANIM" },
+	{ kGameTypeNancy17, "LIB_BaANIM" }	// scenes 2613, 2661 and 2663
+};
+
+static bool isBrokenMovie(const Common::Path &videoName) {
+	for (const BrokenMovie &movie : kBrokenMovies) {
+		if (g_nancy->getGameType() == movie.gameType && videoName.baseName().equalsIgnoreCase(movie.name)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // Orders a frame field that may still hold a sentinel: -1 is the movie's own
@@ -1081,7 +1113,7 @@ void PlaySecondaryMovie::updateGraphics() {
 	// anymore. Neither follows the viewport through execute(), so keep them
 	// attached to their background frame here. Records that never got to show a
 	// frame, or random movies that were stopped, have nothing to keep on screen.
-	if (_fullFrame.empty() || _randomStopRequested) {
+	if (_fullFrame.empty() || _randomStopRequested || (_isFinished && _hideOnFinish)) {
 		return;
 	}
 
@@ -1230,8 +1262,8 @@ void PlaySecondaryMovie::execute() {
 
 	switch (_state) {
 	case kBegin:
-		// WORKAROUND: Skip playing a known broken overlay animation in Nancy14
-		if (g_nancy->getGameType() == kGameTypeNancy14 && _videoName.baseName().equalsIgnoreCase("OFF0007_Water_OVLANIM")) {
+		// WORKAROUND: Skip playing the movies that fail to decode
+		if (isBrokenMovie(_videoName)) {
 			_isDone = true;
 			return;
 		}
@@ -1255,6 +1287,11 @@ void PlaySecondaryMovie::execute() {
 
 		if (_playerCursorAllowed == kNoPlayerCursorAllowed) {
 			g_nancy->setMouseEnabled(false);
+		}
+
+		if (_locksUIMouse && !_hasLockedUIMouse && NancySceneState.getNDUI()) {
+			NancySceneState.getNDUI()->lockMouseInput();
+			_hasLockedUIMouse = true;
 		}
 
 		NancySceneState.setActiveMovie(this);
@@ -1429,11 +1466,23 @@ void PlaySecondaryMovie::execute() {
 				_isFinished = false;
 				_decoder.seekToFrame(_playDirection == kPlayMovieReverse ? _lastFrame : _firstFrame);
 				_decoder.pauseVideo(false);
-			} else if (!g_nancy->_sound->isSoundPlaying(_sound)) {
-				// Stop the video and block it from starting again, but also wait for
-				// sound to end before changing state
-				g_nancy->_sound->stopSound(_sound);
-				_state = kActionTrigger;
+			} else {
+				// Hide it right away, as the flags of its last frame may stop the
+				// record from running; e.g. pouring the hot sauce in Nancy17 scene
+				// 3008, where the bottle overlay takes over. A movie that changes
+				// the scene stays until the next one replaces it, or the scene would
+				// show without it for a moment, like Helena in Nancy18 scene 2320.
+				if (_hideOnFinish && _videoSceneChange != kMovieSceneChange) {
+					setVisible(false);
+					_mask.setVisible(false);
+				}
+
+				if (!g_nancy->_sound->isSoundPlaying(_sound)) {
+					// Stop the video and block it from starting again, but also wait for
+					// sound to end before changing state
+					g_nancy->_sound->stopSound(_sound);
+					_state = kActionTrigger;
+				}
 			}
 		}
 
@@ -1490,6 +1539,16 @@ bool PlaySecondaryMovie::isSkippable() {
 		Common::Rect(_decoder.getWidth(), _decoder.getHeight()) == NancySceneState.getViewport().getBounds();
 }
 
+void PlaySecondaryMovie::getCutShortFlags(Common::Array<int16> &labels) const {
+	if (isRandom() || _movieType == kInteractiveMovie || _state != kRun || _isFinished) {
+		return;
+	}
+
+	for (const FlagAtFrame &frameFlag : _frameFlags) {
+		labels.push_back(frameFlag.flagDesc.label);
+	}
+}
+
 bool PlaySecondaryMovie::skip() {
 	if (!isSkippable()) {
 		return false;
@@ -1503,6 +1562,22 @@ bool PlaySecondaryMovie::skip() {
 		resolveSentinelFrames();
 	}
 
+	// The scene's records wait for times that count the whole movie in, like
+	// the scene change after the opening cinematic of Nancy18
+	if (_decoder.isVideoLoaded() && !_isFinished) {
+		int framesLeft;
+		if (_playDirection == kPlayMovieReverse) {
+			framesLeft = curFrame == -1 ? _lastFrame - _firstFrame + 1 : curFrame - _firstFrame;
+		} else {
+			framesLeft = _lastFrame - curFrame;
+		}
+
+		const int frameCount = _decoder.getFrameCount();
+		if (framesLeft > 0 && frameCount > 0) {
+			NancySceneState.addSceneTime((uint32)((uint64)_decoder.getDuration().msecs() * framesLeft / frameCount));
+		}
+	}
+
 	for (const FlagAtFrame &frameFlag : _frameFlags) {
 		bool isPending;
 		if (_playDirection == kPlayMovieReverse) {
@@ -1514,6 +1589,8 @@ bool PlaySecondaryMovie::skip() {
 		if (isPending) {
 			NancySceneState.setEventFlag(frameFlag.flagDesc);
 		}
+
+		NancySceneState.addSkippedMovieFlag(frameFlag.flagDesc.label);
 	}
 
 	g_nancy->_sound->stopSound(_sound);

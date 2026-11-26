@@ -23,7 +23,9 @@
 #include "mm/mm1/maps/maps.h"
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
+#include "mm/mm1/mm1.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -55,12 +57,29 @@ void Map40::special() {
 		_data[VAL2]++;
 		g_maps->_mapPos.y++;
 		updateGame();
-		send(SoundMessage(STRING["maps.map40.conveyor_belt"]));
+
+		SoundMessage msg("Conveyor belt...");
+		if (g_engine->isEnhanced()) {
+			// Enhanced messages have focus and normally forward the key used
+			// to dismiss them back to Game. On the conveyor that immediately
+			// triggers another forced step/message, making input feel stuck.
+			// Consume the dismissing input for this message instead.
+			msg._keyCallback = [](const Common::KeyState &) {
+				g_events->close();
+			};
+		}
+		send(msg);
 	}
 }
 
 void Map40::special00() {
-	send(SoundMessage(STRING["maps.map40.message2"]));
+	send(SoundMessage(g_engine->isEnhanced() ?
+		"Etched in gold, message 2 reads:\n"
+			"One,-riddles-value-you-you-\n"
+			"5-card-must-claimed.-Dreams,-..." :
+		"Etched in gold, message 2 reads:\n"
+			"One,-riddles-value-you-you-5-card-must-\n"
+			"claimed.-dreams,-..."));
 }
 
 void Map40::special01() {
@@ -75,28 +94,38 @@ void Map40::special01() {
 
 void Map40::special02() {
 	reduceHP();
-	send(SoundMessage(STRING["maps.map40.giants"]));
+	send(SoundMessage("Giants hurl boulders!"));
 }
 
 void Map40::special03() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.stairs_up"],
+		"Stairs going up! Take them (Y/N)?",
 		[]() {
-			g_maps->changeMap(0xf02, 3);
+			g_maps->changeMapFromExit(0xf02, 3);
 		}
 	));
 }
 
 void Map40::special04() {
 	send(SoundMessage(
-		STRING["maps.map40.button"],
+		"A button on the wall, push it (Y/N)?",
 		[]() {
 			Map40 &map = *static_cast<Map40 *>(g_maps->_currentMap);
 			map[VAL1]++;
+
+			// Preserve the disabled conveyor across a ScummVM save/load in
+			// this map visit. A normal map transition clears this marker.
+			map._visited[g_maps->_mapOffset] |= VISITED_TRANSIENT_STATE;
 		}
 	));
+}
+
+void Map40::restoreVisitState() {
+	const byte buttonOffset = _data[51 + 4];
+	if (_visited[buttonOffset] & VISITED_TRANSIENT_STATE)
+		_data[VAL1] = 1;
 }
 
 void Map40::special05() {
@@ -144,7 +173,7 @@ void Map40::special15() {
 		_data[VAL2] = 0;
 		reduceHP();
 		reduceHP();
-		send(SoundMessage(STRING["maps.map40.squish"]));
+		send(SoundMessage(mapText("Squish! The party is impaled on a wall\nof spears!")));
 
 	} else {
 		none160();
@@ -152,23 +181,25 @@ void Map40::special15() {
 }
 
 void Map40::special16() {
-	send(SoundMessage(STRING["maps.map40.boulder"]));
+	send(SoundMessage(g_engine->isEnhanced() ?
+		"A boulder says: \"There should be 5 tests\"" :
+		"A boulder says:\"There should be 5 tests\""));
 }
 
 void Map40::special17() {
-	send(SoundMessage(STRING["maps.map40.test1"]));
+	send(SoundMessage("The First Test"));
 }
 
 void Map40::special18() {
-	send(SoundMessage(STRING["maps.map40.test2"]));
+	send(SoundMessage("The Second Test"));
 }
 
 void Map40::special19() {
-	send(SoundMessage(STRING["maps.map40.test3"]));
+	send(SoundMessage("The Third Test"));
 }
 
 void Map40::special20() {
-	send(SoundMessage(STRING["maps.map40.test4"]));
+	send(SoundMessage("The Fourth Test"));
 }
 
 void Map40::archerResist() {

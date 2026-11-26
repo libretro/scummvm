@@ -156,8 +156,8 @@ void stageEncounter() {
 
 void stageTripleBeepSpecial() {
 	g_events->send("GameMessages", InfoMessage(
-		0, 1, STRING["maps.map13.snake_pit"],
-		0, 2, STRING["maps.map13.levitation2"]
+		0, 1, "Snake pit! ",
+		0, 2, "Levitation saved you."
 	));
 	Sound::sound(SOUND_3);
 }
@@ -186,7 +186,7 @@ bool runSoundTestCase(const Common::String &testName) {
 		return stageWallBump();
 
 	} else if (!scumm_stricmp(testName.c_str(), "message")) {
-		g_events->send("GameMessages", SoundMessage(STRING["dialogs.search.nothing"]));
+		g_events->send("GameMessages", SoundMessage("nothing"));
 		return true;
 
 	} else if (!scumm_stricmp(testName.c_str(), "triple")) {
@@ -728,18 +728,18 @@ bool Console::cmdEncounter(int argc, const char **argv) {
 	} else {
 		Game::Encounter &enc = g_globals->_encounters;
 		int monsterNum = strToInt(argv[1]);
-		if (monsterNum < 1 || monsterNum > MONSTERS_COUNT) {
-			debugPrintf("monster-num must be between 1 and %d\n", MONSTERS_COUNT);
+		if (monsterNum < 1 || monsterNum > 16) {
+			debugPrintf("monster-num must be between 1 and 16\n");
 			return true;
 		}
-		int level = (argc == 3) ? strToInt(argv[2]) : 1;
-		if (level < 1 || level >= 15)
+		int level = (argc > 2) ? strToInt(argv[2]) : 1;
+		if (level < 1 || level > 12)
 			level = 1;
 
 		int count = (argc > 3) ? strToInt(argv[3]) : 1;
-		int encType = (argc > 4) ? strToInt(argv[2]) :
+		int encType = (argc > 4) ? strToInt(argv[4]) :
 			Game::NORMAL_ENCOUNTER;
-		if (encType != -1 || encType == 0 || encType == 1)
+		if (encType == -1 || encType == 0 || encType == 1)
 			enc._encounterType = (Game::EncounterType)encType;
 
 		enc.clearMonsters();

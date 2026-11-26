@@ -22,7 +22,7 @@
 
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/graphics.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/font.h"
 
 #include "engines/nancy/misc/hypertext.h"
@@ -244,20 +244,28 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 
 					metaInfo.push({MetaInfo::kColor, numNonSpaceChars, (byte)(curToken[1] - '0')});
 					continue;
-				case 'f' :
+				case 'f' : {
 					// Font token
-					// This selects a specific font ID for the following text
-					if (curToken.size() != 2) {
+					// This selects a specific font ID for the following text. The credits
+					// of Dossier1 are in font 27.
+					if (curToken.size() != 2 && !(curToken.size() == 3 && Common::isDigit(curToken[2]))) {
 						break;
+					}
+
+					const uint fontID = atoi(curToken.c_str() + 1);
+					if (!g_nancy->_graphics->getFont(fontID)) {
+						warning("Text tag <%s> selects a font that doesn't exist", curToken.c_str());
+						continue;
 					}
 
 					// A font set before any text also applies to word wrapping
 					if (numNonSpaceChars == 0) {
-						curFontID = curToken[1] - '0';
+						curFontID = fontID;
 					}
 
-					metaInfo.push({MetaInfo::kFont, numNonSpaceChars, (byte)(curToken[1] - '0')});
+					metaInfo.push({MetaInfo::kFont, numNonSpaceChars, (byte)fontID});
 					continue;
+				}
 				case 'j' : {
 					// Justification: <jl>, <jr> or <jc>
 					if (curToken.size() != 2) {
@@ -321,7 +329,7 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 		// Do word wrapping on the text, sans tokens. This assumes
 		// all text uses fonts of the same width
 		Array<Common::String> wrappedLines;
-		int maxWidth = textBounds.width();
+		int maxWidth = _wrapsLines ? textBounds.width() : _fullSurface.w;
 		if (hasMark) {
 			auto *mark = GetEngineData(MARK);
 			assert(mark);
@@ -524,7 +532,7 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 				// Draw the normal text
 				const int drawX = textBounds.left + horizontalOffset + (newLineStart ? 0 : leftOffsetNonNewline);
 				const int drawY = textBounds.top + _numDrawnLines * lineStep(font) + _imageVerticalOffset;
-				drawTextRun(_fullSurface, font, stringToDraw, drawX, drawY, textBounds.width(), colorID);
+				drawTextRun(_fullSurface, font, stringToDraw, drawX, drawY, _wrapsLines ? textBounds.width() : _fullSurface.w - drawX, colorID);
 
 				// Underline the segment (the <u> markup toggle) in the text color.
 				if (underline && !stringToDraw.empty()) {
@@ -572,6 +580,7 @@ void HypertextParser::drawAllText(const Common::Rect &textBounds, uint leftOffse
 
 			// Record the height of the text currently drawn. Used for textbox scrolling
 			_drawnTextHeight = (_numDrawnLines - 1) * lineStep(font) + _imageVerticalOffset;
+			_lastLineStep = lineStep(font);
 		}
 
 		// Draw the footer image(s)

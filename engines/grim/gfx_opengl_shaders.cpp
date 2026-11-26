@@ -206,13 +206,14 @@ GfxOpenGLS::GfxOpenGLS() {
 	_fclip = -1;
 	_selectedTexture = nullptr;
 	_emergTexture = 0;
-	_maxLights = 8;
 	_lights = new GLSLight[_maxLights];
 	_lightsEnabled = false;
 	_hasAmbientLight = false;
 	_backgroundProgram = nullptr;
 	_smushProgram = nullptr;
 	_textProgram = nullptr;
+	_blastVBO = 0;
+	_blastVBOCapacity = 0;
 	_emergProgram = nullptr;
 	_actorProgram = nullptr;
 	_actorLightsProgram = nullptr;
@@ -263,8 +264,8 @@ void GfxOpenGLS::setupZBuffer() {
 	glBindTexture(GL_TEXTURE_2D, _zBufTex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexImage2D(GL_TEXTURE_2D, 0, format, nextHigher2((int)width), nextHigher2((int)height), 0, format, ztype, nullptr);
 	glActiveTexture(GL_TEXTURE0);
 
@@ -363,17 +364,20 @@ GLuint GfxOpenGLS::nextPrimitive() {
 
 void GfxOpenGLS::setupShaders() {
 	bool isEMI = g_grim->getGameType() == GType_MONKEY4;
+	const Common::String prefix = isEMI ? "emi_" : "grim_";
 
 	static const char* commonAttributes[] = {"position", "texcoord", nullptr};
-	_backgroundProgram = OpenGL::Shader::fromFiles(isEMI ? "emi_background" : "grim_background", commonAttributes);
+	_backgroundProgram = OpenGL::Shader::fromFiles((prefix + "background").c_str(), commonAttributes);
 	_smushProgram = OpenGL::Shader::fromFiles("grim_smush", commonAttributes);
 	_textProgram = OpenGL::Shader::fromFiles("grim_text", commonAttributes);
 	_emergProgram = OpenGL::Shader::fromFiles("grim_emerg", commonAttributes);
 
 	static const char* actorAttributes[] = {"position", "texcoord", "color", "normal", nullptr};
-	_actorProgram = OpenGL::Shader::fromFiles(isEMI ? "emi_actor" : "grim_actor", actorAttributes);
-	_actorLightsProgram = OpenGL::Shader::fromFiles(isEMI ? "emi_actorlights" : "grim_actorlights", actorAttributes);
-	_spriteProgram = OpenGL::Shader::fromFiles(isEMI ? "emi_sprite" : "grim_actor", actorAttributes);
+	// Actors and sprites share one fragment shader per game.
+	const Common::String objectFragment = prefix + "object";
+	_actorProgram = OpenGL::Shader::fromFiles((prefix + "actor").c_str(), objectFragment.c_str(), actorAttributes);
+	_actorLightsProgram = OpenGL::Shader::fromFiles((prefix + "actorlights").c_str(), objectFragment.c_str(), actorAttributes);
+	_spriteProgram = OpenGL::Shader::fromFiles((prefix + "sprite").c_str(), objectFragment.c_str(), actorAttributes);
 
 	static const char* primAttributes[] = { "position", nullptr };
 	_shadowPlaneProgram = OpenGL::Shader::fromFiles("grim_shadowplane", primAttributes);
@@ -394,7 +398,8 @@ void GfxOpenGLS::setupShaders() {
 	setupPrimitives();
 
 	if (!isEMI) {
-		_blastVBO = OpenGL::Shader::createBuffer(GL_ARRAY_BUFFER, 128 * 16 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+		_blastVBOCapacity = 128;
+		_blastVBO = OpenGL::Shader::createBuffer(GL_ARRAY_BUFFER, _blastVBOCapacity * 16 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
 	}
 }
 
@@ -450,9 +455,6 @@ void GfxOpenGLS::positionCamera(const Math::Vector3d &pos, const Math::Vector3d 
 }
 
 void GfxOpenGLS::positionCamera(const Math::Vector3d &pos, const Math::Matrix4 &rot) {
-	Math::Matrix4 projMatrix = _projMatrix;
-	projMatrix.transpose();
-
 	_currentPos = pos;
 	_currentRot = rot;
 
@@ -468,7 +470,6 @@ void GfxOpenGLS::positionCamera(const Math::Vector3d &pos, const Math::Matrix4 &
 	camPos(2, 3) = -_currentPos.z();
 
 	_viewMatrix = invertZ * viewMatrix * camPos;
-	_mvpMatrix = projMatrix * _viewMatrix;
 	_viewMatrix.transpose();
 }
 
@@ -489,7 +490,9 @@ Math::Matrix4 GfxOpenGLS::getModelView() {
 		Math::Matrix4 modelView = invertZ * viewMatrix * camPos;
 		return modelView;
 	} else {
-		return _mvpMatrix;
+		Math::Matrix4 modelView = _viewMatrix;
+		modelView.transpose();
+		return modelView;
 	}
 }
 
@@ -522,214 +525,9 @@ void GfxOpenGLS::flipBuffer(bool opportunistic) {
 	g_system->updateScreen();
 }
 
-void GfxOpenGLS::getScreenBoundingBox(const Mesh *model, int *x1, int *y1, int *x2, int *y2) {
-	if (_currentShadowArray) {
-		*x1 = -1;
-		*y1 = -1;
-		*x2 = -1;
-		*y2 = -1;
-		return;
-	}
-
-	Math::Matrix4 modelMatrix = _currentActor->getFinalMatrix();
-	Math::Matrix4 mvpMatrix = _mvpMatrix * modelMatrix;
-
-	double top = 1000;
-	double right = -1000;
-	double left = 1000;
-	double bottom = -1000;
-
-	Math::Vector3d obj;
-	float *pVertices = nullptr;
-
-	for (int i = 0; i < model->_numFaces; i++) {
-		for (int j = 0; j < model->_faces[i].getNumVertices(); j++) {
-			pVertices = model->_vertices + 3 * model->_faces[i].getVertex(j);
-
-			obj.set(*(pVertices), *(pVertices + 1), *(pVertices + 2));
-
-			Math::Vector4d v = Math::Vector4d(obj.x(), obj.y(), obj.z(), 1.0f);
-			v = mvpMatrix * v;
-			v /= v.w();
-
-			double winX = (1 + v.x()) / 2.0f * _gameWidth;
-			double winY = (1 + v.y()) / 2.0f * _gameHeight;
-
-			if (winX > right)
-				right = winX;
-			if (winX < left)
-				left = winX;
-			if (winY < top)
-				top = winY;
-			if (winY > bottom)
-				bottom = winY;
-		}
-	}
-
-	double t = bottom;
-	bottom = _gameHeight - top;
-	top = _gameHeight - t;
-
-	if (left < 0)
-		left = 0;
-	if (right >= _gameWidth)
-		right = _gameWidth - 1;
-	if (top < 0)
-		top = 0;
-	if (bottom >= _gameHeight)
-		bottom = _gameHeight - 1;
-
-	if (top >= _gameHeight || left >= _gameWidth || bottom < 0 || right < 0) {
-		*x1 = -1;
-		*y1 = -1;
-		*x2 = -1;
-		*y2 = -1;
-		return;
-	}
-
-	*x1 = (int)left;
-	*y1 = (int)(_gameHeight - bottom);
-	*x2 = (int)right;
-	*y2 = (int)(_gameHeight - top);
-}
-
-void GfxOpenGLS::getScreenBoundingBox(const EMIModel *model, int *x1, int *y1, int *x2, int *y2) {
-	if (_currentShadowArray) {
-		*x1 = -1;
-		*y1 = -1;
-		*x2 = -1;
-		*y2 = -1;
-		return;
-	}
-
-	Math::Matrix4 modelMatrix = _currentActor->getFinalMatrix();
-	Math::Matrix4 mvpMatrix = _mvpMatrix * modelMatrix;
-
-	double top = 1000;
-	double right = -1000;
-	double left = 1000;
-	double bottom = -1000;
-
-	for (uint i = 0; i < model->_numFaces; i++) {
-		uint16 *indices = (uint16 *)model->_faces[i]._indexes;
-
-		for (uint j = 0; j < model->_faces[i]._faceLength * 3; j++) {
-			uint16 index = indices[j];
-			const Math::Vector3d &dv = model->_drawVertices[index];
-
-			Math::Vector4d v = Math::Vector4d(dv.x(), dv.y(), dv.z(), 1.0f);
-			v = mvpMatrix * v;
-			v /= v.w();
-
-			double winX = (1 + v.x()) / 2.0f * _gameWidth;
-			double winY = (1 + v.y()) / 2.0f * _gameHeight;
-
-			if (winX > right)
-				right = winX;
-			if (winX < left)
-				left = winX;
-			if (winY < top)
-				top = winY;
-			if (winY > bottom)
-				bottom = winY;
-		}
-	}
-
-	double t = bottom;
-	bottom = _gameHeight - top;
-	top = _gameHeight - t;
-
-	if (left < 0)
-		left = 0;
-	if (right >= _gameWidth)
-		right = _gameWidth - 1;
-	if (top < 0)
-		top = 0;
-	if (bottom >= _gameHeight)
-		bottom = _gameHeight - 1;
-
-	if (top >= _gameHeight || left >= _gameWidth || bottom < 0 || right < 0) {
-		*x1 = -1;
-		*y1 = -1;
-		*x2 = -1;
-		*y2 = -1;
-		return;
-	}
-
-	*x1 = (int)left;
-	*y1 = (int)(_gameHeight - bottom);
-	*x2 = (int)right;
-	*y2 = (int)(_gameHeight - top);
-}
-
-void GfxOpenGLS::getActorScreenBBox(const Actor *actor, Common::Point &p1, Common::Point &p2) {
-	// Get the actor's bounding box information (describes a 3D box)
-	Math::Vector3d bboxPos, bboxSize;
-	actor->getBBoxInfo(bboxPos, bboxSize);
-
-	// Translate the bounding box to the actor's position
-	Math::Matrix4 m = actor->getFinalMatrix();
-	bboxPos = bboxPos + actor->getWorldPos();
-
-	// Set up the camera coordinate system
-	Math::Matrix4 modelView = _currentRot;
-	Math::Matrix4 zScale;
-	zScale.setValue(2, 2, -1.0);
-	modelView = modelView * zScale;
-	modelView.transpose();
-	modelView.translate(-_currentPos);
-	modelView.transpose();
-
-	// Set values outside of the screen range
-	p1.x = 1000;
-	p1.y = 1000;
-	p2.x = -1000;
-	p2.y = -1000;
-
-	// Project all of the points in the 3D bounding box
-	Math::Vector3d p, projected;
-	for (int x = 0; x < 2; x++) {
-		for (int y = 0; y < 2; y++) {
-			for (int z = 0; z < 2; z++) {
-				Math::Vector3d added(bboxSize.x() * 0.5f * (x * 2 - 1), bboxSize.y() * 0.5f * (y * 2 - 1), bboxSize.z() * 0.5f * (z * 2 - 1));
-				m.transform(&added, false);
-				p = bboxPos + added;
-
-				Math::Vector4d v = Math::Vector4d(p.x(), p.y(), p.z(), 1.0f);
-				v = _projMatrix.transform(modelView.transform(v));
-				if (v.w() == 0.0)
-					return;
-				v /= v.w();
-
-				double winX = (1 + v.x()) / 2.0f * _gameWidth;
-				double winY = (1 + v.y()) / 2.0f * _gameHeight;
-
-				// Find the points
-				if (winX < p1.x)
-					p1.x = winX;
-				if (winY < p1.y)
-					p1.y = winY;
-				if (winX > p2.x)
-					p2.x = winX;
-				if (winY > p2.y)
-					p2.y = winY;
-			}
-		}
-	}
-
-	// Swap the p1/p2 y coorindates
-	int16 tmp = p1.y;
-	p1.y = 480 - p2.y;
-	p2.y = 480 - tmp;
-}
-
 void GfxOpenGLS::startActorDraw(const Actor *actor) {
 	_currentActor = actor;
 	glEnable(GL_DEPTH_TEST);
-
-	const Math::Vector3d &pos = actor->getWorldPos();
-	const Math::Quaternion &quat = actor->getRotationQuat();
-	//const float scale = actor->getScale();
 
 	Math::Matrix4 viewMatrix = _viewMatrix;
 	viewMatrix.transpose();
@@ -772,14 +570,12 @@ void GfxOpenGLS::startActorDraw(const Actor *actor) {
 			shaders[i]->setUniform1f("meshAlpha", 1.0f);
 		}
 	} else {
-		Math::Matrix4 modelMatrix = quat.toMatrix();
+		Math::Matrix4 modelMatrix = actor->getGrimModelMatrix();
+		modelMatrix.transpose();
+
 		bool hasZBuffer = g_grim->getCurrSet()->getCurrSetup()->_bkgndZBm;
 		Math::Matrix4 extraMatrix;
 		_matrixStack.top() = extraMatrix;
-
-		modelMatrix.transpose();
-		modelMatrix.setPosition(pos);
-		modelMatrix.transpose();
 
 		for (int i = 0; i < 3; i++) {
 			shaders[i]->use();
@@ -796,6 +592,7 @@ void GfxOpenGLS::startActorDraw(const Actor *actor) {
 		}
 	}
 
+	OpenGL::Shader *actorShaders[] = { _actorProgram, _actorLightsProgram };
 	if (_currentShadowArray) {
 		const Sector *shadowSector = _currentShadowArray->planeList.front().sector;
 		Math::Vector3d color;
@@ -808,13 +605,13 @@ void GfxOpenGLS::startActorDraw(const Actor *actor) {
 		if (!_currentShadowArray->dontNegate)
 			normal = -normal;
 
-		for (int i = 0; i < 3; i++) {
-			shaders[i]->use();
-			shaders[i]->setUniform("shadow._active", true);
-			shaders[i]->setUniform("shadow._color", color);
-			shaders[i]->setUniform("shadow._light", _currentShadowArray->pos);
-			shaders[i]->setUniform("shadow._point", shadowSector->getVertices()[0]);
-			shaders[i]->setUniform("shadow._normal", normal);
+		for (int i = 0; i < 2; i++) {
+			actorShaders[i]->use();
+			actorShaders[i]->setUniform("shadow._active", true);
+			actorShaders[i]->setUniform("shadow._color", color);
+			actorShaders[i]->setUniform("shadow._light", _currentShadowArray->pos);
+			actorShaders[i]->setUniform("shadow._point", shadowSector->getVertices()[0]);
+			actorShaders[i]->setUniform("shadow._normal", normal);
 		}
 
 		glDepthMask(GL_FALSE);
@@ -822,9 +619,9 @@ void GfxOpenGLS::startActorDraw(const Actor *actor) {
 		glEnable(GL_POLYGON_OFFSET_FILL);
 	}
 	else {
-		for (int i = 0; i < 3; i++) {
-			shaders[i]->use();
-			shaders[i]->setUniform("shadow._active", false);
+		for (int i = 0; i < 2; i++) {
+			actorShaders[i]->use();
+			actorShaders[i]->setUniform("shadow._active", false);
 		}
 	}
 
@@ -1130,67 +927,72 @@ void GfxOpenGLS::drawModelFace(const Mesh *mesh, const MeshFace *face) {
 }
 
 void GfxOpenGLS::drawSprite(const Sprite *sprite) {
-	if (g_grim->getGameType() == GType_MONKEY4) {
-		glDepthMask(GL_TRUE);
-	} else {
-		glDepthMask(GL_FALSE);
-	}
-
+	glDepthMask(GL_TRUE);
+	glEnable(GL_BLEND);
 	if (sprite->_flags1 & Sprite::BlendAdditive) {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 	} else {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
-
-	if (sprite->_flags2 & Sprite::DepthTest || _currentActor->isInOverworld()) {
+	if (sprite->_flags2 & Sprite::DepthTest) {
 		glEnable(GL_DEPTH_TEST);
 	} else {
 		glDisable(GL_DEPTH_TEST);
 	}
 
 	_spriteProgram->use();
-
-	Math::Matrix4 rotateMatrix;
-	rotateMatrix.buildAroundZ(_currentActor->getYaw());
-
-	Math::Matrix4 extraMatrix;
-	extraMatrix.setPosition(sprite->_pos);
-	extraMatrix(0, 0) = sprite->_width;
-	extraMatrix(1, 1) = sprite->_height;
-
-	extraMatrix = rotateMatrix * extraMatrix;
-	extraMatrix.transpose();
-	_spriteProgram->setUniform("extraMatrix", extraMatrix);
 	_spriteProgram->setUniform("textured", GL_TRUE);
-	if (g_grim->getGameType() == GType_GRIM) {
-		_spriteProgram->setUniform1f("alphaRef", 0.5f);
-	} else if (sprite->_flags2 & Sprite::AlphaTest) {
-		_spriteProgram->setUniform1f("alphaRef", 0.1f);
-	} else {
-		_spriteProgram->setUniform1f("alphaRef", 0.0f);
-	}
 
-	// FIXME: Currently vertex-specific colors are not supported for sprites.
-	// It is unknown at this time if this is really needed anywhere.
-	Math::Vector4d color(sprite->_red[0] / 255.0f, sprite->_green[0] / 255.0f, sprite->_blue[0] / 255.0f, sprite->_alpha[0] / 255.0f);
-	if (g_grim->getGameType() == GType_MONKEY4) {
+	if (g_grim->getGameType() == GType_GRIM) {
+		_spriteProgram->setUniform("extraMatrix", _matrixStack.top());
+		_spriteProgram->setUniform("spritePos", sprite->_pos);
+		_spriteProgram->setUniform("spriteSize", Math::Vector2d(sprite->_width, sprite->_height));
+		_spriteProgram->setUniform1f("alphaRef", 0.5f);
+
+		float sprite_quad[] = {
+		//	 X   ,  Y  , Z   , S   , T
+			+0.5f, 0.0f, 0.0f, 0.0f, 1.0f,
+			+0.5f, 1.0f, 0.0f, 0.0f, 0.0f,
+			-0.5f, 1.0f, 0.0f, 1.0f, 0.0f,
+			-0.5f, 0.0f, 0.0f, 1.0f, 1.0f,
+		};
+		glBindBuffer(GL_ARRAY_BUFFER, _spriteVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(sprite_quad), sprite_quad, GL_STATIC_DRAW);
+	} else {
+		Math::Matrix4 rotateMatrix;
+		rotateMatrix.buildAroundZ(_currentActor->getYaw());
+
+		Math::Matrix4 extraMatrix;
+		extraMatrix.setPosition(sprite->_pos);
+		extraMatrix(0, 0) = sprite->_width;
+		extraMatrix(1, 1) = sprite->_height;
+
+		extraMatrix = rotateMatrix * extraMatrix;
+		extraMatrix.transpose();
+		_spriteProgram->setUniform("extraMatrix", extraMatrix);
+		if (sprite->_flags2 & Sprite::AlphaTest) {
+			_spriteProgram->setUniform1f("alphaRef", 0.1f);
+		} else {
+			_spriteProgram->setUniform1f("alphaRef", 0.0f);
+		}
+
+		// FIXME: Currently vertex-specific colors are not supported for sprites.
+		// It is unknown at this time if this is really needed anywhere.
+		Math::Vector4d color(sprite->_red[0] / 255.0f, sprite->_green[0] / 255.0f, sprite->_blue[0] / 255.0f, sprite->_alpha[0] / 255.0f);
 		// Don't overwrite the actor's alpha value  which is set via uniformColor in startActorDraw()
 		_spriteProgram->setUniform("spriteColor", color);
-	} else {
-		// No need to set spriteColor for GRIM, it is specific to the EMI sprite shader program
-		_spriteProgram->setUniform("uniformColor", color);
+
+		float sprite_textured_quad[] = {
+		//	 X   ,  Y   , Z   , S   , T
+			-0.5f, +0.5f, 0.0f, sprite->_texCoordX[0], sprite->_texCoordY[0],
+			+0.5f, +0.5f, 0.0f, sprite->_texCoordX[1], sprite->_texCoordY[1],
+			+0.5f, -0.5f, 0.0f, sprite->_texCoordX[2], sprite->_texCoordY[2],
+			-0.5f, -0.5f, 0.0f, sprite->_texCoordX[3], sprite->_texCoordY[3],
+		};
+		glBindBuffer(GL_ARRAY_BUFFER, _spriteVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(sprite_textured_quad), sprite_textured_quad, GL_STATIC_DRAW);
 	}
 
-	float sprite_textured_quad[] = {
-	//	 X   ,  Y   , Z   , S   , T
-		-0.5f, +0.5f, 0.0f, sprite->_texCoordX[0], sprite->_texCoordY[0],
-		+0.5f, +0.5f, 0.0f, sprite->_texCoordX[1], sprite->_texCoordY[1],
-		+0.5f, -0.5f, 0.0f, sprite->_texCoordX[2], sprite->_texCoordY[2],
-		-0.5f, -0.5f, 0.0f, sprite->_texCoordX[3], sprite->_texCoordY[3],
-	};
-
-	glBindBuffer(GL_ARRAY_BUFFER, _spriteVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(sprite_textured_quad), sprite_textured_quad, GL_STATIC_DRAW);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _quadEBO);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -1254,9 +1056,16 @@ void GfxOpenGLS::turnOffLight(int lightId) {
 		return;
 	}
 
+	// Turning off light 0 means no light is enabled at all.
+	if (lightId == 0)
+		_hasAmbientLight = false;
+
+	// Mark the slot as an ambient light with no colour. A zero position
+	// would be a directional light, and the shaders would normalize a zero
+	// vector into NaN, which makes the whole model disappear.
 	_lights[lightId]._color = Math::Vector4d(0.0f, 0.0f, 0.0f, 0.0f);
-	_lights[lightId]._position = Math::Vector4d(0.0f, 0.0f, 0.0f, 0.0f);
-	_lights[lightId]._direction = Math::Vector4d(0.0f, 0.0f, 0.0f, 0.0f);
+	_lights[lightId]._position = Math::Vector4d(0.0f, 0.0f, 0.0f, -1.0f);
+	_lights[lightId]._direction = Math::Vector4d(0.0f, 0.0f, 0.0f, -1.0f);
 }
 
 
@@ -1695,6 +1504,10 @@ void GfxOpenGLS::createTextObject(TextObject *text) {
 	if (text->isBlastDraw()) {
 		vbo = _blastVBO;
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		if (numCharacters > _blastVBOCapacity) {
+			_blastVBOCapacity = numCharacters;
+			glBufferData(GL_ARRAY_BUFFER, _blastVBOCapacity * 16 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+		}
 		glBufferSubData(GL_ARRAY_BUFFER, 0, numCharacters * 16 * sizeof(float), bufData);
 	} else {
 		vbo = OpenGL::Shader::createBuffer(GL_ARRAY_BUFFER, numCharacters * 16 * sizeof(float), bufData, GL_STATIC_DRAW);
@@ -1759,6 +1572,8 @@ void GfxOpenGLS::copyStoredToDisplay() {
 	_dimProgram->use();
 	_dimProgram->setUniform("scaleWH", Math::Vector2d(1.f, 1.f));
 	_dimProgram->setUniform("tex", 0);
+	_dimProgram->setUniform1f("colorScale", 1.f);
+	_dimProgram->setUniform1f("alpha", 1.f);
 
 	glBindTexture(GL_TEXTURE_2D, _storedDisplay);
 
@@ -1781,17 +1596,6 @@ void GfxOpenGLS::dimRegion(int xin, int yReal, int w, int h, float level) {
 	h = (int)(h * _scaleH);
 	int yin = _screenHeight - yReal - h;
 
-	GLuint texture;
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	g_system->presentBuffer();
-	glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, xin, yin, w, h, 0);
-
 	glBindBuffer(GL_ARRAY_BUFFER, _dimRegionVBO);
 
 	float width = w;
@@ -1812,16 +1616,19 @@ void GfxOpenGLS::dimRegion(int xin, int yReal, int w, int h, float level) {
 	_dimRegionProgram->use();
 	_dimRegionProgram->setUniform("scaleWH", Math::Vector2d(1.f / _screenWidth, 1.f / _screenHeight));
 	_dimRegionProgram->setUniform("tex", 0);
+	_dimRegionProgram->setUniform1f("colorScale", 0.f);
+	_dimRegionProgram->setUniform1f("alpha", 1.f - CLIP(level, 0.f, 1.f));
 
 	glDisable(GL_DEPTH_TEST);
 	glDepthMask(GL_FALSE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
+	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 	glDepthMask(GL_TRUE);
-
-	glDeleteTextures(1, &texture);
 }
 
 void GfxOpenGLS::irisAroundRegion(int x1, int y1, int x2, int y2) {

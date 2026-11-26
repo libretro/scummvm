@@ -190,7 +190,7 @@ SurfaceSdlGraphicsManager::SurfaceSdlGraphicsManager(SdlEventSource *sdlEventSou
 #endif
 	_transactionMode(kTransactionNone),
 	_scalerPlugins(ScalerMan.getPlugins()), _scalerPlugin(nullptr), _scaler(nullptr),
-	_needRestoreAfterOverlay(false), _isInOverlayPalette(false), _isDoubleBuf(false), _prevForceRedraw(false), _numPrevDirtyRects(0),
+	_prevOverlayVisible(false), _isInOverlayPalette(false), _isDoubleBuf(false), _prevForceRedraw(false), _numPrevDirtyRects(0),
 	_prevCursorNeedsRedraw(false),
 	_mouseKeyColor(0), _disableMouseKeyColor(false) {
 
@@ -719,8 +719,8 @@ void SurfaceSdlGraphicsManager::setGraphicsModeIntern() {
 	_useOldSrc = _scalerPlugin->useOldSource();
 	if (_useOldSrc) {
 		_scaler->enableSource(true);
-		_scaler->setSource((byte *)_tmpscreen->pixels, _tmpscreen->pitch,
-									_videoMode.screenWidth, _videoMode.screenHeight, _maxExtraPixels);
+		_scaler->setSource(_tmpscreen->pitch, _videoMode.screenWidth, _videoMode.screenHeight,
+		                   _maxExtraPixels);
 	}
 
 	// Blit everything to the screen
@@ -1057,8 +1057,7 @@ bool SurfaceSdlGraphicsManager::loadGFXMode() {
 
 	if (_useOldSrc) {
 		// Create surface containing previous frame's data to pass to scaler
-		_scaler->setSource((byte *)_tmpscreen->pixels, _tmpscreen->pitch,
-									_videoMode.screenWidth, _videoMode.screenHeight, _maxExtraPixels);
+		_scaler->setSource(_tmpscreen->pitch, _videoMode.screenWidth, _videoMode.screenHeight, _maxExtraPixels);
 	}
 
 	_overlayscreen = createSurface(_videoMode.overlayWidth, _videoMode.overlayHeight, _hwScreen);
@@ -1291,14 +1290,12 @@ void SurfaceSdlGraphicsManager::internUpdateScreen() {
 	int oldScaleFactor;
 
 	if (!_overlayVisible) {
-		if (_needRestoreAfterOverlay) {
+		if (_prevOverlayVisible && _useOldSrc) {
 			// This is needed for the Edge scaler which seems to be the only scaler to use the "_useOldSrc" feature.
 			// Otherwise the screen will not be properly restored after removing the overlay. We need to trigger a
 			// regeneration of SourceScaler::_bufferedOutput. The call to _scaler->setFactor() down below could
-			// do that in theory, but it won't unless the factor actually changes (which it doesn't). Now, the code
-			// in SourceScaler::setSource() looks a bit fishy, e. g. the *src argument isn't even used. But otherwise
-			// it does what we want here at least...
-			_scaler->setSource(nullptr, _tmpscreen->pitch, _videoMode.screenWidth, _videoMode.screenHeight, _maxExtraPixels);
+			// do that in theory, but it won't unless the factor actually changes (which it doesn't).
+			_scaler->setSource(_tmpscreen->pitch, _videoMode.screenWidth, _videoMode.screenHeight, _maxExtraPixels);
 		}
 
 		origSurf = _screen;
@@ -1306,7 +1303,6 @@ void SurfaceSdlGraphicsManager::internUpdateScreen() {
 		width = _videoMode.screenWidth;
 		height = _videoMode.screenHeight;
 		oldScaleFactor = scale1 = _videoMode.scaleFactor;
-		_needRestoreAfterOverlay = false;
 	} else {
 		origSurf = _overlayscreen;
 		srcSurf = _tmpscreen2;
@@ -1314,8 +1310,15 @@ void SurfaceSdlGraphicsManager::internUpdateScreen() {
 		height = _videoMode.overlayHeight;
 		scale1 = 1;
 		oldScaleFactor = _scaler->setFactor(1);
-		_needRestoreAfterOverlay = _useOldSrc;
 	}
+
+	if (_prevOverlayVisible != _overlayVisible) {
+		// Overlay state change must trigger an undrawMouse call
+		// to update mouse rect coordinates
+		_cursorNeedsRedraw = true;
+	}
+
+	_prevOverlayVisible = _overlayVisible;
 
 	// Add the area covered by the mouse cursor to the list of dirty rects if
 	// we have to redraw the mouse, or if the cursor is alpha-blended since
@@ -1794,7 +1797,7 @@ void SurfaceSdlGraphicsManager::fillScreen(const Common::Rect &r, uint32 col) {
 	unlockScreen();
 }
 
-void SurfaceSdlGraphicsManager::addDirtyRect(int x, int y, int w, int h, bool inOverlay, bool realCoordinates) {
+void SurfaceSdlGraphicsManager::addDirtyRect(int x, int y, int w, int h, bool inOverlay) {
 	if (_forceRedraw)
 		return;
 
@@ -1805,23 +1808,22 @@ void SurfaceSdlGraphicsManager::addDirtyRect(int x, int y, int w, int h, bool in
 
 	int height, width;
 
-	if (!inOverlay && !realCoordinates) {
+	if (!inOverlay) {
 		width = _videoMode.screenWidth;
 		height = _videoMode.screenHeight;
-	} else {
-		width = _videoMode.overlayWidth;
-		height = _videoMode.overlayHeight;
-	}
 
-	// Extend the dirty region for scalers
-	// that "smear" the screen, e.g. 2xSAI
-	if (!realCoordinates) {
+		// Extend the dirty region for scalers
+		// that "smear" the screen, e.g. 2xSAI
 		// Aspect ratio correction requires this to be at least one
 		int adjust = MAX(_extraPixels, (uint)1);
 		x -= adjust;
 		y -= adjust;
 		w += adjust * 2;
 		h += adjust * 2;
+	} else {
+		width = _videoMode.overlayWidth;
+		height = _videoMode.overlayHeight;
+		// Overlay has no scaling so no extension
 	}
 
 	// clip
@@ -1844,7 +1846,7 @@ void SurfaceSdlGraphicsManager::addDirtyRect(int x, int y, int w, int h, bool in
 	}
 
 #ifdef USE_ASPECT
-	if (_videoMode.aspectRatioCorrection && !inOverlay && !realCoordinates)
+	if (_videoMode.aspectRatioCorrection && !inOverlay)
 		makeRectStretchable(x, y, w, h, _videoMode.filtering);
 #endif
 
@@ -2017,12 +2019,20 @@ void SurfaceSdlGraphicsManager::clearOverlay() {
 		}
 	}
 
+	// We use a different buffer as a destination so we can't rely on the N-1 image
+	// It would be the same as the last scaled image and make a black screen for scaler making use of it (Edge scaler).
+	if (_useOldSrc) {
+		_scaler->enableSource(false);
+	}
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 	_scaler->scale((byte *)(_tmpscreen->pixels) + _maxExtraPixels * _tmpscreen->pitch + _maxExtraPixels * pixelFormatDetails->bytes_per_pixel, _tmpscreen->pitch,
 #else
 	_scaler->scale((byte *)(_tmpscreen->pixels) + _maxExtraPixels * _tmpscreen->pitch + _maxExtraPixels * _tmpscreen->format->BytesPerPixel, _tmpscreen->pitch,
 #endif
 	(byte *)_overlayscreen->pixels, _overlayscreen->pitch, _videoMode.screenWidth, _videoMode.screenHeight, 0, 0);
+	if (_useOldSrc) {
+		_scaler->enableSource(true);
+	}
 
 #ifdef USE_ASPECT
 	if (_videoMode.aspectRatioCorrection)
@@ -2372,15 +2382,6 @@ void SurfaceSdlGraphicsManager::blitCursor() {
 	// Adapt the real hotspot according to the scale factor.
 	int rW = fracToInt(w * cursorScaleX);
 	int rH = fracToInt(h * cursorScaleY);
-	_mouseCurState.rHotX = fracToInt(_mouseCurState.hotX * cursorScaleX);
-	_mouseCurState.rHotY = fracToInt(_mouseCurState.hotY * cursorScaleY);
-
-	// The virtual dimensions will be the same as the original.
-
-	_mouseCurState.vW = w;
-	_mouseCurState.vH = h;
-	_mouseCurState.vHotX = _mouseCurState.hotX;
-	_mouseCurState.vHotY = _mouseCurState.hotY;
 
 #ifdef USE_ASPECT
 	// store original to pass to aspect-correction function later
@@ -2389,7 +2390,6 @@ void SurfaceSdlGraphicsManager::blitCursor() {
 
 	if (!(_cursorScaleX == 0 && _cursorScaleY == 0) && _videoMode.aspectRatioCorrection) {
 		rH = real2Aspect(rH - 1) + 1;
-		_mouseCurState.rHotY = real2Aspect(_mouseCurState.rHotY);
 	}
 
 	bool sizeChanged = false;
@@ -2527,18 +2527,26 @@ void SurfaceSdlGraphicsManager::undrawMouse() {
 	_mouseNextRect.x = virtualCursor.x + _gameScreenShakeXOffset;
 	_mouseNextRect.y = virtualCursor.y + _gameScreenShakeYOffset;
 
-	if (!_overlayInGUI) {
-		// The game cursor rect is kept in virtual coordinates: drawMouse()
-		// scales and aspect-corrects it, so subtract the virtual hotspot here
-		_mouseNextRect.w = _mouseCurState.vW;
-		_mouseNextRect.h = _mouseCurState.vH;
-		_mouseNextRect.x -= _mouseCurState.vHotX;
-		_mouseNextRect.y -= _mouseCurState.vHotY;
-	} else {
+	// Apply the hotspot
+	_mouseNextRect.x -= _mouseCurState.hotX;
+	_mouseNextRect.y -= _mouseCurState.hotY;
+
+	if (_overlayVisible) {
 		_mouseNextRect.w = _mouseCurState.rW;
 		_mouseNextRect.h = _mouseCurState.rH;
-		_mouseNextRect.x -= _mouseCurState.rHotX;
-		_mouseNextRect.y -= _mouseCurState.rHotY;
+
+		if (!_overlayInGUI) {
+			_mouseNextRect.x *= _videoMode.scaleFactor;
+			_mouseNextRect.y *= _videoMode.scaleFactor;
+			if (_videoMode.aspectRatioCorrection)
+				_mouseNextRect.y = real2Aspect(_mouseNextRect.y);
+		}
+	} else {
+		// When overlay is not shown, the scaling of dirty rect
+		// is done in internUpdateScreen
+		// Hence, we also do it in drawMouse
+		_mouseNextRect.w = _mouseCurState.w * _cursorScaleX;
+		_mouseNextRect.h = _mouseCurState.h * _cursorScaleY;
 	}
 
 	if (!_cursorVisible || !_mouseSurface) {
@@ -2550,14 +2558,14 @@ void SurfaceSdlGraphicsManager::undrawMouse() {
 	// alpha-blended cursors will happily blend into themselves if the surface
 	// under the cursor is not reset first
 	//
-	// The mouse is undrawn using virtual coordinates, i.e. they may be
-	// scaled and aspect-ratio corrected.
+	// The mouse is undrawn using coordinates in use depending on the
+	// overlay status
 
 	if (_mouseLastRect.w != 0 && _mouseLastRect.h != 0)
-		addDirtyRect(_mouseLastRect.x, _mouseLastRect.y, _mouseLastRect.w, _mouseLastRect.h, _overlayInGUI);
+		addDirtyRect(_mouseLastRect.x, _mouseLastRect.y, _mouseLastRect.w, _mouseLastRect.h, _overlayVisible);
 
 	if (_mouseNextRect.w != 0 && _mouseNextRect.h != 0)
-		addDirtyRect(_mouseNextRect.x, _mouseNextRect.y, _mouseNextRect.w, _mouseNextRect.h, _overlayInGUI);
+		addDirtyRect(_mouseNextRect.x, _mouseNextRect.y, _mouseNextRect.w, _mouseNextRect.h, _overlayVisible);
 }
 
 void SurfaceSdlGraphicsManager::drawMouse() {
@@ -2568,22 +2576,25 @@ void SurfaceSdlGraphicsManager::drawMouse() {
 	SDL_Rect dst;
 
 	// We draw the pre-scaled cursor image, so now we need to adjust for
-	// scaling, shake position and aspect ratio correction manually.
+	// scaling, shake position and aspect ratio correction manually depending
+	// on the overlay status
 
 	dst.x = _mouseNextRect.x;
 	dst.y = _mouseNextRect.y;
-	dst.w = _mouseNextRect.w;
-	dst.h = _mouseNextRect.h;
 
-	if (_videoMode.aspectRatioCorrection && !_overlayInGUI)
-		dst.y = real2Aspect(dst.y);
+	if (_overlayVisible) {
+		dst.w = _mouseNextRect.w;
+		dst.h = _mouseNextRect.h;
+	} else {
+		dst.w = _mouseCurState.rW;
+		dst.h = _mouseCurState.rH;
 
-	if (!_overlayInGUI) {
 		dst.x *= _videoMode.scaleFactor;
 		dst.y *= _videoMode.scaleFactor;
+		if (_videoMode.aspectRatioCorrection) {
+			dst.y = real2Aspect(dst.y);
+		}
 	}
-	dst.w = _mouseCurState.rW;
-	dst.h = _mouseCurState.rH;
 
 	// Note that SDL_BlitSurface() and addDirtyRect() will both perform any
 	// clipping necessary

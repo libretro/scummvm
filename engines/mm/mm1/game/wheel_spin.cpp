@@ -22,6 +22,7 @@
 #include "mm/mm1/game/wheel_spin.h"
 #include "mm/mm1/maps/map16.h"
 #include "mm/mm1/globals.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -52,7 +53,7 @@ void WheelSpin::spin() {
 		Common::String line;
 
 		if (map[VAL4] == 0) {
-			line = STRING["maps.map16.loser"];
+			line = mapText("Loser!\n");
 		} else {
 			c._flags[2] |= CHARFLAG2_80;
 			int val;
@@ -63,7 +64,7 @@ void WheelSpin::spin() {
 				WRITE_LE_UINT16(&map[VAL3], val);
 				c._exp += val;
 				line = Common::String::format("+%d %s", val,
-					STRING["maps.map16.exp"].c_str());
+					mapText("Exp!\n").c_str());
 				break;
 
 			case 2:
@@ -71,22 +72,28 @@ void WheelSpin::spin() {
 				WRITE_LE_UINT16(&map[VAL3], val);
 				c._gold += val;
 				line = Common::String::format("+%d %s", val,
-					STRING["maps.map16.gold"].c_str());
+					mapText("Gold!\n").c_str());
 				break;
 
 			case 3:
 				val = 15 << map[VAL4];
 				WRITE_LE_UINT16(&map[VAL3], val);
-				c._gems += val;
+				c._gems = MIN((int)c._gems + val, 0xffff);
 				line = Common::String::format("+%d %s", val,
-					STRING["maps.map16.gems"].c_str());
+					mapText("Gems!\n").c_str());
 				break;
 
 			default:
-				line = STRING["maps.map16.loser"];
+				line = mapText("Loser!\n");
 				break;
 			}
 		}
+
+		// Spinning the Wheel makes all four Great Beasts available again.
+		// Preserve CHARFLAG2_80 (the Wheel marker) and unrelated upper bits;
+		// only the four beast-completion flags are reset.
+		c._flags[2] &= ~(CHARFLAG2_1 | CHARFLAG2_2 |
+			CHARFLAG2_4 | CHARFLAG2_8);
 
 		_results.push_back(line);
 	}

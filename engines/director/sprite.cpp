@@ -630,14 +630,6 @@ void Sprite::setCast(CastMemberID memberID, bool replaceDims) {
 			case kCastShape:
 			case kCastText:
 				break;
-			case kCastDigitalVideo:
-				// A video the score sizes to 0x0 is intentionally invisible (a
-				// hidden timing/audio clock); keep it, don't force native size.
-				if (_width > 0 && _height > 0) {
-					_width = dims.width();
-					_height = dims.height();
-				}
-				break;
 			case kCastBitmap:
 			default:
 				_width = dims.width();
@@ -681,11 +673,7 @@ void Sprite::replaceFrom(Sprite *nextSprite) {
 		return;
 	}
 
-	// If the cast member is the same, persist the editable flag
 	bool editable = nextSprite->_editable;
-	if (_castId == nextSprite->_castId) {
-		editable = _editable;
-	}
 
 	bool immediate = _immediate;
 

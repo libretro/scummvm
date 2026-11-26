@@ -1,0 +1,1863 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/random.h"
+#include "common/util.h"
+
+#include "engines/nancy/enginedata.h"
+#include "engines/nancy/graphics.h"
+#include "engines/nancy/nancy.h"
+#include "engines/nancy/resource/resource.h"
+
+#include "engines/nancy/script/luabind.h"
+#include "engines/nancy/script/mathtypes.h"
+#include "engines/nancy/script/particles.h"
+#include "engines/nancy/script/scenecontext.h"
+#include "engines/nancy/script/types.h"
+
+namespace Nancy {
+namespace Script {
+
+// The simulation goes in steps of a fixed length
+static const double kStepsPerSecond = 30.0;
+
+// Particles are kept in a ring of this many
+static const uint kInitialParticles = 1024;
+
+static double randomFraction() {
+	return g_nancy->_randomSource->getRandomNumber(0xFFFFFF) / 16777216.0;
+}
+
+static double lerp(double from, double to, double fraction) {
+	return from + (to - from) * fraction;
+}
+
+static bool readTruth(lua_State *L, int tableIndex, const char *name) {
+	lua_getfield(L, tableIndex, name);
+	const bool value = lua_toboolean(L, -1) != 0;
+	lua_pop(L, 1);
+	return value;
+}
+
+// What happens to the particles, in the order the record runs the stages. A
+// stage can give a new particle its values, and do something to the particles
+// every step.
+class ParticleStage {
+public:
+	ParticleStage(ParticleRecord &record) : _record(record) {}
+	virtual ~ParticleStage() {}
+
+	// A stage that picks its values ahead of time does it for every particle
+	// as soon as it is added, and for the new ones when there is room for more
+	void onAdded() {
+		onGrown(0, _record.getMaxParticles());
+	}
+
+	void onGrown(uint first, uint count) {
+		if (_isPicked) {
+			initParticles(first, count);
+		}
+	}
+
+	void onSpawn(uint first, uint count) {
+		if (!_isPicked) {
+			initParticles(first, count);
+		}
+	}
+
+	virtual void update(uint first, uint count) {}
+
+	// The fields scripts can read and set on a stage they got back by name; the
+	// new value of a set is at the top of the stack
+	virtual bool getField(lua_State *L, const Common::String &key) { return false; }
+	virtual bool setField(lua_State *L, const Common::String &key) { return false; }
+
+protected:
+	virtual void initParticles(uint first, uint count) {}
+
+	// Scripts set it to "true", so anything but false and nil counts
+	void readPicked(lua_State *L, int tableIndex) {
+		_isPicked = readTruth(L, tableIndex, "init");
+	}
+
+	ParticleRecord &_record;
+	bool _isPicked = false;
+};
+
+// Every record has these two: the particles get older...
+class ParticleLifeStage : public ParticleStage {
+public:
+	ParticleLifeStage(ParticleRecord &record) : ParticleStage(record) {}
+
+	void update(uint first, uint count) override {
+		const double step = 1.0 / kStepsPerSecond / _record.getLife();
+		for (uint i = first; i < first + count; ++i) {
+			_record.getParticle(i).life += step;
+		}
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			_record.getParticle(i).life = 0.0;
+		}
+	}
+};
+
+// ...and the forces on them get worked out anew every step
+class ParticleForceClearStage : public ParticleStage {
+public:
+	ParticleForceClearStage(ParticleRecord &record) : ParticleStage(record) {}
+
+	void update(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+			particle.acceleration[0] = particle.acceleration[1] = particle.acceleration[2] = 0.0;
+		}
+	}
+};
+
+// Reads a vector into the given one. Nancy32 has no vectors, and gives points
+// instead, which are at no depth.
+static bool readVectorValue(lua_State *L, int index, double *out, int size) {
+	ScriptVector vector;
+	if (testVector(L, index, vector)) {
+		for (int i = 0; i < size; ++i) {
+			out[i] = vector.v[i];
+		}
+
+		return true;
+	}
+
+	double x, y;
+	if (!readPointCoordinates(L, index, x, y)) {
+		return false;
+	}
+
+	for (int i = 0; i < size; ++i) {
+		out[i] = i == 0 ? x : (i == 1 ? y : 0.0);
+	}
+
+	return true;
+}
+
+// Reads a vector field of the stage's table into the given one
+static bool readVectorField(lua_State *L, int tableIndex, const char *name, double *out, int size) {
+	if (!pushField(L, tableIndex, name)) {
+		return false;
+	}
+
+	if (!readVectorValue(L, -1, out, size)) {
+		luaL_error(L, "field %s must be a vector", name);
+	}
+
+	lua_pop(L, 1);
+	return true;
+}
+
+// "velocity": a speed between minSpeed and maxSpeed, in a direction that strays
+// from "direction" by up to the two variances, both in radians
+class ParticleVelocityStage : public ParticleStage {
+public:
+	ParticleVelocityStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readPicked(L, tableIndex);
+		readField(L, tableIndex, "minSpeed", _minSpeed);
+		readField(L, tableIndex, "maxSpeed", _maxSpeed);
+
+		double direction[3] = { 0.0, 1.0, 0.0 };
+		readVectorField(L, tableIndex, "direction", direction, 3);
+
+		const double length = sqrt(direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]);
+		if (length > 0.0) {
+			direction[0] /= length;
+			direction[1] /= length;
+			direction[2] /= length;
+		}
+
+		const double azimuth = atan2(direction[1], direction[0]);
+		const double inclination = acos(CLIP(direction[2], -1.0, 1.0));
+
+		double inclinationVariance = 0.0;
+		double azimuthVariance = 0.0;
+		readField(L, tableIndex, "inclinationVariance", inclinationVariance);
+		readField(L, tableIndex, "azimuthVariance", azimuthVariance);
+
+		_minInclination = inclination - inclinationVariance;
+		_maxInclination = inclination + inclinationVariance;
+		_minAzimuth = azimuth - azimuthVariance;
+		_maxAzimuth = azimuth + azimuthVariance;
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			const double speed = lerp(_minSpeed, _maxSpeed, randomFraction()) / kStepsPerSecond;
+			const double inclination = lerp(_minInclination, _maxInclination, randomFraction());
+			const double azimuth = lerp(_minAzimuth, _maxAzimuth, randomFraction());
+
+			Particle &particle = _record.getParticle(i);
+			particle.velocity[0] = cos(azimuth) * speed * sin(inclination);
+			particle.velocity[1] = sin(azimuth) * speed * sin(inclination);
+			particle.velocity[2] = cos(inclination) * speed;
+		}
+	}
+
+private:
+	double _minSpeed = 0.0;
+	double _maxSpeed = 0.0;
+	double _minInclination = 0.0;
+	double _maxInclination = 0.0;
+	double _minAzimuth = 0.0;
+	double _maxAzimuth = 0.0;
+};
+
+// "angle" and "scale": a value between min and max
+class ParticleRangeStage : public ParticleStage {
+public:
+	ParticleRangeStage(ParticleRecord &record, lua_State *L, int tableIndex, double defaultValue, bool isAngle) :
+			ParticleStage(record), _min(defaultValue), _max(defaultValue), _isAngle(isAngle) {
+		readPicked(L, tableIndex);
+		readField(L, tableIndex, "min", _min);
+		readField(L, tableIndex, "max", _max);
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			const double value = lerp(_min, _max, randomFraction());
+			if (_isAngle) {
+				_record.getParticle(i).angle = value;
+			} else {
+				_record.getParticle(i).scale = value;
+			}
+		}
+	}
+
+private:
+	double _min;
+	double _max;
+	bool _isAngle;
+};
+
+// "color": the "base" color the image gets multiplied with. From Nancy25 on,
+// its red, green and blue are scaled by a random factor between "min" and
+// "max" for each particle.
+class ParticleColorStage : public ParticleStage {
+public:
+	ParticleColorStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readPicked(L, tableIndex);
+		if (pushField(L, tableIndex, "base")) {
+			_color = checkColor(L, -1);
+			lua_pop(L, 1);
+		}
+
+		_isScaled = g_nancy->getGameType() >= kGameTypeNancy25;
+		if (_isScaled) {
+			readField(L, tableIndex, "min", _min);
+			readField(L, tableIndex, "max", _max);
+		}
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			_record.getParticle(i).color = _isScaled ? getScaledColor() : _color;
+		}
+	}
+
+private:
+	// Like the original, the factor is converted to 0-255 and the result is
+	// divided by 256
+	uint32 getScaledColor() const {
+		const uint32 factor = (uint32)(int32)(lerp(_min, _max, randomFraction()) * 255.0);
+		const uint32 red = ((_color >> 16) & 0xFF) * factor >> 8;
+		const uint32 green = ((_color >> 8) & 0xFF) * factor >> 8;
+		const uint32 blue = (_color & 0xFF) * factor >> 8;
+		return (_color & 0xFF000000) | (red & 0xFF) << 16 | (green & 0xFF) << 8 | (blue & 0xFF);
+	}
+
+	uint32 _color = 0xFFFFFFFF;
+	bool _isScaled = false;
+	double _min = 1.0;
+	double _max = 1.0;
+};
+
+// "sources": the parts of the image to pick from, as a list of rects
+class ParticleSourcesStage : public ParticleStage {
+public:
+	ParticleSourcesStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readPicked(L, tableIndex);
+
+		for (int i = 1; ; ++i) {
+			lua_rawgeti(L, tableIndex, i);
+			if (lua_isnil(L, -1)) {
+				lua_pop(L, 1);
+				break;
+			}
+
+			_sources.push_back(checkRect(L, -1));
+			lua_pop(L, 1);
+		}
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		if (_sources.empty()) {
+			return;
+		}
+
+		const Graphics::ManagedSurface &image = _record.getImage();
+		const double width = MAX<int>(image.w, 1);
+		const double height = MAX<int>(image.h, 1);
+
+		for (uint i = first; i < first + count; ++i) {
+			const ScriptRect &source = _sources[g_nancy->_randomSource->getRandomNumber(_sources.size() - 1)];
+
+			Particle &particle = _record.getParticle(i);
+			particle.left = source.left / width;
+			particle.right = source.right / width;
+			particle.top = source.top / height;
+			particle.bottom = source.bottom / height;
+			particle.width = source.width();
+			particle.height = source.height();
+		}
+	}
+
+private:
+	Common::Array<ScriptRect> _sources;
+};
+
+// "positionPerspective": a place inside the view of the camera of the
+// "perspective" projection. x and y go from -1 to 1 across the view, and z from 0
+// at the near plane to 1 at the far one. More of the particles end up near.
+class ParticlePerspectivePositionStage : public ParticleStage {
+public:
+	ParticlePerspectivePositionStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readPicked(L, tableIndex);
+
+		double min[3] = { 0.0, 0.0, 0.0 };
+		double max[3] = { 0.0, 0.0, 0.0 };
+		readVectorField(L, tableIndex, "min", min, 3);
+		readVectorField(L, tableIndex, "max", max, 3);
+
+		double fovy = 0.0;
+		double aspectRatio = 0.0;
+		if (!readField(L, tableIndex, "fovy", fovy) || !readField(L, tableIndex, "aspectRatio", aspectRatio) ||
+				!readField(L, tableIndex, "zN", _zNear) || !readField(L, tableIndex, "zF", _zFar)) {
+			luaL_error(L, "Position perspective stage expects numeric fields fovy, aspectRatio, zN, zF");
+		}
+
+		const double tanY = tan(fovy * 0.5);
+		const double tanX = tan(atan(aspectRatio * tanY));
+
+		_minX = tanX * min[0];
+		_maxX = tanX * max[0];
+		_minY = tanY * min[1];
+		_maxY = tanY * max[1];
+		_minZ = min[2];
+		_maxZ = max[2];
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			const double z = lerp(_zNear, _zFar, pow(lerp(_minZ, _maxZ, randomFraction()), 0.3));
+
+			Particle &particle = _record.getParticle(i);
+			particle.position[2] = z;
+			particle.position[0] = lerp(z * _minX, z * _maxX, randomFraction());
+			particle.position[1] = lerp(z * _minY, z * _maxY, randomFraction());
+		}
+	}
+
+private:
+	double _minX, _maxX, _minY, _maxY, _minZ, _maxZ;
+	double _zNear = 0.0;
+	double _zFar = 0.0;
+};
+
+// "fade": the particles fade in or out once they are "start" into their life,
+// over "duration" of it. From Nancy1New on, they go from "alpha1" to "alpha2"
+// (0 to 255 unless set); before, they fade out unless "in" is set.
+class ParticleFadeStage : public ParticleStage {
+public:
+	ParticleFadeStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readField(L, tableIndex, "start", _start);
+		readField(L, tableIndex, "duration", _duration);
+
+		if (g_nancy->getGameType() >= kGameTypeNancy1New) {
+			readAlpha(L, tableIndex, "alpha1", _fromAlpha);
+			readAlpha(L, tableIndex, "alpha2", _toAlpha);
+		} else if (!readTruth(L, tableIndex, "in")) {
+			_fromAlpha = 255;
+			_toAlpha = 0;
+		}
+	}
+
+	void update(uint first, uint count) override {
+		const double change = _toAlpha - _fromAlpha;
+
+		// The oldest particles come first, so the ones after one that hasn't
+		// started fading haven't either
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+			const double fraction = (particle.life - _start) / _duration;
+			if (fraction < 0.0) {
+				break;
+			}
+
+			if (fraction <= 1.0) {
+				const uint32 alpha = (uint32)CLIP<int>((int)floor(fraction * change + _fromAlpha + 0.5), 0, 255);
+				particle.color = (particle.color & 0xFFFFFF) | (alpha << 24);
+			}
+		}
+	}
+
+private:
+	static void readAlpha(lua_State *L, int tableIndex, const char *name, int &alpha) {
+		double value;
+		if (readField(L, tableIndex, name, value)) {
+			alpha = (int)value;
+		}
+	}
+
+	double _start = 0.0;
+	double _duration = 1.0;
+	int _fromAlpha = 0;
+	int _toAlpha = 255;
+};
+
+// "drag": slows the particles down by a factor every step
+class ParticleDragStage : public ParticleStage {
+public:
+	ParticleDragStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readField(L, tableIndex, "factor", _factor);
+	}
+
+	void update(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+			for (int j = 0; j < 3; ++j) {
+				particle.velocity[j] *= _factor;
+			}
+		}
+	}
+
+private:
+	double _factor = 0.95;
+};
+
+// "force": pulls at the particles with a "vector", in units a second squared
+class ParticleForceStage : public ParticleStage {
+public:
+	ParticleForceStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		if (readVectorField(L, tableIndex, "vector", _force, 3)) {
+			for (int i = 0; i < 3; ++i) {
+				_force[i] /= kStepsPerSecond * kStepsPerSecond;
+			}
+		}
+	}
+
+	void update(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+			for (int j = 0; j < 3; ++j) {
+				particle.acceleration[j] += _force[j];
+			}
+		}
+	}
+
+private:
+	double _force[3] = { 0.0, -1.0 / (kStepsPerSecond * kStepsPerSecond), 0.0 };
+};
+
+// "turbulence": every step, every particle gets pushed by "factor" along one of
+// the axes, either way, or not at all. Nancy22 can leave axes out with "x", "y"
+// or "z" set to false; a push along those does nothing.
+class ParticleTurbulenceStage : public ParticleStage {
+public:
+	ParticleTurbulenceStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readField(L, tableIndex, "factor", _factor);
+
+		static const char *const kAxisNames[3] = { "x", "y", "z" };
+		for (int i = 0; i < 3; ++i) {
+			readField(L, tableIndex, kAxisNames[i], _isOnAxis[i]);
+		}
+	}
+
+	void update(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			const uint push = g_nancy->_randomSource->getRandomNumber(7);
+			if (push < 6 && _isOnAxis[push / 2]) {
+				_record.getParticle(i).acceleration[push / 2] += (push & 1) ? -_factor : _factor;
+			}
+		}
+	}
+
+private:
+	double _factor = 0.95;
+	bool _isOnAxis[3] = { true, true, true };
+};
+
+// "position", Nancy22: a place anywhere between "min" and "max"
+class ParticlePositionStage : public ParticleStage {
+public:
+	ParticlePositionStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readPicked(L, tableIndex);
+		readVectorField(L, tableIndex, "min", _min, 3);
+		readVectorField(L, tableIndex, "max", _max, 3);
+	}
+
+	// Nancy25: scripts can read and change "min" and "max", the range of
+	// positions the particles start at
+	bool getField(lua_State *L, const Common::String &key) override {
+		const double *corner = getCorner(key);
+		if (!corner) {
+			return false;
+		}
+
+		pushVector(L, ScriptVector(corner[0], corner[1], corner[2]));
+		return true;
+	}
+
+	bool setField(lua_State *L, const Common::String &key) override {
+		double *corner = getCorner(key);
+		if (!corner) {
+			return false;
+		}
+
+		if (!readVectorValue(L, -1, corner, 3)) {
+			luaL_typerror(L, -1, "Vector");
+		}
+
+		return true;
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+			for (int j = 0; j < 3; ++j) {
+				particle.position[j] = lerp(_min[j], _max[j], randomFraction());
+			}
+		}
+	}
+
+	double *getCorner(const Common::String &key) {
+		if (key == "min") {
+			return _min;
+		} else if (key == "max") {
+			return _max;
+		}
+
+		return nullptr;
+	}
+
+private:
+	double _min[3] = { 0.0, 0.0, 0.0 };
+	double _max[3] = { 0.0, 0.0, 0.0 };
+};
+
+// "planeCollision", Nancy22: the particles bounce off a plane through "position"
+// that faces along "normal". They keep "elasticity" of their speed towards the
+// plane, and lose "friction" of the speed along it.
+class ParticlePlaneCollisionStage : public ParticleStage {
+public:
+	ParticlePlaneCollisionStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readVectorField(L, tableIndex, "position", _position, 3);
+
+		if (readVectorField(L, tableIndex, "normal", _normal, 3)) {
+			const double length = sqrt(_normal[0] * _normal[0] + _normal[1] * _normal[1] + _normal[2] * _normal[2]);
+			if (length > 0.0) {
+				for (int i = 0; i < 3; ++i) {
+					_normal[i] /= length;
+				}
+			}
+		}
+
+		double elasticity = 0.5;
+		readField(L, tableIndex, "elasticity", elasticity);
+		_bounce = 1.0 + CLIP(elasticity, 0.0, 1.0);
+
+		if (readField(L, tableIndex, "friction", _friction)) {
+			_friction = CLIP(_friction, 0.0, 1.0);
+		}
+	}
+
+	void update(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+
+			const double depth = dot(particle.position, _normal, _position);
+			if (depth >= 0.0) {
+				continue;
+			}
+
+			// Back onto the plane, and off it again
+			const double speed = dot(particle.velocity, _normal, nullptr);
+			for (int j = 0; j < 3; ++j) {
+				particle.position[j] -= _normal[j] * depth;
+
+				const double along = particle.velocity[j] - _normal[j] * speed;
+				particle.velocity[j] -= along * _friction + _normal[j] * speed * _bounce;
+			}
+		}
+	}
+
+private:
+	// Of a vector, or of a place measured from another
+	double dot(const double *vector, const double *normal, const double *origin) const {
+		double result = 0.0;
+		for (int i = 0; i < 3; ++i) {
+			result += (vector[i] - (origin ? origin[i] : 0.0)) * normal[i];
+		}
+
+		return result;
+	}
+
+	double _position[3] = { 0.0, 0.0, 0.0 };
+	double _normal[3] = { 0.0, 1.0, 0.0 };
+	double _bounce = 1.5;
+	double _friction = 0.0;
+};
+
+// "path", Nancy23: the particles are made along the line from where the stage
+// was before to where it is now, spread evenly, with sizes and alphas (0 to 1)
+// in between too. Setting one of the three moves its current value to the one
+// before, so a script that keeps moving the stage leaves a trail of particles.
+class ParticlePathStage : public ParticleStage {
+public:
+	ParticlePathStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		if (readVectorField(L, tableIndex, "position", _position[1], 3)) {
+			memcpy(_position[0], _position[1], sizeof(_position[0]));
+		}
+
+		if (readField(L, tableIndex, "scale", _scale[1])) {
+			_scale[0] = _scale[1];
+		}
+
+		if (readField(L, tableIndex, "alpha", _alpha[1])) {
+			_alpha[0] = _alpha[1];
+		}
+	}
+
+	bool getField(lua_State *L, const Common::String &key) override {
+		if (key == "position") {
+			pushVector(L, ScriptVector(_position[1][0], _position[1][1], _position[1][2]));
+		} else if (key == "scale") {
+			lua_pushnumber(L, _scale[1]);
+		} else if (key == "alpha") {
+			lua_pushnumber(L, _alpha[1]);
+		} else {
+			return false;
+		}
+
+		return true;
+	}
+
+	bool setField(lua_State *L, const Common::String &key) override {
+		if (key == "position") {
+			double position[3];
+			if (!readVectorValue(L, -1, position, 3)) {
+				luaL_typerror(L, -1, "Vector");
+			}
+
+			memcpy(_position[0], _position[1], sizeof(_position[0]));
+			memcpy(_position[1], position, sizeof(position));
+		} else if (key == "scale") {
+			_scale[0] = _scale[1];
+			_scale[1] = luaL_checknumber(L, -1);
+		} else if (key == "alpha") {
+			_alpha[0] = _alpha[1];
+			_alpha[1] = luaL_checknumber(L, -1);
+		} else {
+			return false;
+		}
+
+		return true;
+	}
+
+protected:
+	// The last of the new particles is at the current place
+	void initParticles(uint first, uint count) override {
+		const double step = 1.0 / MAX<uint>(count, 1);
+		const int fromAlpha = (int)floor(_alpha[0] * 255.0 + 0.5);
+		const int toAlpha = (int)floor(_alpha[1] * 255.0 + 0.5);
+
+		double fraction = 0.0;
+		for (uint i = first; i < first + count; ++i) {
+			fraction += step;
+
+			Particle &particle = _record.getParticle(i);
+			for (int j = 0; j < 3; ++j) {
+				particle.position[j] = lerp(_position[0][j], _position[1][j], fraction);
+			}
+
+			particle.scale = lerp(_scale[0], _scale[1], fraction);
+
+			const int weight = (int)floor(fraction * 255.0 + 0.5);
+			const uint32 alpha = (uint32)CLIP<int>(((255 - weight) * fromAlpha + weight * toAlpha) >> 8, 0, 255);
+			particle.color = (particle.color & 0xFFFFFF) | (alpha << 24);
+		}
+	}
+
+private:
+	double _position[2][3] = { { 0.0, 0.0, 0.0 }, { 0.0, 0.0, 0.0 } };	// before and now
+	double _scale[2] = { 1.0, 1.0 };
+	double _alpha[2] = { 1.0, 1.0 };
+};
+
+// "rotate", Nancy32: the particles start turning at a speed between "min" and
+// "max" a step. Every step, the speed drops by the factor "drag", and goes up or
+// down by "turbulence".
+class ParticleRotateStage : public ParticleStage {
+public:
+	ParticleRotateStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readField(L, tableIndex, "min", _min);
+		readField(L, tableIndex, "max", _max);
+		readField(L, tableIndex, "drag", _drag);
+		readField(L, tableIndex, "turbulence", _turbulence);
+	}
+
+	void update(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+			particle.angle += particle.angularSpeed;
+
+			const double push = g_nancy->_randomSource->getRandomBit() ? -_turbulence : _turbulence;
+			particle.angularSpeed = particle.angularSpeed * _drag + push;
+		}
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			_record.getParticle(i).angularSpeed = lerp(_min, _max, randomFraction());
+		}
+	}
+
+private:
+	double _min = 0.0;
+	double _max = 0.0;
+	double _drag = 0.0;
+	double _turbulence = 0.0;
+};
+
+// Reads a point field of the stage's table
+static void readPointField(lua_State *L, int tableIndex, const char *name, double &x, double &y) {
+	if (pushField(L, tableIndex, name)) {
+		readPointCoordinates(L, -1, x, y);
+		lua_pop(L, 1);
+	}
+}
+
+// "radialPosition", Nancy32: a place around "center", at a distance between
+// min.x and max.x, and at an angle between min.y and max.y
+class ParticleRadialPositionStage : public ParticleStage {
+public:
+	ParticleRadialPositionStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readPicked(L, tableIndex);
+		readPointField(L, tableIndex, "center", _center[0], _center[1]);
+		readPointField(L, tableIndex, "min", _minRadius, _minAngle);
+		readPointField(L, tableIndex, "max", _maxRadius, _maxAngle);
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		const double range = _maxRadius - _minRadius;
+		const double share = range / _maxRadius;
+
+		for (uint i = first; i < first + count; ++i) {
+			const double radius = sqrt(randomFraction() * share) * range + _minRadius;
+			const double angle = lerp(_minAngle, _maxAngle, randomFraction());
+
+			Particle &particle = _record.getParticle(i);
+			particle.position[0] = _center[0] + radius * cos(angle);
+			particle.position[1] = _center[1] + radius * sin(angle);
+			particle.position[2] = 0.0;
+		}
+	}
+
+private:
+	double _center[2] = { 1.0, 1.0 };
+	double _minRadius = 0.0;
+	double _minAngle = 0.0;
+	double _maxRadius = 0.0;
+	double _maxAngle = 0.0;
+};
+
+// The direction from a center to a particle, which is nothing at the center
+static void getDirection(const Particle &particle, const double center[2], double &x, double &y) {
+	x = particle.position[0] - center[0];
+	y = particle.position[1] - center[1];
+
+	const double length = sqrt(x * x + y * y);
+	if (length != 0.0) {
+		x /= length;
+		y /= length;
+	}
+}
+
+// "radialVelocity", Nancy32: the particles move away from "center" at a speed
+// between minSpeed and maxSpeed, in units a second
+class ParticleRadialVelocityStage : public ParticleStage {
+public:
+	ParticleRadialVelocityStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readPicked(L, tableIndex);
+		readPointField(L, tableIndex, "center", _center[0], _center[1]);
+		readField(L, tableIndex, "minSpeed", _minSpeed);
+		readField(L, tableIndex, "maxSpeed", _maxSpeed);
+	}
+
+protected:
+	void initParticles(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+
+			double x, y;
+			getDirection(particle, _center, x, y);
+
+			const double speed = lerp(_minSpeed, _maxSpeed, randomFraction()) / kStepsPerSecond;
+			particle.velocity[0] = x * speed;
+			particle.velocity[1] = y * speed;
+			particle.velocity[2] = 0.0;
+		}
+	}
+
+private:
+	double _center[2] = { 0.0, 0.0 };
+	double _minSpeed = 0.0;
+	double _maxSpeed = 0.0;
+};
+
+// "radialForce", Nancy32: pushes the particles away from "center" by "factor",
+// in units a second squared; a negative factor pulls them in
+class ParticleRadialForceStage : public ParticleStage {
+public:
+	ParticleRadialForceStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readPointField(L, tableIndex, "center", _center[0], _center[1]);
+		if (readField(L, tableIndex, "factor", _factor)) {
+			_factor /= kStepsPerSecond * kStepsPerSecond;
+		}
+	}
+
+	void update(uint first, uint count) override {
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+
+			double x, y;
+			getDirection(particle, _center, x, y);
+			particle.acceleration[0] += x * _factor;
+			particle.acceleration[1] += y * _factor;
+		}
+	}
+
+private:
+	double _center[2] = { 0.0, 0.0 };
+	double _factor = 0.0;
+};
+
+// "scaleFade", Nancy32: the particles grow or shrink from "scale1" to "scale2"
+// once they are "start" into their life, over "duration" of it
+class ParticleScaleFadeStage : public ParticleStage {
+public:
+	ParticleScaleFadeStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
+		readField(L, tableIndex, "start", _start);
+		readField(L, tableIndex, "duration", _duration);
+		readField(L, tableIndex, "scale1", _fromScale);
+		readField(L, tableIndex, "scale2", _toScale);
+	}
+
+	void update(uint first, uint count) override {
+		// The oldest particles come first, so the ones after one that hasn't
+		// started changing haven't either
+		for (uint i = first; i < first + count; ++i) {
+			Particle &particle = _record.getParticle(i);
+			const double fraction = (particle.life - _start) / _duration;
+			if (fraction < 0.0) {
+				break;
+			}
+
+			if (fraction <= 1.0) {
+				particle.scale = lerp(_fromScale, _toScale, fraction);
+			}
+		}
+	}
+
+private:
+	double _start = 0.0;
+	double _duration = 1.0;
+	double _fromScale = 0.0;
+	double _toScale = 1.0;
+};
+
+// TODO: The "script" and "revolve" stages, which no script uses
+static ParticleStage *makeStage(ParticleRecord &record, lua_State *L, int tableIndex, const Common::String &name) {
+	if (name == "positionPerspective") {
+		return new ParticlePerspectivePositionStage(record, L, tableIndex);
+	} else if (name == "position") {
+		return new ParticlePositionStage(record, L, tableIndex);
+	} else if (name == "planeCollision") {
+		return new ParticlePlaneCollisionStage(record, L, tableIndex);
+	} else if (name == "velocity") {
+		return new ParticleVelocityStage(record, L, tableIndex);
+	} else if (name == "angle") {
+		return new ParticleRangeStage(record, L, tableIndex, 0.0, true);
+	} else if (name == "scale") {
+		return new ParticleRangeStage(record, L, tableIndex, 1.0, false);
+	} else if (name == "color") {
+		return new ParticleColorStage(record, L, tableIndex);
+	} else if (name == "sources") {
+		return new ParticleSourcesStage(record, L, tableIndex);
+	} else if (name == "fade") {
+		return new ParticleFadeStage(record, L, tableIndex);
+	} else if (name == "drag") {
+		return new ParticleDragStage(record, L, tableIndex);
+	} else if (name == "force") {
+		return new ParticleForceStage(record, L, tableIndex);
+	} else if (name == "turbulence") {
+		return new ParticleTurbulenceStage(record, L, tableIndex);
+	} else if (name == "path") {
+		return new ParticlePathStage(record, L, tableIndex);
+	} else if (name == "rotate") {
+		return new ParticleRotateStage(record, L, tableIndex);
+	} else if (name == "radialPosition") {
+		return new ParticleRadialPositionStage(record, L, tableIndex);
+	} else if (name == "radialVelocity") {
+		return new ParticleRadialVelocityStage(record, L, tableIndex);
+	} else if (name == "radialForce") {
+		return new ParticleRadialForceStage(record, L, tableIndex);
+	} else if (name == "scaleFade") {
+		return new ParticleScaleFadeStage(record, L, tableIndex);
+	}
+
+	luaL_error(L, "Stage name '%s' does not match a known stage", name.c_str());
+	return nullptr;
+}
+
+ParticleRecord::~ParticleRecord() {
+	for (ParticleStage *stage : _stages) {
+		delete stage;
+	}
+
+	delete _canvas;
+}
+
+void ParticleRecord::readTable(int tableIndex) {
+	lua_State *L = getLua();
+
+	Common::String imageName;
+	if (!readField(L, tableIndex, "ovl", imageName)) {
+		luaL_error(L, "Particle AR requires field 'ovl' to be a string");
+	}
+
+	if (!g_nancy->_resource->loadImage(Common::Path(imageName), _image)) {
+		luaL_error(L, "Could not load particle image %s", imageName.c_str());
+	}
+
+	if (!readField(L, tableIndex, "frequency", _frequency)) {
+		luaL_error(L, "Particle AR requires field 'frequency' to be a number");
+	}
+
+	if (!readField(L, tableIndex, "life", _life)) {
+		luaL_error(L, "Particle AR requires field 'life' to be a number");
+	}
+
+	if (pushField(L, tableIndex, "perspective")) {
+		_perspective = checkMatrix(L, -1);
+		_hasPerspective = true;
+		lua_pop(L, 1);
+	}
+
+	_particles.resize(kInitialParticles);
+	addStage(new ParticleLifeStage(*this));
+	addStage(new ParticleForceClearStage(*this));
+
+	if (pushField(L, tableIndex, "stages")) {
+		const int stagesIndex = absoluteIndex(L, -1);
+		for (int i = 1; ; ++i) {
+			lua_rawgeti(L, stagesIndex, i);
+			if (lua_isnil(L, -1)) {
+				lua_pop(L, 1);
+				break;
+			}
+
+			luaL_checktype(L, -1, LUA_TTABLE);
+			const int stageIndex = absoluteIndex(L, -1);
+
+			Common::String name;
+			if (!readField(L, stageIndex, "name", name)) {
+				luaL_error(L, "name must be set to a string at each stage");
+			}
+
+			addStage(makeStage(*this, L, stageIndex, name));
+			lua_pop(L, 1);
+		}
+
+		lua_pop(L, 1);
+	}
+
+	// The particles can be there before the record is. From Nancy1New on, that
+	// waits until the record starts, after the stages have been added.
+	readField(L, tableIndex, "fastForward", _fastForward);
+	if (g_nancy->getGameType() < kGameTypeNancy1New && _fastForward > 0.0) {
+		simulate(_fastForward);
+	}
+
+	readField(L, tableIndex, "paused", _isPaused);
+}
+
+void ParticleRecord::addStage(ParticleStage *stage) {
+	_stages.push_back(stage);
+	stage->onAdded();
+}
+
+void ParticleRecord::addNamedStage(const Common::String &kind, const Common::String &name, int tableIndex) {
+	lua_State *L = getLua();
+	if (_namedStages.contains(name)) {
+		luaL_error(L, "Particle AR already has a stage by the name '%s'", name.c_str());
+	}
+
+	ParticleStage *stage = makeStage(*this, L, tableIndex, kind);
+	addStage(stage);
+	_namedStages[name] = stage;
+}
+
+void ParticleRecord::runOnce() {
+	if (g_nancy->getGameType() >= kGameTypeNancy1New && _fastForward > 0.0 && !_isPaused) {
+		simulate(_fastForward);
+	}
+}
+
+void ParticleRecord::run(double sceneTime, double elapsedTime) {
+	if (!_isPaused) {
+		simulate(elapsedTime);
+	}
+}
+
+// Steps through the given time, 30 steps a second. What is left over counts
+// toward the next step.
+void ParticleRecord::simulate(double seconds) {
+	_stepClock += seconds;
+	const int numSteps = MAX<int>((int)(_stepClock * kStepsPerSecond), 0);
+	_stepClock -= numSteps / kStepsPerSecond;
+
+	for (int i = 0; i < numSteps; ++i) {
+		step();
+	}
+}
+
+void ParticleRecord::step() {
+	_spawnTime += 1.0 / kStepsPerSecond;
+	_hasStepped = true;
+
+	// A record that makes no particles keeps no time toward the next one
+	int numSpawned = 0;
+	if (_frequency > 0.0) {
+		_spawnClock += 1.0 / kStepsPerSecond;
+		numSpawned = MAX<int>((int)(_spawnClock * _frequency), 0);
+		_spawnClock -= numSpawned / _frequency;
+	}
+
+	// The particles that lived long enough go
+	while (!_batches.empty() && _batches.front().time + _life <= _spawnTime) {
+		dropOldestBatch();
+	}
+
+	if (numSpawned > 0) {
+		spawn(numSpawned);
+	}
+
+	runStages(_first, _count, false);
+
+	// Forces change the speeds, and speeds the places
+	for (uint i = 0; i < _count; ++i) {
+		Particle &particle = _particles[(_first + i) % _particles.size()];
+		for (int j = 0; j < 3; ++j) {
+			particle.velocity[j] += particle.acceleration[j];
+			particle.position[j] += particle.velocity[j];
+		}
+	}
+}
+
+// Runs every stage on particles of the ring, which can wrap around: either on
+// new particles, or for a step
+void ParticleRecord::runStages(uint first, uint count, bool isSpawn) {
+	const uint firstPart = MIN<uint>(count, _particles.size() - first);
+	for (ParticleStage *stage : _stages) {
+		if (isSpawn) {
+			stage->onSpawn(first, firstPart);
+			if (count > firstPart) {
+				stage->onSpawn(0, count - firstPart);
+			}
+		} else {
+			stage->update(first, firstPart);
+			if (count > firstPart) {
+				stage->update(0, count - firstPart);
+			}
+		}
+	}
+}
+
+void ParticleRecord::spawn(uint count) {
+	// There are as many particles as the frequency and the life call for
+	while (_count + count > _particles.size()) {
+		grow();
+	}
+
+	const uint first = (_first + _count) % _particles.size();
+	runStages(first, count, true);
+
+	Batch batch;
+	batch.time = _spawnTime;
+	batch.count = count;
+	_batches.push_back(batch);
+	_count += count;
+}
+
+// Doubles the room for particles. The ones that wrapped around to the start of
+// the ring move on past its old end, so that they still follow the others.
+void ParticleRecord::grow() {
+	const uint oldSize = _particles.size();
+	_particles.resize(oldSize * 2);
+	for (ParticleStage *stage : _stages) {
+		stage->onGrown(oldSize, oldSize);
+	}
+
+	const uint numWrapped = _first + _count > oldSize ? _first + _count - oldSize : 0;
+	for (uint i = 0; i < numWrapped; ++i) {
+		_particles[oldSize + i] = _particles[i];
+	}
+}
+
+void ParticleRecord::dropOldestBatch() {
+	const uint count = MIN(_batches.front().count, _count);
+	_count -= count;
+	_first = (_first + count) % _particles.size();
+	_batches.pop_front();
+}
+
+void ParticleRecord::onZChanged() {
+	if (_canvas) {
+		_canvas->setScriptZ(getZ(), getContext(), getCreationOrder());
+	}
+}
+
+// What a stage that a script got back by name holds
+struct ParticleStageHandle {
+	ParticleStage *stage;
+};
+
+static const char *const kParticleStageType = "ND.ParticleStage";
+
+// record:FastForward(seconds), Nancy23, runs the simulation through that time
+// at once, even while the record is paused
+static int particleFastForward(lua_State *L) {
+	ParticleRecord *record = (ParticleRecord *)checkRecord(L, 1);
+	record->simulate(luaL_checknumber(L, 2));
+	return 0;
+}
+
+// record:Add<Stage>(name, table), Nancy1New; the kind of stage is the upvalue
+static int particleAddStage(lua_State *L) {
+	ParticleRecord *record = (ParticleRecord *)checkRecord(L, 1);
+	const Common::String name = luaL_checkstring(L, 2);
+	luaL_checktype(L, 3, LUA_TTABLE);
+
+	record->addNamedStage(lua_tostring(L, lua_upvalueindex(1)), name, 3);
+	return 0;
+}
+
+static const char *const kParticleStageKinds[][2] = {
+	{ "AddAngle", "angle" },
+	{ "AddColor", "color" },
+	{ "AddDrag", "drag" },
+	{ "AddFade", "fade" },
+	{ "AddForce", "force" },
+	{ "AddPlaneCollision", "planeCollision" },
+	{ "AddPosition", "position" },
+	{ "AddPositionPerspective", "positionPerspective" },
+	{ "AddScale", "scale" },
+	{ "AddSources", "sources" },
+	{ "AddTurbulence", "turbulence" },
+	{ "AddVelocity", "velocity" },
+	{ "AddPath", "path" },
+	{ "AddRotate", "rotate" },
+	{ "AddRadialPosition", "radialPosition" },
+	{ "AddRadialVelocity", "radialVelocity" },
+	{ "AddRadialForce", "radialForce" },
+	{ "AddScaleFade", "scaleFade" }
+};
+
+bool ParticleRecord::getField(const Common::String &key) {
+	lua_State *L = getLua();
+
+	if (key == "frequency") {
+		lua_pushnumber(L, _frequency);
+	} else if (key == "count") {
+		lua_pushinteger(L, _count);
+	} else if (key == "paused") {
+		lua_pushboolean(L, _isPaused);
+	} else if (key == "timestep") {
+		// Nancy23: the length of a step of the simulation
+		lua_pushnumber(L, 1.0 / kStepsPerSecond);
+	} else if (key == "FastForward") {
+		lua_pushcfunction(L, particleFastForward);
+	} else {
+		for (const auto &kind : kParticleStageKinds) {
+			if (key == kind[0]) {
+				lua_pushstring(L, kind[1]);
+				lua_pushcclosure(L, particleAddStage, 1);
+				return true;
+			}
+		}
+
+		ParticleStage *stage = _namedStages.getValOrDefault(key, nullptr);
+		if (!stage) {
+			return false;
+		}
+
+		ParticleStageHandle handle;
+		handle.stage = stage;
+		pushValue(L, kParticleStageType, handle);
+	}
+
+	return true;
+}
+
+bool ParticleRecord::setField(const Common::String &key) {
+	lua_State *L = getLua();
+
+	if (key == "frequency") {
+		_frequency = MAX(luaL_checknumber(L, 3), 0.0);
+	} else if (key == "paused") {
+		_isPaused = lua_toboolean(L, 3) != 0;
+	} else {
+		return false;
+	}
+
+	return true;
+}
+
+static int particleStageIndex(lua_State *L) {
+	const ParticleStageHandle &handle = *(const ParticleStageHandle *)checkUserData(L, 1, kParticleStageType);
+	const Common::String key = luaL_checkstring(L, 2);
+
+	if (!handle.stage->getField(L, key)) {
+		return luaL_error(L, "Object %s does not have field '%s'", kParticleStageType, key.c_str());
+	}
+
+	return 1;
+}
+
+static int particleStageNewIndex(lua_State *L) {
+	const ParticleStageHandle &handle = *(const ParticleStageHandle *)checkUserData(L, 1, kParticleStageType);
+	const Common::String key = luaL_checkstring(L, 2);
+
+	lua_settop(L, 3);
+	if (!handle.stage->setField(L, key)) {
+		return luaL_error(L, "Object %s does not have field '%s'", kParticleStageType, key.c_str());
+	}
+
+	return 0;
+}
+
+void registerParticleAPI(lua_State *L) {
+	static const luaL_Reg kParticleStageFunctions[] = {
+		{ "__index", particleStageIndex },
+		{ "__newindex", particleStageNewIndex },
+		{ nullptr, nullptr }
+	};
+
+	registerType(L, kParticleStageType, kParticleStageFunctions);
+}
+
+// The picture of the particles is as large as the viewport and mostly transparent.
+// Only the areas they were in and are in now get drawn again.
+static void showCanvas(RecordGraphic &canvas, const Common::Rect &previousArea, const Common::Rect &drawnArea) {
+	canvas.setVisible(true, false);
+	canvas.addChangedArea(previousArea);
+	canvas.addChangedArea(drawnArea);
+	canvas.setNeedsRedraw(!canvas.getChangedArea().isEmpty());
+}
+
+// The particles are drawn on a picture as large as the viewport, which is
+// started over every frame
+void ParticleRecord::registerGraphics() {
+	if (_canvas) {
+		_canvas->registerGraphics();
+	}
+}
+
+void ParticleRecord::updateGraphics() {
+	if (!isShown() || _count == 0) {
+		if (_canvas) {
+			_canvas->addChangedArea(_drawnArea);
+			_canvas->setVisible(false, false);
+		}
+
+		return;
+	}
+
+	const ScriptMatrix transform = getTransform();
+	if (_canvas && _canvas->isVisible() && !_hasStepped && transform == _drawnTransform) {
+		return;
+	}
+
+	_hasStepped = false;
+	_drawnTransform = transform;
+
+	if (!_canvas) {
+		const Common::Rect bounds = RecordGraphic::getDrawArea();
+
+		_canvas = new RecordGraphic();
+		_canvas->init();
+		_canvas->_drawSurface.create(bounds.width(), bounds.height(), g_nancy->_graphics->getTransparentPixelFormat());
+		_canvas->moveTo(bounds);
+		_canvas->setScriptZ(getZ(), getContext(), getCreationOrder());
+		_canvas->registerGraphics();
+
+		// Reading the image is quicker in the format of the picture
+		_image.convertToInPlace(_canvas->_drawSurface.format);
+	}
+
+	if (!_drawnArea.isEmpty()) {
+		_canvas->_drawSurface.fillRect(_drawnArea, 0);
+	}
+
+	const Common::Rect previousArea = _drawnArea;
+	_drawnArea = Common::Rect();
+	for (uint i = 0; i < _count; ++i) {
+		drawParticle(_particles[(_first + i) % _particles.size()], transform, _drawnArea);
+	}
+
+	showCanvas(*_canvas, previousArea, _drawnArea);
+}
+
+// Where a corner of a particle ends up in the viewport. Returns false when it is
+// behind the camera. Without a projection, the particles are placed in the
+// pixels of the viewport.
+static bool projectCorner(double x, double y, const ScriptMatrix &matrix, bool isProjected, int width, int height, double &outX, double &outY) {
+	double point[4];
+	for (int i = 0; i < 4; ++i) {
+		point[i] = x * matrix.m[0][i] + y * matrix.m[1][i] + matrix.m[3][i];
+	}
+
+	if (!isProjected) {
+		outX = point[0];
+		outY = point[1];
+		return true;
+	}
+
+	if (point[3] <= 0.0) {
+		return false;
+	}
+
+	outX = (point[0] / point[3] + 1.0) * 0.5 * width;
+	outY = (1.0 - point[1] / point[3]) * 0.5 * height;
+	return point[2] >= 0.0 && point[2] <= point[3];
+}
+
+// Narrows the pixel range [first, last] of a row to the pixels x where
+// start + step * x is in [0, 1), with one pixel of margin on each side, as
+// each pixel is still tested on its own. Returns false if the range is empty.
+static bool narrowSpan(double start, double step, int &first, int &last) {
+	if (step == 0.0) {
+		return start >= 0.0 && start < 1.0;
+	}
+
+	const double atZero = -start / step;
+	const double atOne = (1.0 - start) / step;
+	const double low = CLIP<double>(floor(MIN(atZero, atOne)) - 1.0, first, last + 1.0);
+	const double high = CLIP<double>(ceil(MAX(atZero, atOne)) + 1.0, first - 1.0, last);
+	first = (int)low;
+	last = (int)high;
+	return first <= last;
+}
+
+// A particle is a square of a part of the image, sized, turned and moved into
+// place, then seen through the projection
+// Draws a particle where the matrix puts the square from -0.5 to 0.5, onto a
+// target of the same 32 bit format as the image
+static void drawParticleQuad(Graphics::ManagedSurface &target, const Graphics::ManagedSurface &image, const Particle &particle,
+		const ScriptMatrix &matrix, bool isProjected, Common::Rect &drawnArea) {
+
+	// The top left, top right and bottom left corners
+	double x0, y0, x1, y1, x2, y2;
+	if (!projectCorner(-0.5, 0.5, matrix, isProjected, target.w, target.h, x0, y0) ||
+			!projectCorner(0.5, 0.5, matrix, isProjected, target.w, target.h, x1, y1) ||
+			!projectCorner(-0.5, -0.5, matrix, isProjected, target.w, target.h, x2, y2)) {
+		return;
+	}
+
+	// The quad stays a parallelogram, as all of it is at the same depth
+	const double ax = x1 - x0;
+	const double ay = y1 - y0;
+	const double bx = x2 - x0;
+	const double by = y2 - y0;
+	const double determinant = ax * by - ay * bx;
+	if (fabs(determinant) < 1e-9) {
+		return;
+	}
+
+	const double x3 = x1 + bx;
+	const double y3 = y1 + by;
+	const int minX = MAX<int>(0, (int)floor(MIN(MIN(x0, x1), MIN(x2, x3))));
+	const int maxX = MIN<int>(target.w - 1, (int)ceil(MAX(MAX(x0, x1), MAX(x2, x3))));
+	const int minY = MAX<int>(0, (int)floor(MIN(MIN(y0, y1), MIN(y2, y3))));
+	const int maxY = MIN<int>(target.h - 1, (int)ceil(MAX(MAX(y0, y1), MAX(y2, y3))));
+	if (minX > maxX || minY > maxY) {
+		return;
+	}
+
+	const Common::Rect area(minX, minY, maxX + 1, maxY + 1);
+	if (drawnArea.isEmpty()) {
+		drawnArea = area;
+	} else {
+		drawnArea.extend(area);
+	}
+
+	// Both pictures are in the 32 bit format with alpha, so their pixels are read
+	// directly; that is a lot quicker for the thousands of particles of smoke
+	const Graphics::PixelFormat &format = target.format;
+	assert(format.bytesPerPixel == 4 && image.format == format);
+
+	const uint32 colorA = particle.color >> 24;
+	const uint32 colorR = (particle.color >> 16) & 0xFF;
+	const uint32 colorG = (particle.color >> 8) & 0xFF;
+	const uint32 colorB = particle.color & 0xFF;
+
+	// Where the middle of a pixel is on the square, from 0 to 1 across and
+	// down, changes by the same amount from one pixel to the next
+	const double inverse = 1.0 / determinant;
+	const double acrossStepX = by * inverse;
+	const double downStepX = -ay * inverse;
+
+	const double uScale = (particle.right - particle.left) * image.w;
+	const double vScale = (particle.bottom - particle.top) * image.h;
+	const double uStart = particle.left * image.w;
+	const double vStart = particle.top * image.h;
+
+	for (int y = minY; y <= maxY; ++y) {
+		const double px = minX + 0.5 - x0;
+		const double py = y + 0.5 - y0;
+		double across = (px * by - py * bx) * inverse;
+		double down = (ax * py - ay * px) * inverse;
+
+		// The pixels of the row that a turned square covers
+		int first = 0;
+		int last = maxX - minX;
+		if (!narrowSpan(across, acrossStepX, first, last) || !narrowSpan(down, downStepX, first, last)) {
+			continue;
+		}
+
+		across += acrossStepX * first;
+		down += downStepX * first;
+
+		uint32 *row = (uint32 *)target.getBasePtr(0, y);
+		for (int x = minX + first; x <= minX + last; ++x, across += acrossStepX, down += downStepX) {
+			if (across < 0.0 || across >= 1.0 || down < 0.0 || down >= 1.0) {
+				continue;
+			}
+
+			const int u = CLIP<int>((int)(uStart + uScale * across), 0, image.w - 1);
+			const int v = CLIP<int>((int)(vStart + vScale * down), 0, image.h - 1);
+			const uint32 source = *(const uint32 *)image.getBasePtr(u, v);
+
+			const uint32 alpha = ((source >> format.aShift) & 0xFF) * colorA / 255;
+			if (alpha == 0) {
+				continue;
+			}
+
+			const uint32 destination = row[x];
+			const uint32 da = (destination >> format.aShift) & 0xFF;
+			const uint32 dr = (destination >> format.rShift) & 0xFF;
+			const uint32 dg = (destination >> format.gShift) & 0xFF;
+			const uint32 db = (destination >> format.bShift) & 0xFF;
+
+			const uint32 sr = ((source >> format.rShift) & 0xFF) * colorR / 255;
+			const uint32 sg = ((source >> format.gShift) & 0xFF) * colorG / 255;
+			const uint32 sb = ((source >> format.bShift) & 0xFF) * colorB / 255;
+			const uint32 outA = alpha + da * (255 - alpha) / 255;
+			const uint32 outR = (sr * alpha + dr * (255 - alpha)) / 255;
+			const uint32 outG = (sg * alpha + dg * (255 - alpha)) / 255;
+			const uint32 outB = (sb * alpha + db * (255 - alpha)) / 255;
+			row[x] = (outA << format.aShift) | (outR << format.rShift) | (outG << format.gShift) | (outB << format.bShift);
+		}
+	}
+}
+
+
+// ParticleEmitterRecord, Lights, Camera, Curses
+
+ParticleEmitterRecord::~ParticleEmitterRecord() {
+	delete _canvas;
+}
+
+void ParticleEmitterRecord::readTable(int tableIndex) {
+	lua_State *L = getLua();
+
+	Common::String imageName;
+	if (!readField(L, tableIndex, "ovl", imageName)) {
+		luaL_error(L, "Particle AR requires field 'ovl' to be a string");
+	}
+
+	if (!g_nancy->_resource->loadImage(Common::Path(imageName), _image)) {
+		luaL_error(L, "Could not load particle image %s", imageName.c_str());
+	}
+
+	if (!readField(L, tableIndex, "frequency", _frequency)) {
+		luaL_error(L, "Particle AR requires field 'frequency' to be a number");
+	}
+
+	if (pushField(L, tableIndex, "stages")) {
+		const int stagesIndex = absoluteIndex(L, -1);
+		for (int i = 1; ; ++i) {
+			lua_rawgeti(L, stagesIndex, i);
+			if (lua_isnil(L, -1)) {
+				lua_pop(L, 1);
+				break;
+			}
+
+			luaL_checktype(L, -1, LUA_TTABLE);
+			readStage(absoluteIndex(L, -1));
+			lua_pop(L, 1);
+		}
+
+		lua_pop(L, 1);
+	}
+}
+
+void ParticleEmitterRecord::readStage(int stageIndex) {
+	lua_State *L = getLua();
+
+	Common::String name;
+	if (!readField(L, stageIndex, "name", name)) {
+		luaL_error(L, "name must be set to a string at each stage");
+	}
+
+	Stage stage;
+	const char *vectorName = nullptr;
+	if (name.equalsIgnoreCase("force")) {
+		stage.kind = kStageForce;
+		vectorName = "force";
+	} else if (name.equalsIgnoreCase("fade")) {
+		stage.kind = kStageFade;
+		vectorName = "color";
+	} else if (name.equalsIgnoreCase("rotate")) {
+		stage.kind = kStageRotate;
+		if (!readField(L, stageIndex, "angle", stage.value)) {
+			luaL_error(L, "Rotate stage must have field 'angle' set to a number");
+		}
+	} else if (name.equalsIgnoreCase("scale")) {
+		stage.kind = kStageScale;
+		if (!readField(L, stageIndex, "size", stage.value)) {
+			luaL_error(L, "Scale stage must have field 'size' set to a number");
+		}
+	} else if (name.equalsIgnoreCase("drag")) {
+		stage.kind = kStageDrag;
+		if (!readField(L, stageIndex, "c0", stage.value) || !readField(L, stageIndex, "c1", stage.value2)) {
+			luaL_error(L, "Drag stage must have fields 'c0' and 'c1' set to numbers");
+		}
+	} else {
+		luaL_error(L, "Stage name '%s' does not match a known stage", name.c_str());
+	}
+
+	if (vectorName) {
+		lua_getfield(L, stageIndex, vectorName);
+		ScriptVector vector;
+		if (!testVector(L, -1, vector)) {
+			luaL_error(L, "%s stage must have field '%s' set to a vector", name.c_str(), vectorName);
+		}
+
+		for (int i = 0; i < vector.size; ++i) {
+			stage.vector[i] = vector.v[i];
+		}
+
+		lua_pop(L, 1);
+	}
+
+	_stages.push_back(stage);
+}
+
+// Emit(this, id) gives the position, speed, angle, size, color, part of the
+// image and time of death of a new particle. The id counts the particles there
+// are with the new one.
+void ParticleEmitterRecord::emit(double sceneTime) {
+	lua_State *L = getLua();
+
+	lua_pushnumber(L, _particles.size() + 1);
+	if (!callFunction("Emit", 1, 7)) {
+		return;
+	}
+
+	ScriptVector position, velocity;
+	const bool hasPosition = testVector(L, -7, position);
+	const bool hasVelocity = testVector(L, -6, velocity);
+	const ScriptRect *source = testRect(L, -2);
+	if (!hasPosition || !hasVelocity || !source || !lua_isnumber(L, -5) || !lua_isnumber(L, -4) || !lua_isnumber(L, -1)) {
+		warning("Particle AR: Emit didn't give a particle");
+		lua_pop(L, 7);
+		return;
+	}
+
+	EmittedParticle particle;
+	particle.position[0] = position.v[0];
+	particle.position[1] = position.v[1];
+	particle.velocity[0] = velocity.v[0];
+	particle.velocity[1] = velocity.v[1];
+	particle.angle = lua_tonumber(L, -5);
+	particle.size = particle.startSize = lua_tonumber(L, -4);
+	const uint32 *color = testColor(L, -3);
+	particle.color = particle.startColor = color ? *color : 0xFFFFFFFF;
+	particle.source = source->toRect();
+	particle.birthTime = sceneTime;
+	particle.deathTime = lua_tonumber(L, -1);
+	lua_pop(L, 7);
+
+	_particles.push_back(particle);
+}
+
+// How far a particle is through its life, from 0 to 1
+static double getLifeProgress(double sceneTime, double birthTime, double deathTime) {
+	const double life = deathTime - birthTime;
+	return life > 0.0 ? CLIP((sceneTime - birthTime) / life, 0.0, 1.0) : 1.0;
+}
+
+void ParticleEmitterRecord::runStage(const Stage &stage, double sceneTime, double elapsedTime) {
+	for (EmittedParticle &particle : _particles) {
+		switch (stage.kind) {
+		case kStageForce:
+			particle.velocity[0] += stage.vector[0] * elapsedTime;
+			particle.velocity[1] += stage.vector[1] * elapsedTime;
+			break;
+		case kStageFade: {
+			// From the color it was made with, by the vector over its life
+			const double progress = getLifeProgress(sceneTime, particle.birthTime, particle.deathTime);
+			uint32 color = 0;
+			for (int i = 0; i < 4; ++i) {
+				const int shift = 24 - i * 8;
+				const double start = (particle.startColor >> shift) & 0xFF;
+				color |= (uint32)CLIP<int>((int)(start + stage.vector[i] * progress), 0, 255) << shift;
+			}
+
+			particle.color = color;
+			break;
+		}
+		case kStageRotate:
+			particle.angle += stage.value * elapsedTime;
+			break;
+		case kStageScale: {
+			// From the size it was made with, to that size times the value
+			const double progress = getLifeProgress(sceneTime, particle.birthTime, particle.deathTime);
+			particle.size = MAX(0.0, (1.0 - progress) * particle.startSize + particle.startSize * stage.value * progress);
+			break;
+		}
+		case kStageDrag: {
+			// Against the speed, by c0 times the speed plus c1 times its square
+			const double speed = sqrt(particle.velocity[0] * particle.velocity[0] + particle.velocity[1] * particle.velocity[1]);
+			if (speed >= 1e-6) {
+				const double drag = (stage.value * speed + stage.value2 * speed * speed) / speed * elapsedTime;
+				particle.velocity[0] -= drag * particle.velocity[0];
+				particle.velocity[1] -= drag * particle.velocity[1];
+			}
+
+			break;
+		}
+		default:
+			break;
+		}
+	}
+}
+
+// What is left over of a particle a frame goes on to the next. A frame makes no
+// more than a tenth of the particles of a second.
+void ParticleEmitterRecord::run(double sceneTime, double elapsedTime) {
+	const uint numParticles = _particles.size();
+
+	if (_frequency > 0.0) {
+		const double due = (elapsedTime + _emitClock) * _frequency;
+		const int count = (int)floor(due);
+		_emitClock = (due - count) / _frequency;
+
+		const int limit = MIN<int>(count, (int)ceil(_frequency / 10.0));
+		for (int i = 0; i < limit; ++i) {
+			emit(sceneTime);
+		}
+	}
+
+	for (const Stage &stage : _stages) {
+		runStage(stage, sceneTime, elapsedTime);
+	}
+
+	// The particles move on until their time is up
+	for (uint i = 0; i < _particles.size(); ) {
+		EmittedParticle &particle = _particles[i];
+		if (sceneTime > particle.deathTime) {
+			_particles.remove_at(i);
+			continue;
+		}
+
+		particle.position[0] += particle.velocity[0] * elapsedTime;
+		particle.position[1] += particle.velocity[1] * elapsedTime;
+		++i;
+	}
+
+	// Nothing moves while the game is paused
+	if (elapsedTime != 0.0 || _particles.size() != numParticles) {
+		_isDirty = true;
+	}
+}
+
+void ParticleEmitterRecord::onZChanged() {
+	if (_canvas) {
+		_canvas->setScriptZ(getZ(), getContext(), getCreationOrder());
+	}
+}
+
+void ParticleEmitterRecord::registerGraphics() {
+	if (_canvas) {
+		_canvas->registerGraphics();
+	}
+}
+
+// A particle is its part of the image, turned by its angle and scaled by its
+// size around its position, and then moved by the transform of the record
+void ParticleEmitterRecord::updateGraphics() {
+	if (!isShown() || _particles.empty()) {
+		if (_canvas) {
+			_canvas->addChangedArea(_drawnArea);
+			_canvas->setVisible(false, false);
+		}
+
+		return;
+	}
+
+	if (_canvas && _canvas->isVisible() && !_isDirty) {
+		return;
+	}
+
+	_isDirty = false;
+
+	if (!_canvas) {
+		const Common::Rect bounds = RecordGraphic::getDrawArea();
+
+		_canvas = new RecordGraphic();
+		_canvas->init();
+		_canvas->_drawSurface.create(bounds.width(), bounds.height(), g_nancy->_graphics->getTransparentPixelFormat());
+		_canvas->_drawSurface.clear(0);
+		_canvas->moveTo(bounds);
+		_canvas->setScriptZ(getZ(), getContext(), getCreationOrder());
+		_canvas->registerGraphics();
+
+		// Reading the image is quicker in the format of the picture
+		_image.convertToInPlace(_canvas->_drawSurface.format);
+	}
+
+	if (!_drawnArea.isEmpty()) {
+		_canvas->_drawSurface.fillRect(_drawnArea, 0);
+	}
+
+	const Common::Rect previousArea = _drawnArea;
+	_drawnArea = Common::Rect();
+	_canvas->setMasked(isMasked());
+
+	const ScriptMatrix transform = getTransform();
+	for (const EmittedParticle &emitted : _particles) {
+		const double width = emitted.source.width();
+		const double height = emitted.source.height();
+		if (width <= 0.0 || height <= 0.0 || _image.w == 0 || _image.h == 0 || (emitted.color >> 24) == 0) {
+			continue;
+		}
+
+		Particle particle;
+		particle.left = (double)emitted.source.left / _image.w;
+		particle.right = (double)emitted.source.right / _image.w;
+		particle.top = (double)emitted.source.top / _image.h;
+		particle.bottom = (double)emitted.source.bottom / _image.h;
+		particle.color = emitted.color;
+
+		// The corner (-0.5, 0.5) of the square is the top left of the picture
+		ScriptMatrix place;
+		place.isSRT = false;
+		const double c = cos(emitted.angle) * emitted.size;
+		const double s = sin(emitted.angle) * emitted.size;
+		place.m[0][0] = width * c;
+		place.m[0][1] = width * s;
+		place.m[1][0] = height * s;
+		place.m[1][1] = -height * c;
+		place.m[3][0] = emitted.position[0];
+		place.m[3][1] = emitted.position[1];
+
+		drawParticleQuad(_canvas->_drawSurface, _image, particle, place * transform, false, _drawnArea);
+	}
+
+	showCanvas(*_canvas, previousArea, _drawnArea);
+}
+
+bool ParticleEmitterRecord::getField(const Common::String &key) {
+	if (key == "frequency") {
+		lua_pushnumber(getLua(), _frequency);
+		return true;
+	} else if (key == "count") {
+		// The particles that are alive
+		lua_pushinteger(getLua(), _particles.size());
+		return true;
+	}
+
+	return false;
+}
+
+bool ParticleEmitterRecord::setField(const Common::String &key) {
+	if (key == "frequency") {
+		_frequency = luaL_checknumber(getLua(), 3);
+		return true;
+	}
+
+	return false;
+}
+
+void ParticleRecord::drawParticle(const Particle &particle, const ScriptMatrix &transform, Common::Rect &drawnArea) {
+	if (particle.width <= 0.0 || particle.height <= 0.0 || (particle.color >> 24) == 0) {
+		return;
+	}
+
+	ScriptMatrix place;
+	place.isSRT = false;
+	const double c = cos(particle.angle);
+	const double s = sin(particle.angle);
+	const double width = particle.width * particle.scale;
+	const double height = particle.height * particle.scale;
+	place.m[0][0] = width * c;
+	place.m[0][1] = width * s;
+	place.m[1][0] = -height * s;
+	place.m[1][1] = height * c;
+	place.m[3][0] = particle.position[0];
+	place.m[3][1] = particle.position[1];
+	place.m[3][2] = particle.position[2];
+
+	const ScriptMatrix matrix = place * transform * _perspective;
+
+	drawParticleQuad(_canvas->_drawSurface, _image, particle, matrix, _hasPerspective, drawnArea);
+}
+
+} // End of namespace Script
+} // End of namespace Nancy

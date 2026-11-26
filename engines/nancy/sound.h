@@ -70,6 +70,8 @@ public:
 
 	void playSound(uint16 channelID);
 	void playSound(const SoundDescription &description);
+	// Nancy24 scripts can pick the volume a sound goes by, whatever its channel
+	void playSound(uint16 channelID, Audio::Mixer::SoundType type);
 	void playSound(const Common::String &chunkName);
 
 	void pauseSound(uint16 channelID, bool pause);
@@ -80,6 +82,14 @@ public:
 	bool isSoundPlaying(uint16 channelID) const;
 	bool isSoundPlaying(const SoundDescription &description) const;
 	bool isSoundPlaying(const Common::String &chunkName) const;
+
+	// The name of the sound last loaded into a channel
+	const Common::String &getSoundName(uint16 channelID) const { return _channels[channelID].name; }
+
+	// Goes up whenever a sound starts on the channel or the channel is stopped,
+	// but not when a sound ends by itself. Nancy19 records tell from it whether
+	// their sound was cut off.
+	uint32 getChannelSerial(uint16 channelID) const;
 
 	void stopSound(uint16 channelID);
 	void stopSound(const SoundDescription &description);
@@ -122,9 +132,17 @@ public:
 	void setRate(const SoundDescription &description, uint32 rate);
 	void setRate(const Common::String &chunkName, uint32 rate);
 
+	// Nancy29: plays a sound once, without a channel, so that several copies of
+	// it can overlap. The volume goes from 0 to 100, and a pitch of 2 plays the
+	// sound twice as fast. Returns false when the sound couldn't be played.
+	bool playInstance(const Common::String &soundName, Audio::Mixer::SoundType type, uint16 volume, double pitch, Audio::SoundHandle &handle);
+	bool isInstancePlaying(const Audio::SoundHandle &handle) const;
+
 	Audio::Timestamp getLength(uint16 channelID);
 	Audio::Timestamp getLength(const SoundDescription &description);
 	Audio::Timestamp getLength(const Common::String &chunkName);
+	// How long the sound file plays, without loading it into a channel
+	Audio::Timestamp getFileLength(const Common::String &soundName);
 
 	bool isCommonSound(const Common::String &soundName) const { return _commonSounds.contains(soundName); }
 
@@ -155,6 +173,7 @@ protected:
 		Audio::AudioStream *streamForMixer = nullptr;
 		Audio::SoundHandle handle;
 		bool isPersistent = false;
+		uint32 serial = 0;
 
 		// Sound effect data, not applicable to nancy2 and below
 		SoundEffectDescription *effectData = nullptr;
@@ -182,6 +201,7 @@ protected:
 
 	Common::Array<Channel> _channels;
 	Common::HashMap<Common::String, SoundDescription> _commonSounds;
+	Common::Array<Audio::SoundHandle> _instances;	// Nancy29: the sounds started by playInstance()
 
 	bool _shouldRecalculate;
 

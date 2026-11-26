@@ -1,0 +1,802 @@
+
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/stack.h"
+#include "ultima/ultima1/logic/overworld_logic.h"
+#include "ultima/ultima1/core/strings.h"
+#include "ultima/ultima1/data/entity.h"
+#include "ultima/ultima1/data/map.h"
+#include "ultima/ultima1/ultima1.h"
+#include "ultima/ultima1/metaengine.h"
+
+namespace Ultima {
+namespace Ultima1 {
+namespace Logic {
+
+enum {
+	IMP_WATER, IMP_MOUNTAINS, IMP_WOODS, IMP_FRIGATES_WATER, IMP_RAFTS_WATER,
+	IMP_BLOCKED_BY, IMP_MOVE_ON_LAND = 6
+};
+
+constexpr int OVERWORLD_MID_Y = Data::OVERWORLD_HEIGHT / 2 - 1;
+
+static const char *IMPASSABLE_REASONS[] = {
+	"You can't walk on water!",
+	"Mountains are impassable!",
+	"Aircars can't pass woods!",
+	"Frigates like water!",
+	"Rafts like water!",
+	"Blocked by a",
+	"Can't move on land!"
+};
+
+static const int8 DELTA_X[5] = { 0, -1, 1, 0, 0 };
+static const int8 DELTA_Y[5] = { 0, 0, 0, -1, 1 };
+
+
+OverworldLogic::OverworldLogic() {
+	_G(map)._mapType = Data::MAPTYPE_OVERWORLD;
+	_G(transportFoodCtr) = 1;
+}
+
+bool OverworldLogic::board() {
+	auto &sg = _G(savegame);
+
+	if (sg._transportType != Data::TRANSPORT_FOOT) {
+		writeString("X-it thy craft first!\n");
+		playFX(1);
+		return true;
+	}
+
+	int tileNum = _G(map).getTileAt(sg._overworldPos.x, sg._overworldPos.y);
+	if (tileNum < Data::TILE_HORSE || tileNum > Data::TILE_TIME_MACHINE) {
+		writeString("Nothing to Board!\n");
+		playFX(1);
+		return true;
+	}
+
+	// The vehicle becomes the player's own overworld graphic, rather than a
+	// separate entity standing at the same spot
+	sg._overworldEntities[0]._type = tileNum;
+	sg.removeOverworldCreatureAt(sg._overworldPos.x, sg._overworldPos.y);
+
+	// TILE_FRIGATE2 (the flag-waving animation frame of TILE_FRIGATE1)
+	// doesn't have its own TransportType, so every tile past it needs to
+	// shift back down by one to line back up
+	sg._transportType = tileNum - Data::TILE_HORSE + 1;
+	if (sg._transportType > 4)
+		--sg._transportType;
+
+	writeString(tileNum == Data::TILE_HORSE || tileNum == Data::TILE_CART ? "Mount " : "Board ");
+	writeString("%s\n", Data::TRANSPORT_NAMES[sg._transportType]);
+
+	if (tileNum == Data::TILE_SHUTTLE) {
+		g_engine->addView("LiftOff");
+		return false;
+	}
+
+	if (tileNum == Data::TILE_TIME_MACHINE) {
+		if (sg._redGems != 0 && sg._whiteGem != 0 && sg._blueGem != 0 && sg._greenGems != 0) {
+			// EnteringCraft shows its four instructional pages, then loads
+			// the Mondain map itself once the last one is dismissed
+			g_engine->addView("EnteringCraft");
+		} else {
+			g_engine->addView("OperateCraft");
+		}
+		return false;
+	}
+
+	return true;
+}
+
+bool OverworldLogic::cast() {
+	writeString("Cast %s", Data::SPELL_NAMES[_G(savegame)._equippedSpell]);
+
+	switch (_G(savegame)._equippedSpell) {
+	case Data::SPELL_PRAYER:
+		castPrayer();
+		return true;
+
+	case Data::SPELL_MAGIC_MISSILE:
+	case Data::SPELL_KILL:
+		// Select direction
+		writeString(": ");
+		_G(logic) = Common::SharedPtr<Logic>(new DirectionLogic(DirectionLogic::SPELL));
+		g_engine->addView("Direction");
+		return false;
+
+	default:
+		writeString("\n");
+		playFX(6);
+		writeString("Failed, dungeon spell only!\n");
+		return true;
+	}
+}
+
+bool OverworldLogic::enter() {
+	int location = _G(map).getLocationAt(_G(savegame)._overworldPos);
+	if (location == 0) {
+		writeString("Enter?\n");
+		playFX(1);
+		return true;
+
+	} else {
+		// Display the enter message
+		_G(map)._isLordBritishCastle = location == 33;
+
+		Common::String msg = "Entering...\n";
+		if (location < 33)
+			msg += "The city of ";
+		msg += Data::LOCATION_NAMES[location - 1];
+		msg += "\n";
+		writeString(msg);
+
+		if (location >= 41 && location < 49) {
+			g_engine->send("Pillar", Graphics::Views::GameMessage("PILLAR", location - 41));
+
+		} else {
+			// Load the new location
+			_G(map).load(location);
+		}
+
+		// Run any logic for entering it
+		_G(logic)->entering();
+
+		return false;
+	}
+}
+
+bool OverworldLogic::fire() {
+	writeString("Fire ");
+
+	if (_G(savegame)._transportType == Data::TRANSPORT_FRIGATE || _G(savegame)._transportType == Data::TRANSPORT_AIRCAR) {
+		writeString(_G(savegame)._transportType == Data::TRANSPORT_FRIGATE ? "cannons: " : "lasers: ");
+		_G(logic) = Common::SharedPtr<Logic>(new DirectionLogic(DirectionLogic::FIRE));
+		g_engine->addView("Direction");
+		return false;
+
+	} else {
+		writeString("what?\n");
+		return true;
+	}
+}
+
+bool OverworldLogic::quit() {
+	writeString("Quit - saving game...");
+	g_engine->updateScreen();
+	if (g_engine->saveGameDialog())
+		writeString("saved.");
+	writeString("\n");
+
+	return true;
+}
+
+bool OverworldLogic::xit() {
+	Data::Savegame &sg = _G(savegame);
+	const Common::Point &pos = sg._overworldPos;
+
+	if (sg._transportType == Data::TRANSPORT_FOOT) {
+		writeString("X-it what?\n");
+		playFX(1);
+		return true;
+	}
+
+	// The original compares the terrain tile straight against TRANSPORT_CART,
+	// which numerically just means "ocean, grass or woods" (tiles 0-2) - you
+	// can't step off onto mountains or a location tile. It also needs dry
+	// land within a couple of tiles
+	int terrain = _G(map).getMapTile(pos.x, pos.y);
+
+	bool landNearby = false;
+	for (int dy = -2; dy <= 2; ++dy) {
+		for (int dx = -2; dx <= 2; ++dx) {
+			if (_G(map).getMapTile(pos.x + dx, pos.y + dy) != Data::TILE_OCEAN)
+				landNearby = true;
+		}
+	}
+
+	if (terrain > Data::TILE_WOODS || !landNearby) {
+		writeString("Thy canst not leave it here!\n");
+		playFX(1);
+		return true;
+	}
+
+	// Drop the vehicle where the player stands as a re-boardable entity,
+	// then carry on afoot
+	int vehicleTile = sg._overworldEntities[0]._type;
+	if (_G(savegame)._overworldEntityCount < Data::OVERWORLD_ENTITY_COUNT - 1) {
+		++_G(savegame)._overworldEntityCount;
+		auto &e = sg._overworldEntities[_G(savegame)._overworldEntityCount];
+		e._type = vehicleTile;
+		e._data = terrain;
+		e._x = pos.x;
+		e._y = pos.y;
+		e._hits = 0;
+	}
+
+	sg._overworldEntities[0]._data = vehicleTile;
+	sg._overworldEntities[0]._type = Data::TILE_PLAYER;
+	sg._transportType = Data::TRANSPORT_FOOT;
+
+	writeString("X-it\n");
+	return true;
+}
+
+bool OverworldLogic::move(Data::Direction dir) {
+	if (!moveCheck(dir))
+		return true;
+
+	if (_G(savegame)._transportType <= Data::TRANSPORT_CART)
+		playFX(4);
+
+	// Write direction traveled
+	writeString(Common::String::format("%s\n", Data::DIRECTION_NAMES[dir]));
+
+	int continentNum = _G(map).getContinentAt(_G(savegame)._overworldPos);
+
+	switch (dir) {
+	case Data::DIR_LEFT:
+		moveLeft();
+		break;
+	case Data::DIR_RIGHT:
+		moveRight();
+		break;
+	case Data::DIR_UP:
+		moveUp();
+		break;
+	case Data::DIR_DOWN:
+		moveDown();
+		break;
+	default:
+		break;
+	}
+
+	if (_G(map).getContinentAt(_G(savegame)._overworldPos) != continentNum)
+		continentChanged(continentNum);
+
+	return true;
+}
+
+bool OverworldLogic::moveCheck(Data::Direction dir) {
+	int xp = _G(savegame)._overworldPos.x + DELTA_X[dir];
+	int yp = _G(savegame)._overworldPos.y + DELTA_Y[dir];
+	int tile = _G(map).getTileAt(xp, yp);
+	int transport = _G(savegame)._transportType;
+
+	if (tile >= Data::TILE_FIRST_MONSTER && tile <= Data::TILE_LAST_MONSTER) {
+		Common::String msg = Common::String::format("Blocked by a");
+		const char *monsterName = Data::OVERWORLD_MONSTERS[(tile - Data::TILE_FIRST_MONSTER) / 2];
+		if (isVowel(*monsterName))
+			msg += '\n';
+		msg += ' ';
+
+		if (tile == Data::TILE_WANDERING_WARLOCK)
+			msg += '\n';
+		msg += monsterName;
+		msg += "!\n";
+
+		writeString(msg);
+		playFX(0);
+		return false;
+
+	} else if (tile == Data::TILE_MOUNTAINS) {
+		impassable(IMP_MOUNTAINS);
+		return false;
+
+	} else if (tile == Data::TILE_OCEAN) {
+		if (transport != Data::TRANSPORT_FRIGATE && transport != Data::TRANSPORT_RAFT &&
+				transport != Data::TRANSPORT_AIRCAR) {
+			impassable(IMP_WATER);
+			return false;
+		}
+	} else if (tile == Data::TILE_WOODS && transport == Data::TRANSPORT_AIRCAR) {
+		impassable(IMP_WOODS);
+		return false;
+
+	} else if (transport == Data::TRANSPORT_FRIGATE) {
+		impassable(IMP_FRIGATES_WATER);
+		return false;
+
+	} else if (transport == Data::TRANSPORT_RAFT) {
+		impassable(IMP_RAFTS_WATER);
+		return false;
+
+	} else if (transport >= Data::TRANSPORT_SHUTTLE) {
+		impassable(IMP_MOVE_ON_LAND);
+		return false;
+	}
+
+	return true;
+}
+
+void OverworldLogic::impassable(int reason) {
+	writeString(Common::String::format("%s\n", IMPASSABLE_REASONS[reason]));
+	playFX(0);
+}
+
+void OverworldLogic::moveLeft() {
+	// Change overworld position
+	Common::Point &pt = _G(savegame)._overworldPos;
+	if (pt.x > 0) {
+		pt.x--;
+	} else {
+		pt.x = Data::OVERWORLD_WIDTH - 1;
+		pt.y = (pt.y >= OVERWORLD_MID_Y) ? pt.y - OVERWORLD_MID_Y : pt.y + OVERWORLD_MID_Y;
+	}
+}
+
+void OverworldLogic::moveRight() {
+	// Change overworld position
+	Common::Point &pt = _G(savegame)._overworldPos;
+	if (pt.x != Data::OVERWORLD_WIDTH - 1) {
+		pt.x++;
+	} else {
+		pt.y = (pt.y >= OVERWORLD_MID_Y) ? pt.y - OVERWORLD_MID_Y : pt.y + OVERWORLD_MID_Y;
+		pt.x = 0;
+	}
+}
+
+void OverworldLogic::moveUp() {
+	// Change overworld position
+	Common::Point &pt = _G(savegame)._overworldPos;
+	pt.y = (pt.y == 0) ? Data::OVERWORLD_HEIGHT - 1 : pt.y - 1;
+}
+
+void OverworldLogic::moveDown() {
+	// Change overworld position
+	Common::Point &pt = _G(savegame)._overworldPos;
+	pt.y = (pt.y == Data::OVERWORLD_HEIGHT - 1) ? 0 : pt.y + 1;
+}
+
+void OverworldLogic::continentChanged(int oldContinent) {
+	// Monsters left behind on the old continent are dropped. A removal shifts
+	// the following entities down, so the same slot is rechecked
+	int index = 1;
+	while (index <= _G(savegame)._overworldEntityCount) {
+		auto &e = _G(savegame)._overworldEntities[index];
+
+		if (e._type >= Data::TILE_FIRST_MONSTER && _G(map).getContinentAt(e._x, e._y) == oldContinent) {
+			_G(savegame).removeOverworldCreatureAt(e._x, e._y);
+			_G(creaturesCount)--;
+		} else {
+			++index;
+		}
+	}
+}
+
+void OverworldLogic::endOfTurn() {
+	if (_G(creaturesCount) < Data::CREATURES_COUNT)
+		generateCreatures();
+	reduceFood();
+
+	// Calls updateCreatures() in turn
+	Logic::endOfTurn();
+}
+
+void OverworldLogic::generateCreatures() {
+	const Common::Point &pos = _G(savegame)._overworldPos;
+	int randomVal = getRandomNumber(1, 255);
+	// Character level (experience / 1000), clamped to the table's bounds
+	int level = MIN(_G(savegame)._experience / 1000, 9);
+	if (randomVal >= Data::MONSTER_THRESHOLDS_PER_LEVEL[level])
+		return;
+
+	// Pick a monster type (0-14), weighted so tougher monster slots are
+	// rarer to roll
+	int weight = getRandomNumber(1, 8) * 2;
+	int typeIdx = getRandomNumber(0, 149) / 10;
+	int tierVal = Data::OVERWORLD_MONSTERS_HITS[typeIdx];
+	if (weight > tierVal)
+		weight = tierVal;
+
+	// The home terrain the monster type needs to spawn on
+	int data;
+	if (typeIdx < 4)
+		data = Data::TILE_OCEAN;
+	else if (typeIdx < 9)
+		data = Data::TILE_WOODS;
+	else
+		data = Data::TILE_GRASS;
+
+	int tile = Data::TILE_FIRST_MONSTER + typeIdx * 2;
+	int hits = Data::OVERWORLD_MONSTERS_HITS[typeIdx] * 10 + (level + 1) + 1;
+
+	// Search for a valid spawn position, randomly offset just outside the
+	// visible viewport, on the monster type's home terrain
+	int x = 0, y = 0, tileAtSpot = 0;
+	bool rangeOk = false;
+	do {
+		int xOff = getRandomNumber(10, 15);
+		if (getRandomNumber(1, 16) & 1)
+			xOff = -xOff;
+		int yOff = getRandomNumber(5, 15);
+		if (getRandomNumber(1, 16) & 1)
+			yOff = -yOff;
+
+		x = _G(map).wrapOverworldX(pos.x + xOff);
+		y = _G(map).wrapOverworldY(pos.y + yOff);
+		tileAtSpot = _G(map).getTileAt(x, y);
+
+		rangeOk = _G(map).mapRangeCheckX(x) && _G(map).mapRangeCheckY(y);
+	} while (tileAtSpot != data && !rangeOk);
+
+	if (tileAtSpot != data || !rangeOk)
+		return;
+
+	// Add the new entity (addOverworldEntity)
+	if (_G(savegame)._overworldEntityCount < Data::OVERWORLD_ENTITY_COUNT - 1) {
+		++_G(savegame)._overworldEntityCount;
+		auto &e = _G(savegame)._overworldEntities[_G(savegame)._overworldEntityCount];
+		e._type = tile;
+		e._data = data;
+		e._x = x;
+		e._y = y;
+		e._hits = hits;
+	}
+
+	++_G(creaturesCount);
+}
+
+void OverworldLogic::updateCreatures() {
+	Common::Stack<int> attackers;
+
+	for (int idx = 1; idx <= _G(savegame)._overworldEntityCount; ++idx) {
+		auto &e = _G(savegame)._overworldEntities[idx];
+
+		if (e._type >= Data::TILE_FIRST_MONSTER && e._type <= Data::TILE_LAST_MONSTER) {
+			int xDiff = _G(savegame)._overworldPos.x - e._x;
+			int yDiff = _G(savegame)._overworldPos.y - e._y;
+			int distance = Data::OverworldEntity::getMonsterAttackDistance(e._type, xDiff, yDiff);
+
+			if (distance != 0) {
+				if ((int)attackers.size() < Data::CREATURES_COUNT)
+					attackers.push(idx);
+			} else {
+				monsterMoveCheck(idx, xDiff, yDiff);
+			}
+		}
+	}
+
+	while (!attackers.empty() && _G(savegame)._hits > 0) {
+		// Get the attacker index from the end of the 
+		int idx = attackers.pop();
+
+		auto &e = _G(savegame)._overworldEntities[idx];
+		int xDiff = _G(savegame)._overworldPos.x - e._x;
+		int yDiff = _G(savegame)._overworldPos.y - e._y;
+		int distance = Data::OverworldEntity::getMonsterAttackDistance(e._type, xDiff, yDiff);
+
+		monsterAttack(idx, xDiff, yDiff, distance);
+	}
+}
+
+void OverworldLogic::reduceFood() {
+	if (_G(transportFoodCtr) >= Data::FOOD_PER_TRANSPORT[_G(savegame)._transportType]) {
+		_G(transportFoodCtr) = 0;
+		--_G(savegame)._food;
+		redrawStats();
+	} else {
+		++_G(transportFoodCtr);
+	}
+}
+
+bool OverworldLogic::monsterTransportCheck(int entityIndex, int xDiff, int yDiff) {
+	// Faster player transports make it harder for monsters to keep up - each
+	// movement attempt has a per-transport-type chance of being skipped
+	if (getRandomNumber(1, 100) > Data::TRANSPORT_RANDOM_THRESHOLD[_G(savegame)._transportType])
+		return false;
+
+	const auto &e = _G(savegame)._overworldEntities[entityIndex];
+	int tile1, tile2;
+	if (e._type >= Data::TILE_FIRST_MONSTER && e._type <= 25) {
+		// Sea monsters can only move onto water
+		tile1 = tile2 = Data::TILE_OCEAN;
+	} else if (e._type == 31 || e._type == 35) {
+		// These two monster types can only move onto woods
+		tile1 = tile2 = Data::TILE_WOODS;
+	} else {
+		// Everything else can move onto either woods or grass
+		tile1 = Data::TILE_WOODS;
+		tile2 = Data::TILE_GRASS;
+	}
+
+	int newX = _G(map).wrapOverworldX(_G(savegame)._overworldPos.x - xDiff);
+	int newY = _G(map).wrapOverworldY(_G(savegame)._overworldPos.y - yDiff);
+	int tile = _G(map).getTileAt(newX, newY);
+
+	// Single-terrain (amphibious) monster types are also allowed to move
+	// onto a city/castle/dungeon entrance tile, regardless of the mismatch
+	if (tile1 == tile2 && tile >= Data::TILE_CASTLE1 && tile <= Data::TILE_DUNGEON)
+		return true;
+
+	return (tile == tile1 || tile == tile2) &&
+		_G(map).mapRangeCheckX(newX) && _G(map).mapRangeCheckY(newY);
+}
+
+void OverworldLogic::moveEntityFromPlayer(int entityIndex, int xDiff, int yDiff) {
+	const Common::Point &pos = _G(savegame)._overworldPos;
+	auto &e = _G(savegame)._overworldEntities[entityIndex];
+
+	e._x = _G(map).wrapOverworldX(pos.x - xDiff);
+	e._y = _G(map).wrapOverworldY(pos.y - yDiff);
+	e._data = _G(map).getMapTile(e._x, e._y);
+}
+
+bool OverworldLogic::monsterMoveCheckX(int entityIndex, int xDiff, int yDiff) {
+	if (xDiff == 0)
+		return false;
+
+	int step = (xDiff > 0) ? -1 : 1;
+	if (!monsterTransportCheck(entityIndex, xDiff + step, yDiff))
+		return false;
+
+	moveEntityFromPlayer(entityIndex, xDiff + step, yDiff);
+	return true;
+}
+
+bool OverworldLogic::monsterMoveCheckY(int entityIndex, int xDiff, int yDiff) {
+	if (yDiff == 0)
+		return false;
+
+	int step = (yDiff > 0) ? -1 : 1;
+	if (!monsterTransportCheck(entityIndex, xDiff, yDiff + step))
+		return false;
+
+	moveEntityFromPlayer(entityIndex, xDiff, yDiff + step);
+	return true;
+}
+
+void OverworldLogic::monsterMoveCheck(int entityIndex, int xDiff, int yDiff) {
+	// Randomly vary which axis is tried first, so pursuing monsters don't
+	// always prefer the same axis when moving diagonally
+	if (getRandomNumber(1, 10) & 1) {
+		if (!monsterMoveCheckY(entityIndex, xDiff, yDiff))
+			monsterMoveCheckX(entityIndex, xDiff, yDiff);
+	} else {
+		if (!monsterMoveCheckX(entityIndex, xDiff, yDiff))
+			monsterMoveCheckY(entityIndex, xDiff, yDiff);
+	}
+}
+
+void OverworldLogic::monsterAttack(int entityIndex, int xDiff, int yDiff, int distance) {
+	const auto &e = _G(savegame)._overworldEntities[entityIndex];
+	int monsterIdx = (e._type - Data::TILE_FIRST_MONSTER) / 2;
+
+	writeString(Data::OVERWORLD_MONSTERS[monsterIdx]);
+	writeString(" attacks!");
+
+	// Animate a projectile flying from the monster towards the player, one
+	// tile at a time, stopping early if it's blocked by mountains
+	int xDelta = (xDiff > 0) ? -1 : (xDiff < 0 ? 1 : 0);
+	int yDelta = (yDiff > 0) ? -1 : (yDiff < 0 ? 1 : 0);
+	const auto &pos = _G(savegame)._overworldPos;
+
+	int tempX, tempY, tile;
+	int attackCtr = 1;
+	for (;;) {
+		tempX = xDiff + xDelta * attackCtr;
+		tempY = yDiff + yDelta * attackCtr;
+
+		showAttackTile(pos.x - tempX, pos.y - tempY, Data::TILE_ATTACK);
+		tile = _G(map).getTileAt(pos.x - tempX, pos.y - tempY);
+
+		++attackCtr;
+		if (attackCtr > distance || tile == Data::TILE_MOUNTAINS || (tempX == 0 && tempY == 0))
+			break;
+	}
+
+	auto &sg = _G(savegame);
+	int roll = getRandomNumber(1, 255);
+	int threshold = 200 - sg._stamina / 2 - sg._equippedArmor * 8;
+	bool isHit = roll < threshold;
+
+	// A shot that got blocked or ran out of range before reaching the
+	// player always misses, regardless of the roll
+	if (tempX != 0 || tempY != 0 || !isHit) {
+		writeString("\n");
+		writeString("Missed!\n");
+		return;
+	}
+
+	showAttackTile(pos.x, pos.y, Data::TILE_ATTACK);
+
+	int damage = getRandomNumber(1, Data::OVERWORLD_MONSTERS_DAMAGE[monsterIdx] * 2 + 1);
+	playFX(2);
+
+	writeString("\n");
+	writeString("Hit! ");
+	writeString("%d damage\n", damage);
+
+	sg._hits -= damage;
+	redrawStats();
+}
+
+void OverworldLogic::castPrayer() {
+	bool flag = false;
+	writeString("\n%s\n", Data::SPELL_PHRASES[0]);
+
+	if (_G(savegame)._hits < 15) {
+		_G(savegame)._hits = 15;
+		redrawStats();
+		writeString(" Shazam!\n");
+		playFX(5);
+		flag = true;
+
+	} else if (_G(savegame)._food < 15) {
+		_G(savegame)._food = 15;
+		redrawStats();
+		writeString(" Shazam!\n");
+		playFX(5);
+		flag = true;
+
+	} else if (getRandomNumber(1, 100) < 25) {
+		// A rarer answered prayer: the first monster close enough to strike
+		// at the player is whisked away
+		Data::Savegame &sg = _G(savegame);
+
+		for (int idx = 1; idx <= _G(savegame)._overworldEntityCount; ++idx) {
+			Data::OverworldEntity &e = sg._overworldEntities[idx];
+			if (e._type < Data::TILE_FIRST_MONSTER)
+				continue;
+
+			int xDiff = sg._overworldPos.x - e._x;
+			int yDiff = sg._overworldPos.y - e._y;
+			if (Data::OverworldEntity::getMonsterAttackDistance(e._type, xDiff, yDiff) == 0)
+				continue;
+
+			showAttackTile(e._x, e._y, Data::TILE_SPELL_ATTACK);
+			writeString("Monster removed!\n");
+			playFX(5);
+			sg.removeOverworldCreatureAt(e._x, e._y);
+			--_G(creaturesCount);
+			flag = true;
+			break;
+		}
+	}
+
+	if (!flag) {
+		writeString("Hmmmm... no effect!\n");
+		playFX(6);
+	}
+}
+
+int OverworldLogic::getMagicWeaponPower() {
+	Data::Savegame &sg = _G(savegame);
+	int result = getRandomNumber(1, sg._intelligence);
+
+	if (sg._equippedWeapon == Data::WEAPON_WAND)
+		result *= 2;
+	else if (sg._equippedWeapon == Data::WEAPON_AMULET)
+		result = result * 3 / 2;
+	else if (sg._equippedWeapon == Data::WEAPON_STAFF || sg._equippedWeapon == Data::WEAPON_TRIANGLE)
+		result *= 3;
+
+	return result;
+}
+
+void OverworldLogic::damage(Data::Direction dir, int effectNum, int maxDistance, int strike, int hitChance, int tileId) {
+	// DELTA_X/Y aren't valid for DIR_UNSPECIFIED (-1) - treat it the same
+	// as DELTA_X/Y's own unused index 0, i.e. the projectile just stays put
+	// on the player's own tile
+	int deltaIdx = (dir == Data::DIR_UNSPECIFIED) ? 0 : dir;
+	int dx = DELTA_X[deltaIdx], dy = DELTA_Y[deltaIdx];
+	const Common::Point &pos = _G(savegame)._overworldPos;
+
+	int x = pos.x, y = pos.y, tile = 0;
+	for (int step = 1; step <= maxDistance; ++step) {
+		x = pos.x + dx * step;
+		y = pos.y + dy * step;
+
+		if (step == 1)
+			playFX(effectNum);
+		showAttackTile(x, y, tileId);
+		tile = _G(map).getTileAt(x, y);
+
+		if (tile >= Data::TILE_FIRST_MONSTER || tile == Data::TILE_MOUNTAINS)
+			break;
+	}
+
+	if (tile < Data::TILE_FIRST_MONSTER) {
+		// Ran out of range, or blocked by mountains, without finding a monster
+		writeString("Miss!\n");
+		endOfTurn();
+		return;
+	}
+
+	int monsterIdx = (tile - Data::TILE_FIRST_MONSTER) / 2;
+	const char *monsterName = Data::OVERWORLD_MONSTERS[monsterIdx];
+
+	if (getRandomNumber(1, 100) > hitChance) {
+		writeString("Missed the %s!\n", monsterName);
+		endOfTurn();
+		return;
+	}
+
+	Data::Savegame &sg = _G(savegame);
+	x = _G(map).wrapOverworldX(x);
+	y = _G(map).wrapOverworldY(y);
+	int entityIdx = sg.getOverworldEntityAt(x, y, 1);
+	if (entityIdx == -1) {
+		// Shouldn't normally happen - the scan found a monster tile with no
+		// matching entity there
+		writeString("Miss!\n");
+		endOfTurn();
+		return;
+	}
+
+	Data::OverworldEntity &e = sg._overworldEntities[entityIdx];
+	e._hits -= strike;
+
+	writeString(e._hits > 0 ? "Hit the %s" : "Killed the %s", monsterName);
+
+	if (e._hits > 0) {
+		writeString(Common::String(monsterName).size() > 6 ? "!\n" : "! ");
+		writeString("%2d damage\n", strike);
+		playFX(2);
+
+	} else {
+		sg.removeOverworldCreatureAt(x, y);
+		--_G(creaturesCount);
+
+		int coins = getRandomNumber(1, Data::OVERWORLD_MONSTERS_DAMAGE[monsterIdx] * 4) + 10;
+		int expGain = getRandomNumber(2, Data::OVERWORLD_MONSTERS_DAMAGE[monsterIdx] * 5);
+		sg._experience += expGain;
+		playFX(2);
+
+		giveTreasure(coins, strlen(monsterName));
+	}
+
+	endOfTurn();
+}
+
+void OverworldLogic::castSpellAttack(Data::Direction dir) {
+	Data::Savegame &sg = _G(savegame);
+
+	writeString("%s\n", (dir >= Data::DIR_LEFT && dir <= Data::DIR_DOWN) ? Data::DIRECTION_NAMES[dir] : "");
+
+	int strike;
+	if (sg._equippedSpell == Data::SPELL_MAGIC_MISSILE) {
+		writeString("\"DELCIO-ERE-UI\" ");
+		strike = getMagicWeaponPower();
+	} else {
+		// SPELL_KILL - cast() only ever routes Magic Missile/Kill here
+		writeString("\"INTERFICIO-NUNC!\" ");
+		strike = 9999;
+	}
+
+	bool success = (sg._class == Data::CLASS_FIGHTER) ||
+		(getRandomNumber(1, 100) < sg._wisdom + 50);
+
+	if (!success) {
+		writeString("Failed!\n");
+		playFX(6);
+		return;
+	}
+
+	playFX(5);
+	writeString("\n");
+	damage(dir, 7, 3, strike, 101, Data::TILE_SPELL_ATTACK);
+}
+
+} // namespace Logic
+} // namespace Ultima1
+} // namespace Ultima

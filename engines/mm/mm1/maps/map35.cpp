@@ -24,6 +24,7 @@
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -71,10 +72,10 @@ void Map35::special01() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.map35.exit"],
+		"Exit castle (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(14, 10);
-			g_maps->changeMap(0xa00, 2);
+			g_maps->changeMapFromExit(0xa00, 2);
 		}
 	));
 }
@@ -83,19 +84,19 @@ void Map35::special02() {
 	visitedExit();
 
 	g_maps->_mapPos = Common::Point(14, 9);
-	g_maps->changeMap(0xa00, 2);
-	send(SoundMessage(STRING["maps.map35.slide"]));
+	g_maps->changeMapFromExit(0xa00, 2);
+	send(SoundMessage("A slide!"));
 }
 
 void Map35::special03() {
-	send(SoundMessage(STRING["maps.map35.message"]));
+	send(SoundMessage(mapText("Etched in silver, message A reads:\natis-19-31ud54aeupi1")));
 }
 
 void Map35::special04() {
 	if (!g_globals->_party.hasItem(MERCHANTS_PASS_ID)) {
 		g_maps->_mapPos.y++;
 		updateGame();
-		send(SoundMessage(STRING["maps.map35.merchant_pass"]));
+		send(SoundMessage(mapText("Castle guards exclaim\n\"No merchants pass! Begone peasants.\"")));
 	}
 }
 
@@ -106,19 +107,19 @@ void Map35::special05() {
 }
 
 void Map35::special06() {
-	g_maps->clearSpecial();
+	g_maps->clearSpecialAndRememberReward();
 	g_globals->_treasure.setGems(30);
 	g_events->addAction(KEYBIND_SEARCH);
 }
 
 void Map35::special07() {
-	send(SoundMessage(STRING["maps.map35.vault"]));
+	send(SoundMessage("Empty vault, alarm!"));
 	_data[VAL1] = 30;
 	_data[VAL2] = 7;
 }
 
 void Map35::special09() {
-	g_maps->clearSpecial();
+	g_maps->clearSpecialAndRememberReward();
 	g_globals->_treasure.setGems(50);
 	special07();
 }
@@ -159,6 +160,9 @@ void Map35::acceptQuest() {
 			c._flags[8] = CHARFLAG8_80;
 			c._flags[5] = CHARFLAG5_80;
 		}
+
+		// Restart Inspectron's seven-quest cycle at quest #1.
+		questNum = 8;
 	}
 
 	// Assign the quest to all party characters
@@ -177,7 +181,10 @@ Common::String Map35::checkQuestComplete() {
 	int qIndex = leader._quest - 8;
 
 	if (leader._flags[5] & MATCH_FLAGS[qIndex] & 0x7f) {
-		// The quest was complete
+		// The quest was complete. Retain it in the Quest Log using
+		// the high bit of a reserved, already-serialized map cell.
+		_visited[15 * MAP_W + qIndex] |= 0x80;
+
 		for (uint i = 0; i < g_globals->_party.size(); ++i) {
 			Character &c = g_globals->_party[i];
 			c._quest = 0;
@@ -186,11 +193,11 @@ Common::String Map35::checkQuestComplete() {
 		}
 
 		return Common::String::format(
-			STRING["maps.map35.inspectron5"].c_str(),
+			"Well done, quest complete! +%u exp",
 			QUEST_EXPERIENCE[qIndex]);
 	} else {
 		// The quest isn't yet complete
-		return STRING["maps.map35.inspectron3"];
+		return "\"Return not until thy quest is complete\"";
 	}
 }
 

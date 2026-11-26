@@ -38,7 +38,7 @@ bool QuickRef::msgUnfocus(const UnfocusMessage &msg) {
 
 void QuickRef::draw() {
 	clearSurface();
-	writeString(STRING["dialogs.quick_ref.title"]);
+	writeString("#     name        hit pts   spell pts ac");
 
 	// Print list of characters, hit pts, spell pts, and ac
 	size_t partySize = getPartySize();
@@ -79,17 +79,16 @@ void QuickRef::draw() {
 		writeNumber(0, 9 + idx, idx + 1);
 
 		_textPos.x++;
-		writeString(STRING["dialogs.quick_ref.food"]);
+		writeString("food= ");
 		writeNumber(c._food);
 
 		_textPos.x = 12;
 		printCondition();
 	}
 
-	writeString(12, 21, "'1'-'");
-	writeNumber(g_globals->_party.size());
-	writeString("' ");
-	writeString(STRING["dialogs.quick_ref.to_view"]);
+	writeString(12, 21, Common::String::format("F1-F%d ",
+		(int)g_globals->_party.size()));
+	writeString("to view");
 
 	escToGoBack();
 }

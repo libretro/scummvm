@@ -51,6 +51,59 @@ struct Sub : public Command {
 	}
 };
 
+struct Add_Item : public Command {
+	Common::String name;
+	Common::String index;
+	Add_Item(const Common::Array<Common::String> &args) : name(args[0]), index(args[1]) {}
+	void exec(ExecutionContext &ctx) const override {
+		auto idx = valueOf(index);
+		warning("add_item %s %d", name.c_str(), idx);
+	}
+};
+
+struct Use_Item : public Command {
+	Common::String name;
+	Use_Item(const Common::Array<Common::String> &args) : name(args[0]) {}
+	void exec(ExecutionContext &ctx) const override {
+		warning("use_item %s", name.c_str());
+	}
+};
+
+struct Remove_Item : public Command {
+	Common::String name;
+	Remove_Item(const Common::Array<Common::String> &args) : name(args[0]) {}
+	void exec(ExecutionContext &ctx) const override {
+		warning("remove_item %s", name.c_str());
+	}
+};
+
+struct Drop_Item : public Command {
+	Drop_Item(const Common::Array<Common::String> &args) {}
+	void exec(ExecutionContext &ctx) const override {
+		warning("drop_item");
+	}
+};
+
+struct Display_Message : public Command {
+	Common::String message;
+	Common::String duration;
+	Display_Message(const Common::Array<Common::String> &args) : message(args[0]), duration(args[1]) {}
+	void exec(ExecutionContext &ctx) const override {
+		auto m = valueOf(message);
+		auto d = valueOf(duration);
+		warning("display_message %d %d", m, d);
+	}
+};
+
+struct Call : public Command {
+	int test;
+	Call(const Common::Array<Common::String> &args) : test(atoi(args[0].c_str())) {}
+	void exec(ExecutionContext &ctx) const override {
+		debug("call %d", test);
+		g_engine->executeTest(test);
+	}
+};
+
 struct Go_Back : public Command {
 	Go_Back(const Common::Array<Common::String> &args) {}
 	void exec(ExecutionContext &ctx) const override {
@@ -128,6 +181,18 @@ struct Play_Amb : public Command {
 	}
 };
 
+struct Play_Music : public Command {
+	Common::String path;
+	Common::String volume;
+	int loops;
+	Play_Music(const Common::Array<Common::String> &args) : path(args[0]),
+															volume(args.size() > 1 ? args[1] : Common::String{}), loops(args.size() > 2 ? atoi(args[2].c_str()) : 0) {}
+	void exec(ExecutionContext &ctx) const override {
+		int v = !volume.empty() ? valueOf(volume) : 100;
+		g_engine->playSound(path, Audio::Mixer::kMusicSoundType, v, loops);
+	}
+};
+
 struct Delay_Sound : public Command {
 	Common::String path;
 	float delay;
@@ -188,6 +253,10 @@ struct Stop_Sound : public Command {
 	}
 };
 
+struct Stop_Music : public Stop_Sound {
+	Stop_Music(const Common::Array<Common::String> &args) : Stop_Sound(args) {}
+};
+
 struct Stop_All_Sounds : public Command {
 	Stop_All_Sounds(const Common::Array<Common::String> &args) {}
 
@@ -207,6 +276,21 @@ struct Cursor_Load : public Command {
 
 	void exec(ExecutionContext &ctx) const override {
 		g_engine->loadCursor(valueOf(index), path, valueOf(offsetX), valueOf(offsetY));
+	}
+};
+
+struct Load_Cursors : public Command {
+	Load_Cursors(const Common::Array<Common::String> &args) {}
+	void exec(ExecutionContext &ctx) const override {
+		if (g_engine->gameIdMatches("mysteryofmummy")) {
+			g_engine->loadCursor(0, "Sprites/cursor_none.tga", 12, 19);
+			g_engine->loadCursor(1, "Sprites/cursor_action.tga", 4, 6);
+			g_engine->loadCursor(2, "Sprites/cursor_take.tga", 10, 16);
+			g_engine->loadCursor(3, "Sprites/cursor_look.tga", 10, 11);
+			g_engine->loadCursor(4, "Sprites/cursor_tool.tga", 1, 7);
+		} else {
+			warning("Load_Cursors is not implemented for this game");
+		}
 	}
 };
 
@@ -281,6 +365,9 @@ struct Sprite_Load : public Command {
 		g_engine->spriteLoad(name, path);
 	}
 };
+struct Sprite_LoadV : public Sprite_Load {
+	Sprite_LoadV(const Common::Array<Common::String> &args) : Sprite_Load(args) {}
+};
 
 struct Sprite_Screen : public Command {
 	int index;
@@ -298,6 +385,10 @@ struct Sprite_Screen : public Command {
 	void exec(ExecutionContext &ctx) const override {
 		g_engine->spriteScreen(index, name, x, y);
 	}
+};
+
+struct Sprite_ScreenV : public Sprite_Screen {
+	Sprite_ScreenV(const Common::Array<Common::String> &args) : Sprite_Screen(args) {}
 };
 
 struct Set_Lens : public Command {
@@ -347,7 +438,7 @@ struct Set_Jump_Key : public Command {
 			key = 0;
 		else if (keyName == "_KEY_RIGHT_CLIC")
 			key = 12;
-		else if (keyName == "_KEY_Q" || keyName == "_KEY_SPACE")
+		else if (keyName == "_KEY_Q" || keyName == "_KEY_SPACE" || keyName == "_KEY_A")
 			warning("unhandled key name: %s", keyName.c_str());
 		else
 			error("unhandled key name: %s", keyName.c_str());
@@ -378,6 +469,20 @@ struct Test_Slot : public Command {
 		if (!value)
 			return;
 		g_engine->loadSaveCardSprite(index, sprite);
+	}
+};
+
+struct Load_Context : public Command {
+	Load_Context(const Common::Array<Common::String> &args) {}
+	void exec(ExecutionContext &ctx) const override {
+		debug("load_context");
+	}
+};
+
+struct Save_Context : public Command {
+	Save_Context(const Common::Array<Common::String> &args) {}
+	void exec(ExecutionContext &ctx) const override {
+		debug("save_context");
 	}
 };
 
@@ -481,6 +586,7 @@ static const char *const kUnhandledV2Commands[] = {
 	"CURSOR_SET",
 	"CURSOR_SET_SPEED",
 	"DELAY_3DSOUND",
+	"DISPLAY",
 	"DIV",
 	"END",
 	"END_SCRIPT",
@@ -488,10 +594,10 @@ static const char *const kUnhandledV2Commands[] = {
 	"GET_MOUSE_BUTTON",
 	"GOTO_REF",
 	"INTERPOLATE_VIEW",
+	"LOAD_LETTERS",
 	"MUL",
 	"NOT",
 	"OR",
-	"PLAY_MUSIC",
 	"QUIT_SCRIPT",
 	"SET_EFFECTS_MODE",
 	"SET_FILTER_KEY",
@@ -505,7 +611,6 @@ static const char *const kUnhandledV2Commands[] = {
 	"SPRITE_SCREEN_MODE",
 	"SPRITE_WARP",
 	"SPRITE_WARP_MODE",
-	"STOP_MUSIC",
 	"UNDERWATER_EFFECT",
 	"ZONES_CLICK_MODE"};
 
@@ -513,10 +618,14 @@ static const char *const kUnhandledV2Commands[] = {
 
 #define COMMAND_LIST(E) \
 	E(Add)              \
+	E(Add_Item)         \
+	E(Display_Message)  \
+	E(Call)             \
 	E(Continue_Game)    \
 	E(Cursor_Load)      \
 	E(Cursor_Set)       \
 	E(Delay_Sound)      \
+	E(Drop_Item)        \
 	E(Enter_Level)      \
 	E(Exit_Game)        \
 	E(Fade)             \
@@ -525,32 +634,41 @@ static const char *const kUnhandledV2Commands[] = {
 	E(Goto_Warp)        \
 	E(Leave_Save)       \
 	E(Limit_View)       \
+	E(Load_Context)     \
+	E(Load_Cursors)     \
 	E(Load_Slot)        \
 	E(Play_3DSound)     \
 	E(Play_Amb)         \
 	E(Play_AnimBloc)    \
 	E(Play_Movie)       \
+	E(Play_Music)       \
 	E(Play_Sound)       \
 	E(Quit_URL)         \
+	E(Remove_Item)      \
 	E(Retrieve_State)   \
+	E(Save_Context)     \
 	E(Save_Slot)        \
 	E(Set_Jump_Key)     \
 	E(Set_Lens)         \
 	E(Set_Lensflare)    \
 	E(Set_View_Angle)   \
 	E(Sprite_Load)      \
+	E(Sprite_LoadV)     \
 	E(Sprite_Screen)    \
+	E(Sprite_ScreenV)   \
 	E(Start_Light)      \
 	E(Start_Timer)      \
 	E(Stop_All_Sounds)  \
 	E(Stop_AnimBloc)    \
 	E(Stop_Delay)       \
 	E(Stop_Light)       \
+	E(Stop_Music)       \
 	E(Stop_Sound)       \
 	E(Stop_Timer)       \
 	E(Store_State)      \
 	E(Sub)              \
-	E(Test_Slot)
+	E(Test_Slot)        \
+	E(Use_Item)
 
 #define ADD_COMMAND(NAME)            \
 	if (cmd.equalsIgnoreCase(#NAME)) \

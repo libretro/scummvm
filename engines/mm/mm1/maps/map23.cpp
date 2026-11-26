@@ -23,7 +23,9 @@
 #include "mm/mm1/maps/maps.h"
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
+#include "mm/mm1/mm1.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -31,6 +33,8 @@ namespace Maps {
 
 #define VAL1 107
 #define VAL2 108
+#define GYPSY_VISITED_OFFSET (11 * MAP_W + 9)
+#define COLOR_BRIDGE_DISCOVERED 0x80
 
 void Map23::special() {
 	// Scan for special actions on the map cell
@@ -49,7 +53,7 @@ void Map23::special() {
 
 	g_maps->clearSpecial();
 	InfoMessage msg(
-		14, 2, STRING["maps.map23.look_out"],
+		14, 2, "Look out!",
 		[]() {
 			g_globals->_encounters.execute();
 		}
@@ -61,10 +65,10 @@ void Map23::special() {
 void Map23::special00() {
 	visitedExit();
 	send(SoundMessage(
-		STRING["maps.map23.passage"],
+		mapText("A cavernous passage leads to Sorpigal,\ntake it (Y/N)?"),
 		[]() {
 			g_maps->_mapPos = Common::Point(12, 0);
-			g_maps->changeMap(0x604, 1);
+			g_maps->changeMapFromExit(0x604, 1);
 		}
 	));
 }
@@ -72,34 +76,31 @@ void Map23::special00() {
 void Map23::special01() {
 	visitedExit();
 	send(SoundMessage(
-		STRING["maps.map23.cave"],
+		"There's a cave here, enter (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(7, 0);
-			g_maps->changeMap(1, 1);
+			g_maps->changeMapFromExit(1, 1);
 		}
 	));
 }
 
 void Map23::special02() {
+	_visited[GYPSY_VISITED_OFFSET] |= COLOR_BRIDGE_DISCOVERED;
 	g_events->addView("Gypsy");
 }
 
 void Map23::special03() {
+	g_maps->clearSpecial();
+
 	if (g_globals->_activeSpells._s.levitate) {
-		Common::String line1 = Common::String::format("%s %s",
-			STRING["maps.map23.pit"].c_str(),
-			STRING["maps.map23.levitation"].c_str()
-		);
+		Common::String line1 = "A pit!.... Your levitation saved you!";
 
 		send(SoundMessage(line1));
 
 	} else {
 		reduceHP();
 
-		Common::String line1 = Common::String::format("%s %s",
-			STRING["maps.map23.pit"].c_str(),
-			STRING["maps.map23.ambush"].c_str()
-		);
+		Common::String line1 = "A pit!.... An ambush!";
 		SoundMessage msg(line1,
 			[]() {
 				g_globals->_encounters.execute();
@@ -112,7 +113,7 @@ void Map23::special03() {
 
 void Map23::special08() {
 	send(SoundMessage(
-		STRING["maps.map23.column"],
+		"A glowing white column, touch it (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(
 				g_events->getRandomNumber(15),
@@ -124,7 +125,9 @@ void Map23::special08() {
 
 void Map23::special09() {
 	send(SoundMessage(
-		STRING["maps.map23.statues"],
+		g_engine->isEnhanced() ?
+			"Statues block the path, smash them (Y/N)?" :
+			"Statues block the path,smash them (Y/N)?",
 		[]() {
 			Map23 &map = *static_cast<Map23 *>(g_maps->_currentMap);
 			Game::Encounter &enc = g_globals->_encounters;
@@ -171,7 +174,7 @@ void Map23::special11() {
 }
 
 void Map23::special12() {
-	send(SoundMessage(14, 2, STRING["maps.map23.avalanche"]));
+	send(SoundMessage(14, 2, "Avalanche!"));
 	g_maps->_currentState = 209;
 	_states[g_maps->_mapOffset] = 0xff;
 	_walls[g_maps->_mapOffset] = 162;
@@ -183,7 +186,7 @@ void Map23::special12() {
 }
 
 void Map23::special13() {
-	g_maps->clearSpecial();
+	g_maps->clearSpecialAndRememberReward();
 	g_globals->_treasure._container = IRON_BOX;
 	g_globals->_treasure._items[0] = 171;
 	g_globals->_treasure._items[1] = 183;
@@ -194,7 +197,7 @@ void Map23::special13() {
 
 void Map23::fountain() {
 	send(SoundMessage(
-		STRING["maps.map23.fountain"],
+		"A strange fountain, drink (Y/N)?",
 		[]() {
 			for (uint i = 0; i < g_globals->_party.size(); ++i) {
 				Character &c = g_globals->_party[i];
@@ -202,9 +205,15 @@ void Map23::fountain() {
 				c.getAttribute(attrNum)._current = 30;
 			}
 
-			g_events->send(InfoMessage(16, 2, STRING["maps.map23.cheers"]));
+			g_events->send(InfoMessage(16, 2, "Cheers!"));
 		}
 	));
+}
+
+bool Map23::gypsyVisited() const {
+	const byte visited = _visited[GYPSY_VISITED_OFFSET];
+	return (visited & COLOR_BRIDGE_DISCOVERED) != 0 ||
+		(visited & 0x7f) != 0;
 }
 
 } // namespace Maps

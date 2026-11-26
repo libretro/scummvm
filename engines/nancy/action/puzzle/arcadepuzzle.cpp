@@ -24,7 +24,7 @@
 
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/graphics.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/sound.h"
 #include "engines/nancy/input.h"
 #include "engines/nancy/util.h"
@@ -662,8 +662,8 @@ void ArcadePuzzle::paddleMovement() {
 		_paddleRight = _paddleLeft + _paddleWidth - 1;
 	}
 
-	if (_paddleLeft  != _paddlePrevLeft  || _paddleRight != _paddlePrevRight ||
-	    _paddleTop   != _paddlePrevTop   || _paddleBottom!= _paddlePrevBottom) {
+	// The paddle only moves horizontally
+	if (_paddleLeft != _paddlePrevLeft || _paddleRight != _paddlePrevRight) {
 		_paddleNeedsRedraw = true;
 	}
 }
@@ -1081,7 +1081,8 @@ void ArcadePuzzle::applyCollision() {
 	}
 
 	case 1: case 2:
-		// Paddle edge: negate both components
+	case 0x10:
+		// Paddle edge or catch-all out-of-bounds: negate both components
 		_ballDX = -_ballDX;
 		_ballDY = -_ballDY;
 		break;
@@ -1123,12 +1124,6 @@ void ArcadePuzzle::applyCollision() {
 		_ballDX = -_ballDX;
 		_ballDY = -_ballDY;
 		playBrickHitSound();
-		break;
-
-	case 0x10:
-		// Catch-all out-of-bounds: negate
-		_ballDX = -_ballDX;
-		_ballDY = -_ballDY;
 		break;
 
 	case -1:

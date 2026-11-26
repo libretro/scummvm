@@ -29,6 +29,7 @@
 #include "engines/grim/lipsync.h"
 #include "engines/grim/movie/movie.h"
 #include "engines/grim/sound.h"
+#include "engines/grim/imuse/imuse_engine.h"
 #include "engines/grim/lua.h"
 #include "engines/grim/resource.h"
 #include "engines/grim/savegame.h"
@@ -87,14 +88,14 @@ Actor::Actor() :
 		_walkedLast(false), _walkedCur(false),
 		_collisionMode(CollisionOff), _collisionScale(1.f),
 		_lastTurnDir(0), _currTurnDir(0),
-		_sayLineText(0), _talkDelay(0),
+		_sayLineText(0),
 		_attachedActor(0), _attachedJoint(""),
 		_globalAlpha(1.f), _alphaMode(AlphaOff),
 		 _mustPlaceText(false),
 		_puckOrient(false), _talking(false),
-		_inOverworld(false), _drawnToClean(false), _backgroundTalk(false),
+		_inOverworld(false), _drawnToClean(false), _backgroundTalk(false), _talkSoundId(0),
 		_sortOrder(0), _useParentSortOrder(false),
-		_sectorSortOrder(-1), _fakeUnbound(false), _lightMode(LightFastDyn),
+		_sectorSortOrder(0), _hasSectorSortOrder(false), _fakeUnbound(false), _lightMode(LightFastDyn),
 		_hasFollowedBoxes(false), _lookAtActor(0) {
 
 	// Some actors don't set walk and turn rates, so we default the
@@ -102,6 +103,8 @@ Actor::Actor() :
 	// _walkRate so Glottis at the demon beaver entrance can walk and
 	// so Chepito in su.set
 	_turnRate = 100.0f;
+
+	_fov = g_grim->getGameType() == GType_GRIM ? 165 : 120;
 
 	_activeShadowSlot = -1;
 	_shadowArray = new Shadow[MAX_SHADOWS];
@@ -145,6 +148,7 @@ void Actor::saveState(SaveGame *savedState) const {
 	savedState->writeString(_talkSoundName);
 	savedState->writeBool(_talking);
 	savedState->writeBool(_backgroundTalk);
+	savedState->writeLESint32(_talkSoundId);
 
 	savedState->writeLEUint32((uint32)_collisionMode);
 	savedState->writeFloat(_collisionScale);
@@ -266,6 +270,7 @@ void Actor::saveState(SaveGame *savedState) const {
 
 	savedState->writeBool(_drawnToClean);
 	savedState->writeBool(_fakeUnbound);
+	savedState->writeFloat(_fov.getDegrees());
 }
 
 bool Actor::restoreState(SaveGame *savedState) {
@@ -303,6 +308,9 @@ bool Actor::restoreState(SaveGame *savedState) {
 	_talkSoundName      = savedState->readString();
 	_talking = savedState->readBool();
 	_backgroundTalk = savedState->readBool();
+	if (savedState->saveMinorVersion() >= 30)
+		_talkSoundId = savedState->readLESint32();
+
 	if (isTalking()) {
 		g_grim->addTalkingActor(this);
 	}
@@ -436,7 +444,8 @@ bool Actor::restoreState(SaveGame *savedState) {
 		_attachedJoint = savedState->readString();
 
 		// will be recalculated in next update()
-		_sectorSortOrder = -1;
+		_sectorSortOrder = 0;
+		_hasSectorSortOrder = false;
 
 		if (savedState->saveMinorVersion() < 24) {
 			// Used to be the wear chore.
@@ -482,6 +491,9 @@ bool Actor::restoreState(SaveGame *savedState) {
 		// Note: actor will stay invisible until re-bound to set
 		// by game scripts.
 		_fakeUnbound = false;
+	}
+	if (savedState->saveMinorVersion() >= 31) {
+		_fov = savedState->readFloat();
 	}
 
 	return true;
@@ -565,7 +577,7 @@ bool Actor::singleTurnTo(const Math::Vector3d &pos) {
 	Math::Angle y, p, r;
 	calculateOrientation(pos, &p, &y, &r);
 
-	float turnAmt = g_grim->getPerSecond(_turnRate);
+	float turnAmt = g_grim->getPerSecond(_turnRate) * _timeScale;
 	bool done = animTurn(turnAmt, y, &_yaw) == 0;
 	done = animTurn(turnAmt, p, &_pitch) == 0 && done;
 	done = animTurn(turnAmt, r, &_roll) == 0 && done;
@@ -797,11 +809,12 @@ void Actor::moveTo(const Math::Vector3d &pos) {
 }
 
 void Actor::walkForward() {
-	float dist = g_grim->getPerSecond(_walkRate);
+	float dist = g_grim->getPerSecond(_walkRate) * _timeScale;
 	// Limit the amount of the movement per frame, otherwise with low fps
 	// scripts that use WalkActorForward and proximity may break.
-	if ((dist > 0 && dist > _walkRate / 5.f) || (dist < 0 && dist < _walkRate / 5.f))
-		dist = _walkRate / 5.f;
+	const float maxDist = _walkRate / 5.f * _timeScale;
+	if ((dist > 0 && dist > maxDist) || (dist < 0 && dist < maxDist))
+		dist = maxDist;
 
 	// Handle special case where actor is trying to walk but _walkRate is
 	// currently set to 0.0f by _walkChore to simulate roboter-like walk style:
@@ -813,15 +826,14 @@ void Actor::walkForward() {
 	_walking = false;
 
 	if (!_followBoxes) {
-		Math::Vector3d forwardVec(-_moveYaw.getSine() * _pitch.getCosine(),
-		                           _moveYaw.getCosine() * _pitch.getCosine(), _pitch.getSine());
+		Math::Vector3d forwardVec(-_moveYaw.getSine(),
+		                           _moveYaw.getCosine(), 0);
 
 		// EMI: Y is up-down, actors use an X-Z plane for movement
 		if (g_grim->getGameType() == GType_MONKEY4) {
-			float temp = forwardVec.z();
 			forwardVec.x() = -forwardVec.x();
 			forwardVec.z() = forwardVec.y();
-			forwardVec.y() = temp;
+			forwardVec.y() = 0;
 		}
 
 		_pos += forwardVec * dist;
@@ -842,15 +854,14 @@ void Actor::walkForward() {
 
 		g_grim->getCurrSet()->findClosestSector(_pos, &currSector, &_pos);
 		if (!currSector) { // Shouldn't happen...
-			Math::Vector3d forwardVec(-_moveYaw.getSine() * _pitch.getCosine(),
-			                           _moveYaw.getCosine() * _pitch.getCosine(), _pitch.getSine());
+			Math::Vector3d forwardVec(-_moveYaw.getSine(),
+			                           _moveYaw.getCosine(), 0);
 
 			// EMI: Y is up-down, actors use an X-Z plane for movement
 			if (g_grim->getGameType() == GType_MONKEY4) {
-				float temp = forwardVec.z();
 				forwardVec.x() = -forwardVec.x();
 				forwardVec.z() = forwardVec.y();
-				forwardVec.y() = temp;
+				forwardVec.y() = 0;
 			}
 
 			if (backwards)
@@ -871,18 +882,18 @@ void Actor::walkForward() {
 				Math::Angle ax = Math::Vector2d(normal.x(), normal.z()).getAngle();
 				Math::Angle ay = Math::Vector2d(normal.y(), normal.z()).getAngle();
 
-				float z1 = -_moveYaw.getCosine() * (ay - _pitch).getCosine();
-				float z2 = _moveYaw.getSine() * (ax - _pitch).getCosine();
-				forwardVec = Math::Vector3d(-_moveYaw.getSine() * ax.getSine() * _pitch.getCosine(),
-				                             _moveYaw.getCosine() * ay.getSine() * _pitch.getCosine(), z1 + z2);
+				float z1 = -_moveYaw.getCosine() * ay.getCosine();
+				float z2 = _moveYaw.getSine() * ax.getCosine();
+				forwardVec = Math::Vector3d(-_moveYaw.getSine() * ax.getSine(),
+				                             _moveYaw.getCosine() * ay.getSine(), z1 + z2);
 			} else {
 				Math::Angle ax = Math::Vector2d(normal.x(), normal.y()).getAngle();
 				Math::Angle az = Math::Vector2d(normal.z(), normal.y()).getAngle();
 
-				float y1 = _moveYaw.getCosine() * (az - _pitch).getCosine();
-				float y2 = _moveYaw.getSine() * (ax - _pitch).getCosine();
-				forwardVec = Math::Vector3d(-_moveYaw.getSine() * ax.getSine() * _pitch.getCosine(), y1 + y2,
-				                            -_moveYaw.getCosine() * az.getSine() * _pitch.getCosine());
+				float y1 = _moveYaw.getCosine() * az.getCosine();
+				float y2 = _moveYaw.getSine() * ax.getCosine();
+				forwardVec = Math::Vector3d(-_moveYaw.getSine() * ax.getSine(), y1 + y2,
+				                            -_moveYaw.getCosine() * az.getSine());
 			}
 
 			if (backwards)
@@ -1102,7 +1113,7 @@ void Actor::stopAllChores(bool ignoreLoopingChores) {
 
 void Actor::turn(int dir) {
 	_walking = false;
-	float delta = g_grim->getPerSecond(_turnRate) * dir;
+	float delta = g_grim->getPerSecond(_turnRate) * dir * _timeScale;
 	if (g_grim->getGameType() == GType_MONKEY4) {
 		delta = -delta;
 	}
@@ -1131,6 +1142,7 @@ Math::Angle Actor::getYawTo(const Math::Vector3d &p) const {
 
 	if (g_grim->getGameType() == GType_MONKEY4) {
 		dpos.y() = dpos.z();
+		dpos.x() = -dpos.x();
 	}
 	if (dpos.x() == 0 && dpos.y() == 0)
 		return 0;
@@ -1138,7 +1150,7 @@ Math::Angle Actor::getYawTo(const Math::Vector3d &p) const {
 		return Math::Angle::arcTangent2(-dpos.x(), dpos.y());
 }
 
-void Actor::sayLine(const char *msgId, bool background, float x, float y) {
+void Actor::sayLine(const char *msgId, bool background, float x, float y, int volume, int pan) {
 	assert(msgId);
 
 	if (msgId[0] == 0) {
@@ -1183,14 +1195,11 @@ void Actor::sayLine(const char *msgId, bool background, float x, float y) {
 
 	Set *currSet = g_grim->getCurrSet();
 
-	if (g_grim->getSpeechMode() != GrimEngine::TextOnly) {
-		// if there is no costume probably the character is drawn by a smush movie, so
-		// we don't want to go out of sync with it.
-		if (g_grim->getGameType() == GType_GRIM && getCurrentCostume()) {
-			_talkDelay = 500;
-		}
-		g_sound->startVoice(_talkSoundName.c_str());
-	}
+	bool started = false;
+	_talkSoundId = 0;
+
+	if (g_grim->getSpeechMode() != GrimEngine::TextOnly)
+		started = g_sound->startVoice(_talkSoundName.c_str(), volume, pan, background, &_talkSoundId);
 
 	// If the actor is clearly not visible then don't try to play the lip sync
 	if (_visible && (!g_movie->isPlaying() || g_grim->getMode() == GrimEngine::NormalMode)) {
@@ -1208,6 +1217,18 @@ void Actor::sayLine(const char *msgId, bool background, float x, float y) {
 		// In these cases, revert to using the mumble chore.
 		if (g_grim->getSpeechMode() != GrimEngine::TextOnly)
 			_lipSync = g_resourceloader->getLipSync(soundLip);
+
+		// Ask iMUSE if there's lipsync data...
+		if (g_grim->getGameType() == GType_GRIM && _lipSync) {
+			bool hasTalkChore = false;
+			for (int i = 1; i < 10; i++) {
+				if (_talkChore[i].isValid())
+					hasTalkChore = true;
+			}
+
+			if (!started || !g_imuse->iMUSEGetPhoneme(_talkSoundId, 0) || !hasTalkChore)
+				_lipSync = nullptr;
+		}
 		// If there's no lip sync file then load the mumble chore if it exists
 		// (the mumble chore doesn't exist with the cat races announcer)
 		if (!_lipSync)
@@ -1256,7 +1277,7 @@ void Actor::sayLine(const char *msgId, bool background, float x, float y) {
 		textObject->setDefaults(&g_grim->_sayLineDefaults);
 		textObject->setFGColor(_talkColor);
 		textObject->setIsSpeech();
-		if (m == GrimEngine::TextOnly || g_grim->getMode() == GrimEngine::SmushMode) {
+		if (m == GrimEngine::TextOnly || g_grim->getMode() == GrimEngine::SmushMode || (g_grim->getGameType() == GType_GRIM && !started)) {
 			textObject->setDuration(500 + msg.size() * 15 * (11 - g_grim->getTextSpeed()));
 		}
 		if (g_grim->getGameType() == GType_MONKEY4 && (x != -1 || y != -1)) {
@@ -1271,8 +1292,9 @@ void Actor::sayLine(const char *msgId, bool background, float x, float y) {
 				_mustPlaceText = true;
 			} else {
 				_mustPlaceText = false;
-				textObject->setX(640 / 2);
-				textObject->setY(463);
+				const Common::Point &pos = g_grim->getOffscreenTextPos();
+				textObject->setX(pos.x);
+				textObject->setY(pos.y);
 			}
 		}
 		textObject->setText(msgId, _mustPlaceText);
@@ -1316,6 +1338,7 @@ void Actor::shutUp() {
 		g_sound->stopSound(_talkSoundName.c_str());
 		_talkSoundName = "";
 	}
+	_talkSoundId = 0;
 
 	if (_lipSync) {
 		if (_talkAnim != -1)
@@ -1504,7 +1527,7 @@ void Actor::updateWalk() {
 	float dist = dir.getMagnitude();
 
 	_walkedCur = true;
-	float walkAmt = g_grim->getPerSecond(_walkRate);
+	float walkAmt = g_grim->getPerSecond(_walkRate) * _timeScale;
 	if (walkAmt >= dist) {
 		walkAmt = dist;
 		_path.pop_back();
@@ -1519,6 +1542,15 @@ void Actor::updateWalk() {
 	}
 
 	turnTo(destPos, true);
+
+	// In EMI, if the actor faces more than 80 degrees away from where it's
+	// walking, it turns in place before moving.
+	if (g_grim->getGameType() == GType_MONKEY4) {
+		Math::Angle remaining = _moveYaw - _yaw;
+		remaining.normalize(-180);
+		if (ABS(remaining.getDegrees()) >= 80.f)
+			return;
+	}
 
 	dir = destPos - _pos;
 	dir.normalize();
@@ -1538,18 +1570,21 @@ void Actor::update(uint frameTime) {
 		if (_followBoxes) {
 			// Check for sort order information in the current sector
 			int oldSortOrder = getEffectiveSortOrder();
-			_sectorSortOrder = set->findSectorSortOrder(_pos, Sector::WalkType);
+			Common::Pair<bool, int> sortInfo = set->findSectorSortOrder(_pos, Sector::WalkType);
+			_hasSectorSortOrder = sortInfo.first;
+			_sectorSortOrder = sortInfo.second;
 
 			if (oldSortOrder != getEffectiveSortOrder())
 				g_emi->invalidateSortOrder();
-		} else if (_sectorSortOrder >= 0) {
-			_sectorSortOrder = -1;
+		} else if (_hasSectorSortOrder) {
+			_hasSectorSortOrder = false;
+			_sectorSortOrder = 0;
 			g_emi->invalidateSortOrder();
 		}
 	}
 
 	if (_turning) {
-		float turnAmt = g_grim->getPerSecond(_turnRate) * _turnRateMultiplier;
+		float turnAmt = g_grim->getPerSecond(_turnRate) * _turnRateMultiplier * _timeScale;
 		_currTurnDir = animTurn(turnAmt, _moveYaw, &_yaw);
 		if (g_grim->getGameType() == GType_MONKEY4) {
 			_currTurnDir = -_currTurnDir;
@@ -1636,16 +1671,32 @@ void Actor::update(uint frameTime) {
 
 	// Update lip syncing
 	if (_lipSync) {
-		int posSound;
+		int anim = -1;
+		bool hasAnim = false;
 
 		// While getPosIn16msTicks will return "-1" to indicate that the
 		// sound is no longer playing, it is more appropriate to check first
-		if (g_grim->getSpeechMode() != GrimEngine::TextOnly && g_sound->getSoundStatus(_talkSoundName.c_str()))
-			posSound = g_sound->getPosIn16msTicks(_talkSoundName.c_str());
-		else
-			posSound = -1;
-		if (posSound != -1) {
-			int anim = _lipSync->getAnim(posSound);
+		if (g_grim->getSpeechMode() != GrimEngine::TextOnly && g_sound->getSoundStatus(_talkSoundName.c_str())) {
+			if (g_grim->getGameType() == GType_GRIM) {
+				// The original gets the phoneme from iMUSE, and stops
+				// talking if there's no lip sync data for the voice
+				int phoneme = g_imuse->iMUSEGetPhoneme(_talkSoundId, 0);
+				if (phoneme) {
+					anim = LipSync::getAnimFromPhoneme(phoneme);
+					hasAnim = true;
+				} else {
+					shutUp();
+				}
+			} else {
+				int posSound = g_sound->getPosIn16msTicks(_talkSoundName.c_str());
+				if (posSound != -1) {
+					anim = _lipSync->getAnim(posSound);
+					hasAnim = true;
+				}
+			}
+		}
+
+		if (hasAnim) {
 			if (_talkAnim != anim) {
 				if (anim != -1) {
 					if (_talkChore[anim].isValid()) {
@@ -1712,28 +1763,57 @@ void Actor::update(uint frameTime) {
 
 // Not all the talking actors are in the current set, and so on not all the talking actors
 // update() is called. For example, Don when he comes out of his office after reaping Meche.
-bool Actor::updateTalk(uint frameTime) {
+bool Actor::updateTalk() {
 	if (_talking) {
 		// If there's no sound file then we're obviously not talking
 		GrimEngine::SpeechMode m = g_grim->getSpeechMode();
 		TextObject *textObject = nullptr;
 		if (_sayLineText)
 			textObject = TextObject::getPool().getObject(_sayLineText);
-		if (m == GrimEngine::TextOnly && !textObject) {
+
+		bool hasVoice = m != GrimEngine::TextOnly && (g_grim->getGameType() != GType_GRIM || _talkSoundId);
+		if (!hasVoice && !textObject) {
 			shutUp();
 			return false;
-		} else if (m != GrimEngine::TextOnly && (_talkSoundName.empty() || !g_sound->getSoundStatus(_talkSoundName.c_str()))) {
-			_talkDelay -= frameTime;
-			if (_talkDelay <= 0) {
-				_talkDelay = 0;
-				shutUp();
-				return false;
-			}
+		} else if (hasVoice && (_talkSoundName.empty() || !g_sound->getSoundStatus(_talkSoundName.c_str()))) {
+			shutUp();
+			return false;
 		}
 		return true;
 	}
 
 	return false;
+}
+
+ScreenBounds Actor::getScreenBounds() const {
+	Math::Matrix4 viewProjMatrix = g_driver->getProjection() * g_driver->getModelView();
+
+	ScreenBounds bounds;
+	if (g_grim->getGameType() == GType_GRIM) {
+		if (!_costumeStack.empty())
+			_costumeStack.back()->getBoundingBox(viewProjMatrix * getGrimModelMatrix(), bounds);
+	} else {
+		Math::Vector3d bboxPos, bboxSize;
+		getBBoxInfo(bboxPos, bboxSize);
+
+		Math::Matrix4 m = getFinalMatrix();
+		bboxPos = bboxPos + getWorldPos();
+
+		for (int x = 0; x < 2; x++) {
+			for (int y = 0; y < 2; y++) {
+				for (int z = 0; z < 2; z++) {
+					Math::Vector3d added(bboxSize.x() * 0.5f * (x * 2 - 1), bboxSize.y() * 0.5f * (y * 2 - 1), bboxSize.z() * 0.5f * (z * 2 - 1));
+					m.transform(&added, false);
+					bounds.addPoint(viewProjMatrix, bboxPos + added);
+				}
+			}
+		}
+
+		if (!bounds.overlapsScreen())
+			return {};
+	}
+
+	return bounds;
 }
 
 void Actor::draw() {
@@ -1753,30 +1833,16 @@ void Actor::draw() {
 	}
 
 	if (_mustPlaceText) {
-		Common::Point p1, p2;
-		if (g_grim->getGameType() == GType_GRIM) {
-			if (!_costumeStack.empty()) {
-				int x1 = 1000, y1 = 1000, x2 = -1000, y2 = -1000;
-				g_driver->startActorDraw(this);
-				_costumeStack.back()->getBoundingBox(&x1, &y1, &x2, &y2);
-				g_driver->finishActorDraw();
-				p1.x = x1;
-				p1.y = y1;
-				p2.x = x2;
-				p2.y = y2;
-			}
-		} else {
-			g_driver->getActorScreenBBox(this, p1, p2);
-		}
-
 		TextObject *textObject = TextObject::getPool().getObject(_sayLineText);
 		if (textObject) {
-			if (p1.x == 1000 || p2.x == -1000 || p2.x == -1000) {
-				textObject->setX(640 / 2);
-				textObject->setY(463);
+			const ScreenBounds bounds = getScreenBounds();
+			if (bounds.isEmpty()) {
+				const Common::Point &pos = g_grim->getOffscreenTextPos();
+				textObject->setX(pos.x);
+				textObject->setY(pos.y);
 			} else {
-				textObject->setX((p1.x + p2.x) / 2);
-				textObject->setY(p1.y);
+				textObject->setX((bounds.getLeft() + bounds.getRight()) / 2);
+				textObject->setY(bounds.getTop());
 			}
 			// Deletes the original text and rebuilds it with the newly placed text
 			textObject->reset();
@@ -2010,7 +2076,7 @@ Math::Vector3d Actor::getTangentPos(const Math::Vector3d &pos, const Math::Vecto
 	}
 	Math::Vector3d p;
 	float size;
-	if (!getSphereInfo(false, size, p))
+	if (!getSphereInfo(size, p))
 		return dest;
 	Math::Vector2d p1(pos.x(), pos.y());
 	Math::Vector2d p2(dest.x(), dest.y());
@@ -2084,7 +2150,7 @@ void Actor::getBBoxInfo(Math::Vector3d &bboxPos, Math::Vector3d &bboxSize) const
 	}
 }
 
-bool Actor::getSphereInfo(bool adjustZ, float &size, Math::Vector3d &p) const {
+bool Actor::getSphereInfo(float &size, Math::Vector3d &p) const {
 	if (g_grim->getGameType() == GType_MONKEY4) {
 		EMICostume *costume = static_cast<EMICostume *>(getCurrentCostume());
 		if (!costume) {
@@ -2100,11 +2166,7 @@ bool Actor::getSphereInfo(bool adjustZ, float &size, Math::Vector3d &p) const {
 		Model *model = getCurrentCostume()->getModel();
 		assert(model);
 
-		p = _pos + model->_insertOffset;
-		// center the sphere on the model center.
-		if (adjustZ) {
-			p.z() += model->_bboxSize.z() / 2.f;
-		}
+		p = _pos + model->_insertOffset + model->_center;
 		size = model->_radius * _collisionScale;
 	}
 	return true;
@@ -2121,11 +2183,7 @@ bool Actor::handleCollisionWith(Actor *actor, CollisionMode mode, Math::Vector3d
 
 	Math::Vector3d p1, p2;
 	float size1, size2;
-	// you may ask: why center the sphere of the first actor only (by setting adjustZ to true)?
-	// because it seems the original does so.
-	// if you change this code test this places: the rocks in lb and bv (both when booting directly in the
-	// set and when coming in from another one) and the poles in xb.
-	if (!this->getSphereInfo(true, size1, p1) || !actor->getSphereInfo(false, size2, p2)) {
+	if (!this->getSphereInfo(size1, p1) || !actor->getSphereInfo(size2, p2)) {
 		return false;
 	}
 
@@ -2334,6 +2392,15 @@ const Math::Matrix4 Actor::getFinalMatrix() const {
 	return  m;
 }
 
+Math::Matrix4 Actor::getGrimModelMatrix() const {
+	Math::Matrix4 m = getRotationQuat().toMatrix();
+	m *= getScale();
+	m.setValue(3, 3, 1.0f);
+	m.transpose();
+	m.setPosition(getWorldPos());
+	return m;
+}
+
 Math::Vector3d Actor::getWorldPos() const {
 	if (! isAttached())
 		return getPos();
@@ -2399,7 +2466,7 @@ int Actor::getEffectiveSortOrder() const {
 		Actor *attachedActor = Actor::getPool().getObject(_attachedActor);
 		return attachedActor->getEffectiveSortOrder();
 	}
-	return _sectorSortOrder >= 0 ? _sectorSortOrder : getSortOrder();
+	return _hasSectorSortOrder ? _sectorSortOrder : getSortOrder();
 }
 
 void Actor::activateShadow(bool active, const char *shadowName) {

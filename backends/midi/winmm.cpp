@@ -1,0 +1,329 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+// Disable symbol overrides so that we can use system headers.
+#define FORBIDDEN_SYMBOL_ALLOW_ALL
+
+#include "common/scummsys.h"
+
+#if defined(WIN32)
+
+#define WIN32_LEAN_AND_MEAN
+#include <process.h>
+#include <windows.h>
+
+#include "audio/musicplugin.h"
+#include "audio/mpu401.h"
+#include "backends/midi/winmm.h"
+#include "backends/platform/sdl/win32/win32_wrapper.h"
+#include "common/config-manager.h"
+#include "common/translation.h"
+#include "common/textconsole.h"
+#include "common/error.h"
+#include <mmsystem.h>
+
+////////////////////////////////////////
+//
+// Windows MIDI driver
+//
+////////////////////////////////////////
+
+class MidiDriver_WIN final : public MidiDriver_MPU401 {
+private:
+	MIDIHDR _streamHeader;
+	byte _streamBuffer[266];	// SysEx blocks should be no larger than 266 bytes
+	HANDLE _streamEvent;
+	HMIDIOUT _mo;
+	bool _isOpen;
+	int _device;
+
+	void check_error(MMRESULT result);
+
+public:
+	MidiDriver_WIN(int deviceIndex) : _isOpen(false), _device(deviceIndex) { }
+	int open() override;
+	bool isOpen() const override { return _isOpen; }
+	void close() override;
+	void send(uint32 b) override;
+	void sysEx(const byte *msg, uint16 length) override;
+};
+
+int MidiDriver_WIN::open() {
+	if (_isOpen)
+		return MERR_ALREADY_OPEN;
+
+	_streamEvent = CreateEvent(nullptr, true, true, nullptr);
+	MMRESULT res = midiOutOpen((HMIDIOUT *)&_mo, _device, (DWORD_PTR)_streamEvent, 0, CALLBACK_EVENT);
+	if (res != MMSYSERR_NOERROR) {
+		check_error(res);
+		CloseHandle(_streamEvent);
+		return MERR_DEVICE_NOT_AVAILABLE;
+	}
+
+	_isOpen = true;
+	return 0;
+}
+
+void MidiDriver_WIN::close() {
+	if (!_isOpen)
+		return;
+	_isOpen = false;
+	MidiDriver_MPU401::close();
+	midiOutUnprepareHeader(_mo, &_streamHeader, sizeof(_streamHeader));
+	check_error(midiOutClose(_mo));
+	CloseHandle(_streamEvent);
+}
+
+void MidiDriver_WIN::send(uint32 b) {
+	assert(_isOpen);
+
+	midiDriverCommonSend(b);
+
+	union {
+		DWORD dwData;
+		BYTE bData[4];
+	} u;
+
+	u.bData[3] = (byte)((b & 0xFF000000) >> 24);
+	u.bData[2] = (byte)((b & 0x00FF0000) >> 16);
+	u.bData[1] = (byte)((b & 0x0000FF00) >> 8);
+	u.bData[0] = (byte)(b & 0x000000FF);
+
+	check_error(midiOutShortMsg(_mo, u.dwData));
+}
+
+
+void MidiDriver_WIN::sysEx(const byte *msg, uint16 length) {
+	if (!_isOpen)
+		return;
+
+	if (WaitForSingleObject (_streamEvent, 2000) == WAIT_TIMEOUT) {
+		warning ("Could not send SysEx - MMSYSTEM is still trying to send data");
+		return;
+	}
+
+	assert(length+2 <= 266);
+
+	midiDriverCommonSysEx(msg, length);
+
+	midiOutUnprepareHeader(_mo, &_streamHeader, sizeof(_streamHeader));
+
+	// Add SysEx frame
+	_streamBuffer[0] = 0xF0;
+	memcpy(&_streamBuffer[1], msg, length);
+	_streamBuffer[length+1] = 0xF7;
+
+	_streamHeader.lpData = (char *)_streamBuffer;
+	_streamHeader.dwBufferLength = length + 2;
+	_streamHeader.dwBytesRecorded = length + 2;
+	_streamHeader.dwUser = 0;
+	_streamHeader.dwFlags = 0;
+
+	MMRESULT result = midiOutPrepareHeader(_mo, &_streamHeader, sizeof(_streamHeader));
+	if (result != MMSYSERR_NOERROR) {
+		check_error (result);
+		return;
+	}
+
+	ResetEvent(_streamEvent);
+	result = midiOutLongMsg(_mo, &_streamHeader, sizeof(_streamHeader));
+	if (result != MMSYSERR_NOERROR) {
+		check_error(result);
+		SetEvent(_streamEvent);
+		return;
+	}
+}
+
+void MidiDriver_WIN::check_error(MMRESULT result) {
+	TCHAR buf[MAXERRORLENGTH];
+	if (result != MMSYSERR_NOERROR) {
+		midiOutGetErrorText(result, buf, MAXERRORLENGTH);
+		Common::String errorMessage = Win32::tcharToString(buf);
+		warning("MM System Error '%s'", errorMessage.c_str());
+	}
+}
+
+
+// Plugin interface
+
+HANDLE WindowsMusicPlugin::_midiWarmUpThreadHandle = nullptr;
+WindowsMusicPlugin::MidiWarmUpWaitCallback WindowsMusicPlugin::_midiWarmUpWaitCallback = nullptr;
+
+WindowsMusicPlugin::WindowsMusicPlugin()
+	: _uiThreadId(GetCurrentThreadId()) {
+}
+
+const char *WindowsMusicPlugin::getName() const {
+	return _s("Windows MIDI");
+}
+
+const char *WindowsMusicPlugin::getId() const {
+	return "windows";
+}
+
+void WindowsMusicPlugin::startMidiWarmUpThread() {
+	// HANDLE for _beginthreadex must be initialized with nullptr, not an INVALID_HANDLE_VALUE.
+	if (_midiWarmUpThreadHandle != nullptr)
+		return;
+
+	// Warm up WinMM in the worker thread (outside from the UI thread) while the WinMM initializes.
+	// A failed thread creation leaves no pending warm-up, so enumeration can proceed.
+	_midiWarmUpThreadHandle = reinterpret_cast<HANDLE>(_beginthreadex(nullptr, 0, warmUpMidiThreadMain, nullptr, 0, nullptr));
+}
+
+void WindowsMusicPlugin::cleanupMidiWarmUpThread() {
+	_midiWarmUpWaitCallback = nullptr;
+	if (_midiWarmUpThreadHandle) {
+		// Closing the handle here does not terminate the thread.
+		CloseHandle(_midiWarmUpThreadHandle);
+		_midiWarmUpThreadHandle = nullptr;
+	}
+}
+
+unsigned __stdcall WindowsMusicPlugin::warmUpMidiThreadMain(void *arglist) {
+	(void)arglist;
+	// Warm-up WinMM to make later WinMM requests instantaneous.
+	(void)midiOutGetNumDevs();
+	return 0;
+}
+
+bool WindowsMusicPlugin::isMidiWarmUpFinished() {
+	// Empty thread handle means exceptional states.
+	// But let's return true regardless, as this warm-up check is a best-effort.
+	// Subsequent WinMM calls works even in this case, albeit with a first-time UI thread 10 second hang.
+	if (_midiWarmUpThreadHandle == nullptr)
+		return true;
+
+	// Poll the warm-up thread's state without blocking.
+	// - If the thread is still running, it will return WAIT_TIMEOUT.
+	// - If the thread has been finished, it will return WAIT_OBJECT_0.
+	return WaitForSingleObject(_midiWarmUpThreadHandle, 0) == WAIT_OBJECT_0;
+}
+
+void WindowsMusicPlugin::setMidiWarmUpWaitCallback(MidiWarmUpWaitCallback callback) {
+	_midiWarmUpWaitCallback = callback;
+}
+
+bool WindowsMusicPlugin::waitForMidiWarmUp() const {
+	MidiWarmUpCompletion isComplete;
+	// OSystem_Win32 installs GUI::MidiDeviceScanDialog::waitForCompletion as the wait handler.
+	// While warm-up is pending, this callback shows a modal progress dialog on the UI thread.
+	// That modal dialog prevent process being marked as unresponsive by OS.
+	if (GetCurrentThreadId() == _uiThreadId && _midiWarmUpWaitCallback && !isComplete())
+		return _midiWarmUpWaitCallback(isComplete);
+
+	// Warm-up has been finished, or No GUI wait is available. Proceed with device enumeration.
+	return true;
+}
+
+MusicDevices WindowsMusicPlugin::getDevices() const {
+	if (!waitForMidiWarmUp()) {
+		// Continue with synchronous device enumeration even if the GUI wait has failed or not available.
+		// At worst, the subsequent WinMM calls may block until initialization completes.
+		warning("Windows MIDI warm-up wait skipped or interrupted; continuing with synchronous device enumeration");
+	}
+
+	MusicDevices devices;
+	int numDevs = midiOutGetNumDevs();
+	MIDIOUTCAPS tmp;
+
+	Common::StringArray deviceNames;
+	for (int i = 0; i < numDevs; i++) {
+		if (midiOutGetDevCaps(i, &tmp, sizeof(MIDIOUTCAPS)) != MMSYSERR_NOERROR)
+			break;
+		Common::String deviceName = Win32::tcharToString(tmp.szPname);
+		deviceNames.push_back(deviceName);
+	}
+
+	// Limit us to the number of actually retrieved devices.
+	numDevs = deviceNames.size();
+
+	// Check for non-unique device names. This may happen if someone has devices with identical
+	// names (e. g. more than one USB device of the exact same hardware type). It seems that this
+	// does happen in reality sometimes. We generate index numbers for these devices.
+	// This is not an ideal solution, since this index could change whenever another USB
+	// device gets plugged in or removed, switched off or just plugged into a different port.
+	// Unfortunately midiOutGetDevCaps() does not generate any other unique information
+	// that could be used. Our index numbers which match the device order should at least be
+	// a little more stable than just using the midiOutGetDevCaps() device ID, since a missing
+	// device (e.g. switched off) should actually not be harmful to our indices (as it would be
+	// when using the device IDs). The cases where users have devices with identical names should
+	// be rare enough anyway.
+	Common::Array<int> nonUniqueIndex;
+	for (int i = 0; i < numDevs; i++) {
+		int match = -1;
+		for (int ii = 0; ii < i; ii++) {
+			if (deviceNames[i] == deviceNames[ii]) {
+				if (nonUniqueIndex[ii] == -1)
+					nonUniqueIndex[ii] = 0;
+				if (++match == 0)
+					++match;
+			}
+		}
+		nonUniqueIndex.push_back(match);
+	}
+
+	// We now add the index number to the non-unique device names to make them unique.
+	for (int i = 0; i < numDevs; i++) {
+		if (nonUniqueIndex[i] != -1)
+			deviceNames[i] = Common::String::format("%s - #%.02d", deviceNames[i].c_str(), nonUniqueIndex[i]);
+	}
+
+	for (Common::StringArray::iterator i = deviceNames.begin(); i != deviceNames.end(); ++i)
+		// There is no way to detect the "MusicType" so I just set it to MT_GM
+		// The user will have to manually select his MT32 type device and his GM type device.
+		devices.push_back(MusicDevice(this, *i, MT_GM));
+
+	return devices;
+}
+
+Common::Error WindowsMusicPlugin::createInstance(MidiDriver **mididriver, MidiDriver::DeviceHandle dev) const {
+	int devIndex = 0;
+	bool found = false;
+
+	if (dev) {
+		Common::String deviceIDString = MidiDriver::getDeviceString(dev, MidiDriver::kDeviceId);
+
+		MusicDevices i = getDevices();
+		for (auto &d : i) {
+			if (d.getCompleteId().equals(deviceIDString)) {
+				found = true;
+				break;
+			}
+			devIndex++;
+		}
+	}
+
+	*mididriver = new MidiDriver_WIN(found ? devIndex : 0);
+	return Common::kNoError;
+}
+
+bool WindowsMusicPlugin::checkDevice(MidiDriver::DeviceHandle hdl, int checkFlags, bool quiet) const {
+	return true;
+}
+
+//#if PLUGIN_ENABLED_DYNAMIC(WINDOWS)
+	//REGISTER_PLUGIN_DYNAMIC(WINDOWS, PLUGIN_TYPE_MUSIC, WindowsMusicPlugin);
+//#else
+	REGISTER_PLUGIN_STATIC(WINDOWS, PLUGIN_TYPE_MUSIC, WindowsMusicPlugin);
+//#endif
+
+#endif

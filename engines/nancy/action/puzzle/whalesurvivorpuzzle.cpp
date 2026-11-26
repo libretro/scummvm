@@ -23,7 +23,7 @@
 
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/graphics.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/sound.h"
 #include "engines/nancy/input.h"
 #include "engines/nancy/util.h"
@@ -401,7 +401,10 @@ void WhaleSurvivorPuzzle::execute() {
 
 		switch (_gameState) {
 		case kStartScreen:
-			// Waiting for the player to click – keep start screen visible.
+		case kHitAnimation:
+			// Keep the start screen or the "Oh no! Try again" overlay visible
+			// until the player clicks Start (full restart via kTryAgain) or
+			// Quit (loss scene). Both are handled in handleInput().
 			redraw();
 			break;
 
@@ -416,13 +419,6 @@ void WhaleSurvivorPuzzle::execute() {
 			_countdownEndMs = nowMs + _tryAgainDelayMs;
 			_executeWin     = true;
 			_gameState      = kCountdown;
-			redraw();
-			break;
-
-		case kHitAnimation:
-			// Show the "Oh no! Try again" overlay and wait for the player
-			// to click Start (full restart via kTryAgain) or Quit (loss
-			// scene). Both transitions are handled in handleInput().
 			redraw();
 			break;
 
@@ -757,9 +753,6 @@ void WhaleSurvivorPuzzle::checkCollisions() {
 			--_fishCount;
 			int divisor = _scoreDivisor > 0 ? (int)_scoreDivisor : 500;
 			_score += (int)((float)divisor * _underwaterMultiplier);
-			if (_prevScore != _score)
-				_needsRedraw = true;
-
 			_porpoiseAnim = kPorpoiseEat;
 
 			if (_eatSound.name != "NO SOUND")

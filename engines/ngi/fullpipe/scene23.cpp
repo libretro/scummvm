@@ -39,22 +39,22 @@ bool sceneHandler23_testCalendar() {
 	int cal0, cal1, cal2, cal3;
 
 	if (g_vars->scene23_calend0->_movement)
-		cal0 = g_vars->scene23_calend0->_movement->_staticsObj2->_staticsId;
+		cal0 = g_vars->scene23_calend0->_movement->_nextStatic->_staticsId;
 	else
 		cal0 = g_vars->scene23_calend0->_statics->_staticsId;
 
 	if (g_vars->scene23_calend1->_movement)
-		cal1 = g_vars->scene23_calend1->_movement->_staticsObj2->_staticsId;
+		cal1 = g_vars->scene23_calend1->_movement->_nextStatic->_staticsId;
 	else
 		cal1 = g_vars->scene23_calend1->_statics->_staticsId;
 
 	if (g_vars->scene23_calend2->_movement)
-		cal2 = g_vars->scene23_calend2->_movement->_staticsObj2->_staticsId;
+		cal2 = g_vars->scene23_calend2->_movement->_nextStatic->_staticsId;
 	else
 		cal2 = g_vars->scene23_calend2->_statics->_staticsId;
 
 	if (g_vars->scene23_calend3->_movement)
-		cal3 = g_vars->scene23_calend3->_movement->_staticsObj2->_staticsId;
+		cal3 = g_vars->scene23_calend3->_movement->_nextStatic->_staticsId;
 	else
 		cal3 = g_vars->scene23_calend3->_statics->_staticsId;
 
@@ -62,31 +62,31 @@ bool sceneHandler23_testCalendar() {
 }
 
 void scene23_initScene(Scene *sc) {
-	g_vars->scene23_calend0 = sc->getStaticANIObject1ById(ANI_CALENDWHEEL, 0);
-	g_vars->scene23_calend1 = sc->getStaticANIObject1ById(ANI_CALENDWHEEL, 1);
-	g_vars->scene23_calend2 = sc->getStaticANIObject1ById(ANI_CALENDWHEEL, 2);
-	g_vars->scene23_calend3 = sc->getStaticANIObject1ById(ANI_CALENDWHEEL, 3);
+	g_vars->scene23_calend0 = sc->findAniObjectById(ANI_CALENDWHEEL, 0);
+	g_vars->scene23_calend1 = sc->findAniObjectById(ANI_CALENDWHEEL, 1);
+	g_vars->scene23_calend2 = sc->findAniObjectById(ANI_CALENDWHEEL, 2);
+	g_vars->scene23_calend3 = sc->findAniObjectById(ANI_CALENDWHEEL, 3);
 	g_vars->scene23_topReached = false;
 	g_vars->scene23_isOnStool = false;
 	g_vars->scene23_someVar = 0;
-	g_vars->scene23_giraffeTop = sc->getStaticANIObject1ById(ANI_GIRAFFE_TOP, -1);
-	g_vars->scene23_giraffee = sc->getStaticANIObject1ById(ANI_GIRAFFEE, -1);
+	g_vars->scene23_giraffeTop = sc->findAniObjectById(ANI_GIRAFFE_TOP, -1);
+	g_vars->scene23_giraffee = sc->findAniObjectById(ANI_GIRAFFEE, -1);
 
 	g_nmi->_floaters->init(g_nmi->getGameLoaderGameVar()->getSubVarByName("SC_23"));
 
 	Scene *oldsc = g_nmi->_currentScene;
 	g_nmi->_currentScene = sc;
 
-	if (g_nmi->getObjectState(sO_UpperHatch_23) == g_nmi->getObjectEnumState(sO_UpperHatch_23, sO_Opened)) {
-		sc->getPictureObjectById(PIC_SC23_BOXOPEN, 0)->_flags |= 4;
-		sc->getPictureObjectById(PIC_SC23_BOXCLOSED, 0)->_flags &= 0xFFFB;
-		sc->getPictureObjectById(PIC_SC23_BTN1, 0)->_flags |= 4;
-		sc->getPictureObjectById(PIC_SC23_BTN2, 0)->_flags |= 4;
-		sc->getPictureObjectById(PIC_SC23_BTN3, 0)->_flags |= 4;
-		sc->getPictureObjectById(PIC_SC23_BTN4, 0)->_flags |= 4;
+	if (g_nmi->getStateId(sO_UpperHatch_23) == g_nmi->getStateValue(sO_UpperHatch_23, sO_Opened)) {
+		sc->findPictureObjectById(PIC_SC23_BOXOPEN, 0)->_flags |= 4;
+		sc->findPictureObjectById(PIC_SC23_BOXCLOSED, 0)->_flags &= 0xFFFB;
+		sc->findPictureObjectById(PIC_SC23_BTN1, 0)->_flags |= 4;
+		sc->findPictureObjectById(PIC_SC23_BTN2, 0)->_flags |= 4;
+		sc->findPictureObjectById(PIC_SC23_BTN3, 0)->_flags |= 4;
+		sc->findPictureObjectById(PIC_SC23_BTN4, 0)->_flags |= 4;
 
 		if (g_vars->scene23_giraffee->_statics->_staticsId == ST_GRFG_EMPTY || !(g_vars->scene23_giraffee->_flags & 4)) {
-			g_vars->scene23_giraffee->changeStatics2(ST_GRFG_BALD);
+			g_vars->scene23_giraffee->setStatic(ST_GRFG_BALD);
 			g_vars->scene23_giraffee->_flags |= 4;
 		}
 		g_vars->scene23_calend0->show1(-1, -1, -1, 0);
@@ -94,14 +94,14 @@ void scene23_initScene(Scene *sc) {
 		g_vars->scene23_calend2->show1(-1, -1, -1, 0);
 		g_vars->scene23_calend3->show1(-1, -1, -1, 0);
 
-		sc->getStaticANIObject1ById(ANI_LUK23_U, -1)->changeStatics2(ST_LUK23U_OPEN);
+		sc->findAniObjectById(ANI_LUK23_U, -1)->setStatic(ST_LUK23U_OPEN);
 	} else {
-		sc->getPictureObjectById(PIC_SC23_BOXOPEN, 0)->_flags &= 0xFFFB;
-		sc->getPictureObjectById(PIC_SC23_BOXCLOSED, 0)->_flags |= 4;
-		sc->getPictureObjectById(PIC_SC23_BTN1, 0)->_flags &= 0xFFFB;
-		sc->getPictureObjectById(PIC_SC23_BTN2, 0)->_flags &= 0xFFFB;
-		sc->getPictureObjectById(PIC_SC23_BTN3, 0)->_flags &= 0xFFFB;
-		sc->getPictureObjectById(PIC_SC23_BTN4, 0)->_flags &= 0xFFFB;
+		sc->findPictureObjectById(PIC_SC23_BOXOPEN, 0)->_flags &= 0xFFFB;
+		sc->findPictureObjectById(PIC_SC23_BOXCLOSED, 0)->_flags |= 4;
+		sc->findPictureObjectById(PIC_SC23_BTN1, 0)->_flags &= 0xFFFB;
+		sc->findPictureObjectById(PIC_SC23_BTN2, 0)->_flags &= 0xFFFB;
+		sc->findPictureObjectById(PIC_SC23_BTN3, 0)->_flags &= 0xFFFB;
+		sc->findPictureObjectById(PIC_SC23_BTN4, 0)->_flags &= 0xFFFB;
 
 		g_vars->scene23_giraffee->hide();
 		g_vars->scene23_calend0->hide();
@@ -109,50 +109,50 @@ void scene23_initScene(Scene *sc) {
 		g_vars->scene23_calend2->hide();
 		g_vars->scene23_calend3->hide();
 
-		sc->getStaticANIObject1ById(ANI_LUK23_U, -1)->changeStatics2(ST_LUK23U_CLOSED);
+		sc->findAniObjectById(ANI_LUK23_U, -1)->setStatic(ST_LUK23U_CLOSED);
 
-		g_nmi->_floaters->genFlies(sc, 600, 90, 0, 0);
+		g_nmi->_floaters->addFly(sc, 600, 90, 0, 0);
 	}
 
-	if (g_nmi->getObjectState(sO_LowerHatch_23) == g_nmi->getObjectEnumState(sO_LowerHatch_23, sO_Opened)) {
+	if (g_nmi->getStateId(sO_LowerHatch_23) == g_nmi->getStateValue(sO_LowerHatch_23, sO_Opened)) {
 		g_vars->scene23_giraffeTop->show1(-1, -1, -1, 0);
-		g_vars->scene23_giraffeTop->changeStatics2(ST_GRFU_UP);
+		g_vars->scene23_giraffeTop->setStatic(ST_GRFU_UP);
 
-		if (g_nmi->getObjectState(sO_LowerPipe_21) == g_nmi->getObjectEnumState(sO_LowerPipe_21, sO_IsOpened)) {
-			g_vars->scene23_giraffeTop->changeStatics2(ST_GRFU_KISS);
+		if (g_nmi->getStateId(sO_LowerPipe_21) == g_nmi->getStateValue(sO_LowerPipe_21, sO_IsOpened)) {
+			g_vars->scene23_giraffeTop->setStatic(ST_GRFU_KISS);
 			g_vars->scene23_giraffee->hide();
 		} else {
-			if (g_nmi->getObjectState(sO_UpperHatch_23) == g_nmi->getObjectEnumState(sO_UpperHatch_23, sO_Opened)
+			if (g_nmi->getStateId(sO_UpperHatch_23) == g_nmi->getStateValue(sO_UpperHatch_23, sO_Opened)
 				&& (g_vars->scene23_giraffee->_flags & 4))
-				g_vars->scene23_giraffeTop->setOXY(614, 362);
+				g_vars->scene23_giraffeTop->setPos(614, 362);
 			else
-				g_vars->scene23_giraffeTop->setOXY(618, 350);
+				g_vars->scene23_giraffeTop->setPos(618, 350);
 
 			if (sceneHandler23_testCalendar())
-				g_vars->scene23_calend1->_statics = g_vars->scene23_calend1->getStaticsById(ST_CND_5);
+				g_vars->scene23_calend1->_statics = g_vars->scene23_calend1->getStatic(ST_CND_5);
 		}
 
-		sc->getStaticANIObject1ById(ANI_LUK23_D, -1)->changeStatics2(ST_LUK23_OPEN);
+		sc->findAniObjectById(ANI_LUK23_D, -1)->setStatic(ST_LUK23_OPEN);
 
-		if (g_nmi->getObjectState(sO_Lever_23) == g_nmi->getObjectEnumState(sO_Lever_23, sO_Taken))
-			sc->getStaticANIObject1ById(ANI_INV_LEVERHANDLE, -1)->hide();
+		if (g_nmi->getStateId(sO_Lever_23) == g_nmi->getStateValue(sO_Lever_23, sO_Taken))
+			sc->findAniObjectById(ANI_INV_LEVERHANDLE, -1)->hide();
 
-		sc->getStaticANIObject1ById(ANI_HANDLE23, -1)->hide();
+		sc->findAniObjectById(ANI_HANDLE23, -1)->hide();
 	} else {
 		g_vars->scene23_giraffeTop->hide();
 
-		sc->getStaticANIObject1ById(ANI_LUK23_D, -1)->changeStatics2(ST_LUK23_WHANDLE2);
+		sc->findAniObjectById(ANI_LUK23_D, -1)->setStatic(ST_LUK23_WHANDLE2);
 
-		sc->getStaticANIObject1ById(ANI_INV_LEVERHANDLE, -1)->hide();
+		sc->findAniObjectById(ANI_INV_LEVERHANDLE, -1)->hide();
 	}
 
 	g_nmi->_currentScene = oldsc;
 }
 
 void scene23_setGiraffeState() {
-	if (g_nmi->getObjectState(sO_UpperHatch_23) == g_nmi->getObjectEnumState(sO_UpperHatch_23, sO_Opened)) {
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene23_giraffeTop, ST_GRFU_UP, QU_GRFU_TURN_UL, 0);
-		g_nmi->_behaviorManager->setBehaviorEnabled(g_vars->scene23_giraffeTop, ST_GRFU_UP, QU_GRFU_TURN_UD, 0);
+	if (g_nmi->getStateId(sO_UpperHatch_23) == g_nmi->getStateValue(sO_UpperHatch_23, sO_Opened)) {
+		g_nmi->_behaviorManager->enableAni(g_vars->scene23_giraffeTop, ST_GRFU_UP, QU_GRFU_TURN_UL, 0);
+		g_nmi->_behaviorManager->enableAni(g_vars->scene23_giraffeTop, ST_GRFU_UP, QU_GRFU_TURN_UD, 0);
 	}
 }
 
@@ -175,15 +175,15 @@ int scene23_updateCursor() {
 }
 
 void sceneHandler23_showStool() {
-	chainQueue(QU_SC23_SHOWSTOOL, 0);
+	runQueue(QU_SC23_SHOWSTOOL, 0);
 }
 
 void sceneHandler23_hideStool() {
-	g_nmi->_currentScene->getStaticANIObject1ById(ANI_TABURETTE, -1)->hide();
+	g_nmi->_currentScene->findAniObjectById(ANI_TABURETTE, -1)->hide();
 }
 
 void sceneHandler23_startKiss() {
-	g_vars->scene23_giraffeTop->changeStatics2(ST_GRFU_UP);
+	g_vars->scene23_giraffeTop->setStatic(ST_GRFU_UP);
 	g_vars->scene23_giraffeTop->startMQIfIdle(QU_SC23_STARTKISS, 0);
 }
 
@@ -204,7 +204,7 @@ void sceneHandler23_spinWheel1() {
 		break;
 
 	case ST_CND_3:
-		g_vars->scene23_calend0->changeStatics2(ST_CND_9);
+		g_vars->scene23_calend0->setStatic(ST_CND_9);
 		mv = MV_CND_9_0;
 		break;
 
@@ -213,13 +213,13 @@ void sceneHandler23_spinWheel1() {
 	}
 
 	if (mv)
-		g_vars->scene23_calend0->startAnim(mv, 0, -1);
+		g_vars->scene23_calend0->startMovement(mv, 0, -1);
 
 	if (sceneHandler23_testCalendar())
 		sceneHandler23_startKiss();
 }
 
-void sceneHandler23_spinWheel2and4(StaticANIObject *ani) {
+void sceneHandler23_spinWheel2and4(AniObject *ani) {
 	int mv = 0;
 
 	switch (ani->_statics->_staticsId) {
@@ -268,7 +268,7 @@ void sceneHandler23_spinWheel2and4(StaticANIObject *ani) {
 	}
 
 	if (mv)
-		ani->startAnim(mv, 0, -1);
+		ani->startMovement(mv, 0, -1);
 
 	if (sceneHandler23_testCalendar())
 		sceneHandler23_startKiss();
@@ -276,21 +276,21 @@ void sceneHandler23_spinWheel2and4(StaticANIObject *ani) {
 
 void sceneHandler23_spinWheel3() {
 	if (g_vars->scene23_calend2->_statics->_staticsId == ST_CND_0) {
-		g_vars->scene23_calend2->startAnim(MV_CND_0_1, 0, -1);
+		g_vars->scene23_calend2->startMovement(MV_CND_0_1, 0, -1);
 	} else if (g_vars->scene23_calend2->_statics->_staticsId == ST_CND_1) {
-		g_vars->scene23_calend2->changeStatics2(ST_CND_9);
-		g_vars->scene23_calend2->startAnim(MV_CND_9_0, 0, -1);
+		g_vars->scene23_calend2->setStatic(ST_CND_9);
+		g_vars->scene23_calend2->startMovement(MV_CND_9_0, 0, -1);
 	}
 
 	if (sceneHandler23_testCalendar())
 		sceneHandler23_startKiss();
 }
 
-void sceneHandler23_pushButton(ExCommand *cmd) {
+void sceneHandler23_pushButton(Command *cmd) {
 	if (g_nmi->_aniMan->isIdle() || !(g_nmi->_aniMan->_flags & 0x100)) {
 		if (!g_vars->scene23_topReached) {
-			if (g_nmi->_aniMan->_ox != 405 || g_nmi->_aniMan->_oy != 220) {
-				if (g_nmi->_aniMan->_ox != 276 || g_nmi->_aniMan->_oy != 438
+			if (g_nmi->_aniMan->_x != 405 || g_nmi->_aniMan->_y != 220) {
+				if (g_nmi->_aniMan->_x != 276 || g_nmi->_aniMan->_y != 438
 					|| g_nmi->_aniMan->_movement || g_nmi->_aniMan->_statics->_staticsId != ST_MAN_RIGHT) {
 					if (g_nmi->_msgX == 276 && g_nmi->_msgY == 438 )
 						return;
@@ -298,16 +298,16 @@ void sceneHandler23_pushButton(ExCommand *cmd) {
 					MessageQueue *mq = getCurrSceneSc2MotionController()->startMove(g_nmi->_aniMan, 276, 438, 1, ST_MAN_RIGHT);
 
 					if (mq) {
-						mq->addExCommandToEnd(cmd->createClone());
+						mq->addCommandToEnd(cmd->createClone());
 
 						postExCommand(g_nmi->_aniMan->_id, 2, 276, 438, 0, -1);
 					}
 				} else {
-					MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(QU_SC23_TOCALENDAR), 0, 0);
+					MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(QU_SC23_TOCALENDAR), 0, 0);
 
-					mq->addExCommandToEnd(cmd->createClone());
+					mq->addCommandToEnd(cmd->createClone());
 					mq->setFlags(mq->getFlags() | 1);
-					mq->chain(nullptr);
+					mq->run(nullptr);
 				}
 
 				if (!g_vars->scene23_topReached)
@@ -342,15 +342,15 @@ void sceneHandler23_pushButton(ExCommand *cmd) {
 			}
 
 			if (mv)
-				g_nmi->_aniMan->startAnim(mv, 0, -1);
+				g_nmi->_aniMan->startMovement(mv, 0, -1);
 
 		}
 	}
 }
 
-void sceneHandler23_sendClick(StaticANIObject *ani) {
+void sceneHandler23_sendClick(AniObject *ani) {
 	int msg = 0;
-	switch (ani->_odelay) {
+	switch (ani->_copyId) {
 	case 0:
 		msg = MSG_SC23_CLICKBTN1;
 		break;
@@ -367,7 +367,7 @@ void sceneHandler23_sendClick(StaticANIObject *ani) {
 		break;
 	}
 
-	ExCommand *ex = new ExCommand(0, 17, msg, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex = new Command(0, 17, msg, 0, 0, 0, 1, 0, 0, 0);
 	ex->_excFlags |= 3;
 
 	ex->postMessage();
@@ -375,7 +375,7 @@ void sceneHandler23_sendClick(StaticANIObject *ani) {
 
 void sceneHandler23_checkReachingTop() {
 	if (g_nmi->_aniMan->_movement || g_nmi->_aniMan->_statics->_staticsId != ST_MAN_STANDLADDER
-		|| g_nmi->_aniMan->_ox != 405 || g_nmi->_aniMan->_oy != 220)
+		|| g_nmi->_aniMan->_x != 405 || g_nmi->_aniMan->_y != 220)
 		g_vars->scene23_topReached = false;
 	else
 		g_vars->scene23_topReached = true;
@@ -384,39 +384,39 @@ void sceneHandler23_checkReachingTop() {
 void sceneHandler23_exitCalendar() {
 	if (!g_nmi->_aniMan->_movement && g_nmi->_aniMan->_statics->_staticsId == ST_MAN_STANDLADDER
 		&& !g_nmi->_aniMan->getMessageQueue() && !(g_nmi->_aniMan->_flags & 0x100)) {
-		chainQueue(QU_SC23_FROMCALENDAREXIT, 1);
+		runQueue(QU_SC23_FROMCALENDAREXIT, 1);
 		g_vars->scene23_someVar = 2;
 	}
 }
 
-void sceneHandler23_fromCalendar(ExCommand *cmd) {
+void sceneHandler23_fromCalendar(Command *cmd) {
 	if (!g_nmi->_aniMan->_movement && g_nmi->_aniMan->_statics->_staticsId == ST_MAN_STANDLADDER
 		&& !g_nmi->_aniMan->getMessageQueue() && !(g_nmi->_aniMan->_flags & 0x100)) {
-		MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(QU_SC23_FROMCALENDAR), 0, 0);
+		MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(QU_SC23_FROMCALENDAR), 0, 0);
 
-		mq->addExCommandToEnd(cmd->createClone());
+		mq->addCommandToEnd(cmd->createClone());
 		mq->setFlags(mq->getFlags() | 1);
-		mq->chain(nullptr);
+		mq->run(nullptr);
 
 		g_vars->scene23_topReached = false;
 		g_vars->scene23_someVar = 0;
 	}
 }
 
-void sceneHandler23_fromStool(ExCommand *cmd) {
+void sceneHandler23_fromStool(Command *cmd) {
 	if (!g_nmi->_aniMan->getMessageQueue() && !(g_nmi->_aniMan->_flags & 0x100)) {
-		MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(QU_SC23_FROMSTOOL), 0, 0);
+		MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(QU_SC23_FROMSTOOL), 0, 0);
 
-		mq->addExCommandToEnd(cmd->createClone());
+		mq->addCommandToEnd(cmd->createClone());
 		mq->setFlags(mq->getFlags() | 1);
-		mq->chain(nullptr);
+		mq->run(nullptr);
 
-		cmd->_messageKind = 0;
+		cmd->_cmd = 0;
 	}
 }
 
-int sceneHandler23(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler23(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch (cmd->_messageNum) {
@@ -424,13 +424,13 @@ int sceneHandler23(ExCommand *cmd) {
 		g_vars->scene23_isOnStool = false;
 
 		getCurrSceneSc2MotionController()->activate();
-		getGameLoaderInteractionController()->enableFlag24();
+		getGameLoaderInteractionController()->enable();
 
-		g_nmi->_behaviorManager->setFlagByStaticAniObject(g_nmi->_aniMan, 1);
+		g_nmi->_behaviorManager->enableAllQueuesForAni(g_nmi->_aniMan, 1);
 		break;
 
 	case MSG_SC23_HIDEGIRAFFEE:
-		g_vars->scene23_giraffee->queueMessageQueue(nullptr);
+		g_vars->scene23_giraffee->setQueue(nullptr);
 		g_vars->scene23_giraffee->_flags &= 0xFFFB;
 		break;
 
@@ -438,9 +438,9 @@ int sceneHandler23(ExCommand *cmd) {
 		g_vars->scene23_isOnStool = true;
 
 		getCurrSceneSc2MotionController()->deactivate();
-		getGameLoaderInteractionController()->disableFlag24();
+		getGameLoaderInteractionController()->disable();
 
-		g_nmi->_behaviorManager->setFlagByStaticAniObject(g_nmi->_aniMan, 0);
+		g_nmi->_behaviorManager->enableAllQueuesForAni(g_nmi->_aniMan, 0);
 		break;
 
 	case MSG_SC22_SHOWSTOOL:
@@ -476,7 +476,7 @@ int sceneHandler23(ExCommand *cmd) {
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x < g_nmi->_sceneRect.left + 200)
 				g_nmi->_currentScene->_x = x - 300 - g_nmi->_sceneRect.left;
@@ -485,8 +485,8 @@ int sceneHandler23(ExCommand *cmd) {
 				g_nmi->_currentScene->_x = x + 300 - g_nmi->_sceneRect.right;
 		}
 
-		g_nmi->_floaters->update();
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_floaters->onUpdate();
+		g_nmi->_behaviorManager->update();
 
 		g_nmi->startSceneTrack();
 
@@ -494,12 +494,12 @@ int sceneHandler23(ExCommand *cmd) {
 
 	case 29:
 		{
-			StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
+			AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
 			int picId;
 
 			if (ani && ani->_id == ANI_CALENDWHEEL) {
 				sceneHandler23_sendClick(ani);
-				cmd->_messageKind = 0;
+				cmd->_cmd = 0;
 			}
 
 			sceneHandler23_checkReachingTop();
@@ -510,14 +510,14 @@ int sceneHandler23(ExCommand *cmd) {
 				if (picId == PIC_SC23_LADDER) {
 					sceneHandler23_exitCalendar();
 
-					cmd->_messageKind = 0;
+					cmd->_cmd = 0;
 					break;
 				}
 
 				if (cmd->_sceneClickY > 450) {
 					sceneHandler23_fromCalendar(cmd);
 
-					cmd->_messageKind = 0;
+					cmd->_cmd = 0;
 					break;
 				}
 				break;
@@ -529,7 +529,7 @@ int sceneHandler23(ExCommand *cmd) {
 				if (picId == PIC_SC23_LADDERU && !g_vars->scene23_topReached) {
 					sceneHandler23_pushButton(cmd);
 
-					cmd->_messageKind = 0;
+					cmd->_cmd = 0;
 					break;
 				}
 				break;
@@ -537,11 +537,11 @@ int sceneHandler23(ExCommand *cmd) {
 
 			if (ani && ani->_id == ANI_HANDLE23) {
 				handleObjectInteraction(g_nmi->_aniMan, ani, cmd->_param);
-				cmd->_messageKind = 0;
+				cmd->_cmd = 0;
 			} else {
 				sceneHandler23_fromStool(cmd);
 
-				cmd->_messageKind = 0;
+				cmd->_cmd = 0;
 			}
 
 		}

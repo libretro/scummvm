@@ -10,7 +10,7 @@ assistance when contributing to the ScummVM project.
  - Know your personal limits.
    AI assistance is a tool helping with development, not a replacement for development skills.
 
- - Only use AI assistance in parts of the codebase you are familiar with.  
+ - Only use AI assistance in parts of the codebase you are familiar with.
    You MUST test your changes to the best of your ability BEFORE submitting your code.
 
  - No slop. Do not submit code changes that solely rely on "vibe coding" without
@@ -18,7 +18,7 @@ assistance when contributing to the ScummVM project.
 
  - AI must be restrained to write the appropriate amount of code comments. Lengthy LLM-oriented explanations are forbidden.
 
- - AI assistance MUST be disclosed in the commit message. See "Attribution".  
+ - AI assistance MUST be disclosed at least in the PR description.
    Using AI assistance repeatedly without disclosure or with the goal of appearing
    more capable than you actually are WILL have consequences, up to a permanent ban on the ScummVM project resources.
 
@@ -42,34 +42,28 @@ is responsible for:
 - Ensuring compliance with licensing requirements
 - Taking full responsibility for the contribution
 
+## Submitting Whole Engines
+
+We, as a project are mostly interested in game preservation and portability. Thus, an engine supporting 
+a particular game or games, is not adding value by itself.
+
+The expectation is that when you submit an engine:
+
+- You join the ScummVM Team and become this engine's primary maintainer
+- As the primary maintainer:
+  - You have a deep understanding of the engine internals
+  - Are able to navigate and maintain the engine without AI assistance
+  - Are committed to monitoring, engaging with and fixing bug reports filed against the engine
+
+In essence, if you used AI in your engine development you used it as a tool to amplify your own abilities as a developer, not to replace your reasoning and thinking.
+
+Engines fully reversed by a swarm of agents are of no value to us. Save your tokens and run the game in DOSBox, Wine, or some kind of an emulator or a VM.
+
 ## Attribution
 
-When AI tools contribute to the project’s development, proper attribution
-helps track the evolving role of AI in the development process.
-Contributions should include an Assisted-by tag in the following format:
-
-```
-Assisted-by: AGENT_NAME:MODEL_VERSION [TOOL1] [TOOL2]
-```
-
-Where:
-
-- `AGENT_NAME` is the name of the AI tool or framework
-- `MODEL_VERSION` is the specific model version used
-- `[TOOL1] [TOOL2]` are optional specialized analysis tools used
-  (e.g., coccinelle, sparse, smatch, clang-tidy)
-
-Basic development tools (git, gcc, make, editors) should not be listed.
-
-Example:
-
-```
-Assisted-by: Claude:claude-3-opus coccinelle sparse [OR]
-Assisted-by: Claude:claude-opus-4.6
-
-```
+When AI tools contribute to the project’s development, we require disclosure. In the past, we required attribution in
+the commit log messages, but we dropped this as a hard requirement.
 
 ## AI and Art
 
 Usage of AI is NOT allowed for creating media assets, such as logos, game icons, etc. We have very skilled artists working on the project. We believe that art is something truly human that must never be replaced by AI.
-

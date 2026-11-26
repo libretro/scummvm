@@ -3283,32 +3283,34 @@ Common::String EEMEngine::notebookNoteText(uint clueId, const byte *ni,
 										   uint32 mysSz) const {
 	if (!ni || clueId >= niCount)
 		return Common::String();
-	if (floppyNb && bufBase) {
-		const uint16 textOff = READ_LE_UINT16(ni + clueId * 7);
+	Common::String text;
+	if ((floppyNb || _mystery.usesCompactMacData()) && bufBase) {
+		const uint stride = floppyNb ? 7 : 8;
+		const uint16 textOff = READ_LE_UINT16(ni + clueId * stride);
 		if (textOff == 0 || textOff >= mysSz)
 			return Common::String();
 		const char *p = (const char *)(bufBase + textOff);
 		uint32 len = 0;
 		while (textOff + len < mysSz && p[len] != 0)
 			len++;
-		return parseString(Common::String(p, len),
-						   _playerName, _partner);
+		text = Common::String(p, len);
+	} else {
+		const uint stride = isLondon() ? 2 : 4;
+		const uint16 textOff = READ_LE_UINT16(ni + clueId * stride);
+		text = _mystery.textAt(textOff);
 	}
-	if (_mystery.usesCompactMacData() && bufBase) {
-		const uint16 textOff = READ_LE_UINT16(ni + clueId * 8);
-		if (textOff == 0 || textOff >= mysSz)
-			return Common::String();
-		const char *p = (const char *)(bufBase + textOff);
-		uint32 len = 0;
-		while (textOff + len < mysSz && p[len] != 0)
-			len++;
-		return parseString(Common::String(p, len),
-						   _playerName, _partner);
+
+	// WORKAROUND: Case 49's English and Spanish notebook entries misdescribe
+	// Starr's partner; his dialogue and the solution identify the space alien.
+	if (!isLondon() && _mystery.number() == 49) {
+		Common::replace(text,
+			"Mr. Starr was dancing with someone dressed in a big curly wig.",
+			"Mr. Starr was dancing with someone dressed in a big green alien costume.");
+		Common::replace(text,
+			"Sr. Starr bailaba con alguien vestido de alien con peluca.",
+			"Sr. Starr bailaba con alguien vestido de alien verde.");
 	}
-	const uint stride = isLondon() ? 2 : 4;
-	const uint16 textOff = READ_LE_UINT16(ni + clueId * stride);
-	return parseString(_mystery.textAt(textOff),
-					   _playerName, _partner);
+	return parseString(text, _playerName, _partner);
 }
 
 void EEMEngine::drawNotebookFrame(int &page, TravisScrollBar *scrollBar) {
@@ -4035,27 +4037,8 @@ uint16 EEMEngine::getKDTextBalloon(byte firstChar) const {
 
 Common::String EEMEngine::accuseNoteText(uint clueId,
 										 const AccuseNotesCtx &ctx) const {
-	if (ctx.floppyNote) {
-		const uint16 textOff = READ_LE_UINT16(ctx.ni + clueId * 7);
-		if (textOff == 0 || textOff >= _mystery.dataSize() ||
-			!ctx.bufBaseNotes)
-			return Common::String();
-		return parseString(
-			(const char *)(ctx.bufBaseNotes + textOff),
-			_playerName, _partner);
-	}
-	if (_mystery.usesCompactMacData() && ctx.bufBaseNotes) {
-		const uint16 textOff = READ_LE_UINT16(ctx.ni + clueId * 8);
-		if (textOff == 0 || textOff >= _mystery.dataSize())
-			return Common::String();
-		return parseString(
-			(const char *)(ctx.bufBaseNotes + textOff),
-			_playerName, _partner);
-	}
-	const uint stride = isLondon() ? 2 : 4;
-	const uint16 textOff = READ_LE_UINT16(ctx.ni + clueId * stride);
-	return parseString(_mystery.textAt(textOff),
-					   _playerName, _partner);
+	return notebookNoteText(clueId, ctx.ni, ctx.niCount, ctx.floppyNote,
+		ctx.bufBaseNotes, _mystery.dataSize());
 }
 
 void EEMEngine::accuseRebuildPagination(const AccuseNotesCtx &ctx) {
@@ -4462,8 +4445,8 @@ void EEMEngine::drawKDBalloonOverCurrentScreen(Common::String text) {
 
 	Picture balloon;
 	const bool haveBalloon =
-		_balloonArchive.size() > (bubNum & 0x7F) &&
-		_balloonArchive.loadEntry(bubNum & 0x7F, balloon);
+		_balloonArchive.size() > (bubNum & 0x7Fu) &&
+		_balloonArchive.loadEntry(bubNum & 0x7Fu, balloon);
 
 	const int balloonX = isMacTalkie() ? 100 : scaleX(0x21);
 	const int topBandH = isMacTalkie() ? 155 : scaleY(0x50);
@@ -4856,8 +4839,8 @@ void EEMEngine::doAccuse() {
 			_picsArchive.getPicture(picId, suspect);
 		Picture balloon;
 		const bool haveBalloon =
-			_balloonArchive.size() > (bubNum & 0x7F) &&
-			_balloonArchive.loadEntry(bubNum & 0x7F, balloon);
+			_balloonArchive.size() > (bubNum & 0x7Fu) &&
+			_balloonArchive.loadEntry(bubNum & 0x7Fu, balloon);
 
 		int balloonX = macTalkie ? 100 : 0x21;
 		int balloonY = 1;
@@ -4983,8 +4966,8 @@ void EEMEngine::doAccuse() {
 				rBub = fitBalloonToText(rBub, react);
 				Picture rBalloon;
 				const bool haveR =
-					_balloonArchive.size() > (rBub & 0x7F) &&
-					_balloonArchive.loadEntry(rBub & 0x7F, rBalloon);
+					_balloonArchive.size() > (rBub & 0x7Fu) &&
+					_balloonArchive.loadEntry(rBub & 0x7Fu, rBalloon);
 				const int rX = macTalkie ? 100 : 0x21;
 				int rY = 1;
 				if (haveR && rBalloon.surface.h < (macTalkie ? 155 : 0x4e))

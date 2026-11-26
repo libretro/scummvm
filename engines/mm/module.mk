@@ -6,7 +6,6 @@ MODULE_OBJS := \
 	shared/utils/bitmap_font.o \
 	shared/classic/pc_speaker.o \
 	shared/utils/strings.o \
-	shared/utils/strings_data.o \
 	shared/utils/xeen_font.o \
 	shared/xeen/cc_archive.o \
 	shared/xeen/file.o \
@@ -34,6 +33,7 @@ MODULE_OBJS += \
 	mm1/data/monsters.o \
 	mm1/data/party.o \
 	mm1/data/roster.o \
+	mm1/data/text.o \
 	mm1/data/text_parser.o \
 	mm1/data/trap.o \
 	mm1/data/treasure.o \
@@ -138,6 +138,8 @@ MODULE_OBJS += \
 	mm1/views/trap.o \
 	mm1/views/unlock.o \
 	mm1/views/wheel_spin.o \
+	mm1/views_enh/active_quest.o \
+	mm1/views_enh/bestiary.o \
 	mm1/views_enh/spells/cast_spell.o \
 	mm1/views_enh/spells/spellbook.o \
 	mm1/views_enh/spells/detect_magic.o \

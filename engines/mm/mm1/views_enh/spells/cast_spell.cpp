@@ -20,6 +20,7 @@
  */
 
 #include "mm/mm1/views_enh/spells/cast_spell.h"
+#include "mm/mm1/data/text.h"
 #include "mm/mm1/game/spells_party.h"
 #include "mm/mm1/globals.h"
 
@@ -63,32 +64,36 @@ void CastSpell::draw() {
 	_fontReduced = false;
 
 	const Character &c = *g_globals->_currCharacter;
-	writeString(0, 0, STRING["enhdialogs.cast_spell.title"], ALIGN_MIDDLE);
+	writeString(0, 0, "Cast Spell", ALIGN_MIDDLE);
 	writeString(0, 16, c._name, ALIGN_MIDDLE);
-	writeString(0, 40, STRING["enhdialogs.cast_spell.spell_ready"]);
+	writeString(0, 40, "Spell Ready:");
 
 	setTextColor(37);
 
 	int spellNum = c.spellNumber();
-	Common::String spellName = STRING["enhdialogs.cast_spell.none"];
+	Common::String spellName = "None Ready";
 	if (spellNum >= 0 && spellNum < 47) {
-		spellName = STRING[Common::String::format("spells.cleric.%d", spellNum)];
+		spellName = CLERIC_SPELL_NAMES[spellNum];
+
+		// MM1 Cleric 2-5 is Protection From Fire.
+		if (spellNum == 12)
+			spellName = "Protection From Fire";
 	} else if (spellNum >= 47) {
-		spellName = STRING[Common::String::format("spells.wizard.%d", spellNum - 47)];
+		spellName = WIZARD_SPELL_NAMES[spellNum - 47];
 	}
 	writeString(0, 60, spellName, ALIGN_MIDDLE);
 
 	_fontReduced = true;
 	setTextColor(0);
-	writeString(0, 80, STRING["enhdialogs.cast_spell.cost"]);
-	writeString(0, 90, STRING["enhdialogs.cast_spell.cur_sp"]);
+	writeString(0, 80, "Cost");
+	writeString(0, 90, "Cur SP");
 	writeString(0, 80, Common::String::format("%d/%d",
 		_requiredSp, _requiredGems), ALIGN_RIGHT);
 	writeString(0, 90, Common::String::format("%d", c._sp._current), ALIGN_RIGHT);
 
-	writeString(0, 122, STRING["enhdialogs.cast_spell.cast"]);
-	writeString(30, 122, STRING["enhdialogs.cast_spell.new"]);
-	writeString(60, 122, STRING["enhdialogs.cast_spell.esc"]);
+	writeString(0, 122, "\x01""37Cast");
+	writeString(30, 122, "\x01""37New");
+	writeString(60, 122, "ESC");
 
 	_fontReduced = false;
 }
@@ -102,6 +107,9 @@ bool CastSpell::msgKeypress(const KeypressMessage &msg) {
 				spellError();
 			} else if (hasCharTarget()) {
 				addView("CharacterSelect");
+			} else if (hasMonsterTarget()) {
+				close();
+				send("Combat", GameMessage("SELECT_SPELL_TARGET"));
 			} else {
 				close();
 				castSpell();
@@ -141,6 +149,10 @@ bool CastSpell::msgGame(const GameMessage &msg) {
 	} else if (msg._name == "CHAR_SELECTED" && msg._value != -1) {
 		close();
 		castSpell(&g_globals->_party[msg._value]);
+
+	} else if (msg._name == "MONSTER_SELECTED" &&
+			msg._value != -1) {
+		castSpell();
 	}
 
 	return true;
@@ -168,16 +180,77 @@ void CastSpell::charSwitched(Character *priorChar) {
 	updateSelectedSpell();
 }
 
+bool CastSpell::hasMonsterTarget() {
+	if (!isInCombat())
+		return false;
+
+	// Spells that affect a single chosen monster
+	switch (_spellIndex) {
+	// Cleric
+	case 2:		// Blind
+	case 10:	// Pain
+	case 14:	// Silence
+	case 15:	// Suggestion
+	case 20:	// Produce Flame
+	case 21:	// Produce Frost
+	case 46:	// Sun Ray
+
+	// Wizard
+	case 49:	// Energy Blast
+	case 50:	// Flame Arrow
+	case 55:	// Electric Arrow
+	case 56:	// Hypnotize
+	case 57:	// Identify Monster
+	case 62:	// Scare
+	case 71:	// Acid Arrow
+	case 72:	// Cold Beam
+	case 73:	// Feeble Mind
+	case 74:	// Freeze
+	case 81:	// Finger of Death
+	case 85:	// Disintegration
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 void CastSpell::castSpell(Character *target) {
 	if (_spellIndex == -1)
 		return;
 
+	// During combat, results are shown by the Combat view. An exploration
+	// InfoMessage would draw the dungeon or outdoor scene over the battle
+	auto showResult = [this](const Common::String &msg) {
+		if (isInCombat()) {
+			Common::String result = spellResultMessage(msg);
+			GameMessage gameMsg("SPELL_RESULT", result);
+			gameMsg._value = 20 - (result.size() / 2);
+			g_events->send("Combat", gameMsg);
+		} else {
+			g_events->send(InfoMessage(msg));
+		}
+	};
 	Character &c = *g_globals->_currCharacter;
+	if (isInCombat()) {
+		Common::String spellName = _spellIndex < 47 ?
+			CLERIC_SPELL_NAMES[_spellIndex] :
+			WIZARD_SPELL_NAMES[_spellIndex - 47];
+		if (_spellIndex == 12)
+			spellName = "Protection From Fire";
+		const Common::String logLine = target ?
+			Common::String::format("%s casts %s on %s.", c._name,
+				spellName.c_str(), target->_name) :
+			Common::String::format("%s casts %s.", c._name,
+				spellName.c_str());
+		send("Combat", GameMessage("COMBAT_LOG", logLine));
+	}
+
 	c._sp._current = MAX((int)c._sp._current - _requiredSp, 0);
 	c._gems = MAX((int)c._gems - _requiredGems, 0);
 
 	if (!isMagicAllowed()) {
-		g_events->send(InfoMessage(STRING["spells.magic_doesnt_work"]));
+		showResult("Magic doesn't work here");
 
 	} else {
 		// Cast the spell
@@ -185,11 +258,11 @@ void CastSpell::castSpell(Character *target) {
 
 		switch (result) {
 		case Game::SR_FAILED:
-			g_events->send(InfoMessage(STRING["spells.failed"]));
+			showResult("Spell failed");
 			break;
 
 		case Game::SR_SUCCESS_DONE:
-			g_events->send(InfoMessage(STRING["spells.done"]));
+			showResult("Done");
 			break;
 
 		default:
@@ -200,10 +273,16 @@ void CastSpell::castSpell(Character *target) {
 }
 
 void CastSpell::spellError() {
-	g_events->drawElements();
-
 	Common::String msg = getSpellError();
-	send(SoundMessage(msg, ALIGN_MIDDLE));
+
+	if (isInCombat()) {
+		// Keep spell errors inside Combat. A global drawElements() here can
+		// redraw the underlying dungeon/outdoor scene over the battle screen.
+		send("Combat", GameMessage("SPELL_RESULT", msg, 0));
+	} else {
+		g_events->drawElements();
+		send(SoundMessage(msg, ALIGN_MIDDLE));
+	}
 }
 
 } // namespace Spells

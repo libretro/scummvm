@@ -283,7 +283,6 @@ void OSystem_Wii::initSize(uint width, uint height,
 		free(_gamePixelsTexture);
 
 		if (_pfGame.bytesPerPixel > 1) {
-			// TODO: Support other texture formats?
 			tex_format = GFX_TF_RGB565;
 			_pfGameTexture = _pfRGB565;
 		} else {
@@ -347,7 +346,11 @@ void OSystem_Wii::updateMousePalette() {
 			// In this case, clear the palette
 			memset(_texMouse.palette, 0, 256 * 2);
 		} else {
-			memcpy(_texMouse.palette, _texGame.palette, 256 * 2);
+			u8 r, g, b;
+			for (uint i = 0; i < 256; ++i) {
+				_pfRGB565.colorToRGB(_texGame.palette[i], r, g, b);
+				_texMouse.palette[i] = _pfRGB3444.ARGBToColor(0xff, r, g, b);
+			}
 		}
 
 		_cursorPaletteDirty = true;
@@ -485,8 +488,8 @@ void OSystem_Wii::updateScreen() {
 					                    _gameWidth * _pfGame.bytesPerPixel,
 					                    _gameWidth, _gameHeight, _pfGameTexture, _pfGame);
 				}
-
 			}
+            
 			gfx_tex_convert(&_texGame, _gamePixelsTexture);
 			_gameDirty = false;
 		}
@@ -665,11 +668,12 @@ void OSystem_Wii::warpMouse(int x, int y) {
 }
 
 void OSystem_Wii::setMouseCursor(const void *buf, uint w, uint h, int hotspotX,
-									int hotspotY, uint32 keycolor,
-									const Graphics::PixelFormat *format, const byte *mask,
-									frac_t scaleX, frac_t scaleY) {
+								int hotspotY, uint32 keycolor,
+								const Graphics::PixelFormat *format, const byte *mask,
+								frac_t scaleX, frac_t scaleY) {
 #ifdef PLATFORM_WII_OSYSTEM_GFX_DEBUG
-	printf("%s(%p, w:%u, h:%u, hsX:%d, hsY:%d, kc:%u, scaleX:%f, scaleY:%f, %p, %p)\n", __func__, buf, w, h, hotspotX, hotspotY, keycolor, fracToDouble(scaleX), fracToDouble(scaleY), format, mask);
+	printf("%s(%p, w:%u, h:%u, hsX:%d, hsY:%d, kc:%u, scaleX:%f, scaleY:%f, %p, %p)\n",
+			__func__, buf, w, h, hotspotX, hotspotY, keycolor, fracToDouble(scaleX), fracToDouble(scaleY), format, mask);
 #endif
 
 	if (mask)
@@ -677,7 +681,6 @@ void OSystem_Wii::setMouseCursor(const void *buf, uint w, uint h, int hotspotX,
 
 	gfx_tex_format_t tex_format = GFX_TF_PALETTE_RGB5A3;
 	uint tw, th;
-	uint32 oldKeycolor = _mouseKeyColor;
 
 	if (!format)
 		_pfCursor = Graphics::PixelFormat::createFormatCLUT8();
@@ -686,15 +689,15 @@ void OSystem_Wii::setMouseCursor(const void *buf, uint w, uint h, int hotspotX,
 
 	if (_pfCursor.bytesPerPixel > 1) {
 		tex_format = GFX_TF_RGB5A3;
-		_mouseKeyColor = keycolor & 0xffff;
+		_pfCursorTexture = _pfRGB3444;
+		_mouseKeyColor = keycolor;
 		tw = ROUNDUP(w, 4);
 		th = ROUNDUP(h, 4);
-
 	} else {
+		_pfCursorTexture = Graphics::PixelFormat::createFormatCLUT8();
 		_mouseKeyColor = keycolor & 0xff;
 		tw = ROUNDUP(w, 8);
 		th = ROUNDUP(h, 4);
-
 	}
 
 	if (!gfx_tex_init(&_texMouse, tex_format, TLUT_MOUSE, tw, th)) {
@@ -704,52 +707,42 @@ void OSystem_Wii::setMouseCursor(const void *buf, uint w, uint h, int hotspotX,
 
 	gfx_tex_set_bilinear_filter(&_texMouse, _bilinearFilter);
 
-	u8 bpp = _texMouse.bpp >> 3;
-	byte *tmp = (byte *) malloc(tw * th * bpp);
+	const uint bytesPerPixel = _texMouse.bpp >> 3;
+	byte *tmp = (byte *)malloc(tw * th * bytesPerPixel);
 
 	if (!tmp) {
 		printf("could not alloc temp cursor buffer\n");
 		::abort();
 	}
 
-	if (bpp > 1)
-		memset(tmp, 0, tw * th * bpp);
-	else
-		memset(tmp, _mouseKeyColor, tw * th);
+	if (_pfCursor.bytesPerPixel > 1) {
+		const uint16 transparentColor =
+				(uint16)_pfCursorTexture.ARGBToColor(0, 0, 0, 0);
+		uint16 *dst = (uint16 *)tmp;
 
-	if (bpp > 1) {
+		for (uint i = 0; i < tw * th; ++i)
+			dst[i] = transparentColor;
 
-		if (!Graphics::crossBlit(tmp, (const byte *)buf,
-									tw * _pfRGB3444.bytesPerPixel,
-									w * _pfCursor.bytesPerPixel,
-									w, h, _pfRGB3444, _pfCursor)) {
-			printf("crossBlit failed (cursor)\n");
+		if (!Graphics::crossKeyBlit(tmp, (const byte *)buf,
+										tw * _pfCursorTexture.bytesPerPixel,
+										w * _pfCursor.bytesPerPixel,
+										w, h, _pfCursorTexture, _pfCursor,
+										_mouseKeyColor)) {
+			free(tmp);
+			printf("crossKeyBlit failed (cursor)\n");
 			::abort();
 		}
-
-		// nasty, shouldn't the frontend set the alpha channel?
-		const u16 *s = (const u16 *) buf;
-		u16 *d = (u16 *) tmp;
-		for (u16 y = 0; y < h; ++y) {
-			for (u16 x = 0; x < w; ++x) {
-				if (*s++ == _mouseKeyColor)
-					*d++ &= ~(7 << 12);
-				else
-					d++;
-			}
-
-			d += tw - w;
-		}
 	} else {
-		const byte *s = (const byte *)buf;
-		byte *d = (byte *) tmp;
-		for (u16 y = 0; y < h; ++y) {
-			for (u16 x = 0; x < w; ++x) {
-				*d++ = *s++;
-			}
-			d += tw - w;
-		}
+		memset(tmp, _mouseKeyColor, tw * th);
 
+		const byte *src = (const byte *)buf;
+		byte *dst = tmp;
+
+		for (uint y = 0; y < h; ++y) {
+			memcpy(dst, src, w);
+			src += w;
+			dst += tw;
+		}
 	}
 
 	gfx_tex_convert(&_texMouse, tmp);
@@ -760,6 +753,6 @@ void OSystem_Wii::setMouseCursor(const void *buf, uint w, uint h, int hotspotX,
 	_cursorScaleX = fracToDouble(scaleX);
 	_cursorScaleY = fracToDouble(scaleY);
 
-	if (_pfCursor.bytesPerPixel == 1 && oldKeycolor != _mouseKeyColor)
+	if (_pfCursor.bytesPerPixel == 1)
 		updateMousePalette();
 }

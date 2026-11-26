@@ -20,6 +20,7 @@
  */
 
 #include "mm/mm1/views_enh/trade.h"
+#include "mm/mm1/data/party.h"
 #include "mm/mm1/globals.h"
 
 namespace MM {
@@ -33,8 +34,10 @@ Trade::Trade() : ScrollView("Trade") {
 bool Trade::msgFocus(const FocusMessage &msg) {
 	_btnIcons.load("view.icn");
 
-	if (dynamic_cast<TextEntry *>(msg._priorView) == nullptr)
+	if (dynamic_cast<TextEntry *>(msg._priorView) == nullptr) {
+		_shareMode = false;
 		setMode(TRADE_OPTIONS);
+	}
 
 	return ScrollView::msgFocus(msg);
 }
@@ -42,6 +45,17 @@ bool Trade::msgFocus(const FocusMessage &msg) {
 bool Trade::msgUnfocus(const UnfocusMessage &msg) {
 	_btnIcons.clear();
 	return ScrollView::msgUnfocus(msg);
+}
+
+bool Trade::msgGame(const GameMessage &msg) {
+	if (msg._name == "SHARE") {
+		_shareMode = true;
+		setMode(TRADE_OPTIONS);
+		redraw();
+		return true;
+	}
+
+	return ScrollView::msgGame(msg);
 }
 
 void Trade::draw() {
@@ -52,7 +66,7 @@ void Trade::draw() {
 		drawOptions();
 		break;
 	default:
-		writeString(0, 5, STRING["enhdialogs.trade.how_much"]);
+		writeString(0, 5, "How much:");
 		break;
 	}
 }
@@ -62,17 +76,35 @@ bool Trade::msgKeypress(const KeypressMessage &msg) {
 	case TRADE_OPTIONS:
 		switch (msg.keycode) {
 		case Common::KEYCODE_m:
-			setMode(TRADE_GEMS);
+			if (_shareMode) {
+				Party::share(TK_GEMS);
+				close();
+			} else {
+				setMode(TRADE_GEMS);
+			}
 			break;
 		case Common::KEYCODE_g:
-			setMode(TRADE_GOLD);
+			if (_shareMode) {
+				Party::share(TK_GOLD);
+				close();
+			} else {
+				setMode(TRADE_GOLD);
+			}
 			break;
 		case Common::KEYCODE_f:
-			setMode(TRADE_FOOD);
+			if (_shareMode) {
+				Party::share(TK_FOOD);
+				close();
+			} else {
+				setMode(TRADE_FOOD);
+			}
 			break;
 		case Common::KEYCODE_i:
-			close();
-			send(InfoMessage(STRING["enhdialogs.trade.items_help"]));
+			if (!_shareMode) {
+				close();
+				send(InfoMessage("To trade items, select an item from the inventory, and then select the portrait of the "
+					"character to trade to"));
+			}
 			break;
 		default:
 			break;
@@ -112,29 +144,37 @@ void Trade::setMode(TradeMode mode) {
 	switch (_mode) {
 	case TRADE_OPTIONS:
 		addButton(&_btnIcons, Common::Point(80, 0), 32, Common::KEYCODE_g);
-		addButton(&_btnIcons, Common::Point(158, 0), 34, Common::KEYCODE_d);
+		addButton(&_btnIcons, Common::Point(158, 0), 34, Common::KEYCODE_m);
 		addButton(&_btnIcons, Common::Point(80, 20), 36, Common::KEYCODE_f);
-		addButton(&_btnIcons, Common::Point(158, 20), 26, Common::KEYCODE_i);
+		if (!_shareMode)
+			addButton(&_btnIcons, Common::Point(158, 20), 26, Common::KEYCODE_i);
 		addButton(&g_globals->_escSprites, Common::Point(0, 20), 0, KEYBIND_ESCAPE);
 		break;
 
 	default:
-		// How much
+		// Gold is stored as a 24-bit value (maximum 16,777,215),
+		// so gold transfers need an 8-digit entry field.
 		draw();
-		_textEntry.display(70, 157, 5, true, abortFunc, enterFunc);
+		_textEntry.display(70, 157, _mode == TRADE_GOLD ? 8 : 5, true,
+			abortFunc, enterFunc);
 	}
 }
 
 void Trade::drawOptions() {
-	writeString(0, 5, STRING["enhdialogs.trade.which"]);
-	writeString(28, 25, STRING["enhdialogs.misc.exit"]);
-	writeString(108, 5, STRING["enhdialogs.trade.gold"]);
-	writeString(186, 5, STRING["enhdialogs.trade.gems"]);
-	writeString(108, 25, STRING["enhdialogs.trade.food"]);
-	writeString(186, 25, STRING["enhdialogs.trade.items"]);
+	writeString(0, 5, _shareMode ? "share all:" :
+		"Trade which:");
+	writeString(28, 25, "Exit");
+	writeString(108, 5, "\x01""37Gold");
+	writeString(186, 5, "Ge\x01""37ms");
+	writeString(108, 25, "\x01""37Food");
+	if (!_shareMode)
+		writeString(186, 25, "\x01""37Items");
 }
 
 void Trade::amountEntered(uint amount) {
+	if (_shareMode)
+		return;
+
 	close();
 	send("CharacterInventory", GameMessage("TRADE", TRADE_NAMES[_mode], amount));
 }

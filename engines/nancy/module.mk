@@ -161,43 +161,99 @@ MODULE_OBJS = \
   misc/lightning.o \
   misc/specialeffect.o \
   misc/viewportfader.o \
-  cif.o \
+  resource/cif.o \
+  resource/decompress.o \
+  resource/iff.o \
+  resource/resource.o \
+  resource/sound_vorbis.o \
+  resource/video.o \
+  resource/xsheetfile.o \
   commontypes.o \
   console.o \
   cursor.o \
-  decompress.o \
   enginedata.o \
   font.o \
   graphics.o \
-  iff.o \
   movieplayer.o \
   input.o \
   metaengine.o \
   nancy.o \
   puzzledata.o \
   renderobject.o \
-  resource.o \
   sound.o \
-  sound_vorbis.o \
-  util.o \
-  video.o
+  util.o
 
 # Nancy19 and newer, whose scenes are Lua scripts
 ifdef ENABLE_NANCY_V4
 MODULE_OBJS += \
+  box2d/Collision/b2BroadPhase.o \
+  box2d/Collision/b2CollideCircle.o \
+  box2d/Collision/b2CollidePoly.o \
+  box2d/Collision/b2Collision.o \
+  box2d/Collision/b2Distance.o \
+  box2d/Collision/b2PairManager.o \
+  box2d/Collision/b2TimeOfImpact.o \
+  box2d/Collision/Shapes/b2CircleShape.o \
+  box2d/Collision/Shapes/b2PolygonShape.o \
+  box2d/Collision/Shapes/b2Shape.o \
+  box2d/Common/b2BlockAllocator.o \
+  box2d/Common/b2Math.o \
+  box2d/Common/b2Settings.o \
+  box2d/Common/b2StackAllocator.o \
+  box2d/Dynamics/b2Body.o \
+  box2d/Dynamics/b2ContactManager.o \
+  box2d/Dynamics/b2Island.o \
+  box2d/Dynamics/b2World.o \
+  box2d/Dynamics/b2WorldCallbacks.o \
+  box2d/Dynamics/Contacts/b2CircleContact.o \
+  box2d/Dynamics/Contacts/b2Contact.o \
+  box2d/Dynamics/Contacts/b2ContactSolver.o \
+  box2d/Dynamics/Contacts/b2PolyAndCircleContact.o \
+  box2d/Dynamics/Contacts/b2PolyContact.o \
+  box2d/Dynamics/Joints/b2DistanceJoint.o \
+  box2d/Dynamics/Joints/b2GearJoint.o \
+  box2d/Dynamics/Joints/b2Joint.o \
+  box2d/Dynamics/Joints/b2MouseJoint.o \
+  box2d/Dynamics/Joints/b2PrismaticJoint.o \
+  box2d/Dynamics/Joints/b2PulleyJoint.o \
+  box2d/Dynamics/Joints/b2RevoluteJoint.o \
   script/api.o \
   script/bootapi.o \
   script/convo.o \
   script/gameapi.o \
+  script/graphnode.o \
   script/luabind.o \
   script/luastate.o \
   script/mathtypes.o \
+  script/particles.o \
+  script/physics.o \
   script/record.o \
   script/records.o \
   script/ref.o \
   script/scenecontext.o \
+  script/timer.o \
+  script/transformer.o \
   script/types.o \
-  script/uiapi.o
+  script/uiapi.o \
+  script/xsheet.o
+
+# Nancy26 and newer, whose UI is made of records as well
+ifdef ENABLE_NANCY_V5
+MODULE_OBJS += \
+  script/v5/animator.o \
+  script/v5/bitmaptext.o \
+  script/v5/bootobjects.o \
+  script/v5/brain.o \
+  script/v5/cliptransformer.o \
+  script/v5/gamefunctions.o \
+  script/v5/messaging.o \
+  script/v5/overlaycombiner.o \
+  script/v5/recordnode.o \
+  script/v5/scriptinput.o \
+  script/v5/streamtree.o \
+  script/v5/textrecord.o \
+  script/v5/widgets.o
+endif
 endif
 
 # This module can be built as a plugin

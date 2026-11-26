@@ -31,12 +31,13 @@
 namespace NGI {
 
 enum QueueFlags {
-	kInGlobalQueue = 2
+	kInGlobalQueue = 2,
+	kBehaviorQueue = 8
 };
 
 class Message : public CObject {
  public:
-	int _messageKind;
+	int _cmd;
 	int16 _parentId;
 	int _x;
 	int _y;
@@ -44,11 +45,11 @@ class Message : public CObject {
 	int _sceneClickX;
 	int _sceneClickY;
 	int _invId;
-	int _field_24;
+	int _wait;
 	int _param;
-	int _field_2C;
-	int _field_30;
-	int _field_34;
+	int _auxParam;
+	int _oneShot;
+	int _armed;
 
  public:
 	Message();
@@ -56,21 +57,24 @@ class Message : public CObject {
 	Message(int16 parentId, int messageKind, int x, int y, int a6, int a7, int sceneClickX, int sceneClickY, int a10);
 };
 
-class ExCommand : public Message {
+class Command : public Message {
  public:
+	enum { kCmdPause = 64 }; // Timed pause in XML queues.
+	Common::String _messageName;
+	bool _mirror = false;
 	int _messageNum;
 	int _field_3C;
 	int _excFlags;
 	int _parId;
 
-	ExCommand();
-	ExCommand(ExCommand *src);
-	ExCommand(int16 parentId, int messageKind, int messageNum, int x, int y, int a7, int a8, int sceneClickX, int sceneClickY, int a11);
-	~ExCommand() override {}
+	Command();
+	Command(Command *src);
+	Command(int16 parentId, int messageKind, int messageNum, int x, int y, int a7, int a8, int sceneClickX, int sceneClickY, int a11);
+	~Command() override {}
 
 	bool load(MfcArchive &file) override;
 
-	virtual ExCommand *createClone();
+	virtual Command *createClone();
 
 	bool handleMessage();
 	void sendMessage();
@@ -81,7 +85,7 @@ class ExCommand : public Message {
 	void setf3c(int val);
 };
 
-class ExCommand2 : public ExCommand {
+class ExCommand2 : public Command {
  public:
 	PointList _points;
 
@@ -91,7 +95,7 @@ class ExCommand2 : public ExCommand {
 	ExCommand2 *createClone() override;
 };
 
-class ObjstateCommand : public ExCommand {
+class ObjstateCommand : public Command {
  public:
 	Common::String _objCommandName;
 	int _value;
@@ -109,8 +113,8 @@ class MessageQueue : public CObject {
   public:
 	int _id;
 	int _flags;
-	Common::String _queueName;
-	int16 _dataId;
+	Common::String _title;
+	int16 _queueId;
 	CObject *_field_14;
 	int _counter;
 	int _field_38;
@@ -119,7 +123,8 @@ class MessageQueue : public CObject {
 	int _flag1;
 
   private:
-	Common::List<ExCommand *> _exCommands;
+	Common::List<Command *> _commands;
+	Common::ScopedPtr<Command> _pauseCommand;
 
  public:
 	MessageQueue();
@@ -132,22 +137,23 @@ class MessageQueue : public CObject {
 	int getFlags() { return _flags; }
 	void setFlags(int flags) { _flags = flags; }
 
-	uint getCount() { return _exCommands.size(); }
+	uint getCount() { return _commands.size(); }
 
-	void addExCommand(ExCommand *ex);
-	void addExCommandToEnd(ExCommand *ex);
-	void insertExCommandAt(int pos, ExCommand *ex);
-	ExCommand *getExCommandByIndex(uint idx);
-	void deleteExCommandByIndex(uint idx, bool doFree);
+	void addCommandToFront(Command *ex);
+	void addCommandToEnd(Command *ex);
+	void addCommand(int pos, Command *ex);
+	Command *getCommandByIndex(uint idx);
+	void removeCommand(uint idx, bool doFree);
 
 	void mergeQueue(MessageQueue *mq);
 
-	void setParamInt(int key1, int key2);
+	void setObjectCopy(int key1, int key2);
 
-	/** `ani` will own `this` if `chain` returns true */
-	bool chain(StaticANIObject *ani);
+	/** `ani` will own `this` if `run` returns true */
+	bool run(AniObject *ani);
 	void update();
-	void sendNextCommand();
+	void next();
+	bool updatePause(uint32 elapsed);
 	void finish();
 
 	void messageQueueCallback1(int par);
@@ -155,8 +161,8 @@ class MessageQueue : public CObject {
 	bool checkGlobalExCommandList1();
 	bool checkGlobalExCommandList2();
 
-	int calcDuration(StaticANIObject *obj);
-	void changeParam28ForObjectId(int objId, int oldParam28, int newParam28);
+	int calcDuration(AniObject *obj);
+	void setObjectCopyForId(int objId, int oldCopyId, int newCopyId);
 
 	int activateExCommandsByKind(int kind);
 };
@@ -175,7 +181,7 @@ public:
 };
 
 struct MessageHandler {
-	int (*callback)(ExCommand *cmd);
+	int (*callback)(Command *cmd);
 	int16 id;
 	int16 field_6;
 	int index;
@@ -184,12 +190,12 @@ struct MessageHandler {
 
 bool removeMessageHandler(int16 id, int pos);
 void updateMessageHandlerIndex(MessageHandler *msg, int offset);
-void addMessageHandler(int (*callback)(ExCommand *), int16 id);
+void addMessageHandler(int (*callback)(Command *), int16 id);
 MessageHandler *getMessageHandlerById(int16 id);
-bool allocMessageHandler(MessageHandler *where, int16 id, int (*callback)(ExCommand *), int index);
+bool allocMessageHandler(MessageHandler *where, int16 id, int (*callback)(Command *), int index);
 int getMessageHandlersCount();
-bool addMessageHandlerByIndex(int (*callback)(ExCommand *), int index, int16 id);
-bool insertMessageHandler(int (*callback)(ExCommand *), int index, int16 id);
+bool addMessageHandlerByIndex(int (*callback)(Command *), int index, int16 id);
+bool insertMessageHandler(int (*callback)(Command *), int index, int16 id);
 void clearMessageHandlers();
 void processMessages();
 void updateGlobalMessageQueue(int id, int objid);
@@ -197,8 +203,8 @@ void clearMessages();
 void clearGlobalMessageQueueList();
 void clearGlobalMessageQueueList1();
 
-bool chainQueue(int queueId, int flags);
-bool chainObjQueue(StaticANIObject *obj, int queueId, int flags);
+bool runQueue(int queueId, int flags);
+bool runQueueByIdWithAni(AniObject *obj, int queueId, int flags);
 void postExCommand(int parentId, int keyCode, int x, int y, int f20, int f16);
 
 } // End of namespace NGI

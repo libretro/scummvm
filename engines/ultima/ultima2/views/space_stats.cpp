@@ -1,0 +1,49 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "ultima/ultima2/views/space_stats.h"
+#include "ultima/ultima2/gfx/text.h"
+#include "ultima/ultima2/ultima2.h"
+#include "graphics/views/rect.h"
+
+namespace Ultima {
+namespace Ultima2 {
+namespace Views {
+
+SpaceStats::SpaceStats(UIElement *parent) : Graphics::Views::UIElement("SpaceStats", parent) {
+	_bounds = Graphics::Views::TextRect(30, 20, 39, 23);
+}
+
+void SpaceStats::draw() {
+	auto s = getSurface();
+	s.clear();
+
+	Data::Savegame &sg = _G(savegame);
+	s.setColor(Gfx::textColor(Gfx::TEXT_NORMAL));
+	s.writeString(Common::Point(0, 0), "  Fuel=%.2d", sg._items[Data::ITEM_TRI_LITHIUM] % 100);
+	s.writeString(Common::Point(0, 1), "  Xeno=%.2d", sg._hyperwarpCoords[0]);
+	s.writeString(Common::Point(0, 2), "  Yako=%.2d", sg._hyperwarpCoords[1]);
+	s.writeString(Common::Point(0, 3), "  Zabo=%.2d", sg._hyperwarpCoords[2]);
+}
+
+} // namespace Views
+} // namespace Ultima2
+} // namespace Ultima

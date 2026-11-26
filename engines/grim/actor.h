@@ -41,6 +41,7 @@ class Set;
 class Material;
 struct SetShadow;
 struct Joint;
+struct ScreenBounds;
 class EMIModel;
 
 struct Plane {
@@ -316,6 +317,9 @@ public:
 	 */
 	Math::Angle  getYawTo(const Math::Vector3d &p) const;
 
+	const Math::Angle &getFOV() const { return _fov; }
+	void setFOV(const Math::Angle &a) { _fov = a; }
+
 	/**
 	 * Sets the actor visibility.
 	 *
@@ -375,6 +379,8 @@ public:
 	 * @param setName The name of the set.
 	 */
 	bool isInSet(const Common::String &setName) const;
+
+	const Common::String &getCurrentSet() const { return _setName; }
 
 	/**
 	 * Sets the rate of the turning.
@@ -436,10 +442,12 @@ public:
 	 *
 	 * @param msgId The id of the message to say.
 	 * @param background ?? actual meaning unknown yet.
+	 * @param volume The voice volume (0-127), the SayLine table's volume.
+	 * @param pan The voice pan (0-127), the SayLine table's pan.
 	 * @see isTalking
 	 * @see shutUp
 	 */
-	void sayLine(const char *msgId, bool background, float x, float y);
+	void sayLine(const char *msgId, bool background, float x, float y, int volume, int pan);
 	// When we clean all text objects we don't want the actors to clean their
 	// objects again since they're already freed
 	void lineCleanup();
@@ -500,7 +508,7 @@ public:
 	/**
 	 * Check if the actor is still talking. If it is returns true, otherwise false.
 	 */
-	bool updateTalk(uint frameTime);
+	bool updateTalk();
 	void draw();
 
 	bool isLookAtVectorZero() {
@@ -539,6 +547,7 @@ public:
 	void detach();
 	Math::Quaternion getRotationQuat() const;
 	const Math::Matrix4 getFinalMatrix() const;
+	Math::Matrix4 getGrimModelMatrix() const;
 	Math::Vector3d getHeadPos() const;
 
 	void setInOverworld(bool inOverworld) { _inOverworld = inOverworld; }
@@ -571,6 +580,7 @@ public:
 
 private:
 	void costumeMarkerCallback(int marker);
+	ScreenBounds getScreenBounds() const;
 	void collisionHandlerCallback(Actor *other) const;
 	void updateWalk();
 	void addShadowPlane(const char *n, Set *scene, int shadowId);
@@ -593,7 +603,7 @@ private:
 	Math::Vector3d getSimplePuckVector() const;
 	void calculateOrientation(const Math::Vector3d &pos, Math::Angle *pitch, Math::Angle *yaw, Math::Angle *roll);
 
-	bool getSphereInfo(bool adjustZ, float &size, Math::Vector3d &pos) const;
+	bool getSphereInfo(float &size, Math::Vector3d &pos) const;
 	EMIModel *findModelWithMesh(const Common::String &mesh);
 
 	Common::String _name;
@@ -602,6 +612,7 @@ private:
 	Color _talkColor;
 	Math::Vector3d _pos;
 	Math::Angle _pitch, _yaw, _roll;
+	Math::Angle _fov;
 	float _walkRate, _turnRate;
 
 	bool _followBoxes;  // Constrain to walkboxes
@@ -614,6 +625,7 @@ private:
 	Common::String _talkSoundName;
 	bool _talking;
 	bool _backgroundTalk;
+	int _talkSoundId;
 	ObjectPtr<LipSync> _lipSync;
 	Common::List<Costume *> _costumeStack;
 
@@ -708,7 +720,6 @@ private:
 	bool _puckOrient;
 
 	static bool _isTalkingBackground;
-	int _talkDelay;
 	int _attachedActor;
 	int _lookAtActor;
 	Common::String _attachedJoint;
@@ -719,6 +730,7 @@ private:
 
 	int _sortOrder;
 	int _sectorSortOrder;
+	bool _hasSectorSortOrder { false };
 	bool _useParentSortOrder;
 
 	bool _fakeUnbound;

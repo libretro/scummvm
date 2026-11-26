@@ -40,8 +40,6 @@
 #include "image/codecs/indeo3.h"
 #endif
 
-#ifdef VIDEO_COKTELDECODER_H
-
 #include "audio/audiostream.h"
 #include "audio/decoders/raw.h"
 #include "audio/decoders/adpcm_intern.h"
@@ -66,6 +64,11 @@ CoktelDecoder::CoktelDecoder(Audio::Mixer *mixer, Audio::Mixer::SoundType soundT
 }
 
 CoktelDecoder::~CoktelDecoder() {
+}
+
+bool CoktelDecoder::safeSeekFromPreviousFullFrame(int32 frame, int whence) {
+	// Not supported by this decoder variant: fall back to a plain seek
+	return seek(frame, whence, true);
 }
 
 bool CoktelDecoder::evaluateSeekFrame(int32 &frame, int whence) const {
@@ -264,6 +267,12 @@ int32 CoktelDecoder::getSubtitleIndex() const {
 
 bool CoktelDecoder::isPaletted() const {
 	return true;
+}
+
+bool CoktelDecoder::loadKeyFrames(Common::SeekableReadStream *stream) {
+	warning("CoktelDecoder::loadKeyFrames(): This decoder variant does not support key frames");
+	delete stream;
+	return false;
 }
 
 int CoktelDecoder::getCurFrame() const {
@@ -1730,7 +1739,8 @@ VMDDecoder::VMDDecoder(Audio::Mixer *mixer, Audio::Mixer::SoundType soundType) :
 	_soundLastFilledFrame(0), _audioFormat(kAudioFormat8bitRaw),
 	_hasVideo(false), _hasVideoData(false), _videoCodec(0), _blitMode(0), _bytesPerPixel(0),
 	_firstFramePos(0), _videoBufferSize(0), _externalCodec(false), _codec(0),
-	_subtitle(-1), _isPaletted(true), _autoStartSound(true), _oldStereoBuffer(nullptr) {
+	_subtitle(-1), _isPaletted(true), _autoStartSound(true), _oldStereoBuffer(nullptr),
+	_externalKeyFrameStream(nullptr), _externalKeyFrameToRender(-1) {
 
 	_videoBuffer   [0] = 0;
 	_videoBuffer   [1] = 0;
@@ -1796,7 +1806,9 @@ bool VMDDecoder::seek(int32 frame, int whence, bool restart) {
 	}
 
 	// Seek
-	_stream->seek(_frames[frame + 1].offset);
+	_externalKeyFrameToRender = -1;
+	if ((uint32)(frame + 1) < _frameCount)
+		_stream->seek(_frames[frame + 1].offset);
 	_curFrame = frame;
 	_nbFramesPastEnd = 0;
 	_startTime = g_system->getMillis() - ((frame + 2) * getStaticTimeToNextFrame());
@@ -2229,6 +2241,12 @@ void VMDDecoder::close() {
 
 	_files.clear();
 
+	delete _externalKeyFrameStream;
+	_externalKeyFrameStream = nullptr;
+	_externalKeyFrameOffsets.clear();
+	_externalKeyFrameSizes.clear();
+	_externalKeyFrameToRender = -1;
+	_safeSeekDirtyRect = Common::Rect();
 
 	_stream = 0;
 
@@ -2298,9 +2316,21 @@ void VMDDecoder::processFrame() {
 
 	_dirtyRects.clear();
 
+	// Area changed by the frames silently decoded while safe seeking
+	if (!_safeSeekDirtyRect.isEmpty()) {
+		_dirtyRects.push_back(_safeSeekDirtyRect);
+		_safeSeekDirtyRect = Common::Rect();
+	}
+
 	_subtitle     = -1;
 
 	bool startSound = false;
+
+	bool externalKeyFrameUsed = false;
+	if (_externalKeyFrameToRender == _curFrame) {
+		externalKeyFrameUsed = renderExternalKeyFrame(_externalKeyFrameToRender);
+		_externalKeyFrameToRender = -1;
+	}
 
 	_stream->seek(_frames[_curFrame].offset, SEEK_SET);
 
@@ -2360,6 +2390,11 @@ void VMDDecoder::processFrame() {
 			warning("VMDDecoder::processFrame(): Header claims there's no video, but video found (%d)", part.size);
 			_stream->skip(part.size);
 
+		} else if ((part.type == kPartTypeVideo) && externalKeyFrameUsed) {
+
+			// This video frame was replaced by an external one from a KEY file
+			_stream->skip(part.size);
+
 		} else if ((part.type == kPartTypeVideo) && _hasVideo) {
 
 			uint32 size = part.size;
@@ -2373,7 +2408,7 @@ void VMDDecoder::processFrame() {
 					byte r = _stream->readByte() << 2;
 					byte g = _stream->readByte() << 2;
 					byte b = _stream->readByte() << 2;
-					_palette.set(index + j, r, g, b); 
+					_palette.set(index + j, r, g, b);
 				}
 
 				_stream->skip((255 - count) * 3);
@@ -2430,6 +2465,220 @@ void VMDDecoder::processFrame() {
 	if (((uint32)_curFrame == (_frameCount - 1)) && (_soundStage == 2)) {
 		_audioStream->finish();
 		_soundStage = kSoundFinished;
+	}
+}
+
+bool VMDDecoder::loadKeyFrames(Common::SeekableReadStream *stream) {
+	delete _externalKeyFrameStream;
+	_externalKeyFrameStream = nullptr;
+	_externalKeyFrameOffsets.clear();
+	_externalKeyFrameSizes.clear();
+
+	if (!stream)
+		return false;
+
+	uint16 frameCount = stream->readUint16LE();
+	stream->seek(10);
+	stream->readUint32LE(); // Max size of the frame data
+	stream->readUint32LE(); // Max size of the unpacked frame data
+	uint32 tableOffset = stream->readUint32LE();
+
+	if (frameCount != _frameCount)
+		warning("VMDDecoder::loadKeyFrames(): Frame count mismatch (%d, video has %d)", frameCount, _frameCount);
+
+	// Tables of offsets and sizes of the key frames data (frame offset = 0 means "no key frame")
+	_externalKeyFrameOffsets.resize(frameCount);
+	_externalKeyFrameSizes.resize(frameCount);
+	stream->seek(tableOffset);
+	for (uint16 frame = 0; frame < frameCount; frame++)
+		_externalKeyFrameOffsets[frame] = stream->readUint32LE();
+	for (uint16 frame = 0; frame < frameCount; frame++)
+		_externalKeyFrameSizes[frame] = stream->readUint32LE();
+
+	if (stream->err() || stream->eos()) {
+		warning("VMDDecoder::loadKeyFrames(): Failed reading the key frames table");
+		_externalKeyFrameOffsets.clear();
+		_externalKeyFrameSizes.clear();
+		delete stream;
+		return false;
+	}
+
+	_externalKeyFrameStream = stream;
+	return true;
+}
+
+bool VMDDecoder::hasExternalKeyFrame(int32 frame) const {
+	return _externalKeyFrameStream &&
+		   frame >= 0 &&
+		   (uint32)frame < _externalKeyFrameOffsets.size() &&
+		   _externalKeyFrameOffsets[frame] != 0;
+}
+
+bool VMDDecoder::isFullFrame(int32 frame) const {
+	if (frame < 0 || (uint32)frame >= _frameCount)
+		return false;
+
+	// A video part that is neither a sparse block nor a delta
+	for (uint16 i = 0; i < _partsPerFrame; i++) {
+		const Part &part = _frames[frame].parts[i];
+		if (part.type == kPartTypeSeparator)
+			break;
+
+		if (part.type == kPartTypeVideo)
+			return !(part.field_E & 0x01) && !(part.flags & 0x40);
+	}
+
+	return false;
+}
+
+int32 VMDDecoder::findPreviousFullFrame(int32 frame) const {
+	for (int32 i = frame; i > 0; i--) {
+		if (hasExternalKeyFrame(i) || isFullFrame(i))
+			return i;
+	}
+
+	return 0;
+}
+
+bool VMDDecoder::renderExternalKeyFrame(int32 frame) {
+	if (!hasExternalKeyFrame(frame) || !_hasVideo || _externalCodec || (_blitMode != 0))
+		return false;
+
+	uint32 size = _externalKeyFrameSizes[frame];
+	if ((size == 0) || (size > _videoBufferSize)) {
+		warning("VMDDecoder::renderExternalKeyFrame(): Invalid key frame %d size (%u, max %u)", frame, size, _videoBufferSize);
+		return false;
+	}
+
+	if (!_externalKeyFrameStream->seek(_externalKeyFrameOffsets[frame]) ||
+	    (_externalKeyFrameStream->read(_videoBuffer[0], size) != size)) {
+		warning("VMDDecoder::renderExternalKeyFrame(): Failed reading key frame %d", frame);
+		return false;
+	}
+
+	_videoBufferLen[0] = size;
+
+	// The key frame covers the whole video area
+	Common::Rect rect(_x, _y, _x + _width, _y + _height);
+	if (renderFrame(rect))
+		_dirtyRects.push_back(rect);
+
+	return true;
+}
+
+bool VMDDecoder::safeSeekFromPreviousFullFrame(int32 frame, int whence) {
+	if (!evaluateSeekFrame(frame, whence))
+		return false;
+
+	int32 nextFrame = frame + 1;
+	if ((uint32)nextFrame >= _frameCount)
+		// Nothing to decode after it: plain seek
+		return seek(nextFrame, SEEK_SET, true);
+
+	int32 curNextFrame = _curFrame + 1;
+	if (nextFrame != curNextFrame) {
+		int32 startFrame = findPreviousFullFrame(nextFrame);
+
+		// If the current position lies in between, continue from there instead
+		if (startFrame < curNextFrame && curNextFrame < nextFrame)
+			startFrame = curNextFrame;
+
+		seek(startFrame, SEEK_SET, true);
+
+		if (hasExternalKeyFrame(startFrame))
+			_externalKeyFrameToRender = startFrame;
+
+		// Decode the frames up to the wanted one, without their sound.
+		bool savedSoundEnabled = _soundEnabled;
+		_soundEnabled = false;
+
+		Common::Rect seekRect;
+		while (_curFrame + 1 < nextFrame) {
+			createSurface();
+			processFrame();
+
+			for (const Common::Rect &rect : _dirtyRects) {
+				if (seekRect.isEmpty())
+					seekRect = rect;
+				else
+					seekRect.extend(rect);
+			}
+		}
+
+		_soundEnabled = savedSoundEnabled;
+		_safeSeekDirtyRect = seekRect;
+	}
+
+	_startTime = g_system->getMillis() - ((nextFrame + 1) * getStaticTimeToNextFrame());
+	restartSoundAt(nextFrame);
+	return true;
+}
+
+VMDDecoder::Part *VMDDecoder::findPartOfFrame(int32 frame, PartType type, uint32 &offset) {
+	if ((uint32)frame >= _frameCount)
+		return nullptr;
+
+	offset = _frames[frame].offset;
+	for (uint16 i = 0; i < _partsPerFrame; i++) {
+		Part &part = _frames[frame].parts[i];
+		if (part.type == type) {
+			return &part;
+		}
+
+		offset += part.size;
+	}
+
+	return nullptr;
+}
+
+void VMDDecoder::restartSoundAt(int32 nextFrame) {
+	if (!_hasSound || _soundStereo == 1 || _mixer->getOutputRate() == 0)
+		return;
+
+	if (_audioStream) {
+		if (_soundStage == kSoundPlaying || _soundStage == kSoundFinished) {
+			_audioStream->finish();
+			_mixer->stopHandle(_audioHandle);
+		}
+
+		delete _audioStream;
+		_audioStream = nullptr;
+	}
+
+	createAudioStream();
+	_soundEnabled = true;
+	_soundStage   = kSoundLoaded;
+
+	if (nextFrame == 0)
+		return; // Nothing more to do for frame 0, which contains the initial sound slices.
+
+	// Otherwise, we need to look for sound slices in the previous frames, as the sound
+	// is stored ahead of the video by _soundSlicesCount - 2 slices.
+	int32 frame = nextFrame - (_soundSlicesCount - 2);
+	if (frame <= 0) {
+		// Some slices must be taken from the initial slices of frame 0.
+		uint32 offset = 0;
+		Part *soundPart = findPartOfFrame(0, kPartTypeAudio, offset);
+		if (soundPart && soundPart->flags == 2 && _soundSlicesCount <= 32) {
+			_stream->seek(offset);
+			uint32 mask = _stream->readUint32LE();
+			filledSoundSlices(soundPart->size - /* mask size */ 4, mask, nextFrame);
+		} else {
+			for (int32 i = nextFrame; i < _soundSlicesCount - 1; i++)
+				emptySoundSlice(_soundDataSize * _soundBytesPerSample);
+		}
+
+		frame = 1;
+	}
+
+	for (; frame < nextFrame; ++frame) {
+		uint32 offset = 0;
+		Part *soundPart = findPartOfFrame(frame, kPartTypeAudio, offset);
+		if (soundPart && soundPart->flags == 1) {
+			_stream->seek(offset);
+			filledSoundSlice(soundPart->size);
+		} else
+			emptySoundSlice(_soundDataSize * _soundBytesPerSample);
 	}
 }
 
@@ -2706,7 +2955,10 @@ void VMDDecoder::filledSoundSlice(uint32 size) {
 		_audioStream->queueAudioStream(sliceStream);
 }
 
-void VMDDecoder::filledSoundSlices(uint32 size, uint32 mask) {
+void VMDDecoder::filledSoundSlices(uint32 size, uint32 mask, uint8 firstSlice) {
+	// The slices past the 32nd are a single block, which cannot be started in its middle
+	assert((firstSlice == 0) || (_soundSlicesCount <= 32));
+
 	bool fillInfo[32];
 
 	uint8 max;
@@ -2728,7 +2980,10 @@ void VMDDecoder::filledSoundSlices(uint32 size, uint32 mask) {
 		extraSize = 0;
 
 	for (uint8 i = 0; i < max; i++)
-		if (fillInfo[i])
+		if (i < firstSlice) {
+			if (fillInfo[i])
+				_stream->skip(_soundDataSize + extraSize);
+		} else if (fillInfo[i])
 			filledSoundSlice(_soundDataSize + extraSize);
 		else
 			emptySoundSlice(_soundDataSize * _soundBytesPerSample);
@@ -3032,5 +3287,3 @@ Audio::AudioStream *AdvancedVMDDecoder::VMDAudioTrack::getAudioStream() const {
 }
 
 } // End of namespace Video
-
-#endif // VIDEO_COKTELDECODER_H

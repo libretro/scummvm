@@ -180,7 +180,7 @@ NGIEngine::~NGIEngine() {
 }
 
 void NGIEngine::restartGame() {
-	_floaters->stopAll();
+	_floaters->deleteAllFlies();
 
 	clearGlobalMessageQueueList();
 	clearMessages();
@@ -200,18 +200,18 @@ void NGIEngine::restartGame() {
 
 	_gameLoader->restoreDefPicAniInfos();
 
-	getGameLoaderInventory()->clear();
+	getGameLoaderInventory()->removeAllItems();
 	getGameLoaderInventory()->addItem(ANI_INV_MAP, 1);
-	getGameLoaderInventory()->rebuildItemRects();
+	getGameLoaderInventory()->recalcItemPos();
 
 	initMap();
 
 	if (_flgPlayIntro) {
 		_gameLoader->loadScene(SC_INTRO1);
-		_gameLoader->gotoScene(SC_INTRO1, TrubaUp);
+		_gameLoader->setScene(SC_INTRO1, TrubaUp);
 	} else {
 		_gameLoader->loadScene(SC_1);
-		_gameLoader->gotoScene(SC_1, TrubaLeft);
+		_gameLoader->setScene(SC_1, TrubaLeft);
 	}
 }
 
@@ -240,6 +240,12 @@ Common::String NGIEngine::getSaveStateName(int slot) const {
 }
 
 Common::Error NGIEngine::run() {
+	_globalMessageQueueList.reset(new GlobalMessageQueueList);
+	_aniHandler.reset(new AniHandler);
+
+	if (getPlatform() == Common::kPlatformAndroid)
+		return runAndroid();
+
 	// Initialize backend
 	initGraphics(800, 600, nullptr);
 
@@ -249,16 +255,14 @@ Common::Error NGIEngine::run() {
 
 	_backgroundSurface.create(800, 600, format);
 
-	_globalMessageQueueList.reset(new GlobalMessageQueueList);
-	_behaviorManager.reset(new BehaviorManager);
+	_behaviorManager.reset(new BehaviorController);
 
 	_sceneRect.left = 0;
 	_sceneRect.top = 0;
 	_sceneRect.right = 799;
 	_sceneRect.bottom = 599;
 
-	_floaters.reset(new Floaters);
-	_aniHandler.reset(new AniHandler);
+	_floaters.reset(new FlyPack);
 	_globalPalette = &_defaultPalette;
 
 	_isSaveAllowed = false;
@@ -341,12 +345,12 @@ Common::Error NGIEngine::run() {
 void NGIEngine::updateEvents() {
 	Common::Event event;
 	Common::EventManager *eventMan = _system->getEventManager();
-	ExCommand *ex;
+	Command *ex;
 
 	while (eventMan->pollEvent(event)) {
 		switch (event.type) {
 		case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
-			ex = new ExCommand(0, 17, 36, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(0, 17, 36, 0, 0, 0, 1, 0, 0, 0);
 			ex->_param = event.customType;
 			ex->_excFlags |= 3;
 			ex->handle();
@@ -364,12 +368,12 @@ void NGIEngine::updateEvents() {
 							deleteModalObject();
 						}
 					} else {
-						_gameLoader->updateSystems(42);
+						_gameLoader->updateContent(42);
 					}
 					return;
 				}
 
-				ex = new ExCommand(0, 17, 36, 0, 0, 0, 1, 0, 0, 0);
+				ex = new Command(0, 17, 36, 0, 0, 0, 1, 0, 0, 0);
 				ex->_param = 32;
 				ex->_excFlags |= 3;
 				ex->handle();
@@ -381,7 +385,7 @@ void NGIEngine::updateEvents() {
 					return;
 				}
 
-				ex = new ExCommand(0, 17, 36, 0, 0, 0, 1, 0, 0, 0);
+				ex = new Command(0, 17, 36, 0, 0, 0, 1, 0, 0, 0);
 				ex->_param = event.kbd.keycode;
 				ex->_excFlags |= 3;
 				ex->handle();
@@ -390,7 +394,7 @@ void NGIEngine::updateEvents() {
 				return;
 				break;
 			default:
-				ex = new ExCommand(0, 17, 36, 0, 0, 0, 1, 0, 0, 0);
+				ex = new Command(0, 17, 36, 0, 0, 0, 1, 0, 0, 0);
 				ex->_param = event.kbd.keycode;
 				ex->_excFlags |= 3;
 				ex->handle();
@@ -399,7 +403,7 @@ void NGIEngine::updateEvents() {
 			break;
 		case Common::EVENT_KEYUP:
 			if (!_inputArFlag) {
-				ex = new ExCommand(0, 17, 37, 0, 0, 0, 1, 0, 0, 0);
+				ex = new Command(0, 17, 37, 0, 0, 0, 1, 0, 0, 0);
 				ex->_excFlags |= 3;
 				ex->handle();
 			}
@@ -407,7 +411,7 @@ void NGIEngine::updateEvents() {
 			break;
 		case Common::EVENT_MOUSEMOVE:
 			if (_recordEvents) {
-				ex = new ExCommand(0, 17, 31, event.mouse.x, event.mouse.y, 0, 1, 0, 0, 0);
+				ex = new Command(0, 17, 31, event.mouse.x, event.mouse.y, 0, 1, 0, 0, 0);
 				ex->_excFlags |= 3;
 				ex->handle();
 			}
@@ -418,7 +422,7 @@ void NGIEngine::updateEvents() {
 			return;
 		case Common::EVENT_RBUTTONDOWN:
 			if (!_inputArFlag && (_updateTicks - _lastInputTicks) >= 2) {
-				ex = new ExCommand(0, 17, 107, event.mouse.x, event.mouse.y, 0, 1, 0, 0, 0);
+				ex = new Command(0, 17, 107, event.mouse.x, event.mouse.y, 0, 1, 0, 0, 0);
 				ex->_excFlags |= 3;
 				_lastInputTicks = _updateTicks;
 				ex->handle();
@@ -427,7 +431,7 @@ void NGIEngine::updateEvents() {
 			break;
 		case Common::EVENT_LBUTTONDOWN:
 			if (!_inputArFlag && (_updateTicks - _lastInputTicks) >= 2) {
-				ex = new ExCommand(0, 17, 29, event.mouse.x, event.mouse.y, 0, 1, 0, 0, 0);
+				ex = new Command(0, 17, 29, event.mouse.x, event.mouse.y, 0, 1, 0, 0, 0);
 
 				ex->_sceneClickX = _sceneRect.left + ex->_x;
 				ex->_sceneClickY = _sceneRect.top + ex->_y;
@@ -440,7 +444,7 @@ void NGIEngine::updateEvents() {
 			break;
 		case Common::EVENT_LBUTTONUP:
 			if (!_inputArFlag && (_updateTicks - _lastButtonUpTicks) >= 2) {
-				ex = new ExCommand(0, 17, 30, 0, 0, 0, 1, 0, 0, 0);
+				ex = new Command(0, 17, 30, 0, 0, 0, 1, 0, 0, 0);
 				ex->_excFlags |= 3;
 				_lastButtonUpTicks = _updateTicks;
 				ex->handle();
@@ -460,7 +464,7 @@ void NGIEngine::updateEvents() {
 
 void NGIEngine::freeGameLoader() {
 	setCursor(0);
-	_floaters->stopAll();
+	_floaters->deleteAllFlies();
 	_gameLoader.reset();
 	_currentScene = nullptr;
 	_scene2 = nullptr;
@@ -500,7 +504,7 @@ void NGIEngine::updateScreen() {
 	//if (inputArFlag)
 	//	updateGame_inputArFlag();
 
-	if (_modalObject || (_flgGameIsRunning && (_gameLoader->updateSystems(42), _modalObject != nullptr))) {
+	if (_modalObject || (_flgGameIsRunning && (_gameLoader->updateContent(42), _modalObject != nullptr))) {
 		if (_flgGameIsRunning) {
 			if (_modalObject->init(42)) {
 				_modalObject->update();
@@ -509,10 +513,10 @@ void NGIEngine::updateScreen() {
 			}
 		}
 	} else if (_currentScene) {
-		_currentScene->draw();
+		_currentScene->render();
 
 		if (_inventoryScene)
-			_inventory->draw();
+			_inventory->render();
 
 		if (_updateScreenCallback)
 			_updateScreenCallback();
@@ -524,12 +528,12 @@ void NGIEngine::updateScreen() {
 	} else {
 		//vrtRectangle(*(_DWORD *)g_vrtHandle, 0, 0, 0, 800, 600);
 	}
-	_inputController->drawCursor(_mouseScreenPos.x, _mouseScreenPos.y);
+	_inputController->render(_mouseScreenPos.x, _mouseScreenPos.y);
 
 	++_updateTicks;
 }
 
-int NGIEngine::getObjectEnumState(const Common::String &name, const char *state) {
+int NGIEngine::getStateValue(const Common::String &name, const char *state) {
 	GameVar *var = _gameLoader->_gameVar->getSubVarByName("OBJSTATES");
 
 	if (!var) {
@@ -546,7 +550,7 @@ int NGIEngine::getObjectEnumState(const Common::String &name, const char *state)
 	return 0;
 }
 
-int NGIEngine::getObjectState(const Common::String &objname) {
+int NGIEngine::getStateId(const Common::String &objname) {
 	GameVar *var = _gameLoader->_gameVar->getSubVarByName("OBJSTATES");
 
 	if (var)
@@ -555,7 +559,7 @@ int NGIEngine::getObjectState(const Common::String &objname) {
   return 0;
 }
 
-void NGIEngine::setObjectState(const Common::String &name, int state) {
+void NGIEngine::setState(const Common::String &name, int state) {
 	GameVar *var = _gameLoader->_gameVar->getSubVarByName("OBJSTATES");
 
 	if (!var) {
@@ -565,7 +569,7 @@ void NGIEngine::setObjectState(const Common::String &name, int state) {
 	var->setSubVarAsInt(name, state);
 }
 
-void NGIEngine::disableSaves(ExCommand *ex) {
+void NGIEngine::disableSaves(Command *ex) {
 	if (_isSaveAllowed) {
 		_isSaveAllowed = false;
 

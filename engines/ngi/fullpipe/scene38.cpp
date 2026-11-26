@@ -36,28 +36,28 @@
 namespace NGI {
 
 void scene38_setBottleState(Scene *sc) {
-	ExCommand *ex = sc->getMessageQueueById(QU_SC38_SHOWBOTTLE_ONTABLE)->getExCommandByIndex(0);
+	Command *ex = sc->findMessageQueue(QU_SC38_SHOWBOTTLE_ONTABLE)->getCommandByIndex(0);
 
-	if (g_vars->scene38_bottle->_ox == ex->_x && g_vars->scene38_bottle->_oy == ex->_y) {
+	if (g_vars->scene38_bottle->_x == ex->_x && g_vars->scene38_bottle->_y == ex->_y) {
 		if (g_nmi->lift_checkButton(sO_Level5) ) {
-			ex = sc->getMessageQueueById(QU_SC38_SHOWBOTTLE)->getExCommandByIndex(0);
+			ex = sc->findMessageQueue(QU_SC38_SHOWBOTTLE)->getCommandByIndex(0);
 
-			g_vars->scene38_bottle->setOXY(ex->_x, ex->_y);
-			g_vars->scene38_bottle->_priority = ex->_z;
+			g_vars->scene38_bottle->setPos(ex->_x, ex->_y);
+			g_vars->scene38_bottle->_z = ex->_z;
 
-			g_nmi->setObjectState(sO_Bottle_38, g_nmi->getObjectEnumState(sO_Bottle_38, sO_Blocked));
+			g_nmi->setState(sO_Bottle_38, g_nmi->getStateValue(sO_Bottle_38, sO_Blocked));
 		}
 	}
 }
 
 void scene38_initScene(Scene *sc) {
-	g_vars->scene38_boss = sc->getStaticANIObject1ById(ANI_GLAVAR, -1);
-	g_vars->scene38_tally = sc->getStaticANIObject1ById(ANI_DYLDA, -1);
-	g_vars->scene38_shorty = sc->getStaticANIObject1ById(ANI_MALYSH, -1);
-	g_vars->scene38_domino0 = sc->getStaticANIObject1ById(ANI_DOMINO38, 0);
-	g_vars->scene38_dominos = sc->getStaticANIObject1ById(ANI_DOMINOS, 0);
-	g_vars->scene38_domino1 = sc->getStaticANIObject1ById(ANI_DOMINO38, 1);
-	g_vars->scene38_bottle = sc->getStaticANIObject1ById(ANI_BOTTLE38, 0);
+	g_vars->scene38_boss = sc->findAniObjectById(ANI_GLAVAR, -1);
+	g_vars->scene38_tally = sc->findAniObjectById(ANI_DYLDA, -1);
+	g_vars->scene38_shorty = sc->findAniObjectById(ANI_MALYSH, -1);
+	g_vars->scene38_domino0 = sc->findAniObjectById(ANI_DOMINO38, 0);
+	g_vars->scene38_dominos = sc->findAniObjectById(ANI_DOMINOS, 0);
+	g_vars->scene38_domino1 = sc->findAniObjectById(ANI_DOMINO38, 1);
+	g_vars->scene38_bottle = sc->findAniObjectById(ANI_BOTTLE38, 0);
 	g_vars->scene38_bossCounter = 0;
 	g_vars->scene38_lastBossAnim = 0;
 	g_vars->scene38_bossAnimCounter = 0;
@@ -70,10 +70,10 @@ void scene38_initScene(Scene *sc) {
 
 	scene38_setBottleState(sc);
 
-	if (g_nmi->getObjectState(sO_Boss) == g_nmi->getObjectEnumState(sO_Boss, sO_IsSleeping)) {
+	if (g_nmi->getStateId(sO_Boss) == g_nmi->getStateValue(sO_Boss, sO_IsSleeping)) {
 		g_vars->scene38_shorty->_flags &= 0xFFFB;
 
-		g_vars->scene38_tally->stopAnim_maybe();
+		g_vars->scene38_tally->stopMovement();
 		g_vars->scene38_tally->_flags &= 0xFFFB;
 
 		g_vars->scene38_domino0->_flags &= 0xFFFB;
@@ -86,22 +86,22 @@ void scene38_initScene(Scene *sc) {
 }
 
 void sceneHandler38_tryTakeBottle() {
-	g_vars->scene38_boss->changeStatics2(ST_GLV_NOHAMMER);
-	g_vars->scene38_boss->startAnim(MV_GLV_LOOKMAN, 0, -1);
+	g_vars->scene38_boss->setStatic(ST_GLV_NOHAMMER);
+	g_vars->scene38_boss->startMovement(MV_GLV_LOOKMAN, 0, -1);
 
 	g_vars->scene38_bossCounter = 0;
 }
 
-void sceneHandler38_postHammerKick() {
-	g_vars->scene38_domino1->setOXY(g_vars->scene38_domino1->_ox, g_vars->scene38_domino1->_oy + 2);
+void sceneHandler38_onPostHmrKick() {
+	g_vars->scene38_domino1->setPos(g_vars->scene38_domino1->_x, g_vars->scene38_domino1->_y + 2);
 }
 
-void sceneHandler38_propose() {
+void sceneHandler38_onPropose() {
 	if (!g_vars->scene38_tally->_movement) {
 		if (g_vars->scene38_tally->_flags & 4) {
 			if (!(g_vars->scene38_tally->_flags & 2) && g_vars->scene38_tallyCounter > 0
 				&& g_nmi->_rnd.getRandomNumber(32767) < 32767) {
-				chainQueue(QU_DLD_DENY, 0);
+				runQueue(QU_DLD_DENY, 0);
 				g_vars->scene38_tallyCounter = 0;
 			}
 		}
@@ -113,11 +113,11 @@ void sceneHandler38_point() {
 		&& g_vars->scene38_bossCounter > 0
 		&& g_nmi->_rnd.getRandomNumber(32767) < 32767) {
 		if (g_vars->scene38_boss->_statics->_staticsId == ST_GLV_HAMMER) {
-			chainQueue(QU_GLV_TOSMALL, 0);
+			runQueue(QU_GLV_TOSMALL, 0);
 			g_vars->scene38_bossCounter = 0;
 		} else {
 			if (g_vars->scene38_boss->_statics->_staticsId == ST_GLV_NOHAMMER)
-				chainQueue(QU_GLV_TOSMALL_NOHMR, 0);
+				runQueue(QU_GLV_TOSMALL_NOHMR, 0);
 
 			g_vars->scene38_bossCounter = 0;
 		}
@@ -130,18 +130,18 @@ void sceneHandler38_hammerKick() {
 			if (!(g_vars->scene38_shorty->_flags & 2) && g_vars->scene38_shortyCounter > 1
 				&& g_vars->scene38_shorty->_statics->_staticsId == ST_MLS_LEFT2
 				&& g_nmi->_rnd.getRandomNumber(32767) < 3276) {
-				chainQueue(QU_MLS_TURNR, 0);
+				runQueue(QU_MLS_TURNR, 0);
 				g_vars->scene38_shortyCounter = 0;
 			}
 		}
 	}
 
-	g_vars->scene38_domino1->setOXY(g_vars->scene38_domino1->_ox, g_vars->scene38_domino1->_oy - 2);
+	g_vars->scene38_domino1->setPos(g_vars->scene38_domino1->_x, g_vars->scene38_domino1->_y - 2);
 
 	if (g_vars->scene38_dominos->_statics->_staticsId == ST_DMS_3)
-		g_vars->scene38_dominos->startAnim(MV_DMS_THREE, 0, -1);
+		g_vars->scene38_dominos->startMovement(MV_DMS_THREE, 0, -1);
 	else if (g_vars->scene38_dominos->_statics->_staticsId == ST_DMS_4)
-		g_vars->scene38_dominos->startAnim(MV_DMS_FOUR, 0, -1);
+		g_vars->scene38_dominos->startMovement(MV_DMS_FOUR, 0, -1);
 }
 
 void sceneHandler38_drink() {
@@ -150,7 +150,7 @@ void sceneHandler38_drink() {
 			if (!(g_vars->scene38_shorty->_flags & 2) && g_vars->scene38_shortyCounter > 0
 				&& g_vars->scene38_shorty->_statics->_staticsId == ST_MLS_LEFT2
 				&& g_nmi->_rnd.getRandomNumber(32767) < 3276) {
-				chainQueue(QU_MLS_TURNR, 0);
+				runQueue(QU_MLS_TURNR, 0);
 				g_vars->scene38_shortyCounter = 0;
 			}
 		}
@@ -173,17 +173,17 @@ void sceneHandler38_animateAlcoholics() {
 			g_vars->scene38_bossCounter = 0;
 		} else if ((g_vars->scene38_domino0->_flags & 4) && g_vars->scene38_domino0->_statics->_staticsId == ST_DMN38_6) {
 			if (bossSt == ST_GLV_HAMMER) {
-				chainQueue(QU_GLV_TAKEDOMINO, 1);
+				runQueue(QU_GLV_TAKEDOMINO, 1);
 				g_vars->scene38_bossCounter = 0;
 			}
 
 			if (bossSt == ST_GLV_NOHAMMER) {
-				chainQueue(QU_GLV_TAKEDOMINO_NOHMR, 1);
+				runQueue(QU_GLV_TAKEDOMINO_NOHMR, 1);
 				g_vars->scene38_bossCounter = 0;
 			}
 		} else {
 			if ((g_vars->scene38_bottle->_flags & 4) && g_vars->scene38_bottle->_statics->_staticsId == ST_BTL38_FULL && bossSt == ST_GLV_NOHAMMER) {
-				chainQueue(QU_GLV_DRINKBOTTLE, 1);
+				runQueue(QU_GLV_DRINKBOTTLE, 1);
 				g_vars->scene38_bossCounter = 0;
 			} else {
 				int bossAnim = 0;
@@ -217,9 +217,9 @@ void sceneHandler38_animateAlcoholics() {
 				}
 
 				if (bossAnim > 0) {
-					mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(bossAnim), 0, 0);
+					mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(bossAnim), 0, 0);
 
-					mq->chain(nullptr);
+					mq->run(nullptr);
 
 					g_vars->scene38_bossCounter = 0;
 				}
@@ -265,9 +265,9 @@ void sceneHandler38_animateAlcoholics() {
 			g_vars->scene38_tallyAnimCounter = 1;
 		}
 		if (tallyAnim > 0) {
-			mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(tallyAnim), 0, 0);
+			mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(tallyAnim), 0, 0);
 
-			mq->chain(nullptr);
+			mq->run(nullptr);
 			g_vars->scene38_tallyCounter = 0;
 		}
 	}
@@ -309,16 +309,16 @@ void sceneHandler38_animateAlcoholics() {
 	}
 
 	if (shortyAnim > 0) {
-		mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(shortyAnim), 0, 0);
+		mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(shortyAnim), 0, 0);
 
-		mq->chain(nullptr);
+		mq->run(nullptr);
 
 		g_vars->scene38_shortyCounter = 0;
 	}
 }
 
-int sceneHandler38(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler38(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch (cmd->_messageNum) {
@@ -339,11 +339,11 @@ int sceneHandler38(ExCommand *cmd) {
 		break;
 
 	case MSG_SC38_POSTHMRKICK:
-		sceneHandler38_postHammerKick();
+		sceneHandler38_onPostHmrKick();
 		break;
 
 	case MSG_SC38_PROPOSE:
-		sceneHandler38_propose();
+		sceneHandler38_onPropose();
 		break;
 
 	case MSG_LIFT_CLICKBUTTON:
@@ -372,19 +372,19 @@ int sceneHandler38(ExCommand *cmd) {
 
 	case 29:
 		{
-			StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(g_nmi->_sceneRect.left + cmd->_x, g_nmi->_sceneRect.top + cmd->_y);
+			AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(g_nmi->_sceneRect.left + cmd->_x, g_nmi->_sceneRect.top + cmd->_y);
 
 			if (ani && ani->_id == ANI_LIFTBUTTON) {
 				g_nmi->lift_animateButton(ani);
 
-				cmd->_messageKind = 0;
+				cmd->_cmd = 0;
 			}
 		}
 		break;
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x < g_nmi->_sceneRect.left + 200)
 				g_nmi->_currentScene->_x = x - 300 - g_nmi->_sceneRect.left;
@@ -395,7 +395,7 @@ int sceneHandler38(ExCommand *cmd) {
 
 		sceneHandler38_animateAlcoholics();
 
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_behaviorManager->update();
 
 		g_nmi->startSceneTrack();
 

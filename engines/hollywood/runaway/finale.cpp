@@ -1,0 +1,101 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/util.h"
+#include "hollywood/runaway/scene.h"
+
+namespace Hollywood {
+
+void RunawayRoomScene::resumeFinaleOutdoorAudio(bool entering, uint16 windCue, byte windVolume) {
+	_finaleAmbientTick = _now;
+	if (!_audio.effectPlaying(2)) {
+		_audio.playMusicEffect(windCue, windVolume, 2, true);
+	}
+	if (entering || !_audio.musicPlaying() || _audio.musicLooping()) {
+		_audio.playMusic(12 + _random.getRandomNumber(4), false);
+	}
+}
+
+void RunawayRoomScene::updateFinaleOutdoorAudio(byte wildlifeVolume) {
+	updateOutdoorMusic(5);
+	if (wildlifeVolume && _now - _finaleAmbientTick >= 250) {
+		_finaleAmbientTick = _now;
+		if (!_audio.effectPlaying(0) && !_random.getRandomNumber(49)) {
+			byte cue;
+			do {
+				cue = 74 + _random.getRandomNumber(4);
+			} while (cue == _finaleLastAmbient);
+			_finaleLastAmbient = cue;
+			_audio.playEffect(cue, wildlifeVolume);
+		}
+	}
+}
+
+bool RunawayRoomScene::sayFinaleInventory(const RunawayInventory::Reply &reply) {
+	typedef RunawaySequence S;
+	if (reply.cue == 301 || reply.cue == 303 || reply.cue == 307) {
+		// The mine map, bottle and bank brochure each have an enlarged view.
+		const uint16 image = reply.cue == 301 ? 146 : reply.cue == 303 ? 147 : 158;
+		const byte variation = reply.cue == 303 && _finale.moneyFound >= 3;
+		_filmCommands = {{S::kImage, image}, {S::kSpeech, reply.cue, variation, variation, 1},
+			{S::kWaitInput}, {S::kEnd}};
+		_inventorySequence = true;
+		_sequence.start(_filmCommands.data(), _text, _now, 'H');
+		return true;
+	}
+	if (reply.cue == 200 || reply.cue == 256) {
+		return sayHopiInventory(reply);
+	}
+	if (reply.cue == 253 && _finale.scalpelNeeded) {
+		say(302, 0, true);
+		return true;
+	}
+	if (reply.cue == 306) {
+		say(306, 0, true);
+		say(306, 1, true);
+		return true;
+	}
+	if (reply.cue == 309) {
+		say(309, _finale.recordings, true);
+		return true;
+	}
+	if (reply.cue == 313 && reply.variation < 6) {
+		say(313, reply.variation, true);
+		_audio.playEffect(reply.variation == 4 ? 40 : 41);
+		say(313, reply.variation + 1, true);
+		return true;
+	}
+	return false;
+}
+
+void RunawayRoomScene::resumeFinaleJailAudio(bool entering) {
+	_audio.stopEffect(2);
+	if (entering || !_audio.musicPlaying()) {
+		_audio.playMusic(18, false);
+	}
+	_audio.setMusicVolume(75);
+}
+
+void RunawayRoomScene::updateFinaleJailAudio() {
+	_audio.updateBackgroundMusic(_now, _random, 18, 1, 75);
+}
+
+} // End of namespace Hollywood

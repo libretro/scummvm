@@ -37,6 +37,9 @@ namespace NDUI {
 static const uint32 kDefaultColor = 0xFFFFFFFF;
 static const uint32 kDefaultDisabledColor = 0xC8808080;
 
+// How wide a line of text that doesn't get wrapped can be laid out
+static const int kSingleLineWidth = 1024;
+
 // Lays out text, with its markup, in the font and color of an element
 class ElementText : public Misc::HypertextParser {
 public:
@@ -65,14 +68,29 @@ public:
 		return _fullSurface;
 	}
 
-	// The number of lines the text gets wrapped into
-	uint countLines(const Common::String &text, int width, uint fontID) {
+	// How wide the text drawn by render() is
+	int getDrawnWidth() const {
+		for (int x = _fullSurface.w - 1; x >= 0; --x) {
+			for (int y = 0; y < _fullSurface.h; ++y) {
+				byte a, r, g, b;
+				_fullSurface.format.colorToARGB(_fullSurface.getPixel(x, y), a, r, g, b);
+				if (a) {
+					return x + 1;
+				}
+			}
+		}
+
+		return 0;
+	}
+
+	// The height of the text when it gets wrapped to a width
+	int measureHeight(const Common::String &text, int width, uint fontID) {
 		_fullSurface.create(width, 1, g_nancy->_graphics->getTransparentPixelFormat());
 		addTextLine(text);
 		drawAllText(Common::Rect(width, 1), 0, fontID, fontID);
 
 		// Every text gets an empty line after it
-		return _numDrawnLines - 1;
+		return (_numDrawnLines - 1) * _lastLineStep;
 	}
 };
 
@@ -148,7 +166,45 @@ bool Element::blend(ControlState state, float seconds, float rate) {
 	return changed;
 }
 
-// The texture is stretched to fill the destination, and tinted by the current color
+bool Element::hasReached(ControlState state) const {
+	const uint32 current = ((uint32)colorChannelToByte(_current[0]) << 24) | ((uint32)colorChannelToByte(_current[1]) << 16) |
+		((uint32)colorChannelToByte(_current[2]) << 8) | colorChannelToByte(_current[3]);
+	return current == _colors[state];
+}
+
+// Samples a texture between its four nearest pixels, like a Direct3D sampler with
+// linear filtering does, at a position in pixels where pixel centers are at .5
+static void sampleBilinear(const Graphics::ManagedSurface &texture, double x, double y, byte &a, byte &r, byte &g, byte &b) {
+	x -= 0.5;
+	y -= 0.5;
+	const int x0 = (int)floor(x);
+	const int y0 = (int)floor(y);
+	const double fx = x - x0;
+	const double fy = y - y0;
+
+	double channels[4] = { 0.0, 0.0, 0.0, 0.0 };
+	for (int i = 0; i < 4; ++i) {
+		const int px = CLIP<int>(x0 + (i & 1), 0, texture.w - 1);
+		const int py = CLIP<int>(y0 + (i >> 1), 0, texture.h - 1);
+		const double weight = ((i & 1) ? fx : 1.0 - fx) * ((i >> 1) ? fy : 1.0 - fy);
+
+		byte pa, pr, pg, pb;
+		texture.format.colorToARGB(texture.getPixel(px, py), pa, pr, pg, pb);
+		channels[0] += pa * weight;
+		channels[1] += pr * weight;
+		channels[2] += pg * weight;
+		channels[3] += pb * weight;
+	}
+
+	a = (byte)CLIP<int>((int)(channels[0] + 0.5), 0, 255);
+	r = (byte)CLIP<int>((int)(channels[1] + 0.5), 0, 255);
+	g = (byte)CLIP<int>((int)(channels[2] + 0.5), 0, 255);
+	b = (byte)CLIP<int>((int)(channels[3] + 0.5), 0, 255);
+}
+
+// The texture is stretched to fill the destination, and tinted by the current color.
+// Nancy16 to Nancy21 draw it through a D3DX sprite, whose Begin sets linear
+// filtering, so a texture drawn at another size is smoothed.
 void Element::drawSprite(Graphics::ManagedSurface &surface, const Common::Rect &src, const Common::Rect &dest, const Graphics::ManagedSurface &texture) const {
 	byte tintA = colorChannelToByte(_current[0]);
 	if (tintA == 0 || src.isEmpty() || dest.isEmpty()) {
@@ -160,6 +216,29 @@ void Element::drawSprite(Graphics::ManagedSurface &surface, const Common::Rect &
 	byte tintB = colorChannelToByte(_current[3]);
 
 	Common::Rect clipped = dest.findIntersectingRect(Common::Rect(surface.w, surface.h));
+
+	const bool isFiltered = g_nancy->getGameType() <= kGameTypeNancy21 &&
+		(src.width() != dest.width() || src.height() != dest.height());
+	if (isFiltered) {
+		const double scaleX = (double)src.width() / dest.width();
+		const double scaleY = (double)src.height() / dest.height();
+		for (int y = clipped.top; y < clipped.bottom; ++y) {
+			const double srcY = src.top + (y - dest.top + 0.5) * scaleY;
+			for (int x = clipped.left; x < clipped.right; ++x) {
+				const double srcX = src.left + (x - dest.left + 0.5) * scaleX;
+
+				byte a, r, g, b;
+				sampleBilinear(texture, srcX, srcY, a, r, g, b);
+				a = a * tintA / 255;
+				if (a != 0) {
+					blendPixel(surface, x, y, a, r * tintR / 255, g * tintG / 255, b * tintB / 255);
+				}
+			}
+		}
+
+		return;
+	}
+
 	for (int y = clipped.top; y < clipped.bottom; ++y) {
 		int srcY = src.top + (y - dest.top) * src.height() / dest.height();
 		for (int x = clipped.left; x < clipped.right; ++x) {
@@ -185,7 +264,15 @@ int Element::measureTextHeight(const Common::String &text, int width) const {
 	}
 
 	ElementText layout;
-	return layout.countLines(text, width, (uint)fontID) * getFontHeight();
+	return layout.measureHeight(text, width, (uint)fontID);
+}
+
+int Element::getDrawnTextHeight(const Common::String &text, int width) const {
+	if (_wordWrap) {
+		return measureTextHeight(text, width);
+	}
+
+	return text.contains("<n>") ? measureTextHeight(text, kSingleLineWidth) : getFontHeight();
 }
 
 const Graphics::Font *Element::getSystemFont() const {
@@ -209,19 +296,38 @@ void Element::drawText(Graphics::ManagedSurface &surface, const Common::String &
 		return;
 	}
 
+	// Text kept on a single line is laid out as wide as it gets, and then aligned
+	// in the rect. Wrapped text is aligned up and down in the rect like it. Text
+	// isn't cut off by a rect that is too low for it: the goal of Lights, Camera,
+	// Curses has two lines in the height of one.
+	const int textHeight = getDrawnTextHeight(text, dest.width());
+	const bool hasSeveralLines = !_wordWrap && text.contains("<n>");
 	ElementText layout;
-	const Graphics::ManagedSurface &rendered = layout.render(text, dest.width(), dest.height(), (uint)fontID,
-		colorChannelToByte(color[1]), colorChannelToByte(color[2]), colorChannelToByte(color[3]), _horizontalAlignment, state);
+	const int renderHeight = MAX<int>(dest.height(), textHeight);
+	const Graphics::ManagedSurface &rendered = layout.render(text, _wordWrap ? dest.width() : kSingleLineWidth, renderHeight, (uint)fontID,
+		colorChannelToByte(color[1]), colorChannelToByte(color[2]), colorChannelToByte(color[3]),
+		_wordWrap || hasSeveralLines ? _horizontalAlignment : (int32)ElementText::kAlignLeft, state);
 
-	// Only text kept on a single line gets aligned vertically
+	int left = dest.left;
+	int width = rendered.w;
 	int top = dest.top;
 	if (!_wordWrap) {
-		int lineHeight = getFontHeight();
-		if (_verticalAlignment == kAlignVCenter) {
-			top += (dest.height() - lineHeight) / 2;
-		} else if (_verticalAlignment == kAlignBottom) {
-			top += dest.height() - lineHeight;
+		// Each of several lines is aligned by itself, in the whole width laid out
+		if (!hasSeveralLines) {
+			width = layout.getDrawnWidth();
 		}
+
+		if (_horizontalAlignment == ElementText::kAlignCenter) {
+			left += (dest.width() - width) / 2;
+		} else if (_horizontalAlignment == ElementText::kAlignRight) {
+			left = dest.right - width;
+		}
+	}
+
+	if (_verticalAlignment == kAlignVCenter) {
+		top += (dest.height() - textHeight) / 2;
+	} else if (_verticalAlignment == kAlignBottom) {
+		top += dest.height() - textHeight;
 	}
 
 	// The text gets blended in with the color's alpha. The shadow is the same shape
@@ -234,11 +340,10 @@ void Element::drawText(Graphics::ManagedSurface &surface, const Common::String &
 				continue;
 			}
 
-			for (int x = 0; x < rendered.w; ++x) {
-				int destX = dest.left + x + offset;
-				if (destX < 0 || destX >= surface.w) {
-					continue;
-				}
+			const int firstX = MAX<int>(0, -(left + offset));
+			const int endX = MIN<int>(width, surface.w - (left + offset));
+			for (int x = firstX; x < endX; ++x) {
+				int destX = left + x + offset;
 
 				byte a, r, g, b;
 				rendered.format.colorToARGB(rendered.getPixel(x, y), a, r, g, b);

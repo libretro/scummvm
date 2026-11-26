@@ -24,7 +24,7 @@
 #include "engines/nancy/util.h"
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/graphics.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/sound.h"
 #include "engines/nancy/input.h"
 #include "engines/nancy/cursor.h"
@@ -469,8 +469,7 @@ void TurningPuzzle::execute() {
 			} else if (_solveAnimate) {
 				_solveState = kWaitForAnimation;
 			} else {
-				_solveState = kWaitForSound;
-				_shouldSetSolveFlag = true;
+				_solveState = kWaitBeforeSound;
 			}
 			_objectCurrentlyTurning = -1;
 			_turnFrameID = 0;

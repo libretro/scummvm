@@ -23,22 +23,35 @@
 #define NGI_SCENE_H
 
 #include "common/ptr.h"
+#include "ngi/objects.h"
 #include "ngi/gfx.h"
+#include "ngi/interaction.h"
 
 namespace NGI {
 
 class MessageQueue;
+class GameProject;
+class BehaviorController;
+class MctlCompound;
 
 class Scene : public Background {
  public:
 	/** list items are owned */
-	Common::Array<StaticANIObject *> _staticANIObjectList1;
+	Common::Array<AniObject *> _aniObjects;
 
-	Common::Array<StaticANIObject *> _staticANIObjectList2;
-	Common::Array<MessageQueue *> _messageQueueList;
+	// Includes non-owning references to roaming XML actors from other scenes.
+	Common::Array<AniObject *> _renderableAnis;
+	PicAniInfoList _roamingObjects;
+	Common::Array<Entrance> _entrances;
+	int16 _heroId = 0;
+	Common::Array<MessageQueue *> _messageQueues;
+	// XML queue templates are cloned when run and can be shared between scenes.
+	Scene *_commonQueueScene = nullptr;
 	// PtrList _faObjectList; // not used
 	Common::ScopedPtr<Shadows> _shadows;
 	Common::ScopedPtr<SoundList> _soundList;
+	Common::ScopedPtr<BehaviorController> _behaviorController;
+	Common::ScopedPtr<MctlCompound> _motionController;
 	int16 _sceneId;
 	Common::String _sceneName;
 	int _field_BC;
@@ -52,31 +65,33 @@ class Scene : public Background {
 
 	void initStaticANIObjects();
 	void init();
-	void draw();
+	void render();
+	void drawAndroid(Graphics::ManagedSurface &target) const;
 	void drawContent(int minPri, int maxPri, bool drawBG);
 	void updateScrolling();
 	void updateScrolling2();
 
-	void update(int counterdiff);
+	/** Returns true if the scene may need redrawing. */
+	bool update(int counterdiff);
 
-	StaticANIObject *getAniMan();
-	StaticANIObject *getStaticANIObject1ById(int obj, int a3);
-	StaticANIObject *getStaticANIObject1ByName(const Common::String &name, int a3);
-	MessageQueue *getMessageQueueById(int messageId);
+	AniObject *getAniMan();
+	AniObject *findAniObjectById(int obj, int a3);
+	AniObject *getStaticANIObject1ByName(const Common::String &name, int a3);
+	MessageQueue *findMessageQueue(int messageId);
 	MessageQueue *getMessageQueueByName(const Common::String &name);
 
-	void deleteStaticANIObject(StaticANIObject *obj);
+	void removeAni(AniObject *obj);
 	/** takes ownership of the passed obj */
-	void addStaticANIObject(StaticANIObject *obj, bool addList2);
+	void addAni(AniObject *obj, bool addList2);
 
 	void setPictureObjectsFlag4();
-	PictureObject *getPictureObjectById(int objId, int flags);
+	PictureObject *findPictureObjectById(int objId, int flags);
 	PictureObject *getPictureObjectByName(const Common::String &name, int keyCode);
-	void deletePictureObject(PictureObject *obj);
+	void removePicture(PictureObject *obj);
 	void preloadMovements(GameVar *var);
 
-	StaticANIObject *getStaticANIObjectAtPos(int x, int y);
-	PictureObject *getPictureObjectAtPos(int x, int y);
+	AniObject *findAniObjectAtPos(int x, int y);
+	PictureObject *findPictureObjectAtPos(int x, int y);
 	int getPictureObjectIdAtPos(int x, int y);
 
 	void initObjectCursors(const char *name);
@@ -86,11 +101,11 @@ class Scene : public Background {
   private:
 #if 0
 	static bool compareObjPriority(const void *p1, const void *p2);
-	void objectList_sortByPriority(Common::Array<StaticANIObject *> &list, bool skipFirst = false);
-	void objectList_sortByPriority(Common::Array<PictureObject *> &list, bool skipFirst = false);
+	void sortRenderables(Common::Array<AniObject *> &list, bool skipFirst = false);
+	void sortRenderables(Common::Array<PictureObject *> &list, bool skipFirst = false);
 #else
 	template<typename T>
-	void objectList_sortByPriority(Common::Array<T*> &list, uint startIndex = 0);
+	void sortRenderables(Common::Array<T*> &list, uint startIndex = 0);
 #endif
 };
 
@@ -107,6 +122,7 @@ class SceneTag : public CObject {
 
 	bool load(MfcArchive &file) override;
 	void loadScene();
+	void loadSceneXML(const GameProject &project);
 };
 
 class SceneTagList : public Common::List<SceneTag>, public CObject {

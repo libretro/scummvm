@@ -51,10 +51,11 @@ bool Monsters::load() {
 
 	for (int lineNum = 0; lineNum < MONSTERS_COUNT; ++lineNum) {
 		Monster &mon = _monsters[lineNum];
+		mon._bestiaryId = lineNum + 1;
 		Common::String line = f.readLine();
 		assert(line.size() > 20 && line[0] == '"' && line[16] == '"');
 
-		mon._name = Common::String(line.c_str() + 1, line.c_str() + 15);
+		mon._name = Common::String(line.c_str() + 1, line.c_str() + 16);
 		while (mon._name.hasSuffix(" "))
 			mon._name.deleteLastChar();
 
@@ -97,6 +98,7 @@ Graphics::ManagedSurface Monsters::getMonsterImage(int imgNum) {
 	if (!decoder.loadStream(*entry, 104, 96))
 		error("Failed decoding monster image");
 
+	delete entry;
 	img.copyFrom(*decoder.getSurface());
 
 	return img;

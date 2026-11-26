@@ -19,12 +19,15 @@
  *
  */
 
+#include "common/debug.h"
+#include "common/file.h"
+
 #include "graphics/fontman.h"
 #include "graphics/fonts/ttf.h"
 
 #include "engines/nancy/font.h"
 #include "engines/nancy/nancy.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/util.h"
 #include "engines/nancy/enginedata.h"
@@ -196,14 +199,36 @@ void Font::readSystemFont(Common::SeekableReadStream &stream, bool bold) {
 	setSystemFont(name, faceName, height, weight);
 }
 
-void Font::setSystemFont(const Common::String &name, const Common::String &faceName, int32 height, int32 weight) {
+void Font::setSystemFont(const Common::String &name, const Common::String &faceName, int32 height, int32 weight, const Common::Path &fileName) {
 	_description = name;
 
-	// None of the Windows fonts the game asks for (Tahoma, Arial, Lucida Handwriting)
-	// ship with ScummVM, so they all get replaced with the same sans-serif font
 #ifdef USE_FREETYPE2
+	// A font file that comes with the game takes the place of the Windows font
+	if (!fileName.empty()) {
+		Common::File *file = new Common::File();
+		if (file->open(fileName)) {
+			_systemFont.reset(Graphics::loadTTFFont(file, DisposeAfterUse::YES, height, Graphics::kTTFSizeModeCell), DisposeAfterUse::YES);
+		} else {
+			delete file;
+		}
+
+		if (_systemFont) {
+			return;
+		}
+
+		// Nancy24 asks for Digital Display2.ttf, which doesn't come with it
+		debugC(1, kDebugEngine, "Could not load font file %s", fileName.toString().c_str());
+	}
+
+	// None of the Windows fonts the game asks for (Tahoma, Arial, Courier, Lucida
+	// Handwriting) ship with ScummVM. Courier gets a font of the same fixed width,
+	// and the rest the same sans-serif font, italic when the name says so.
 	const int32 kBoldWeight = 700;
-	const char *substitute = weight >= kBoldWeight ? "LiberationSans-Bold.ttf" : "LiberationSans-Regular.ttf";
+	const bool isBold = weight >= kBoldWeight;
+	const bool isItalic = faceName.hasSuffixIgnoreCase("Italic");
+	const char *style = isBold ? (isItalic ? "BoldItalic" : "Bold") : (isItalic ? "Italic" : "Regular");
+	const Common::String substitute = Common::String::format("Liberation%s-%s.ttf",
+		faceName.hasPrefixIgnoreCase("Courier") ? "Mono" : "Sans", style);
 	_systemFont.reset(Graphics::loadTTFFontFromArchive(substitute, height, Graphics::kTTFSizeModeCell), DisposeAfterUse::YES);
 #endif
 
@@ -574,7 +599,6 @@ Common::Rect Font::getCharacterSourceRect(char chr) const {
 			offset = _atSignOffset;
 			break;
 		default:
-			offset = -1;
 			break;
 		}
 	}

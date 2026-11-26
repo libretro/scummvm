@@ -216,6 +216,9 @@ Engine::Engine(OSystem *syst)
 }
 
 Engine::~Engine() {
+	if (_showHotspots)
+		showHotspots(false);
+	delete _hotspotRenderer;
 	_mixer->stopAll();
 
 	delete _debugger;
@@ -711,6 +714,7 @@ PauseToken Engine::pauseEngine() {
 	_pauseLevel++;
 
 	if (_pauseLevel == 1) {
+		suspendHotspots();
 		_pauseStartTime = _system->getMillis();
 		_pauseScreenChangeID = g_system->getScreenChangeID();
 		pauseEngineIntern(true);
@@ -725,6 +729,7 @@ void Engine::resumeEngine() {
 	_pauseLevel--;
 
 	if (_pauseLevel == 0) {
+		_hotspotForceRedraw = true;
 		if (_pauseScreenChangeID != g_system->getScreenChangeID()) {
 			// Inject a screen change event in the event loop for the engine
 			Common::Event ev;
@@ -744,70 +749,80 @@ void Engine::pauseEngineIntern(bool pause) {
 }
 
 void Engine::showHotspots(bool show) {
-	bool wasShowing = _showHotspots;
 	_showHotspots = show;
 
 	if (show) {
 		_hotspotForceRedraw = true;
-		if (!wasShowing)
-			_hotspotPrevCursorVisible = CursorMan.showMouse(false);
 	} else {
-		if (wasShowing)
-			CursorMan.showMouse(_hotspotPrevCursorVisible);
-		if (g_system->isOverlayVisible())
-			g_system->hideOverlay();
+		suspendHotspots();
+		if (_hotspotRenderer)
+			_hotspotRenderer->releaseResources();
+		_hotspotScratch.resize(0);
 	}
 }
 
+void Engine::suspendHotspots() {
+	if (_hotspotRenderer)
+		_hotspotRenderer->hideOverlay(*_system);
+	if (_hotspotCursorHidden) {
+		CursorMan.showMouse(_hotspotPrevCursorVisible);
+		_hotspotCursorHidden = false;
+	}
+	_hotspotForceRedraw = true;
+}
+
 void Engine::getHotspotPositions(Common::Array<Graphics::HotspotInfo> &hotspots) {
+}
+
+HotspotKeyMode Engine::effectiveHotspotKeyMode() const {
+	const int mode = ConfMan.hasKey("hotspot_key_mode") ? ConfMan.getInt("hotspot_key_mode") : -1;
+	if (mode == kHotspotKeyModeHold || mode == kHotspotKeyModeToggle)
+		return (HotspotKeyMode)mode;
+	return hotspotsKeyMode();
 }
 
 bool Engine::hotspotDirty() const {
 	return true;
 }
 
+Graphics::HotspotRenderer *Engine::createHotspotRenderer() {
+	return new Graphics::HotspotRenderer();
+}
+
 void Engine::drawHotspots() {
-	if (!_showHotspots)
+	if (!_showHotspots || isPaused() || g_gui.isActive())
 		return;
-
-	if (!hotspotDirty() && !_hotspotForceRedraw)
+	if (!_hotspotRenderer) {
+		_hotspotRenderer = createHotspotRenderer();
+		_hotspotForceRedraw = true;
+	}
+	if (_system->isOverlayVisible() && !_hotspotRenderer->ownsOverlay())
 		return;
+	if (hotspotDirty() || _hotspotForceRedraw) {
+		_hotspotScratch.resize(0);
+		getHotspotPositions(_hotspotScratch);
+		_hotspotRenderer->exchangeHotspots(_hotspotScratch);
+	}
+	if (_hotspotForceRedraw) {
+		if (!ConfMan.getBool("enable_hotspots")) {
+			showHotspots(false);
+			return;
+		}
+		_hotspotShowText = !ConfMan.hasKey("show_hotspot_text") || ConfMan.getBool("show_hotspot_text");
+		const int marker = ConfMan.hasKey("hotspot_marker") ? ConfMan.getInt("hotspot_marker") : Graphics::kMarkerDefault;
+		_hotspotMarker = marker == Graphics::kMarkerDefault ? Graphics::kMarkerDefault :
+			CLIP(marker, (int)Graphics::kMarkerCrosshair, (int)Graphics::kMarkerPoint);
+	}
+	const bool shouldHideCursor = !_hotspotRenderer->empty() && hideCursorForHotspots();
+	if (shouldHideCursor && !_hotspotCursorHidden) {
+		_hotspotPrevCursorVisible = CursorMan.showMouse(false);
+		_hotspotCursorHidden = true;
+	} else if (!shouldHideCursor && _hotspotCursorHidden) {
+		CursorMan.showMouse(_hotspotPrevCursorVisible);
+		_hotspotCursorHidden = false;
+	}
+	_hotspotRenderer->renderOverlay(*_system, (Graphics::MarkerShape)_hotspotMarker, _hotspotShowText, _hotspotForceRedraw);
 	_hotspotForceRedraw = false;
-
-	Common::Array<Graphics::HotspotInfo> hotspots;
-	getHotspotPositions(hotspots);
-
-	if (hotspots.empty())
-		return;
-
-	int16 gameWidth = g_system->getWidth();
-	int16 gameHeight = g_system->getHeight();
-	int16 overlayWidth = g_system->getOverlayWidth();
-	int16 overlayHeight = g_system->getOverlayHeight();
-	Graphics::PixelFormat overlayFormat = g_system->getOverlayFormat();
-
-	if (!g_system->isOverlayVisible())
-		g_system->showOverlay(false);
-
-	g_system->clearOverlay();
-
-	Graphics::Surface overlayBuffer;
-	overlayBuffer.create(overlayWidth, overlayHeight, overlayFormat);
-	g_system->grabOverlay(overlayBuffer);
-
-	bool showText = ConfMan.getBool("show_hotspot_text");
-	if (!ConfMan.hasKey("show_hotspot_text"))
-		showText = true;
-
-	int markerType = ConfMan.getInt("hotspot_marker");
-
-	Graphics::HotspotRenderer renderer;
-	renderer.render(&overlayBuffer, hotspots, gameWidth, gameHeight,
-		overlayWidth, overlayHeight, overlayFormat,
-		(Graphics::MarkerShape)markerType, showText);
-
-	g_system->copyRectToOverlay(overlayBuffer.getPixels(), overlayBuffer.pitch, 0, 0, overlayWidth, overlayHeight);
-	overlayBuffer.free();
 }
 
 void Engine::openMainMenuDialog() {

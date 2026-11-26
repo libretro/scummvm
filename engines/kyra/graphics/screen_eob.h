@@ -31,10 +31,10 @@
 namespace Kyra {
 
 class EoBCoreEngine;
-class SegaRenderer;
+class SegaCDRenderer;
 class SegaAnimator;
 class Screen_EoB : public Screen {
-friend class SegaRenderer;
+friend class SegaCDRenderer;
 public:
 	// The purpose of this enum is to keep better track of which page is used
 	// when and for which purpose. We use the pages for more backup operations
@@ -57,6 +57,7 @@ public:
 	~Screen_EoB() override;
 
 	bool init() override;
+	void enableHiColorMode(bool enabled) override;
 
 	void setClearScreenDim(int dim);
 	void clearCurDim();
@@ -159,14 +160,14 @@ public:
 	uint8 *sega_convertShape(const uint8 *src, int w, int h, int pal, int hOffs = 0);
 	void sega_encodeShapesFromSprites(const uint8 **dst, const uint8 *src, int numShapes, int w, int h, int pal, bool removeSprites = true);
 
-	SegaRenderer *sega_getRenderer() const { return _segaRenderer; }
+	SegaCDRenderer *sega_getRenderer() const { return _segaRenderer; }
 	SegaAnimator *sega_getAnimator() const { return _segaAnimator; }
 
 private:
 	void updateDirtyRects() override;
 	void ditherRect(const uint8 *src, uint8 *dst, int dstPitch, int srcW, int srcH, int colorKey = -1);
 
-	template<typename pixelType	, bool shapeFading>	void drawShapeSetPixel(uint8 *dst, uint8 col);
+	template<typename pixelType, bool shapeFading> void drawShapeSetPixel(uint8 *dst, uint8 col);
 	void scaleShapeProcessLine2Bit(uint8 *&shpDst, const uint8 *&shpSrc, uint32 transOffsetDst, uint32 transOffsetSrc);
 	void scaleShapeProcessLine4Bit(uint8 *&dst, const uint8 *&src);
 	bool posWithinRect(int posX, int posY, int x1, int y1, int x2, int y2);
@@ -177,6 +178,7 @@ private:
 	void generateCGADitheringTables(const uint8 *mappingData);
 
 	typedef void (Screen_EoB::*DrawShapePlotFunc)(uint8*, uint8);
+	static const DrawShapePlotFunc _drawShapePixelFuncs[4];
 	DrawShapePlotFunc _drawShapeSetPixel;
 
 	int _dsDiv, _dsRem, _dsScaleTrans;
@@ -223,7 +225,7 @@ private:
 
 	PaletteFader *_palFaders;
 	bool _specialColorReplace;
-	SegaRenderer *_segaRenderer;
+	SegaCDRenderer *_segaRenderer;
 	SegaAnimator *_segaAnimator;
 	uint16 _segaCurPalette[64];
 	uint16 *_segaCustomPalettes;

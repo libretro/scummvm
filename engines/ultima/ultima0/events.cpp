@@ -157,7 +157,7 @@ void Events::replaceView(UIElement *ui, bool replaceAllViews) {
 }
 
 void Events::replaceView(const Common::String &name, bool replaceAllViews) {
-	replaceView(findView(name));
+	replaceView(findView(name), replaceAllViews);
 }
 
 void Events::addView(UIElement *ui) {
@@ -297,7 +297,7 @@ bool UIElement::isFocused() const {
 }
 
 void UIElement::clearSurface() {
-	Graphics::ManagedSurface s = getSurface();
+	auto s = getSurface();
 	s.fillRect(Common::Rect(s.w, s.h), 0);
 }
 

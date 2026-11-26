@@ -23,7 +23,9 @@
 #include "mm/mm1/maps/maps.h"
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
+#include "mm/mm1/mm1.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -56,14 +58,21 @@ void Map42::special00() {
 }
 
 void Map42::special01() {
-	send(SoundMessage(STRING["maps.map42.message9"]));
+	send(SoundMessage(g_engine->isEnhanced() ?
+		"Etched in gold, message 9 reads:\n"
+			"Successful-that-training,-the-\n"
+			"worthy-the-visit-yet-inner-\n"
+			"reality,-order," :
+		"Etched in gold, message 9 reads:\n"
+			"Successful-that-training,-the-worthy-\n"
+			"the-visit-yet-inner-reality,-order,"));
 }
 
 void Map42::special02() {
 	Game::Encounter &enc = g_globals->_encounters;
 
 	if (_data[VAL1]) {
-		send(SoundMessage(STRING["maps.map42.defeated"]));
+		send(SoundMessage(mapText("The master of this stronghold\nhas been defeated!")));
 
 		for (uint i = 0; i < g_globals->_party.size(); ++i) {
 			g_globals->_party[i]._flags[5] |= CHARFLAG5_40;
@@ -83,7 +92,7 @@ void Map42::special02() {
 }
 
 void Map42::special03() {
-	send(SoundMessage(STRING["maps.map42.sign1"]));
+	send(SoundMessage(mapText("Enter the Maze of the Minotaur...\nIf you dare!")));
 }
 
 void Map42::special04() {
@@ -137,24 +146,38 @@ void Map42::special15() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.stairs_up"],
+		"Stairs going up! Take them (Y/N)?",
 		[]() {
-			g_maps->changeMap(0xf04, 3);
+			g_maps->changeMapFromExit(0xf04, 3);
 		}
 	));
 }
 
 void Map42::special17() {
+	g_maps->clearSpecialAndRememberReward();
 	g_globals->_treasure.setGold(7500);
 	g_globals->_treasure._container = GOLD_BOX;
 	g_events->addAction(KEYBIND_SEARCH);
 }
 
 void Map42::dogSuccess() {
+	bool alreadyCompleted = false;
 	for (uint i = 0; i < g_globals->_party.size(); ++i) {
-		Character &c = g_globals->_party[i];
-		c._flags[0] = CHARFLAG0_DOG_STATUE;
-		c._exp += 10000;
+		if (g_globals->_party[i]._flags[0] & CHARFLAG0_DOG_STATUE) {
+			alreadyCompleted = true;
+			break;
+		}
+	}
+
+	// The quest transition replaces the courier-stage byte with DOG_STATUE.
+	// Award the completion XP only on that first transition, so recovering a
+	// missed Gold Key later doesn't duplicate it
+	if (!alreadyCompleted) {
+		for (uint i = 0; i < g_globals->_party.size(); ++i) {
+			Character &c = g_globals->_party[i];
+			c._flags[0] = CHARFLAG0_DOG_STATUE;
+			c._exp += 10000;
+		}
 	}
 
 	g_globals->_treasure._items[2] = GOLD_KEY_ID;

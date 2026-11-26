@@ -29,10 +29,73 @@ namespace MM {
 namespace MM1 {
 namespace Maps {
 
+static const char *const MM1_MAP_DESCRIPTIONS[] = {
+	"Sorpigal",
+	"Portsmith",
+	"Algary",
+	"Dusk",
+	"Erliquin",
+	"Sorpigal Dungeon",
+	"Crazed Wizard Cave",
+	"Portsmith Dungeon",
+	"Erliquin Dungeon",
+	"Dusk Dungeon",
+	"Caves at the Korin Bluffs",
+	"Volcano",
+	"Cave of Square Magic",
+	"Medusa Lair",
+	"Area A-1",
+	"Area A-2",
+	"Area A-3",
+	"Area A-4",
+	"Area B-1",
+	"Area B-2",
+	"Area B-3",
+	"Area B-4",
+	"Area C-1",
+	"Area C-2",
+	"Area C-3",
+	"Area C-4",
+	"Area D-1",
+	"Area D-2",
+	"Area D-3",
+	"Area D-4",
+	"Area E-1",
+	"Area E-2",
+	"Area E-3",
+	"Area E-4",
+	"Castle Doom",
+	"Castle Blackridge North",
+	"Castle Blackridge South",
+	"Ancient Wizard Lair - L1",
+	"Ancient Wizard Lair - L2",
+	"Warrior's Stronghold - L1",
+	"Warrior's Stronghold - L2",
+	"Stronghold - L1",
+	"Stronghold - L2",
+	"Castle White Wolf",
+	"Castle Dragadune - L1",
+	"Castle Dragadune - L2",
+	"Castle Dragadune - L3",
+	"Castle Dragadune - L4",
+	nullptr, // Unidentified internal map
+	"Castle Alamar",
+	"Fabled Building of Gold - L1",
+	"Fabled Building of Gold - L2",
+	"Fabled Building of Gold - L3",
+	"Fabled Building of Gold - L4",
+	"Soul Maze",
+	"Astral Plane",
+};
+
 Map::Map(uint index, const Common::String &name, uint16 id,
 		byte defaultSection, const char *desc) :
 		_mapIndex(index), _name(name), _id(id), _defaultSection(defaultSection) {
-	_description = desc ? Common::String(desc) : _name;
+	const char *mapDescription = desc;
+	if (!mapDescription && index < ARRAYSIZE(MM1_MAP_DESCRIPTIONS))
+		mapDescription = MM1_MAP_DESCRIPTIONS[index];
+
+	_description = mapDescription ? Common::String(mapDescription) : _name;
 	_description.setChar(toupper(_description[0]), 0);
 	if (_description.hasPrefix("Area")) {
 		_description.setChar(toupper(_description[4]), 4);
@@ -105,10 +168,17 @@ void Map::reduceHP() {
 }
 
 void Map::updateGame() {
+	// Scripted same-map teleports often assign _mapPos directly and then
+	// call updateGame(), bypassing Maps::step(). Discover the landing square
+	// before repainting so the Enhanced minimap can immediately draw it and
+	// the party arrow.
+	g_maps->visitedTile();
 	g_events->send("Game", GameMessage("UPDATE"));
 }
 
 void Map::redrawGame() {
+	// Keep REDRAW-only relocation paths consistent with updateGame().
+	g_maps->visitedTile();
 	g_events->send("Game", GameMessage("REDRAW"));
 }
 
@@ -131,16 +201,24 @@ void Map::unlockDoor() {
 }
 
 void Map::visitedSpecial() {
-	if (!_visited[g_maps->_mapOffset])
-		_visited[g_maps->_mapOffset] = VISITED_SPECIAL;
+	byte &visited = _visited[g_maps->_mapOffset];
+	if (!(visited & 0x7f))
+		visited = (visited & 0x80) | VISITED_SPECIAL;
 }
 
 void Map::visitedExit() {
-	_visited[g_maps->_mapOffset] = VISITED_EXIT;
+	byte &visited = _visited[g_maps->_mapOffset];
+	visited = (visited & 0x80) | VISITED_EXIT;
+
+	// Show the exit marker before an entrance prompt can immediately move
+	// the party to another map, otherwise the source map's minimap would
+	// never be repainted
+	g_events->redrawViews();
 }
 
 void Map::visitedBusiness() {
-	_visited[g_maps->_mapOffset] = VISITED_BUSINESS;
+	byte &visited = _visited[g_maps->_mapOffset];
+	visited = (visited & 0x80) | VISITED_BUSINESS;
 }
 
 } // namespace Maps

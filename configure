@@ -173,6 +173,7 @@ _osxdockplugin=auto
 _jpeg=auto
 _png=auto
 _gif=auto
+_sjis=auto
 _theoradec=auto
 _vpx=auto
 _faad=auto
@@ -210,6 +211,7 @@ _mt32emu=yes
 _lua=yes
 _mactoolbox=yes
 _mfc=yes
+_views=yes
 _build_scalers=yes
 _build_hq_scalers=yes
 _build_edge_scalers=yes
@@ -219,6 +221,7 @@ _enable_asan=no
 _enable_tsan=no
 _enable_ubsan=no
 _bink=yes
+_coktel_decoder=auto
 _cloud=auto
 _dlc=no
 _scummvmdlc=no
@@ -314,7 +317,9 @@ _qdm2=auto
 _fmtowns_pc98_audio=auto
 _sid_audio=auto
 _svq1=auto
+_tm2a=auto
 _truemotion1=auto
+_vc1=auto
 _unp64=auto
 _vgmtrans_audio=auto
 _xan=auto
@@ -343,6 +348,7 @@ add_feature printing "Printing" "_printing"
 
 # Components are features which may be disabled if unused by the engines
 add_component cdtoons "CDTOONS" "_cdtoons" "USE_CDTOONS"
+add_component coktel_decoder "Coktel decoder" "_coktel_decoder" "USE_COKTEL_DECODER"
 add_component enet "ENet" "_enet" "USE_ENET"
 add_component fmtowns_pc98_audio "FM-TOWNS/PC98 audio" "_fmtowns_pc98_audio" "USE_FMTOWNS_PC98_AUDIO"
 add_component gif "GIF" "_gif" "USE_GIF"
@@ -363,11 +369,15 @@ add_component mpeg2 "mpeg2" "_mpeg2" "USE_MPEG2"
 add_component msmpeg4 "Microsoft MPEG-4 v3" "_msmpeg4" "USE_MSMPEG4"
 add_component qdm2 "QDM2" "_qdm2" "USE_QDM2"
 add_component sid_audio "SID audio" "_sid_audio" "USE_SID_AUDIO"
+add_component sjis "SJIS" "_sjis" "USE_SJIS"
 add_component svq1 "Sorenson Video 1" "_svq1" "USE_SVQ1"
 add_component tinygl "TinyGL" "_tinygl" "USE_TINYGL"
+add_component tm2a "TrueMotion 2A" "_tm2a" "USE_TM2A"
 add_component truemotion1 "TrueMotion 1" "_truemotion1" "USE_TRUEMOTION1"
 add_component universaltracker "External Tracker Libraries" "_universaltracker" "USE_UNIVERSALTRACKER"
 add_component unp64 "UNP64" "_unp64" "USE_UNP64"
+add_component vc1 "VC-1 / WMV3" "_vc1" "USE_VC1"
+add_component views "Event-based Views" "_views" "USE_VIEWS"
 add_component vgmtrans_audio "VGMTrans Soundfont audio" "_vgmtrans_audio" "USE_VGMTRANS_AUDIO"
 add_component xan "XAN" "_xan" "USE_XAN"
 
@@ -1349,8 +1359,8 @@ for ac_option in $@; do
 	--disable-mikmod)             _libmikmod=no          ;;
 	--enable-openmpt)             _libopenmpt=yes        ;;
 	--disable-openmpt)            _libopenmpt=no         ;;
-	--enable-mpcdec)              _libmpcdec=yes        ;;
-	--disable-mpcdec)             _libmpcdec=no         ;;
+	--enable-mpcdec)              _libmpcdec=yes         ;;
+	--disable-mpcdec)             _libmpcdec=no          ;;
 	--enable-a52)                 _a52=yes               ;;
 	--disable-a52)                _a52=no                ;;
 	--disable-jpeg)               _jpeg=no               ;;
@@ -1359,6 +1369,8 @@ for ac_option in $@; do
 	--enable-png)                 _png=yes               ;;
 	--disable-gif)                _gif=no                ;;
 	--enable-gif)                 _gif=yes               ;;
+	--disable-sjis)               _sjis=no               ;;
+	--enable-sjis)                _sjis=yes              ;;
 	--disable-theoradec)          _theoradec=no          ;;
 	--enable-theoradec)           _theoradec=yes         ;;
 	--disable-vpx)                _vpx=no                ;;
@@ -3911,7 +3923,6 @@ if test -n "$_host"; then
 			#	append_var LDFLAGS "-s"
 			#fi
 			append_var DEFINES "-DSCUMM_OPTIMISED_CODE"
-			append_var DEFINES "-DDISABLE_DOSBOX_OPL"
 
 			# auto -> no
 			if test "$_optimizations" = "yes"; then
@@ -3966,13 +3977,7 @@ if test -n "$_host"; then
 			_detection_features_full=no
 
 			if test "$_backend" = sdl; then
-				if cc_check_define __mcoldfire__; then
-					_firebee_plugin_provider=yes
-				else
-					_atari_plugin_provider=yes
-				fi
-				define_in_config_if_yes "$_atari_plugin_provider" 'USE_ATARI_PLUGIN_PROVIDER'
-				define_in_config_if_yes "$_firebee_plugin_provider" 'USE_FIREBEE_PLUGIN_PROVIDER'
+				add_line_to_config_mk 'SDL_ATARI = 1'
 			fi
 
 			_port_mk="backends/platform/atari/atari.mk"
@@ -5273,7 +5278,6 @@ POST_OBJS_FLAGS := -Wl,-no-whole-archive
 	mintelf)
 		_elf_loader=yes
 		append_var DEFINES "-DM68K_TARGET"
-		append_var DEFINES "-DPLUGIN_DETECTION_NAME=\\\"detectio\\\""
 		append_var CXXFLAGS "-fuse-cxa-atexit"
 		append_var DEFINES "-DELF_LOADER_CXA_ATEXIT"
 		append_var DEFINES "-DUNCACHED_PLUGINS"

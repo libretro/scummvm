@@ -1,0 +1,271 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/config-manager.h"
+#include "common/engine_data.h"
+#include "common/system.h"
+#include "common/savefile.h"
+#include "engines/util.h"
+#include "audio/decoders/raw.h"
+#include "audio/softsynth/pcspk.h"
+#include "ultima/shared/engine/graphics_options.h"
+#include "ultima/ultima3/ultima3.h"
+#include "ultima/ultima3/console.h"
+#include "ultima/ultima3/metaengine.h"
+#include "ultima/ultima3/music.h"
+#include "ultima/ultima3/sound_effects.h"
+#include "ultima/ultima3/data/data.h"
+#include "ultima/ultima3/gfx/charset.h"
+#include "ultima/ultima3/gfx/dungeon_view.h"
+#include "ultima/ultima3/gfx/shapes.h"
+#include "ultima/ultima3/views/views.h"
+
+namespace Ultima {
+namespace Ultima3 {
+
+constexpr int SAVEGAME_VERSION = 1;
+
+Ultima3Engine *g_engine;
+
+// The renderer stored in the configuration, falling back to the default one
+// for the version of the game if it's missing or stale
+static Data::RenderMode configuredRenderMode(bool enhanced) {
+	const Data::RenderMode defaultMode = enhanced ? Data::RENDER_VGA : Data::RENDER_CGA;
+	int mode = Shared::configuredGraphicsMode(defaultMode);
+	return (mode >= 0 && mode < Data::RENDER_MODE_COUNT) ? (Data::RenderMode)mode : defaultMode;
+}
+
+Ultima3Engine::Ultima3Engine(OSystem *syst, const Ultima::UltimaGameDescription *gameDesc) :
+		Engine(syst), Shared::Events("ultima3"), _gameDescription(gameDesc) {
+	g_engine = this;
+	_pcSpeaker = new Audio::PCSpeaker();
+	loadOptions();
+	_renderMode = configuredRenderMode(isEnhanced());
+}
+
+bool Ultima3Engine::isEnhanced() const {
+	return (_gameDescription->features & GF_ENHANCED) != 0;
+}
+
+void Ultima3Engine::loadOptions() {
+	const bool enhanced = isEnhanced();
+
+	_moreMonsters = Shared::configuredOption("more_monsters", enhanced);
+	_lessHunger = Shared::configuredOption("less_hunger", enhanced);
+	_moonIcons = Shared::configuredOption("moon_icons", true);
+	_timedSounds = Shared::configuredOption("timed_sounds", enhanced);
+	Gfx::DungeonView::setPicturesEnabled(Shared::configuredOption("picture_dungeons", enhanced));
+	_music.setEnabled(Shared::configuredOption("midi_music", enhanced));
+	_music.syncVolume();
+}
+
+Ultima3Engine::~Ultima3Engine() {
+	_mixer->stopHandle(_effectHandle);
+	delete _pcSpeaker;
+}
+
+uint32 Ultima3Engine::getFeatures() const {
+	return _gameDescription->desc.flags;
+}
+
+Common::String Ultima3Engine::getGameId() const {
+	return _gameDescription->desc.gameId;
+}
+
+Common::Error Ultima3Engine::run() {
+	MetaEngine::setKeybindingMode(KBMODE_MINIMAL);
+
+	// Initialize 320x200 graphics mode
+	initGraphics(320, 200);
+
+	// Initialise engine data for the game, which has the graphics for the
+	// upgrade's renderers
+	Common::U32String errMsg;
+	if (!Common::load_engine_data("ultima.dat", "ultima3", 1, 0, errMsg)) {
+		GUIErrorMessage(errMsg);
+		return Common::kNoError;
+	}
+
+	// Set the palette and fonts of the renderer in use
+	Data::setPalette(_renderMode);
+	Gfx::CharSet::load();
+	_pcSpeakerReady = _pcSpeaker->init();
+
+	// Set the engine's debugger console
+	setDebugger(new Console());
+
+	Views::Views views;
+	addView("Title");
+	runGame();
+	(void)views;		// Suppress any warnings of unused local
+
+	return Common::kNoError;
+}
+
+void Ultima3Engine::returnToMainMenu() {
+	// Back to the start of the game, which has no music
+	auto *game = dynamic_cast<Views::Game *>(baseView()->findView(gameViewName()));
+	if (game)
+		game->cancelInteraction();
+
+	_music.silence();
+	replaceView("Title", true);
+}
+
+void Ultima3Engine::applyGameSettings() {
+	loadOptions();
+
+	// The renderer can be changed from the game options dialog
+	Data::RenderMode mode = configuredRenderMode(isEnhanced());
+	if (mode == _renderMode)
+		return;
+
+	_renderMode = mode;
+	Data::setPalette(_renderMode);
+	Gfx::CharSet::load();
+	_shapes.load();
+
+	if (focusedView())
+		focusedView()->redraw();
+}
+
+bool Ultima3Engine::canSaveGameStateCurrently(Common::U32String *) {
+	// Anything but the title sequence, which isn't a state worth keeping
+	UIElement *view = focusedView();
+
+	Views::Game *game = dynamic_cast<Views::Game *>(view);
+	if (game)
+		return dynamic_cast<Views::CombatMap *>(view) == nullptr && !game->isEndgame();
+
+	return dynamic_cast<Views::WindowView *>(view) != nullptr;
+}
+
+bool Ultima3Engine::canLoadGameStateCurrently(Common::U32String *) {
+	return true;
+}
+
+Common::Error Ultima3Engine::syncGame(Common::Serializer &s) {
+	s.syncVersion(SAVEGAME_VERSION);
+
+	_savegame.synchronize(s);
+	if (_savegame._mapLoaded) {
+		_map.synchronize(s);
+
+		// The world is kept aside while the party is in a town or castle
+		if (_savegame._location == Data::LOCATION_TOWN || _savegame._location == Data::LOCATION_CASTLE ||
+				_savegame._location == Data::LOCATION_AMBROSIA)
+			_worldMap.synchronize(s);
+
+		if (_savegame._location == Data::LOCATION_DUNGEON)
+			_dungeon.synchronize(s);
+	}
+
+	if (s.isLoading()) {
+		// Carry on in the world if there's a party able to adventure in it,
+		// otherwise return to where the party can be organized
+		_resumeGame = _savegame._mapLoaded && _savegame._partySize > 0 &&
+			_savegame.hasLivingPartyMember();
+		replaceView(_resumeGame ? gameViewName() : "LogoScreen", true);
+	}
+
+	return Common::kNoError;
+}
+
+void Ultima3Engine::queueTone(int divisor, uint32 lengthMs) {
+	if (!_pcSpeakerReady || !_soundEnabled)
+		return;
+
+	float freq = divisor > 0 ? 1193182.0f / divisor : 0.0f;
+	_pcSpeaker->playQueue(Audio::PCSpeaker::kWaveFormSquare, freq, lengthMs * 1000);
+}
+
+void Ultima3Engine::queueSilence(uint32 lengthMs) {
+	if (!_pcSpeakerReady || !_soundEnabled)
+		return;
+
+	_pcSpeaker->playQueue(Audio::PCSpeaker::kWaveFormSilence, 0.0f, lengthMs * 1000);
+}
+
+void Ultima3Engine::playErrorBeep() {
+	if (_timedSounds)
+		queueTone(0x1630, 120);
+	else
+		// ~371Hz for ~65ms, from the original's raw 48-toggle loop at 4.77MHz
+		queueTone(3216, 65);
+}
+
+void Ultima3Engine::queueEffect(const Common::Array<byte> &samples) {
+	// Don't let effects pile up behind the action
+	constexpr int MAX_QUEUED = 6;
+
+	if (samples.empty())
+		return;
+
+	if (!_mixer->isSoundHandleActive(_effectHandle)) {
+		_effectStream = Audio::makeQueuingAudioStream(SoundEffects::SAMPLE_RATE, false);
+		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_effectHandle, _effectStream);
+	}
+
+	if (_effectStream->numQueuedStreams() >= MAX_QUEUED)
+		return;
+
+	byte *data = (byte *)malloc(samples.size());
+	if (!data)
+		return;
+
+	memcpy(data, &samples[0], samples.size());
+	_effectStream->queueBuffer(data, samples.size(), DisposeAfterUse::YES, Audio::FLAG_UNSIGNED);
+}
+
+void Ultima3Engine::playSoundEffect(byte effect, byte arg1, byte arg2) {
+	switch (effect) {
+	case 0xFE:
+		playErrorBeep();
+		break;
+	case 0xFF:
+		if (_timedSounds)
+			queueTone(0x3E80, 110);
+		else
+			// ~132Hz for ~60ms, from the original's raw 16-toggle loop at 4.77MHz
+			queueTone(9040, 60);
+		break;
+	default:
+		if (_soundEnabled)
+			queueEffect(SoundEffects::render(effect, arg1, arg2, _timedSounds));
+		break;
+	}
+}
+
+bool Ultima3Engine::savegamesExist() const {
+	Common::String slotName = getSaveStateName(1);
+	Common::InSaveFile *saveFile = g_system->getSavefileManager()->openForLoading(slotName);
+	bool result = saveFile != nullptr;
+
+	delete saveFile;
+	return result;
+}
+
+Graphics::Font *Ultima3Engine::createFont() const {
+	return new Gfx::CharSet();
+}
+
+} // namespace Ultima3
+} // namespace Ultima

@@ -105,13 +105,6 @@ public:
 	 */
 	virtual void flipBuffer(bool opportunistic = false) = 0;
 
-	/**
-	 * FIXME: The implementations of these functions (for Grim and EMI, respectively)
-	 * are very similar. Needs refactoring. See issue #789.
-	 */
-	virtual void getScreenBoundingBox(const Mesh *mesh, int *x1, int *y1, int *x2, int *y2) = 0;
-	virtual void getScreenBoundingBox(const EMIModel *mesh, int *x1, int *y1, int *x2, int *y2) = 0;
-	virtual void getActorScreenBBox(const Actor *actor, Common::Point &p1, Common::Point &p2) = 0;
 	virtual void startActorDraw(const Actor *act) = 0;
 	virtual void finishActorDraw() = 0;
 	virtual void setShadow(Shadow *shadow) = 0;
@@ -140,8 +133,7 @@ public:
 
 	virtual void enableLights() = 0;
 	virtual void disableLights() = 0;
-	virtual void setupLight(Light *light, int lightId) = 0;
-	virtual void turnOffLight(int lightId) = 0;
+	virtual void setupLights(Common::List<Light *> &lightsList);
 
 	virtual void createTexture(Texture *texture, const uint8 *data, const CMap *cmap, bool clamp) = 0;
 	virtual void selectTexture(const Texture *texture) = 0;
@@ -268,12 +260,18 @@ public:
 
 	static Math::Matrix4 makeLookMatrix(const Math::Vector3d& pos, const Math::Vector3d& interest, const Math::Vector3d& up);
 	static Math::Matrix4 makeProjMatrix(float fov, float nclip, float fclip);
+
+	static uint8 dimScreenRGB(uint8 r, uint8 g, uint8 b);
+
 	Texture *getSpecialtyTexturePtr(uint id) { if (id >= _numSpecialtyTextures) return nullptr; return &_specialtyTextures[id]; };
 	Texture *getSpecialtyTexturePtr(Common::String name);
 
 	virtual void setBlendMode(bool additive) = 0;
 protected:
 	Bitmap *createScreenshotBitmap(Graphics::Surface *src, int w, int h, bool flipOrientation);
+	virtual void setupLight(Light *light, int lightId) = 0;
+	virtual void turnOffLight(int lightId) = 0;
+
 	static const unsigned int _numSpecialtyTextures = 22;
 	Texture _specialtyTextures[_numSpecialtyTextures];
 	static const int _gameHeight = 480;
@@ -287,6 +285,7 @@ protected:
 	unsigned char _shadowColorR;
 	unsigned char _shadowColorG;
 	unsigned char _shadowColorB;
+	int _maxLights = 8;
 	bool _renderBitmaps;
 	bool _renderZBitmaps;
 	bool _shadowModeActive;

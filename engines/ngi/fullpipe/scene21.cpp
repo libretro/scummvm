@@ -38,15 +38,15 @@ namespace NGI {
 void scene21_initScene(Scene *sc) {
 	Scene *oldsc = g_nmi->_currentScene;
 
-	g_vars->scene21_giraffeBottom = sc->getStaticANIObject1ById(ANI_GIRAFFE_BOTTOM, -1);
+	g_vars->scene21_giraffeBottom = sc->findAniObjectById(ANI_GIRAFFE_BOTTOM, -1);
 	g_nmi->_currentScene = sc;
 
-	if (g_nmi->getObjectState(sO_LowerPipe_21) == g_nmi->getObjectEnumState(sO_LowerPipe_21, sO_IsOpened)) {
-		g_vars->scene21_giraffeBottom->changeStatics2(ST_GRFB_HANG);
+	if (g_nmi->getStateId(sO_LowerPipe_21) == g_nmi->getStateValue(sO_LowerPipe_21, sO_IsOpened)) {
+		g_vars->scene21_giraffeBottom->setStatic(ST_GRFB_HANG);
 		g_vars->scene21_pipeIsOpen = true;
 		g_vars->scene21_wigglePos = 0.0;
-		g_vars->scene21_giraffeBottomX = g_vars->scene21_giraffeBottom->_ox;
-		g_vars->scene21_giraffeBottomY = g_vars->scene21_giraffeBottom->_oy;
+		g_vars->scene21_giraffeBottomX = g_vars->scene21_giraffeBottom->_x;
+		g_vars->scene21_giraffeBottomY = g_vars->scene21_giraffeBottom->_y;
 		g_vars->scene21_wiggleTrigger = false;
 	} else {
 		g_vars->scene21_pipeIsOpen = false;
@@ -66,8 +66,8 @@ int scene21_updateCursor() {
 }
 
 void sceneHandler21_doWiggle() {
-	g_vars->scene21_giraffeBottom->setOXY((int)(cos(g_vars->scene21_wigglePos) * 4.0) + g_vars->scene21_giraffeBottom->_ox,
-										  g_vars->scene21_giraffeBottom->_oy);
+	g_vars->scene21_giraffeBottom->setPos((int)(cos(g_vars->scene21_wigglePos) * 4.0) + g_vars->scene21_giraffeBottom->_x,
+										  g_vars->scene21_giraffeBottom->_y);
 
 	g_vars->scene21_wigglePos += 0.19635;
 
@@ -75,35 +75,35 @@ void sceneHandler21_doWiggle() {
 		g_vars->scene21_wigglePos = 0;
 
 		if (!g_vars->scene21_giraffeBottom->_movement)
-			g_vars->scene21_giraffeBottom->setOXY(g_vars->scene21_giraffeBottomX, g_vars->scene21_giraffeBottomY);
+			g_vars->scene21_giraffeBottom->setPos(g_vars->scene21_giraffeBottomX, g_vars->scene21_giraffeBottomY);
 	}
 }
 
-int sceneHandler21(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler21(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch (cmd->_messageNum) {
 	case MSG_SC21_UPDATEASS:
-		if (g_nmi->getObjectState(sO_LowerPipe_21) == g_nmi->getObjectEnumState(sO_LowerPipe_21, sO_IsOpened)) {
-			g_vars->scene21_giraffeBottom->changeStatics2(ST_GRFB_HANG);
-			g_vars->scene21_giraffeBottom->setOXY(g_vars->scene21_giraffeBottomX, g_vars->scene21_giraffeBottomY);
-			g_vars->scene21_giraffeBottom->changeStatics2(ST_GRFB_SIT);
+		if (g_nmi->getStateId(sO_LowerPipe_21) == g_nmi->getStateValue(sO_LowerPipe_21, sO_IsOpened)) {
+			g_vars->scene21_giraffeBottom->setStatic(ST_GRFB_HANG);
+			g_vars->scene21_giraffeBottom->setPos(g_vars->scene21_giraffeBottomX, g_vars->scene21_giraffeBottomY);
+			g_vars->scene21_giraffeBottom->setStatic(ST_GRFB_SIT);
 
 			g_vars->scene21_pipeIsOpen = false;
 
-			g_nmi->setObjectState(sO_LowerPipe_21, g_nmi->getObjectEnumState(sO_LowerPipe_21, sO_IsClosed));
+			g_nmi->setState(sO_LowerPipe_21, g_nmi->getStateValue(sO_LowerPipe_21, sO_IsClosed));
 		}
 
 		break;
 
 	case 29:
 		{
-			StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
+			AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
 			if (!ani || !canInteractAny(g_nmi->_aniMan, ani, cmd->_param)) {
 				int picId = g_nmi->_currentScene->getPictureObjectIdAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
 
-				PictureObject *pic = g_nmi->_currentScene->getPictureObjectById(picId, 0);
+				PictureObject *pic = g_nmi->_currentScene->findPictureObjectById(picId, 0);
 
 				if (!pic || !canInteractAny(g_nmi->_aniMan, pic, cmd->_param) ) {
 					if ((g_nmi->_sceneRect.right - cmd->_sceneClickX < 47 && g_nmi->_sceneRect.right < g_nmi->_sceneWidth - 1)
@@ -116,7 +116,7 @@ int sceneHandler21(ExCommand *cmd) {
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x <= g_nmi->_sceneWidth - 460) {
 				if (x < g_nmi->_sceneRect.left + 200)
@@ -136,7 +136,7 @@ int sceneHandler21(ExCommand *cmd) {
 
 		g_vars->scene21_wiggleTrigger = !g_vars->scene21_wiggleTrigger;
 
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_behaviorManager->update();
 		g_nmi->startSceneTrack();
 
 		break;

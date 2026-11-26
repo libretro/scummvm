@@ -23,9 +23,10 @@
 #include "common/system.h"
 
 #include "video/bink_decoder.h"
+#include "video/bink2_decoder.h"
 
 #include "engines/nancy/nancy.h"
-#include "engines/nancy/video.h"
+#include "engines/nancy/resource/video.h"
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/util.h"
 #include "engines/nancy/commontypes.h"
@@ -83,12 +84,30 @@ byte MoviePlayer::resolvePlaytype(byte videoPlaytype) {
 	return g_nancy->getGameType() >= kGameTypeNancy10 ? kVideoPlaytypeBink : kVideoPlaytypeAVF;
 }
 
+// The AVF decoder caches frames itself, so only the Bink path needs ours
+void MoviePlayer::enableFrameCache() {
+	if (_useFrameCache || !_decoder || _videoType != kVideoPlaytypeBink) {
+		return;
+	}
+
+	_useFrameCache = true;
+	_frameCache.resize(_decoder->getFrameCount());
+	_cacheFillNext = 0;
+	_cacheLoader.reset(new BinkCacheLoader(*this));
+	g_nancy->addDeferredLoader(_cacheLoader);
+}
+
 bool MoviePlayer::loadFile(const Common::Path &name, byte videoPlaytype, bool bidirectionalCache, bool screenFormat) {
 	freeFrameCache();
 	unregisterMovie();
 
 	const Common::Path avfPath = name.append(".avf");
-	const Common::Path bikPath = name.append(".bik");
+	Common::Path bikPath = name.append(".bik");
+
+	// Nancy30 names some of its Bink 2 movies .bk2
+	if (!Common::File::exists(bikPath) && Common::File::exists(name.append(".bk2"))) {
+		bikPath = name.append(".bk2");
+	}
 
 	// Use the requested container, the other one only if its file is missing.
 	const byte preferred = resolvePlaytype(videoPlaytype);
@@ -103,13 +122,27 @@ bool MoviePlayer::loadFile(const Common::Path &name, byte videoPlaytype, bool bi
 		return false;
 	}
 
+	_hasEmbeddedDest = false;
 	if (_videoType == kVideoPlaytypeBink) {
-		_decoder.reset(new Video::BinkDecoder());
+		// Nancy29 has movies in both versions of Bink. Its Bink 2 decoder is
+		// older than the one of the later games.
+		Common::File file;
+		if (file.open(bikPath) && Video::Bink2Decoder::isBink2(file))
+			_decoder.reset(new Video::Bink2Decoder(g_nancy->getGameType() == kGameTypeNancy29));
+		else
+			_decoder.reset(new Video::BinkDecoder());
+
+		if (file.isOpen() && bikPath.baseName().hasSuffixIgnoreCase(".bk2") && file.size() >= 16) {
+			file.seek(-16, SEEK_END);
+			readExclusiveRect(file, _embeddedDest);
+			_hasEmbeddedDest = !file.err() && !_embeddedDest.isEmpty();
+		}
 	} else {
 		_decoder.reset(new AVFDecoder(bidirectionalCache ? AVFDecoder::kLoadBidirectional : AVFDecoder::kLoadForward));
 	}
 
 	_currentSurface = nullptr;
+	_currentFrame = -1;
 
 	if (!_decoder->loadFile(_videoType == kVideoPlaytypeAVF ? avfPath : bikPath)) {
 		_decoder.reset();
@@ -134,13 +167,8 @@ bool MoviePlayer::loadFile(const Common::Path &name, byte videoPlaytype, bool bi
 		}
 	}
 
-	// The AVF decoder caches frames itself, so only the Bink path needs ours.
-	_useFrameCache = bidirectionalCache && _videoType == kVideoPlaytypeBink;
-	if (_useFrameCache) {
-		_frameCache.resize(_decoder->getFrameCount());
-		_cacheFillNext = 0;
-		_cacheLoader.reset(new BinkCacheLoader(*this));
-		g_nancy->addDeferredLoader(_cacheLoader);
+	if (bidirectionalCache) {
+		enableFrameCache();
 	}
 
 	_loadedName = name;
@@ -155,6 +183,7 @@ bool MoviePlayer::isVideoLoaded() const {
 
 void MoviePlayer::close() {
 	_currentSurface = nullptr;
+	_currentFrame = -1;
 	freeFrameCache();
 	unregisterMovie();
 	if (_decoder) {
@@ -192,6 +221,9 @@ bool MoviePlayer::fillNextCacheFrame() {
 		_frameCache[_cacheFillNext].copyFrom(*frame);
 	}
 	++_cacheFillNext;
+
+	// The decoder's picture no longer shows the frame goToFrame() went to
+	_currentFrame = -1;
 
 	return _cacheFillNext >= _frameCache.size();
 }
@@ -255,9 +287,17 @@ const Graphics::Surface *MoviePlayer::decodeNextFrame(int frameNr) {
 		return &_frameCache[frameNr];
 	}
 
-	// seekToFrame() re-decodes from the previous keyframe, so only seek when the
-	// frame can't be reached by decoding forward one step.
-	if (_decoder->getCurFrame() + 1 != frameNr) {
+	// seekToFrame() decodes again from the keyframe before the frame, which can
+	// be far back: the movies of the conversations have few of them. A frame a
+	// little ahead is reached by decoding the ones in between instead, so a
+	// frame rate that drops for a moment, e.g. during a fade, doesn't make every
+	// later frame slower to get to.
+	const int framesAhead = frameNr - _decoder->getCurFrame();
+	if (framesAhead > 1 && framesAhead <= kMaxFramesDecodedAhead) {
+		while (_decoder->getCurFrame() + 1 < frameNr) {
+			_decoder->decodeNextFrame();
+		}
+	} else if (framesAhead != 1) {
 		_decoder->seekToFrame(frameNr);
 	}
 
@@ -276,6 +316,7 @@ const Graphics::Surface *MoviePlayer::decodeNextFrame(int frameNr) {
 
 void MoviePlayer::storeCurrentFrame() {
 	_currentSurface = _decoder->decodeNextFrame();
+	_currentFrame = _decoder->getCurFrame();
 }
 
 void MoviePlayer::goToFrame(int frameNr) {
@@ -288,12 +329,42 @@ void MoviePlayer::goToFrame(int frameNr) {
 	}
 	_rangePlaying = false;
 	_decoder->setReverse(false);
-	_decoder->seekToFrame(frameNr);
-	storeCurrentFrame();
 
-	int frameCount = _decoder->getFrameCount();
-	uint32 durationMs = _decoder->getDuration().msecs();
-	_frameDelayMs = (frameCount > 0 && durationMs > 0) ? (durationMs / frameCount) : 66;
+	if (_videoType == kVideoPlaytypeAVF) {
+		_decoder->seekToFrame(frameNr);
+		storeCurrentFrame();
+		return;
+	}
+
+	// Nancy32's fidgets set the frame of their movies one frame after the
+	// other, and seeking decodes again from the keyframe before the frame.
+	// The frame that already shows stays, and one a little ahead is decoded
+	// forward to.
+	if (frameNr == _currentFrame && _currentSurface) {
+		return;
+	}
+
+	_currentSurface = decodeNextFrame(frameNr);
+	_currentFrame = frameNr;
+}
+
+// How long a frame shows, from the length of the movie unless another frame
+// rate was set
+double MoviePlayer::getFrameMillis() const {
+	if (_frameRate > 0.0) {
+		return 1000.0 / _frameRate;
+	}
+
+	const int frameCount = _decoder->getFrameCount();
+	const uint32 durationMs = _decoder->getDuration().msecs();
+	return (frameCount > 0 && durationMs > 0) ? (double)durationMs / frameCount : 1000.0 / 15.0;
+}
+
+void MoviePlayer::setFrameRate(double framesPerSecond) {
+	_frameRate = MAX(framesPerSecond, 0.0);
+	if (_decoder) {
+		_frameMillis = getFrameMillis();
+	}
 }
 
 void MoviePlayer::playRange(int first, int last) {
@@ -310,7 +381,10 @@ void MoviePlayer::playRange(int first, int last) {
 	_decoder->seekToFrame(first);
 	storeCurrentFrame();
 	_rangePlaying = (first != last);
-	_lastFrameTime = g_system->getMillis();
+	_frameMillis = getFrameMillis();
+	_nextFrameTime = g_system->getMillis() + _frameMillis;
+	_playedMillis = 0.0;
+	_nextPlayedFrame = _frameMillis;
 }
 
 bool MoviePlayer::update() {
@@ -318,15 +392,49 @@ bool MoviePlayer::update() {
 		return false;
 	}
 
-	// Own the frame timing (one frame per delay, never skipping), so playback
+	// Own the frame timing (one frame at a time, never skipping), so playback
 	// starts immediately and stays smooth even when the decoder's own timing
-	// would stall after a seek.
-	uint32 now = g_system->getMillis();
-	if (now - _lastFrameTime < _frameDelayMs) {
+	// would stall after a seek. Every frame is due at its own time, so frames
+	// that show a little late, as the game only draws 60 times a second, don't
+	// hold back the ones after them and leave the movie behind its sound.
+	const uint32 now = g_system->getMillis();
+	if (now < _nextFrameTime) {
 		return false;
 	}
-	_lastFrameTime = now;
 
+	_nextFrameTime += _frameMillis;
+
+	// A movie that is more than a frame late times the frames after it from now
+	if (_nextFrameTime < now) {
+		_nextFrameTime = now + _frameMillis;
+	}
+
+	return showNextFrame();
+}
+
+// Every frame is due at its own time from the start. A movie that is late
+// decodes a frame it missed without showing it, so it stays in time with its
+// sound even when the game draws fewer frames than the movie has. It doesn't
+// catch up on more than that at once: when decoding takes longer than the
+// frames last, each update would have more of them to decode than the last.
+bool MoviePlayer::advance(double elapsedMillis) {
+	if (!_rangePlaying || !_decoder) {
+		return false;
+	}
+
+	_playedMillis += elapsedMillis;
+
+	static const int kMaxFramesPerAdvance = 2;
+	int numShown = 0;
+	while (numShown < kMaxFramesPerAdvance && _playedMillis >= _nextPlayedFrame && showNextFrame()) {
+		_nextPlayedFrame += _frameMillis;
+		++numShown;
+	}
+
+	return numShown > 0;
+}
+
+bool MoviePlayer::showNextFrame() {
 	if (_decoder->endOfVideo() ||
 			(_step > 0 && _decoder->getCurFrame() >= _rangeLast) ||
 			(_step < 0 && _decoder->getCurFrame() <= _rangeLast)) {
@@ -341,6 +449,18 @@ bool MoviePlayer::update() {
 void MoviePlayer::drawFrame(Graphics::ManagedSurface &dst, const Common::Point &pos) const {
 	if (_currentSurface) {
 		dst.blitFrom(*_currentSurface, pos);
+	}
+}
+
+void MoviePlayer::drawFrame(Graphics::ManagedSurface &dst, const Common::Rect &source, const Common::Point &pos) const {
+	if (!_currentSurface) {
+		return;
+	}
+
+	Common::Rect area = source;
+	area.clip(Common::Rect(_currentSurface->w, _currentSurface->h));
+	if (!area.isEmpty()) {
+		dst.blitFrom(*_currentSurface, area, Common::Point(pos.x + area.left - source.left, pos.y + area.top - source.top));
 	}
 }
 

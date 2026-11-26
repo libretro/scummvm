@@ -24,7 +24,9 @@
 #include "engines/nancy/input.h"
 #include "engines/nancy/util.h"
 
+#include "common/algorithm.h"
 #include "common/memstream.h"
+#include "common/system.h"
 
 #include "engines/nancy/ui/ndui/panel.h"
 #include "engines/nancy/ui/ndui/control.h"
@@ -43,6 +45,7 @@ namespace NDUI {
 static const int kInvButtonFirstID = 10;
 
 Panel::Panel(Manager *manager, uint16 z, byte kind) : RenderObject(z), _manager(manager), _kind(kind) {
+	_layer = kUILayer;
 	setNativeResolution(true);
 }
 
@@ -169,10 +172,9 @@ void Panel::addBuiltInTooltip() {
 	static const double kHideAfter = 10.0;
 	static const char *const kFontName = "UIFont";
 
-	// TODO: The colors of the original aren't known; these are the usual ones
-	// of a tooltip
-	static const uint32 kBackgroundColor = 0xFFFFFFE1;
-	static const uint32 kTextColor = 0xFF000000;
+	// White text with nothing behind it
+	static const uint32 kBackgroundColor = 0x00000000;
+	static const uint32 kTextColor = 0xFFFFFFFF;
 
 	// Centered, and on a single line
 	static const int32 kAlignCenter = 2;
@@ -233,6 +235,16 @@ void Panel::addBuiltInTooltip() {
 	_tooltip->read(stream);
 }
 
+bool Panel::hasControl(const Common::String &name) const {
+	for (const Control *control : _controls) {
+		if (control->getName().equalsIgnoreCase(name)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool Panel::createObject(const Common::String &name, const Common::String &templateName) {
 	return _objectFactory && _objectFactory->createObject(name, templateName);
 }
@@ -242,7 +254,12 @@ void Panel::addItemButton(const INVD::Item &item) {
 	_kind = kObjectInvPanel;
 	_newItem = &item;
 
-	if (!createObject(item.name, "InvButton")) {
+	// The original's Inventory.<name> makes the name upper case, and the scripts
+	// get it that way: Lights, Camera, Curses compares it with string.upper()
+	Common::String name = item.name;
+	name.toUppercase();
+
+	if (!createObject(name, "InvButton")) {
 		warning("Couldn't create the UI button of item %s", item.name.c_str());
 	}
 
@@ -293,9 +310,12 @@ Control *Panel::addNewControl(int32 type, Common::SeekableReadStream &stream) {
 	case kControlCheckBox:
 		control = new CheckBox(this);
 		break;
-	case kControlInvButton:
-		control = new InvButton(this);
+	case kControlInvButton: {
+		InvButton *button = new InvButton(this);
+		_invButtons.push_back(button);
+		control = button;
 		break;
+	}
 	case kControlVarStatic:
 		control = new VarStatic(this);
 		break;
@@ -314,7 +334,7 @@ Control *Panel::addNewControl(int32 type, Common::SeekableReadStream &stream) {
 	return control;
 }
 
-void Panel::addItemButtons(const Common::Array<byte> &buttonTemplate) {
+void Panel::addItemButtons(const Common::Array<byte> &buttonTemplate, const Common::Array<int16> &skippedItems) {
 	const INVD *items = GetEngineData(INVD);
 	if (!items) {
 		return;
@@ -323,6 +343,10 @@ void Panel::addItemButtons(const Common::Array<byte> &buttonTemplate) {
 	_kind = kObjectInvPanel;
 
 	for (const INVD::Item &item : items->items) {
+		if (Common::find(skippedItems.begin(), skippedItems.end(), item.id) != skippedItems.end()) {
+			continue;
+		}
+
 		Common::MemoryReadStream stream(buttonTemplate.data(), buttonTemplate.size());
 		stream.skip(33 + 4); // version and control type
 
@@ -462,9 +486,20 @@ bool Panel::takeAction(const Action &action) {
 		break;
 	case kActionEnable:
 		_enabled = true;
+		fireEvent(kEventEnable);
 		break;
 	case kActionDisable:
 		_enabled = false;
+		fireEvent(kEventDisable);
+		break;
+	case kActionExpand:
+		setCollapsed(false);
+		break;
+	case kActionCollapse:
+		setCollapsed(true);
+		break;
+	case kActionToggleCollapsed:
+		setCollapsed(!_isCollapsed);
 		break;
 	case kActionSetValue:
 		// A scroll panel follows its scroll bar, a whole step at a time
@@ -488,6 +523,22 @@ bool Panel::takeAction(const Action &action) {
 
 		showItem((int16)action.value, action.type == kActionShowItem);
 		break;
+	case kActionCycleFocus:
+		cycleFocus();
+		break;
+	case kActionSetLocation: {
+		// The panel goes to the top left corner of the rect; its handlers get
+		// the rect too, even when the panel was there already
+		const Common::Rect location = decodeRect(action.value);
+		if (!_isPlaced) {
+			_background->_bounds.moveTo(location.left, location.top);
+		} else if (location.left != _screenPosition.left || location.top != _screenPosition.top) {
+			moveTo(Common::Point(location.left, location.top));
+		}
+
+		fireEvent(kEventSetLocation, action.value);
+		return true;
+	}
 	default:
 		return false;
 	}
@@ -496,7 +547,7 @@ bool Panel::takeAction(const Action &action) {
 	return true;
 }
 
-// The newest item goes first
+// The newest item goes first, unless the game puts new items last
 void Panel::showItem(int16 itemID, bool show) {
 	for (uint i = 0; i < _arrangeOrder.size(); ++i) {
 		Control *control = _arrangeOrder[i];
@@ -505,8 +556,13 @@ void Panel::showItem(int16 itemID, bool show) {
 		}
 
 		if (show) {
+			const ScriptBootData *boot = (const ScriptBootData *)g_nancy->getEngineData("ScriptBootData");
 			_arrangeOrder.remove_at(i);
-			_arrangeOrder.insert_at(0, control);
+			if (boot && !boot->isInventoryAddedToFront) {
+				_arrangeOrder.push_back(control);
+			} else {
+				_arrangeOrder.insert_at(0, control);
+			}
 		}
 
 		control->setVisible(show);
@@ -520,8 +576,11 @@ void Panel::saveState(Common::Array<UIStateData::Change> &changes) const {
 		return;
 	}
 
-	for (const Control *control : _controls) {
-		addStateChanges(changes, control->getName(), control->getInitialState(), control->isVisible(), control->isEnabled());
+	// Which inventory buttons are shown follows from the items of the character
+	if (_kind != kObjectInvPanel) {
+		for (const Control *control : _controls) {
+			addStateChanges(changes, control->getName(), control->getInitialState(), control->isVisible(), control->isEnabled());
+		}
 	}
 
 	addStateChanges(changes, getName(), _initialState, isVisible(), _enabled);
@@ -540,34 +599,69 @@ void Panel::finishBlending() {
 	_isDirty = true;
 }
 
-// Every show needs a matching hide before the panel goes away
+// Before Nancy19, every show needs a matching hide before the panel goes away
 void Panel::show() {
 	++_showCount;
-	setVisible(true);
+	if (_isCollapsed) {
+		_isShownWhenExpanded = true;
+	} else {
+		setVisible(true);
+	}
+
 	arrangeControls();
 	fireEvent(kEventShow);
 }
 
-void Panel::hide() {
-	--_showCount;
-	if (_showCount == 0) {
+void Panel::setCollapsed(bool isCollapsed) {
+	if (isCollapsed == _isCollapsed) {
+		return;
+	}
+
+	_isCollapsed = isCollapsed;
+	if (isCollapsed) {
+		_isShownWhenExpanded = isVisible();
 		setVisible(false);
 		if (_capture) {
 			_capture->_isPressed = false;
 			_capture = nullptr;
 		}
-
-		fireEvent(kEventHide);
-	} else if (_showCount < 0) {
-		_showCount = 0;
+	} else {
+		setVisible(_isShownWhenExpanded);
 	}
 }
 
-void Panel::fireEvent(int32 eventType) {
-	_background->fireEvents(eventType, false, 0, getName());
+// Nancy19 and up don't count: a hide always hides, and tells the scripts. Nancy25
+// opens the phone without showing its panel, and closes it by hiding that.
+void Panel::hide() {
+	if (g_nancy->getGameType() < kGameTypeNancy19) {
+		--_showCount;
+		if (_showCount < 0) {
+			_showCount = 0;
+			return;
+		}
+
+		if (_showCount > 0) {
+			return;
+		}
+	} else {
+		_showCount = 0;
+	}
+
+	setVisible(false);
+	_isShownWhenExpanded = false;
+	if (_capture) {
+		_capture->_isPressed = false;
+		_capture = nullptr;
+	}
+
+	fireEvent(kEventHide);
+}
+
+void Panel::fireEvent(int32 eventType, double value) {
+	_background->fireEvents(eventType, false, value, getName());
 
 	for (Control *control : _controls) {
-		control->fireEvents(eventType, false, 0, control->getName());
+		control->fireEvents(eventType, false, value, control->getName());
 	}
 }
 
@@ -601,6 +695,17 @@ bool Panel::removeControl(const Common::String &name) {
 			}
 		}
 
+		for (uint j = 0; j < _invButtons.size(); ++j) {
+			if (_invButtons[j] == control) {
+				_invButtons.remove_at(j);
+				break;
+			}
+		}
+
+		if (_focus == control) {
+			_focus = nullptr;
+		}
+
 		if (_capture == control) {
 			_capture = nullptr;
 		}
@@ -618,9 +723,58 @@ EditBox *Panel::getKeyboardFocus() const {
 		return nullptr;
 	}
 
+	if (_focus && _focus->isVisible() && _focus->isEnabled()) {
+		return _focus;
+	}
+
 	for (EditBox *editBox : _editBoxes) {
 		if (editBox->isVisible() && editBox->isEnabled()) {
 			return editBox;
+		}
+	}
+
+	return nullptr;
+}
+
+// The edit box after the focused one, going around to the first
+void Panel::cycleFocus() {
+	EditBox *current = getKeyboardFocus();
+	if (!current) {
+		return;
+	}
+
+	uint start = 0;
+	while (_editBoxes[start] != current) {
+		++start;
+	}
+
+	for (uint i = 1; i <= _editBoxes.size(); ++i) {
+		EditBox *editBox = _editBoxes[(start + i) % _editBoxes.size()];
+		if (editBox->isVisible() && editBox->isEnabled()) {
+			_focus = editBox;
+			break;
+		}
+	}
+}
+
+bool Panel::isItemButton(const Common::String &name) const {
+	if (_kind != kObjectInvPanel) {
+		return false;
+	}
+
+	for (const Control *control : _controls) {
+		if (control->getName().equalsIgnoreCase(name)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+InvButton *Panel::findInvButton(const Common::String &name) const {
+	for (InvButton *button : _invButtons) {
+		if (button->getName().equalsIgnoreCase(name)) {
+			return button;
 		}
 	}
 
@@ -670,7 +824,8 @@ int Panel::getCheckedRadioIndex(const Common::String &group) const {
 }
 
 void Panel::updateGraphics() {
-	uint32 now = g_nancy->getTotalPlayTime();
+	// Not the play time: up to Nancy20, it stops while a menu pauses the game
+	uint32 now = g_system->getMillis();
 	if (_lastUpdateTime == 0) {
 		_lastUpdateTime = now;
 	}
@@ -686,14 +841,61 @@ void Panel::updateGraphics() {
 		control->fireEvents(kEventUpdate, false, 0, control->getName());
 	}
 
-	bool changed = _background->update(seconds);
+	bool isAllChanged = _background->update(seconds) || _isDirty;
+	Common::Rect changedArea;
 	for (Control *control : _controls) {
-		changed |= control->update(seconds);
+		if (!control->update(seconds)) {
+			continue;
+		}
+
+		if (!control->isDrawnInBounds()) {
+			isAllChanged = true;
+			continue;
+		}
+
+		Common::Rect bounds = control->getDrawBounds();
+		bounds.translate(0, -_scrollOffset);
+		if (changedArea.isEmpty()) {
+			changedArea = bounds;
+		} else {
+			changedArea.extend(bounds);
+		}
 	}
 
-	if (changed || _isDirty) {
+	if (isAllChanged) {
 		redraw();
+	} else if (!changedArea.isEmpty()) {
+		redrawArea(changedArea);
 	}
+}
+
+// A button fading in and out of its hover color only needs its own area drawn
+void Panel::redrawArea(const Common::Rect &area) {
+	const Common::Rect clipped = area.findIntersectingRect(Common::Rect(_drawSurface.w, _drawSurface.h));
+	if (clipped.isEmpty()) {
+		return;
+	}
+
+	Graphics::ManagedSurface target(_drawSurface, clipped);
+	target.clear(0);
+
+	const Common::Point offset(-clipped.left, -clipped.top);
+	if (_backgroundColor >> 24) {
+		Common::Rect background = _background->_bounds;
+		background.translate(offset.x, offset.y);
+		background.clip(Common::Rect(target.w, target.h));
+		if (!background.isEmpty()) {
+			target.fillRect(background, argbToColor(target.format, _backgroundColor));
+		}
+	}
+
+	_background->draw(target, offset);
+	for (Control *control : _controls) {
+		control->draw(target, Common::Point(offset.x, offset.y - _scrollOffset));
+	}
+
+	addChangedArea(clipped);
+	_needsRedraw = true;
 }
 
 void Panel::redraw() {
@@ -747,7 +949,7 @@ bool Panel::handleInput(NancyInput &input, bool canHover, bool &isOverControl) {
 	Control *hovered = (isInside && _enabled) ? getControlAt(pos) : nullptr;
 	if (isInside && !hovered) {
 		Common::Point unscrolledPos(pos.x, pos.y - _scrollOffset);
-		isInside = _background->_bounds.contains(unscrolledPos);
+		isInside = _capturesClicks && _background->_bounds.contains(unscrolledPos);
 	}
 
 	for (Control *control : _controls) {
@@ -776,6 +978,12 @@ bool Panel::handleInput(NancyInput &input, bool canHover, bool &isOverControl) {
 		isOverControl = true;
 		hovered->onMouseHover(pos);
 
+		// Resting the mouse on a control changes nothing by itself, and redrawing
+		// a large panel every frame slows down the game
+		if ((input.input & NancyInput::kLeftMouseButtonDown) || notches) {
+			_isDirty = true;
+		}
+
 		if ((input.input & NancyInput::kLeftMouseButtonDown) && hovered->onMouseDown(pos)) {
 			_capture = hovered;
 		}
@@ -783,8 +991,6 @@ bool Panel::handleInput(NancyInput &input, bool canHover, bool &isOverControl) {
 		if (notches && hovered->onWheel(notches)) {
 			notches = 0;
 		}
-
-		_isDirty = true;
 	} else if (_enabled && (input.input & NancyInput::kLeftMouseButtonUp)) {
 		// A click on the panel itself reports no value
 		_background->fireEvents(kEventClicked, false, -1, getName());
@@ -792,7 +998,7 @@ bool Panel::handleInput(NancyInput &input, bool canHover, bool &isOverControl) {
 
 	// The wheel scrolls a scroll panel by one step
 	if (notches && !_scrollBarName.empty()) {
-		_manager->takeAction(kActionSetValue, _scrollBarName, (double)(notches * _scrollStep));
+		_manager->takeAction(kActionScrollBy, _scrollBarName, (double)(notches * _scrollStep));
 	}
 
 	return true;

@@ -30,13 +30,36 @@
 #include "engines/grim/gfx_base.h"
 #include "engines/grim/sound.h"
 #include "engines/grim/emi/sound/emisound.h"
+#include "engines/grim/imuse/imuse_engine.h"
 
 #include "math/frustum.h"
 
 namespace Grim {
 
+// The original normalizes the vector with an approximation of its length, which it returns too
+static float normalize3QuickAcc(Math::Vector3d &vector) {
+	float x = ABS(vector.x());
+	float y = ABS(vector.y());
+	float z = ABS(vector.z());
+
+	float maxValue = MAX(x, MAX(y, z));
+	float minValue = MIN(x, MIN(y, z));
+	float midValue = MAX(MIN(x, y), MIN(MAX(x, y), z));
+
+	float length = (minValue * 0.25f + midValue * 0.34375f) + maxValue;
+
+	// The original could divide by zero here, let's avoid that...
+	if (length > 0.0f) {
+		float scale = 1.0f / length;
+		vector.set(vector.x() * scale, vector.y() * scale, vector.z() * scale);
+	}
+
+	return length;
+}
+
 Set::Set(const Common::String &sceneName, Common::SeekableReadStream *data) :
-		_locked(false), _name(sceneName), _enableLights(false) {
+		_locked(false), _name(sceneName), _enableLights(false), _soundMaxDist(kSoundDefaultMaxDist),
+		_soundPanFactor(kSoundDefaultPanFactor), _soundMaxRadius(kSoundDefaultRadius) {
 
 	char header[7];
 	data->read(header, 7);
@@ -54,7 +77,9 @@ Set::Set() :
 		_cmaps(nullptr), _locked(false), _enableLights(false), _numSetups(0),
 		_numLights(0), _numSectors(0), _numObjectStates(0), _minVolume(0),
 		_maxVolume(0), _numCmaps(0), _numShadows(0), _currSetup(nullptr),
-		_setups(nullptr), _lights(nullptr), _sectors(nullptr), _shadows(nullptr) {
+		_setups(nullptr), _lights(nullptr), _sectors(nullptr), _shadows(nullptr),
+		_soundMaxDist(kSoundDefaultMaxDist), _soundPanFactor(kSoundDefaultPanFactor),
+		_soundMaxRadius(kSoundDefaultRadius) {
 	setupOverworldLights();
 }
 
@@ -66,7 +91,6 @@ Set::~Set() {
 			delete _setups[i]._bkgndZBm;
 		}
 		delete[] _setups;
-		turnOffLights();
 		delete[] _lights;
 		for (int i = 0; i < _numSectors; ++i) {
 			delete _sectors[i];
@@ -253,6 +277,9 @@ void Set::saveState(SaveGame *savedState) const {
 	savedState->writeBool(_enableLights);
 	savedState->writeLESint32(_minVolume);
 	savedState->writeLESint32(_maxVolume);
+	savedState->writeFloat(_soundMaxDist);
+	savedState->writeFloat(_soundPanFactor);
+	savedState->writeFloat(_soundMaxRadius);
 
 	savedState->writeLEUint32(_states.size());
 	for (StateList::const_iterator i = _states.begin(); i != _states.end(); ++i) {
@@ -300,6 +327,12 @@ bool Set::restoreState(SaveGame *savedState) {
 	_enableLights     = savedState->readBool();
 	_minVolume        = savedState->readLESint32();
 	_maxVolume        = savedState->readLESint32();
+
+	if (savedState->saveMinorVersion() >= 30) {
+		_soundMaxDist = savedState->readFloat();
+		_soundPanFactor = savedState->readFloat();
+		_soundMaxRadius = savedState->readFloat();
+	}
 
 	_numObjectStates = savedState->readLESint32();
 	_states.clear();
@@ -364,7 +397,7 @@ void Set::Setup::load(Set *set, int id, TextSplitter &ts) {
 		// Don't even try to load if it's the "none" bitmap
 		if (strcmp(buf, "<none>.lbm") != 0) {
 			_bkgndZBm = Bitmap::create(buf);
-			Debug::debug(Debug::Bitmaps | Debug::Sets,
+			Debug::debug(Debug::Sets,
 						 "Loading scene z-buffer bitmap: %s\n", buf);
 		}
 	}
@@ -814,28 +847,10 @@ void Set::setupLights(const Math::Vector3d &pos, bool inOverworld) {
 
 	// Sort the ligths from the nearest to the farthest to the pos.
 	Sorter sorter(pos);
-	Common::List<Light *>* lightsList = inOverworld ? &_overworldLightsList : &_lightsList;
-	Common::sort(lightsList->begin(), lightsList->end(), sorter);
+	Common::List<Light *> &lightsList = inOverworld ? _overworldLightsList : _lightsList;
+	Common::sort(lightsList.begin(), lightsList.end(), sorter);
 
-	int count = 0;
-	for (Light *l : *lightsList) {
-		if (l->_enabled) {
-			g_driver->setupLight(l, count);
-			++count;
-		}
-	}
-}
-
-void Set::turnOffLights() {
-	_enableLights = false;
-	int count = 0;
-	for (int i = 0; i < _numLights; i++) {
-		Light *l = &_lights[i];
-		if (l->_enabled) {
-			g_driver->turnOffLight(count);
-			++count;
-		}
-	}
+	g_driver->setupLights(lightsList);
 }
 
 void Set::setSetup(int num) {
@@ -861,7 +876,7 @@ void Set::setSetup(int num) {
 Bitmap::Ptr Set::loadBackground(const char *fileName) {
 	Bitmap::Ptr bg = Bitmap::create(fileName);
 	if (!bg) {
-		Debug::warning(Debug::Bitmaps | Debug::Sets,
+		Debug::warning(Debug::Sets,
 					   "Unable to load scene bitmap: %s, loading dfltroom instead", fileName);
 		if (g_grim->getGameType() == GType_MONKEY4) {
 			bg = Bitmap::create("dfltroom.til");
@@ -869,10 +884,10 @@ Bitmap::Ptr Set::loadBackground(const char *fileName) {
 			bg = Bitmap::create("dfltroom.bm");
 		}
 		if (!bg) {
-			Debug::error(Debug::Bitmaps | Debug::Sets, "Unable to load dfltroom");
+			Debug::error(Debug::Sets, "Unable to load dfltroom");
 		}
 	} else {
-		Debug::debug(Debug::Bitmaps | Debug::Sets,
+		Debug::debug(Debug::Sets,
 					 "Loaded scene bitmap: %s", fileName);
 	}
 	return bg;
@@ -912,14 +927,15 @@ Sector *Set::findPointSector(const Math::Vector3d &p, Sector::SectorType type) {
 	return nullptr;
 }
 
-int Set::findSectorSortOrder(const Math::Vector3d &p, Sector::SectorType type) {
+Common::Pair<bool, int> Set::findSectorSortOrder(const Math::Vector3d &p, Sector::SectorType type) {
 	int setup = getSetup();
-	int sortOrder = 0;
 	float minDist = 0.01f;
+	int sortOrder = 0;
+	bool found = false;
 
 	for (int i = 0; i < _numSectors; i++) {
 		Sector *sector = _sectors[i];
-		if (!sector || (sector->getType() & type) == 0 || !sector->isVisible() || setup >= sector->getNumSortplanes())
+		if (!sector || (sector->getType() & type) == 0 || !sector->isVisible())
 			continue;
 
 		Math::Vector3d closestPt = sector->getClosestPoint(p);
@@ -927,9 +943,10 @@ int Set::findSectorSortOrder(const Math::Vector3d &p, Sector::SectorType type) {
 		if (thisDist < minDist) {
 			minDist = thisDist;
 			sortOrder = sector->getSortplane(setup);
+			found = true;
 		}
 	}
-	return sortOrder;
+	return Common::Pair<bool, int>(found, sortOrder);
 }
 
 void Set::findClosestSector(const Math::Vector3d &p, Sector **sect, Math::Vector3d *closestPoint) {
@@ -1017,32 +1034,117 @@ void Set::setLightPosition(int light, const Math::Vector3d &pos) {
 }
 
 void Set::setSoundPosition(const char *soundName, const Math::Vector3d &pos) {
-	setSoundPosition(soundName, pos, _minVolume, _maxVolume);
+	setSoundPosition(soundName, pos, _minVolume, _maxVolume, _soundMaxDist, _soundMaxRadius);
 }
 
-void Set::setSoundPosition(const char *soundName, const Math::Vector3d &pos, int minVol, int maxVol) {
-	int newBalance, newVolume;
-	calculateSoundPosition(pos, minVol, maxVol, newVolume, newBalance);
-	g_sound->setVolume(soundName, newVolume);
-	g_sound->setPan(soundName, newBalance);
+void Set::setSoundPosition(const char *soundName, const Math::Vector3d &pos, int minVol, int maxVol, float maxDist, float radius) {
+	SoundPosition sound;
+	sound.name = soundName;
+	sound.soundId = 0;
+	sound.pos = pos;
+	sound.minVol = minVol;
+	sound.maxVol = maxVol;
+	sound.maxDist = maxDist;
+	sound.radius = radius;
+	addSoundPosition(sound);
 }
 
-void Set::calculateSoundPosition(const Math::Vector3d &pos, int minVol, int maxVol, int &volume, int &balance) {
-	// TODO: The volume and pan needs to be updated when the setup changes.
+void Set::setSoundPosition(int soundId, const Math::Vector3d &pos, int minVol, int maxVol, float maxDist, float radius) {
+	SoundPosition sound;
+	sound.soundId = soundId;
+	sound.pos = pos;
+	sound.minVol = minVol;
+	sound.maxVol = maxVol;
+	sound.maxDist = maxDist;
+	sound.radius = radius;
+	addSoundPosition(sound);
+}
+
+const char *Set::getSoundKey(const SoundPosition &sound) const {
+	// Like in the original, a sound is identified either by its name or by its number
+	if (sound.name.empty())
+		return (const char *)(intptr)sound.soundId;
+
+	return sound.name.c_str();
+}
+
+bool Set::isSoundPlaying(const SoundPosition &sound) const {
+	return g_imuse->soundsIsSoundPlaying(getSoundKey(sound));
+}
+
+void Set::addSoundPosition(const SoundPosition &newSound) {
+	// Only the sounds which are currently playing can be positioned
+	if (!isSoundPlaying(newSound))
+		return;
+
+	removeStoppedSounds();
+
+	_soundPositions.push_front(newSound);
+	updateSoundPosition(newSound);
+}
+
+void Set::removeStoppedSounds() {
+	Common::List<SoundPosition>::iterator it = _soundPositions.begin();
+	while (it != _soundPositions.end()) {
+		if (isSoundPlaying(*it))
+			++it;
+		else
+			it = _soundPositions.erase(it);
+	}
+}
+
+void Set::relocateSounds() {
+	removeStoppedSounds();
+
+	for (Common::List<SoundPosition>::iterator it = _soundPositions.begin(); it != _soundPositions.end(); ++it)
+		updateSoundPosition(*it);
+}
+
+void Set::updateSoundPosition(const SoundPosition &sound) {
+	int newVolume, newBalance;
+	const char *soundKey = getSoundKey(sound);
+
+	if (calculateSoundPosition(sound.pos, sound.minVol, sound.maxVol, sound.maxDist, sound.radius, newVolume, newBalance))
+		g_sound->setVolume(soundKey, newVolume);
+
+	g_sound->setPan(soundKey, newBalance);
+}
+
+bool Set::calculateSoundPosition(const Math::Vector3d &pos, int minVol, int maxVol, float maxDist, float radius, int &volume, int &balance) {
 	// Note: This is only used in Grim. See SoundTrack::updatePosition for the corresponding implementation in EMI.
 
-	// distance calculation
-	Math::Vector3d cameraPos = _currSetup->_pos;
-	Math::Vector3d vector = pos - cameraPos;
-	float distance = vector.getMagnitude();
-	float diffVolume = maxVol - minVol;
-	// This 8.f is a guess, so it may need some adjusting
-	int newVolume = (int)(8.f * diffVolume / distance);
-	newVolume += minVol;
-	if (newVolume > _maxVolume)
-		newVolume = _maxVolume;
-	volume = newVolume;
-	float angle;
+	// The volume doesn't change if the sound is closer than the radius
+	Math::Vector3d vector = pos - _currSetup->_pos;
+	float distance = normalize3QuickAcc(vector);
+	bool hasVolume = false;
+
+	if (distance - radius >= 0.0f) {
+		// These are unsigned like in the original, so a negative volume ends up as the maximum one
+		uint32 minVolume = minVol;
+		uint32 maxVolume = maxVol;
+		uint32 newVolume = minVolume;
+
+		// The original could divide by zero here, let's avoid that...
+		if (maxDist > 0.0f)
+			newVolume = (int)((maxDist - (distance - radius)) * ((float)(maxVol - minVol) / maxDist) + minVol);
+
+		if (newVolume >= minVolume) {
+			if (newVolume > maxVolume)
+				newVolume = maxVolume;
+
+			volume = newVolume;
+		} else {
+			volume = minVolume;
+		}
+
+		hasVolume = true;
+	}
+
+	// In the original the division by zero gives a vector of NaNs, which ends up as the leftmost pan...
+	if (distance == 0.0f) {
+		balance = 0;
+		return hasVolume;
+	}
 
 	Math::Vector3d cameraVector = _currSetup->_interest - _currSetup->_pos;
 	Math::Vector3d up(0, 0, 1);
@@ -1055,10 +1157,11 @@ void Set::calculateSoundPosition(const Math::Vector3d &pos, int minVol, int maxV
 	     cameraVector * Math::Vector3d::dotProduct(cameraVector, up) * (1 - cosr);
 	right = Math::Vector3d::crossProduct(cameraVector, up);
 	right.normalize();
-	angle = atan2(Math::Vector3d::dotProduct(vector, right), Math::Vector3d::dotProduct(vector, cameraVector));
 
-	float pan = sin(angle);
-	balance = (int)((pan + 1.f) / 2.f * 127.f + 0.5f);
+	float pan = CLIP(Math::Vector3d::dotProduct(vector, right) * _soundPanFactor, -1.f, 1.f);
+	balance = MIN((int)((pan + 1.f) * 64.f), 127);
+
+	return hasVolume;
 }
 
 Sector *Set::getSectorBase(int id) {
@@ -1078,34 +1181,37 @@ Sector *Set::getSectorByName(const Common::String &name) {
 	return nullptr;
 }
 
-Sector *Set::getSectorBySubstring(const Common::String &str) {
+Sector *Set::findNamedSector(const Common::String &name, const Math::Vector3d &pos) {
+	if (g_grim->getGameType() == GType_MONKEY4) {
+		Sector *sector = getSectorByName(name);
+		if (sector && sector->isVisible() && sector->isPointInSector(pos))
+			return sector;
+		return nullptr;
+	}
+
 	for (int i = 0; i < _numSectors; i++) {
 		Sector *sector = _sectors[i];
-		if (strstr(sector->getName().c_str(), str.c_str())) {
+		if (sector->isVisible() && strstr(sector->getName().c_str(), name.c_str()) && sector->isPointInSector(pos)) {
 			return sector;
 		}
 	}
 	return nullptr;
 }
 
-Sector *Set::getSectorBySubstring(const Common::String &str, const Math::Vector3d &pos) {
-	for (int i = 0; i < _numSectors; i++) {
-		Sector *sector = _sectors[i];
-		if (strstr(sector->getName().c_str(), str.c_str()) && sector->isPointInSector(pos)) {
-			return sector;
-		}
-	}
-	return nullptr;
-}
-
-void Set::setSoundParameters(int minVolume, int maxVolume) {
+void Set::setSoundParameters(float maxDist, int minVolume, int maxVolume, float panFactor, float maxRadius) {
+	_soundMaxDist = maxDist;
 	_minVolume = minVolume;
 	_maxVolume = maxVolume;
+	_soundPanFactor = panFactor;
+	_soundMaxRadius = maxRadius;
 }
 
-void Set::getSoundParameters(int *minVolume, int *maxVolume) {
+void Set::getSoundParameters(float *maxDist, int *minVolume, int *maxVolume, float *panFactor, float *maxRadius) {
+	*maxDist = _soundMaxDist;
 	*minVolume = _minVolume;
 	*maxVolume = _maxVolume;
+	*panFactor = _soundPanFactor;
+	*maxRadius = _soundMaxRadius;
 }
 
 void Set::addObjectState(const ObjectState::Ptr &s) {

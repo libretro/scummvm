@@ -159,14 +159,14 @@ struct INV : public EngineData {
 
 	Common::Rect scrollbarSrcBounds;
 	Common::Point scrollbarDefaultPos;
-	uint16 scrollbarMaxScroll;
+	uint16 scrollbarMaxScroll = 0;
 
 	Common::Array<Common::Rect> ornamentSrcs;
 	Common::Array<Common::Rect> ornamentDests;
 
 	Common::Array<Common::Rect> curtainAnimationSrcs;
 	Common::Rect curtainsScreenPosition;
-	uint16 curtainsFrameTime;
+	uint16 curtainsFrameTime = 0;
 
 	uint16 captionAutoClearTime = 3000;
 
@@ -973,6 +973,12 @@ struct INVD : public EngineData {
 		int16 valueIndex = 0;
 		Common::String valueName;	// Nancy19+ names the value instead
 		Common::Rect sourceRect;
+
+		// Nancy29: where the player uses the item ("hand" or "face"), and the
+		// Brain flags that force it there or disable it
+		Common::String equipPoint;
+		Common::String forceOnFlag;
+		Common::String forceOffFlag;
 	};
 
 	INVD() {}
@@ -1100,6 +1106,31 @@ struct ScriptBootData : public EngineData {
 		Common::Rect sources[kNumCursorVariants];
 		Common::Point hotspots[kNumCursorVariants];
 		bool overridesItem = false;	// shown even while an item is held
+		Common::Path imageName;	// Nancy26: every cursor names its own picture
+	};
+
+	// Nancy26 draws all its texts with fonts made of pictures. A font comes in
+	// four styles, each a picture holding the letters and a table of where they are.
+	struct BitmapFont {
+		enum Style { kRegular = 0, kBold = 1, kItalic = 2, kBoldItalic = 3, kNumStyles = 4 };
+
+		struct Glyph {
+			Common::Rect source;	// in the picture
+			int16 xOffset = 0;		// where it goes from the pen
+			int16 yOffset = 0;
+			int16 xAdvance = 0;		// how far the pen moves on
+		};
+
+		struct Face {
+			Common::Path imageName;
+			int height = 0;		// of a line
+			Common::HashMap<uint32, Glyph> glyphs;
+			Common::HashMap<uint32, int> kerning;	// by (first << 16) | second
+		};
+
+		int id = 0;
+		Common::String name;
+		Face faces[kNumStyles];
 	};
 
 	struct SystemFont {
@@ -1146,6 +1177,29 @@ struct ScriptBootData : public EngineData {
 	Common::String savePromptFlag;
 	bool savePromptFlagState = false;
 
+	// Lights, Camera, Curses keeps a saved game for every player, named after
+	// them: a profile
+	Common::String currentPlayerObject;		// what the name of the player is saved under
+	Common::Array<Common::String> puzzlesUnlocked;	// saved values all the profiles share
+	Common::String loadToScene;				// where a new profile starts
+	Common::String arcadeSave;				// the profile of the arcade mode, never listed
+	Common::String profileButtonPrefix;		// the buttons of the list, numbered from 0
+	Common::String newProfileButton;
+
+	// Resorting to Danger: saves that the scripts make under secret names,
+	// which the list of profiles leaves out, and the name the game saves under
+	// when a scene begins, until the scripts name the profile
+	Common::Array<Common::String> specialSaves;
+	Common::String autoSaveName;
+
+	// Nancy20: whether a new item goes first in the inventory, or last, as in
+	// Resorting to Danger
+	bool isInventoryAddedToFront = true;
+
+	// The Dossier games: the height of the UI bar at the bottom of the viewport,
+	// which Viewport.size leaves out
+	int viewportUIHeight = 0;
+
 	Common::Rect leftNodeHotspot;	// in the viewport
 	Common::Rect rightNodeHotspot;
 	Common::Rect uturnNodeHotspot;
@@ -1164,8 +1218,24 @@ struct ScriptBootData : public EngineData {
 
 	Common::Array<SystemFont> fonts;
 	Common::Array<FontColor> fontColors;
+	Common::Array<BitmapFont> bitmapFonts;	// Nancy26
+
+	// Nancy26: where an item's picture goes from the mouse while it is held
+	Common::Point itemCursorOffset;
+
+	Common::String buildNumber;	// Nancy26
+
+	// Nancy23: font files of the game folder, which the fonts named like them
+	// use in place of a Windows font
+	Common::Array<Common::String> customFontFiles;
 
 	Common::Array<Player> players;	// in the order of PCUI::characters
+
+	// Nancy1New names every value (VarTable) and text (StrTable) the scripts
+	// keep beforehand; using any other name is an error
+	typedef Common::HashMap<Common::String, bool, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> NameSet;
+	NameSet valueNames;
+	NameSet textNames;
 };
 
 } // End of namespace Nancy

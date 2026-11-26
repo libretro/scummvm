@@ -22,19 +22,36 @@
 #ifndef GRIM_IMUSE_TABLES_H
 #define GRIM_IMUSE_TABLES_H
 
+#include "common/scummsys.h"
+
 namespace Grim {
 
-struct ImuseTable {
-	byte opcode;
-	int16 soundId;
-	byte atribPos;
-	byte hookId;
-	int16 fadeOut60TicksDelay;
-	byte volume;
-	byte pan;
-	char filename[32];
+struct IMuseStateTable {
+	char name[32];
+	int transitionId;
+	int soundId;
+	char internalName[24];
+	int attribPos;
+	int hookId;
+	int fadeTime;
+	int volume;
+	int pan;
 };
 
-} // end of namespace Grim
+struct IMuseDemoFileTable {
+	char name[32];
+	char fileName[32];
+};
+
+extern const IMuseStateTable _grimStateMusicTable[181];
+extern const IMuseStateTable _grimSeqMusicTable[41];
+extern const IMuseStateTable _grimDemoStateMusicTable[23];
+extern const IMuseStateTable _grimDemoSeqMusicTable[2];
+extern const IMuseDemoFileTable _grimDemoMusicFileTable[12];
+
+// Sound id of a state, given its position in the table of the old iMUSE
+int grimLegacyStateSoundId(int tableIndex);
+
+} // End of namespace Grim
 
 #endif

@@ -1,0 +1,150 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef ULTIMA1_DATA_MAP_DUNGEON_H
+#define ULTIMA1_DATA_MAP_DUNGEON_H
+
+#include "common/serializer.h"
+
+namespace Ultima {
+namespace Ultima1 {
+namespace Data {
+
+constexpr int DUNGEON_WIDTH = 11;
+constexpr int DUNGEON_HEIGHT = 11;
+constexpr int DUNGEON_FLOORS = 10;
+// Number of distinct monster "slots" filled in when a level is generated
+constexpr int DUNGEON_MONSTER_SLOTS = 5;
+
+// No monster is present in a cell. Real monster Ids are 0-24 (5 tiers of
+// 5 types, tier = (dungeonLevel - 1) / 2), so this can't use 0 like the
+// _itemId sentinel does
+constexpr int16 DUNGEON_NO_MONSTER = -1;
+
+// Disguised monster Ids that don't block movement/view like a normal
+// monster would - a mimic looks (and is named) like a chest, an
+// invisible seeker isn't visibly drawn at all, and a gelatinous cube
+// fills the passage but can still be seen/moved past
+constexpr int UMONS_GELATINOUS_CUBE = 9;
+constexpr int UMONS_MIMIC = 11;
+constexpr int UMONS_INVISIBLE_SEEKER = 20;
+
+// Monster Ids with a special effect on a successful melee hit (see
+// DungeonLogic::dungeonMonsterAttack)
+constexpr int UMONS_THIEF = 2;
+constexpr int UMONS_GREMLIN = 16;
+constexpr int UMONS_MIND_WHIPPER = 21;
+
+// Dungeon monster names, indexed by DungeonCell::_monsterId (0-24)
+constexpr int DUNGEON_MONSTER_COUNT = 25;
+extern const char *UNDERWORLD_MONSTERS[];
+
+enum DungeonTileId {
+	DTILE_HALLWAY = 0,
+	DTILE_WALL = 1,
+	DTILE_SECRET_DOOR = 2,
+	DTILE_DOOR = 3,
+	DTILE_CHEST = 4,
+	DTILE_COFFIN = 5,
+	DTILE_LADDER_DOWN = 6,
+	DTILE_LADDER_UP = 7,
+	DTILE_BEAMS = 8
+};
+
+// Values of DungeonCell::_itemId. Shares numbering with DungeonTileId's
+// chest/coffin, since the original stores the same tile Id in both places
+enum DungeonItemId {
+	DITEM_NONE = 0,
+	DITEM_CHEST = DTILE_CHEST,
+	DITEM_COFFIN = DTILE_COFFIN
+};
+
+struct DungeonCell {
+	DungeonTileId _tileNum;
+	int16 _monsterId;
+	int16 _itemId;
+	int16 _monsterHp;
+};
+
+struct MapDungeon {
+private:
+	uint16 _randomSeed = 0;
+	// Tracks which of the 5 monster slots have already been filled while
+	// generating the current level
+	bool _monsterSlotUsed[DUNGEON_MONSTER_SLOTS] = {};
+
+	/**
+	 * Clear the dungeon content
+	 */
+	void clear();
+
+	/**
+	 * Sets the random seed used for generating the dungeon level layout
+	 */
+	void setRandomSeed();
+
+	/**
+	 * Gets a random number in the inclusive min/max range, using the same
+	 * manually seeded algorithm as the original game, so the dungeon
+	 * layouts will match
+	 */
+	byte getRandomNumber(int minVal, int maxVal);
+
+	/**
+	 * Picks a random unoccupied cell and, provided it isn't where the
+	 * player is standing, spawns a new monster there appropriate for the
+	 * current dungeon level
+	 */
+	void dungeonSpawnMonster();
+
+public:
+	DungeonCell _cells[DUNGEON_HEIGHT][DUNGEON_WIDTH];
+
+public:
+	MapDungeon();
+
+	/**
+	 * Generates a dungeon level
+	 */
+	void generateDungeonLevel();
+
+	/**
+	 * Removes a slain monster from the given cell, freeing up its monster
+	 * slot, then spawns a fresh monster elsewhere in its place
+	 */
+	void killMonster(int x, int y);
+
+	/**
+	 * Spawns a monster into a specific cell (the original's shiftCoffin) -
+	 * used when opening a coffin. Does nothing unless the cell is open
+	 * floor/a ladder and unoccupied. Unlike a kill, no slot is freed first,
+	 * so it will reuse an already-taken slot after enough tries
+	 */
+	void spawnMonsterAt(int x, int y);
+
+	void synchronize(Common::Serializer &s);
+};
+
+} // namespace Data
+} // namespace Ultima1
+} // namespace Ultima
+
+#endif

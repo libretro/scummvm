@@ -27,12 +27,25 @@
 #include "common/str-array.h"
 #include "common/memstream.h"
 #include "common/translation.h"
+#include "ultima/shared/engine/graphics_options.h"
 #ifdef ENABLE_AKALABETH
 #include "ultima/ultima0/ultima0.h"
 #include "ultima/ultima0/metaengine.h"
 #endif
 #ifdef ENABLE_ULTIMA1
-#include "ultima/shared/early/ultima_early.h"
+#include "ultima/ultima1/ultima1.h"
+#include "ultima/ultima1/metaengine.h"
+#undef _G
+#endif
+#ifdef ENABLE_ULTIMA2
+#include "ultima/ultima2/ultima2.h"
+#include "ultima/ultima2/metaengine.h"
+#undef _G
+#endif
+#ifdef ENABLE_ULTIMA3
+#include "ultima/ultima3/ultima3.h"
+#include "ultima/ultima3/metaengine.h"
+#undef _G
 #endif
 #ifdef ENABLE_ULTIMA4
 #include "ultima/ultima4/ultima4.h"
@@ -162,6 +175,116 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 		}
 	},
 	{
+		GAMEOPTION_ULTIMA2_STAT_BOOST,
+		{
+			_s("Choose the attribute to boost"),
+			_s("Lets you choose which attribute is raised by the \"ALAKAZAM!\" gift from the Offer command, as the Ultima II Upgrade does, instead of it being random"),
+			"stat_boost_choice",
+			false,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_ULTIMA2_MIXED_CASE,
+		{
+			_s("Mixed case, colored text"),
+			_s("Shows text in mixed case, and in color with the EGA graphics, as the Ultima II Upgrade does, instead of in capitals"),
+			"mixed_case_text",
+			false,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_ULTIMA3_MORE_MONSTERS,
+		{
+			_s("Increase monster generation"),
+			_s("Doubles the rate monsters and ships appear in the world, and increases it in dungeons, as in the Ultima III Upgrade"),
+			"more_monsters",
+			false,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_LESS_HUNGER,
+		{
+			_s("Halve food consumption"),
+			_s("Food is eaten at half the original rate. The Ultima III Upgrade does this"),
+			"less_hunger",
+			false,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_ULTIMA3_MOON_ICONS,
+		{
+			_s("Show moon phase icons"),
+			_s("Shows the phases of the moons as pictures rather than numbers, as in the Ultima III Upgrade"),
+			"moon_icons",
+			true,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_ULTIMA3_MIDI_MUSIC,
+		{
+			_s("Play MIDI music"),
+			_s("Plays the music that the Ultima III Upgrade adds to the game"),
+			"midi_music",
+			false,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_ULTIMA3_TIMED_SOUNDS,
+		{
+			_s("Use Upgrade sound effects"),
+			_s("Plays the sound effects with the timing of the Ultima III Upgrade, which doesn't depend on the speed of the computer"),
+			"timed_sounds",
+			false,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_ULTIMA3_PICTURE_DUNGEONS,
+		{
+			_s("Use textured dungeon walls"),
+			_s("Draws the view in dungeons using pictures of stone walls, doors, ladders and chests rather than lines. Only used with VGA graphics"),
+			"picture_dungeons",
+			false,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_ULTIMA1_PICTURE_DUNGEONS,
+		{
+			_s("Use textured dungeon walls"),
+			_s("Draws the view in dungeons using pictures of stone walls, doors, ladders, chests, coffins and monsters rather than lines. Only used with the EGA graphics"),
+			"picture_dungeons",
+			true,
+			0,
+			0
+		}
+	},
+	{
+		GAMEOPTION_ULTIMA2_PICTURE_DUNGEONS,
+		{
+			_s("Use textured dungeon walls"),
+			_s("Draws the view in dungeons using pictures of stone walls, doors, ladders, chests and monsters rather than lines. Only used with the EGA graphics, other than Commodore 64"),
+			"picture_dungeons",
+			false,
+			0,
+			0
+		}
+	},
+	{
 		GAMEOPTION_ALWAYS_CHRISTMAS,
 		{
 			_s("Always enable Christmas easter-egg"),
@@ -183,6 +306,51 @@ const ADExtraGuiOptionsMap *UltimaMetaEngine::getAdvancedExtraGuiOptions() const
 	return optionsList;
 }
 
+GUI::OptionsContainerWidget *UltimaMetaEngine::buildEngineOptionsWidget(GUI::GuiObject *boss,
+		const Common::String &name, const Common::String &target) const {
+#ifdef ENABLE_ULTIMA1
+	if (getGameId(target) == "ultima1") {
+		return new Ultima::Shared::GraphicsOptionsWidget(boss, name, target,
+			Ultima::Ultima1::Data::RENDER_MODE_LABELS, Ultima::Ultima1::Data::RENDER_MODE_COUNT,
+			getExtraGuiOptions(target), false, Ultima::Ultima1::Data::RENDER_EGA);
+	}
+#endif
+#ifdef ENABLE_ULTIMA2
+	if (getGameId(target) == "ultima2" || getGameId(target) == "ultima2_enh") {
+		// The enhanced version starts off using the best of the graphics
+		const bool enhanced = getGameId(target) == "ultima2_enh";
+		ExtraGuiOptions options = getExtraGuiOptions(target);
+		if (enhanced) {
+			for (uint i = 0; i < options.size(); ++i)
+				options[i].defaultState = true;
+		}
+
+		return new Ultima::Shared::GraphicsOptionsWidget(boss, name, target,
+			Ultima::Ultima2::Data::RENDER_MODE_LABELS, Ultima::Ultima2::Data::RENDER_MODE_COUNT,
+			options, true,
+			enhanced ? Ultima::Ultima2::Data::RENDER_EGA : Ultima::Ultima2::Data::RENDER_CGA);
+	}
+#endif
+#ifdef ENABLE_ULTIMA3
+	if (getGameId(target) == "ultima3" || getGameId(target) == "ultima3_enh") {
+		// The enhanced version starts off with all the options on, and the best graphics
+		const bool enhanced = getGameId(target) == "ultima3_enh";
+		ExtraGuiOptions options = getExtraGuiOptions(target);
+		if (enhanced) {
+			for (uint i = 0; i < options.size(); ++i)
+				options[i].defaultState = true;
+		}
+
+		return new Ultima::Shared::GraphicsOptionsWidget(boss, name, target,
+			Ultima::Ultima3::Data::RENDER_MODE_LABELS, Ultima::Ultima3::Data::RENDER_MODE_COUNT,
+			options, false,
+			enhanced ? Ultima::Ultima3::Data::RENDER_VGA : Ultima::Ultima3::Data::RENDER_CGA);
+	}
+#endif
+
+	return AdvancedMetaEngine::buildEngineOptionsWidget(boss, name, target);
+}
+
 Common::Error UltimaMetaEngine::createInstance(OSystem *syst, Engine **engine, const Ultima::UltimaGameDescription *gd) const {
 	switch (gd->gameId) {
 #ifdef ENABLE_AKALABETH
@@ -192,7 +360,17 @@ Common::Error UltimaMetaEngine::createInstance(OSystem *syst, Engine **engine, c
 #endif
 #ifdef ENABLE_ULTIMA1
 	case Ultima::GAME_ULTIMA1:
-		*engine = new Ultima::Shared::UltimaEarlyEngine(syst, gd);
+		*engine = new Ultima::Ultima1::Ultima1Engine(syst, gd);
+		break;
+#endif
+#ifdef ENABLE_ULTIMA2
+	case Ultima::GAME_ULTIMA2:
+		*engine = new Ultima::Ultima2::Ultima2Engine(syst, gd);
+		break;
+#endif
+#ifdef ENABLE_ULTIMA3
+	case Ultima::GAME_ULTIMA3:
+		*engine = new Ultima::Ultima3::Ultima3Engine(syst, gd);
 		break;
 #endif
 #ifdef ENABLE_ULTIMA4
@@ -255,13 +433,25 @@ SaveStateDescriptor UltimaMetaEngine::querySaveMetaInfos(const char *target, int
 }
 
 Common::KeymapArray UltimaMetaEngine::initKeymaps(const char *target) const {
-#if defined(ENABLE_AKALABETH) || defined(ENABLE_ULTIMA4) || defined(ENABLE_ULTIMA6) || defined(ENABLE_ULTIMA8)
+#if defined(ENABLE_AKALABETH) || defined(ENABLE_ULTIMA1) || defined(ENABLE_ULTIMA2) || defined(ENABLE_ULTIMA4) || defined(ENABLE_ULTIMA6) || defined(ENABLE_ULTIMA8)
 	const Common::String gameId = getGameId(target);
 #endif
 
 #ifdef ENABLE_AKALABETH
 	if (gameId == "akalabeth")
 		return Ultima::Ultima0::MetaEngine::initKeymaps();
+#endif
+#ifdef ENABLE_ULTIMA1
+	if (gameId == "ultima1")
+		return Ultima::Ultima1::MetaEngine::initKeymaps();
+#endif
+#ifdef ENABLE_ULTIMA2
+	if (gameId == "ultima2" || gameId == "ultima2_enh")
+		return Ultima::Ultima2::MetaEngine::initKeymaps();
+#endif
+#ifdef ENABLE_ULTIMA3
+	if (gameId == "ultima3" || gameId == "ultima3_enh")
+		return Ultima::Ultima3::MetaEngine::initKeymaps();
 #endif
 #ifdef ENABLE_ULTIMA4
 	if (gameId == "ultima4" || gameId == "ultima4_enh")

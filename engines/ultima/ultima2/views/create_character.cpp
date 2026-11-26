@@ -1,0 +1,303 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "ultima/ultima2/views/create_character.h"
+#include "ultima/ultima2/gfx/text.h"
+#include "ultima/ultima2/ultima2.h"
+
+namespace Ultima {
+namespace Ultima2 {
+namespace Views {
+
+constexpr int STARTING_POINTS = 90;
+constexpr int MIN_ATTRIBUTE = 10;
+
+CreateCharacter::CreateCharacter() : View("CreateCharacter"), _cursor("Cursor", this) {
+}
+
+bool CreateCharacter::msgFocus(const FocusMessage &msg) {
+	reset();
+	return View::msgFocus(msg);
+}
+
+void CreateCharacter::reset() {
+	_state = STRENGTH;
+	_pointsRemaining = STARTING_POINTS;
+	_digitCount = 0;
+	_charName.clear();
+
+	_G(savegame) = Data::Savegame();
+	_G(map).clearSaved();
+	positionCursor();
+	redraw();
+}
+
+void CreateCharacter::rejectEntry() {
+	g_engine->playFX(Data::SFX_FAIL);
+	reset();
+}
+
+void CreateCharacter::enterStat(int value) {
+	if (value < MIN_ATTRIBUTE || value > _pointsRemaining) {
+		rejectEntry();
+		return;
+	}
+
+	_pointsRemaining -= value;
+	Data::Savegame &sg = _G(savegame);
+
+	switch (_state) {
+	case STRENGTH:
+		sg._strength = value;
+		_state = AGILITY;
+		break;
+	case AGILITY:
+		sg._agility = value;
+		_state = STAMINA;
+		break;
+	case STAMINA:
+		sg._stamina = value;
+		_state = CHARISMA;
+		break;
+	case CHARISMA:
+		sg._charisma = value;
+		_state = WISDOM;
+		break;
+	case WISDOM:
+		sg._wisdom = value;
+		_state = INTELLIGENCE;
+		break;
+	case INTELLIGENCE:
+		sg._intelligence = value;
+		_state = SEX;
+		break;
+	default:
+		break;
+	}
+
+	_digitCount = 0;
+	positionCursor();
+	redraw();
+}
+
+void CreateCharacter::positionCursor() {
+	switch (_state) {
+	case STRENGTH: case AGILITY: case STAMINA:
+	case CHARISMA: case WISDOM: case INTELLIGENCE:
+		_cursor.setPosition(Common::Point(26 + _digitCount, 4 + (int)_state));
+		break;
+	case SEX:
+		_cursor.setPosition(Common::Point(20, 11));
+		break;
+	case RACE:
+		_cursor.setPosition(Common::Point(20, 12));
+		break;
+	case CLASS:
+		_cursor.setPosition(Common::Point(20, 13));
+		break;
+	case NAME:
+		_cursor.setPosition(Common::Point((int16)(20 + _charName.size()), 14));
+		break;
+	case CONFIRM:
+		_cursor.setPosition(Common::Point(29, 16));
+		break;
+	default:
+		break;
+	}
+
+	_cursor.show();
+}
+
+void CreateCharacter::draw() {
+	auto s = getSurface();
+	s.clear();
+
+	Data::Savegame &sg = _G(savegame);
+
+	// Writes text at a position in one of the colors
+	auto put = [&](int x, int y, Gfx::TextColor color, const Common::String &text) {
+		s.setColor(Gfx::textColor(color));
+		s.writeString(Common::Point(x, y), text);
+	};
+
+	put(10, 1, Gfx::TEXT_NORMAL, "Player Generation :");
+
+	put(5, 2, Gfx::TEXT_NORMAL, "Points left to distribute : ");
+	Gfx::setReverseText(s, true);
+	s.writeString(Common::Point(33, 2), Common::String::format("%d", _pointsRemaining));
+	Gfx::setReverseText(s, false);
+
+	put(11, 4, Gfx::TEXT_NORMAL, "Strength.......");
+	put(11, 5, Gfx::TEXT_NORMAL, "Agility........");
+	put(11, 6, Gfx::TEXT_NORMAL, "Stamina........");
+	put(11, 7, Gfx::TEXT_NORMAL, "Charisma.......");
+	put(11, 8, Gfx::TEXT_NORMAL, "Wisdom.........");
+	put(11, 9, Gfx::TEXT_NORMAL, "Intelligence...");
+
+	if (_state > STRENGTH) put(26, 4, Gfx::TEXT_NUMBER, Common::String::format("%d", sg._strength));
+	if (_state > AGILITY) put(26, 5, Gfx::TEXT_NUMBER, Common::String::format("%d", sg._agility));
+	if (_state > STAMINA) put(26, 6, Gfx::TEXT_NUMBER, Common::String::format("%d", sg._stamina));
+	if (_state > CHARISMA) put(26, 7, Gfx::TEXT_NUMBER, Common::String::format("%d", sg._charisma));
+	if (_state > WISDOM) put(26, 8, Gfx::TEXT_NUMBER, Common::String::format("%d", sg._wisdom));
+	if (_state > INTELLIGENCE) put(26, 9, Gfx::TEXT_NUMBER, Common::String::format("%d", sg._intelligence));
+
+	// The digits typed so far for whichever attribute is currently active
+	if (_state <= INTELLIGENCE && _digitCount > 0) {
+		Common::String digits;
+		for (int i = 0; i < _digitCount; ++i)
+			digits += (char)('0' + _digits[i]);
+		put(26, 4 + (int)_state, Gfx::TEXT_NUMBER, digits);
+	}
+
+	put(16, 11, Gfx::TEXT_NORMAL, "M/F-");
+	put(15, 12, Gfx::TEXT_NORMAL, "Race-");
+	put(15, 13, Gfx::TEXT_NORMAL, "Type-");
+	put(15, 14, Gfx::TEXT_NORMAL, "Name-");
+
+	if (_state > SEX)
+		put(20, 11, Gfx::TEXT_HEADING, sg._sex == Data::SEX_MALE ? "Male" : "Female");
+	if (_state > RACE)
+		put(20, 12, Gfx::TEXT_HEADING, Data::raceName(sg._race));
+	if (_state > CLASS)
+		put(20, 13, Gfx::TEXT_HEADING, Data::className(sg._class));
+	if (_state >= NAME)
+		put(20, 14, Gfx::TEXT_LIST, _charName);
+
+	put(10, 16, Gfx::TEXT_NORMAL, "Satisfactory (Y/N)-");
+
+	put(8, 18, Gfx::TEXT_NORMAL, "Races:         Types:");
+	put(9, 19, Gfx::TEXT_NORMAL, "1-Human        1-Fighter");
+	put(9, 20, Gfx::TEXT_NORMAL, "2-Elf          2-Cleric");
+	put(9, 21, Gfx::TEXT_NORMAL, "3-Dwarf        3-Wizard");
+	put(9, 22, Gfx::TEXT_NORMAL, "4-Hobbit       4-Thief");
+}
+
+bool CreateCharacter::msgKeypress(const KeypressMessage &msg) {
+	Data::Savegame &sg = _G(savegame);
+
+	switch (_state) {
+	case STRENGTH:
+	case AGILITY:
+	case STAMINA:
+	case CHARISMA:
+	case WISDOM:
+	case INTELLIGENCE:
+		if (msg.ascii < '0' || msg.ascii > '9')
+			break;
+		_digits[_digitCount++] = msg.ascii - '0';
+		if (_digitCount == 2) {
+			enterStat(_digits[0] * 10 + _digits[1]);
+		} else {
+			positionCursor();
+			redraw();
+		}
+		break;
+
+	case SEX:
+		if (toupper(msg.ascii) == 'M') {
+			sg._sex = Data::SEX_MALE;
+			sg._strength += 5;
+			_state = RACE;
+			positionCursor();
+			redraw();
+		} else if (toupper(msg.ascii) == 'F') {
+			sg._sex = Data::SEX_FEMALE;
+			sg._charisma += 16;
+			_state = RACE;
+			positionCursor();
+			redraw();
+		}
+		break;
+
+	case RACE:
+		if (msg.ascii >= '1' && msg.ascii <= '4') {
+			sg._race = (Data::Race)(msg.ascii - '1');
+			switch (sg._race) {
+			case Data::RACE_HUMAN: sg._intelligence += 5; break;
+			case Data::RACE_ELF: sg._agility += 5; break;
+			case Data::RACE_DWARF: sg._strength += 5; break;
+			case Data::RACE_HOBBIT: sg._wisdom += 16; break;
+			default: break;
+			}
+			_state = CLASS;
+			positionCursor();
+			redraw();
+		}
+		break;
+
+	case CLASS:
+		if (msg.ascii >= '1' && msg.ascii <= '4') {
+			sg._class = (Data::CharClass)(msg.ascii - '1');
+			switch (sg._class) {
+			case Data::CLASS_FIGHTER: sg._strength += 21; break;
+			case Data::CLASS_CLERIC: sg._wisdom += 16; break;
+			case Data::CLASS_WIZARD: sg._intelligence += 16; break;
+			case Data::CLASS_THIEF: sg._agility += 16; break;
+			default: break;
+			}
+			_state = NAME;
+			positionCursor();
+			redraw();
+		}
+		break;
+
+	case NAME:
+		if (msg.ascii == 8) { // backspace
+			if (!_charName.empty())
+				_charName.deleteLastChar();
+			positionCursor();
+			redraw();
+		} else if (msg.ascii == 13) { // enter
+			_state = CONFIRM;
+			positionCursor();
+			redraw();
+		} else if (msg.ascii >= 32 && msg.ascii < 127 && (int)_charName.size() < Data::MAX_NAME_LENGTH) {
+			_charName += (char)msg.ascii;
+			positionCursor();
+			redraw();
+		}
+		break;
+
+	case CONFIRM:
+		if (toupper(msg.ascii) == 'N') {
+			reset();
+		} else if (toupper(msg.ascii) == 'Y') {
+			Common::strlcpy(sg._name, _charName.c_str(), sizeof(sg._name));
+			sg._hp = 400;
+			sg._food = 400;
+			sg._gold = 400;
+			sg._mapX = 20;
+			sg._mapY = 20;
+			sg._mapEra = 2;
+			sg._mapType = 0;
+			_G(map).load(sg._mapEra, sg._mapType);
+		}
+		break;
+	default:
+		break;
+	}
+
+	return true;
+}
+
+} // namespace Views
+} // namespace Ultima2
+} // namespace Ultima

@@ -361,19 +361,12 @@ protected:
 		int16 w, h;
 		int16 hotX, hotY;
 
-		// The size and hotspot of the pre-scaled cursor image, in real
+		// The size of the pre-scaled cursor image, in real
 		// coordinates.
 		int16 rW, rH;
-		int16 rHotX, rHotY;
-
-		// The size and hotspot of the pre-scaled cursor image, in game
-		// coordinates.
-		int16 vW, vH;
-		int16 vHotX, vHotY;
 
 		MousePos() : w(0), h(0), hotX(0), hotY(0),
-					rW(0), rH(0), rHotX(0), rHotY(0), vW(0), vH(0),
-					vHotX(0), vHotY(0)
+					rW(0), rH(0)
 			{ }
 	};
 
@@ -415,7 +408,7 @@ protected:
 	Common::Rect _focusRect;
 #endif
 
-	virtual void addDirtyRect(int x, int y, int w, int h, bool inOverlay, bool realCoordinates = false);
+	virtual void addDirtyRect(int x, int y, int w, int h, bool inOverlay);
 
 	virtual void drawMouse();
 	virtual void undrawMouse();
@@ -469,13 +462,7 @@ private:
 							 y * getOverlayHeight() / getHeight());
 	}
 
-	/**
-	 * Special case for scalers that use the useOldSrc feature (currently
-	 * only the Edge scalers). The variable is checked after closing the
-	 * overlay, so that the creation of a new output buffer for the scaler
-	 * can be triggered.
-	 */
-	bool _needRestoreAfterOverlay;
+	bool _prevOverlayVisible;
 	bool _prevForceRedraw;
 	bool _prevCursorNeedsRedraw;
 };

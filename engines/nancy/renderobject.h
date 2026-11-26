@@ -30,6 +30,18 @@ namespace Nancy {
 class NancyEngine;
 class GraphicsManager;
 
+// Nancy21 can zoom into the viewport, with everything in some of the streams
+// of scenes: what is drawn gets scaled around the top left of the viewport, then
+// moved by the offset, in viewport pixels
+struct ViewTransform {
+	double scaleX = 1.0;
+	double scaleY = 1.0;
+	double offsetX = 0.0;
+	double offsetY = 0.0;
+
+	bool isIdentity() const { return scaleX == 1.0 && scaleY == 1.0 && offsetX == 0.0 && offsetY == 0.0; }
+};
+
 // Loosely equivalent to the original engine's ZRenderStructs.
 // A subclass of this will be automatically updated and drawn from the graphics manager,
 // but initialization needs to be done manually.
@@ -48,12 +60,38 @@ public:
 
 	void moveTo(const Common::Point &position);
 	void moveTo(const Common::Rect &bounds);
-	void setVisible(bool visible);
+	// Without forceRedraw, an object that stays shown or hidden isn't drawn again
+	void setVisible(bool visible, bool forceRedraw = true);
 	void setTransparent(bool isTransparent);
 	bool isVisible() const { return _isVisible; }
 
+	// Lights, Camera, Curses draws some things into the stencil buffer only:
+	// a stencil object shows nothing itself, but a masked object drawn after it
+	// leaves out the pixels the stencil object isn't transparent at
+	void setStencil(bool isStencil);
+	bool isStencil() const { return _isStencil; }
+	void setMasked(bool isMasked);
+	bool isMasked() const { return _isMasked; }
+
+	// Nancy26: the part of the screen the object gets drawn in; empty for all of it
+	void setClipRect(const Common::Rect &clip);
+	const Common::Rect &getClipRect() const { return _clipRect; }
+
+	// Where on the screen the object was the last time it got drawn; empty when it
+	// wasn't shown. The viewport can scroll since, which moves where the object
+	// would be now, but not what is on the screen.
+	const Common::Rect &getDrawnScreenPosition() const { return _drawnScreenPosition; }
+	void setDrawnScreenPosition(const Common::Rect &position) { _drawnScreenPosition = position; }
+
 	bool needsRedraw() const { return _needsRedraw; }
 	void setNeedsRedraw(bool needsRedraw) { _needsRedraw = needsRedraw; }
+
+	// The part of the picture that changed, for a large one that is mostly
+	// transparent. Only that part of the screen gets drawn again; when it's
+	// empty, all of the object does.
+	void addChangedArea(const Common::Rect &area);
+	const Common::Rect &getChangedArea() const { return _changedArea; }
+	void clearChangedArea() { _changedArea = Common::Rect(); }
 
 	void setHasMoved(bool hasMoved) { _hasMoved = hasMoved; }
 
@@ -81,6 +119,26 @@ public:
 
 	Common::Rect getBounds() const { return Common::Rect(_screenPosition.width(), _screenPosition.height()); }
 	uint16 getZOrder() const { return _z; }
+
+	// What decides between objects of the same z order: the records of the
+	// scripts draw in the order they were made. 0 for everything else.
+	uint32 getTieOrder() const { return _tieOrder; }
+	void setTieOrder(uint32 order) { _tieOrder = order; }
+
+	// What comes before the z order: Nancy19 to Nancy20 draw each stream in a
+	// layer of its own. The UI is in front of all of them.
+	static const int32 kUILayer = 0x7FFFFFFF;
+	int32 getLayer() const { return _layer; }
+	void setLayer(int32 layer);
+
+	// Nancy19 to Nancy25: the z of a record of the scripts, which tells apart the
+	// records the z order can't, e.g. the many farther than the background, or
+	// z values closer together than its steps.
+	// Everything else is farther than all records of its z order.
+	static const double kNoExactZ;
+	double getExactZ() const { return _exactZ; }
+	void setExactZ(double z);
+
 	// Also moves the object in the draw order, so changing the z of a registered
 	// object takes effect without re-registering it
 	void setZOrder(uint16 z);
@@ -90,14 +148,35 @@ public:
 	// Needed for proper handling of objects inside the viewport
 	virtual bool isViewportRelative() const { return false; }
 
+	// Whether an object in the viewport moves with its vertical scroll. The
+	// records of the scripts are placed by their transforms instead.
+	virtual bool isMovedByViewportScroll() const { return true; }
+
+	// The zoom the object gets drawn with, if any. It belongs to whoever set it.
+	const ViewTransform *getViewTransform() const { return _viewTransform; }
+	void setViewTransform(const ViewTransform *viewTransform) { _viewTransform = viewTransform; }
+	bool isZoomed() const { return _viewTransform && !_viewTransform->isIdentity(); }
+
 protected:
 	bool _needsRedraw;
+	Common::Rect _changedArea;
 	bool _isVisible;
 	bool _hasMoved;
 	bool _isNativeResolution = false;
+	bool _isStencil = false;
+	bool _isMasked = false;
 	uint16 _z;
+	uint32 _tieOrder = 0;
+	int32 _layer = 0;
+	double _exactZ = kNoExactZ;
+	Common::Rect _drawnScreenPosition;
 	Common::Rect _previousScreenPosition;
 	Common::Rect _screenPosition;
+	Common::Rect _clipRect;
+	const ViewTransform *_viewTransform = nullptr;
+
+private:
+	Common::Rect convertPositionToScreen(const Common::Rect &position) const;
 };
 
 } // End of namespace Nancy

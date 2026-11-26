@@ -79,7 +79,7 @@ public:
 	void readData(Common::SeekableReadStream &stream) override;
 	void execute() override;
 
-	byte _type = 1;
+	byte _effectType = 1;
 	uint16 _fadeToBlackTime = 0;
 	uint16 _frameTime = 0;
 	uint16 _totalTime = 0;
@@ -762,6 +762,7 @@ public:
 	void execute() override;
 
 	CursorManager::CursorType getHoverCursor() const override { return _hoverCursor; }
+	bool cursorSetFromScript() const override { return true; }
 	bool canHaveHotspot() const override { return true; }
 
 protected:
@@ -788,6 +789,7 @@ public:
 
 	void readData(Common::SeekableReadStream &stream) override;
 	void execute() override;
+	void updateGraphics() override;
 
 	bool isViewportRelative() const override { return true; }
 
@@ -817,6 +819,7 @@ public:
 	void execute() override;
 
 	CursorManager::CursorType getHoverCursor() const override { return _hoverCursor; }
+	bool cursorSetFromScript() const override { return true; }
 	bool canHaveHotspot() const override { return true; }
 
 protected:

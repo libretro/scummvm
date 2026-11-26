@@ -45,7 +45,8 @@ bool Giant::msgUnfocus(const UnfocusMessage &msg) {
 
 void Giant::draw() {
 	clearSurface();
-	writeString(0, 1, STRING["maps.map30.giant"]);
+	writeString(0, 1, "Statue of a giant holding the Scale of\n"
+		"Judgement. Who will climb on (F1-F6)?");
 }
 
 bool Giant::msgKeypress(const KeypressMessage &msg) {
@@ -88,6 +89,10 @@ void Giant::charSelected(uint charIndex) {
 	clearSurface();
 	writeString(0, 1, line);
 	Sound::sound(SOUND_2);
+
+	// Keep any visible character/party information synchronized with the
+	// just-awarded XP/attribute values.
+	g_events->redrawViews();
 
 	delaySeconds(5);
 }

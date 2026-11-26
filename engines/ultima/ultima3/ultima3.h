@@ -1,0 +1,223 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef ULTIMA3_H
+#define ULTIMA3_H
+
+#include "common/scummsys.h"
+#include "common/system.h"
+#include "common/error.h"
+#include "common/ptr.h"
+#include "common/serializer.h"
+#include "common/util.h"
+#include "audio/audiostream.h"
+#include "audio/mixer.h"
+#include "engines/engine.h"
+#include "ultima/detection.h"
+#include "ultima/shared/engine/events.h"
+#include "ultima/ultima3/data/arena.h"
+#include "ultima/ultima3/data/data.h"
+#include "ultima/ultima3/data/dungeon.h"
+#include "ultima/ultima3/data/map.h"
+#include "ultima/ultima3/data/savegame.h"
+#include "ultima/ultima3/gfx/message_log.h"
+#include "ultima/ultima3/gfx/overview.h"
+#include "ultima/ultima3/gfx/screen_effects.h"
+#include "ultima/ultima3/gfx/shapes.h"
+#include "ultima/ultima3/music.h"
+#include "ultima/ultima3/logic/combat_logic.h"
+
+namespace Audio {
+class PCSpeaker;
+}
+
+namespace Ultima {
+namespace Ultima3 {
+
+struct Ultima3GameDescription;
+
+class Ultima3Engine : public Engine, public Shared::Events {
+private:
+	const Ultima::UltimaGameDescription *_gameDescription;
+
+	/**
+	 * Returns true for the entry that has the Ultima III Upgrade's changes on by default
+	 */
+	bool isEnhanced() const;
+
+	/**
+	 * Reads the game options
+	 */
+	void loadOptions();
+
+protected:
+	// Engine APIs
+	Common::Error run() override;
+	void applyGameSettings() override;
+
+	/**
+	 * Returns true if the game should quit
+	 */
+	bool shouldQuit() const override {
+		return Engine::shouldQuit();
+	}
+
+	/**
+	 * Goes back to the title screen
+	 */
+	void returnToMainMenu() override;
+
+private:
+	Audio::PCSpeaker *_pcSpeaker = nullptr;
+	bool _pcSpeakerReady = false;
+	Audio::QueuingAudioStream *_effectStream = nullptr;
+	Audio::SoundHandle _effectHandle;
+
+public:
+	/**
+	 * Queues up the samples of a sound effect to be played
+	 */
+	void queueEffect(const Common::Array<byte> &samples);
+
+	/**
+	 * Queues a single square-wave note. divisor is the original's PIT
+	 * timer divisor (frequency = ~1193182/divisor), matching how each
+	 * original sound is specified
+	 */
+	void queueTone(int divisor, uint32 lengthMs);
+
+	/**
+	 * Queues a moment of silence
+	 */
+	void queueSilence(uint32 lengthMs);
+
+	/**
+	 * Plays the short low buzz used to reject invalid input
+	 */
+	void playErrorBeep();
+
+	/**
+	 * Plays one of the game's sound effects, identified by its original
+	 * number. Some effects are varied by values from where they're played
+	 */
+	void playSoundEffect(byte effect, byte arg1 = 0, byte arg2 = 0);
+
+	Data::Savegame _savegame;
+	Data::Map _map;
+	Data::Map _worldMap;
+	Data::Dungeon _dungeon;
+	CombatLogic _combat;
+	Gfx::Shapes _shapes;
+	Gfx::MessageLog _messages;
+	Gfx::Overview _overview;
+	Gfx::ScreenEffects _effects;
+	byte _windDirection = 0;
+
+	// How many more turns time is held still for, by powder or a spell
+	byte _holdTime = 0;
+
+	// A full viewport picture shown in place of the dungeon, such as a fountain
+	byte _scene[Data::ARENA_SIZE * Data::ARENA_SIZE] = {};
+	bool _sceneShown = false;
+
+	// Set by the game options that bring in the Ultima III Upgrade's changes to
+	// the monster generation and food rates
+	bool _moreMonsters = false;
+	bool _lessHunger = false;
+	bool _moonIcons = true;
+	bool _timedSounds = false;
+
+	// Plays the Upgrade's MIDI music, if that's been turned on
+	Music _music;
+
+	// Which of the upgrade's renderers is in use
+	Data::RenderMode _renderMode = Data::RENDER_CGA;
+
+	// Toggled in the game by the Volume command
+	bool _soundEnabled = true;
+
+	// Set when a loaded game should continue in the world rather than start it
+	bool _resumeGame = false;
+
+	// Debug flag toggled by the "intangible" console command, allowing
+	// movement through normally impassable terrain
+	bool _intangible = false;
+
+	Ultima3Engine(OSystem *syst, const Ultima::UltimaGameDescription *gameDesc);
+	~Ultima3Engine() override;
+
+	uint32 getFeatures() const;
+
+	/**
+	 * Returns the game Id
+	 */
+	Common::String getGameId() const;
+
+	bool hasFeature(EngineFeature f) const override {
+		return
+			(f == kSupportsLoadingDuringRuntime) ||
+			(f == kSupportsSavingDuringRuntime) ||
+			(f == kSupportsReturnToLauncher);
+	};
+
+	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
+	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
+
+	/**
+	 * Uses a serializer to allow implementing savegame
+	 * loading and saving using a single method
+	 */
+	Common::Error syncGame(Common::Serializer &s);
+
+	Common::Error saveGameStream(Common::WriteStream *stream, bool  = false) override {
+		Common::Serializer s(nullptr, stream);
+		return syncGame(s);
+	}
+	Common::Error loadGameStream(Common::SeekableReadStream *stream) override {
+		Common::Serializer s(stream, nullptr);
+		return syncGame(s);
+	}
+
+	/**
+	 * Returns true if any savegames exist
+	 */
+	bool savegamesExist() const;
+
+	/**
+	 * Returns the name of the view for the place the party is in
+	 */
+	const char *gameViewName() const {
+		return _savegame._location == Data::LOCATION_DUNGEON ? "DungeonMap" : "LocationMap";
+	}
+
+	/**
+	 * Returns a font object that GfxSurface instances can use
+	 */
+	Graphics::Font *createFont() const override;
+};
+
+extern Ultima3Engine *g_engine;
+#define _G(X) (Ultima3::g_engine->_##X)
+
+} // namespace Ultima3
+} // namespace Ultima
+
+#endif

@@ -21,6 +21,7 @@
 
 #include "common/util.h"
 #include "mm/mm1/game/view_base.h"
+#include "mm/mm1/data/text.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/mm1.h"
 #include "mm/mm1/mm1.h"
@@ -114,8 +115,7 @@ bool ViewBase::msgGame(const GameMessage &msg) {
 		update();
 		return true;
 	} else if (msg._name == "LOCATION") {
-		_descriptionLine = STRING[Common::String::format(
-			"dialogs.location.titles.%d", msg._value)];
+		_descriptionLine = LOCATION_TITLES[msg._value];
 		draw();
 		return true;
 	}
@@ -145,7 +145,9 @@ void ViewBase::forward(KeybindingAction action) {
 
 	//  Figure out direction mask
 	byte mask = maps._forwardMask;
-	if (action == KEYBIND_STRAFE_LEFT) {
+	if (action == KEYBIND_BACKWARDS) {
+		mask = maps._backwardsMask;
+	} else if (action == KEYBIND_STRAFE_LEFT) {
 		mask = maps._leftMask;
 	} else if (action == KEYBIND_STRAFE_RIGHT) {
 		mask = maps._rightMask;
@@ -174,7 +176,7 @@ void ViewBase::forward(KeybindingAction action) {
 			if (map.dataByte(Maps::MAP_30 + offset) == 4 &&
 				!g_globals->_activeSpells._s.walk_on_water) {
 				Sound::sound(SOUND_1);
-				_dialogMessage = STRING["movement.obstructed.cant_swim"];
+				_dialogMessage = " can't swim";
 				redraw();
 				return;
 			}
@@ -198,31 +200,7 @@ void ViewBase::forward(KeybindingAction action) {
 }
 
 void ViewBase::backwards() {
-	Maps::Maps &maps = g_globals->_maps;
-	Maps::Map &map = *g_globals->_maps._currentMap;
-	Common::Point delta = g_maps->getMoveDelta(maps._backwardsMask);
-
-	if (!g_globals->_intangible) {
-		if (maps._currentWalls & maps._backwardsMask) {
-			Sound::sound(SOUND_1);
-			g_globals->_party.checkPartyDead();
-			return;
-		}
-		if (maps._currentState & 0x55 & maps._backwardsMask) {
-			Sound::sound(SOUND_1);
-			g_globals->_party.checkPartyDead();
-			return;
-		}
-	}
-
-	g_globals->_treasure.clear();
-
-	int maxVal = map[Maps::MAP_29];
-	if (g_engine->getRandomNumber(maxVal) == maxVal)
-		_stepRandom = true;
-
-	g_globals->_maps.step(delta);
-	update();
+	forward(KEYBIND_BACKWARDS);
 }
 
 void ViewBase::obstructed(byte mask) {
@@ -236,12 +214,11 @@ void ViewBase::obstructed(byte mask) {
 	else if (!(maps._currentWalls & mask & 0xaa))
 		index = 30;
 
-	_dialogMessage = STRING[Common::String::format(
-		"movement.obstructed.%d", map.dataByte(index))];
+	_dialogMessage = OBSTRUCTED_MESSAGES[map.dataByte(index)];
 }
 
 void ViewBase::barrier() {
-	_dialogMessage = STRING["movement.obstructed.barrier"];
+	_dialogMessage = "  barrier!  ";
 	Sound::sound(SOUND_1);
 }
 

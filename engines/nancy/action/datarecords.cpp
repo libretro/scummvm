@@ -482,6 +482,10 @@ CursorManager::CursorType EventFlagsMultiHS::getHoverCursor() const {
 	return _hoverCursor;
 }
 
+bool EventFlagsMultiHS::runsOnClick() const {
+	return g_nancy->getGameType() >= kGameTypeNancy17;
+}
+
 void EventFlagsMultiHS::execute() {
 	switch (_state) {
 	case kBegin:
@@ -500,10 +504,11 @@ void EventFlagsMultiHS::execute() {
 
 		break;
 	case kActionTrigger:
-		// Swallow clicks if the cursor is in the puzzle-drag range
+		// Swallow clicks if the cursor is in the puzzle-drag range. From Nancy16 on
+		// the record is a scene change without a scene, which takes every click.
 		if (g_nancy->getGameType() <= kGameTypeNancy9 && (_hoverCursor == CursorManager::kCustom1 || _hoverCursor == CursorManager::kCustom2)) {
 			_state = kRun;
-		} else if (g_nancy->getGameType() >= kGameTypeNancy10 &&
+		} else if (g_nancy->getGameType() >= kGameTypeNancy10 && g_nancy->getGameType() <= kGameTypeNancy15 &&
 				(int)_hoverCursor >= (g_nancy->getGameType() >= kGameTypeNancy12 ?
 					CursorManager::kNewUseHand : CursorManager::kNewUseHand - 1)) {
 			// The puzzle-drag cursor range starts one slot earlier before Nancy12

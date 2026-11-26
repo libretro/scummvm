@@ -69,7 +69,7 @@ public:
 // get created while the game runs, like journal entries and conversation responses.
 class Manager {
 public:
-	static const uint16 kTooltipZ = 2000;
+	static const uint16 kTooltipZ = 64000;
 
 	// What the UI asked of the engine, which has to wait until the UI is done
 	// handling the player's input, since it can replace the UI
@@ -91,10 +91,35 @@ public:
 	~Manager();
 
 	Request takeRequest();
+	const Request &getRequest() const { return _request; }
 
 	// Nancy18 scenes save and load games by name, which is how it does second chances
 	void requestSave(const Common::String &name);
 	void requestLoad(const Common::String &name);
+
+	// Nancy26's scripts start new games and quit by themselves
+	void requestNewGame() { _request.type = kRequestNewGame; }
+	void requestQuit() { _request.type = kRequestQuit; }
+
+	// Whether there is a saved game of that name, and its slot; -1 for none
+	bool hasSave(const Common::String &name) const { return findSaveSlot(name) != -1; }
+	int findSaveSlot(const Common::String &name) const;
+	bool isValidSaveName(const Common::String &name) const;
+
+	// Resorting to Danger manages the saved games of its profiles itself
+	bool isSavingAllowed() const { return _isSavingAllowed; }
+	bool deleteSave(const Common::String &name);
+	bool renameSave(const Common::String &oldName, const Common::String &newName);
+
+	// Resorting to Danger saves the game under the name of the profile whenever
+	// a scene begins, as soon as saving is allowed
+	void setAutosaveName(const Common::String &name) { _autosaveName = name; }
+	void requestAutosave() { _isAutosavePending = true; }
+
+	Panel *findPanel(const Common::String &name) const;
+
+	// The names of the saved games
+	void getSaveNames(Common::Array<Common::String> &names) const;
 
 	// Goes on with the quit or load that was put off to ask whether to save first
 	void runPendingAction();
@@ -111,7 +136,8 @@ public:
 	const Common::String &getEventSender() const { return _eventSender; }
 	void setEventSender(const Common::String &sender) { _eventSender = sender; }
 
-	void takeAction(const Action &action);
+	// Returns whether anything took the action
+	bool takeAction(const Action &action);
 	void takeAction(int32 type, const Common::String &target, double value);
 	void takeAction(int32 type, const Common::String &target, const Common::String &text);
 	void handleInput(NancyInput &input);
@@ -120,11 +146,15 @@ public:
 	// Nancy17: the control under the mouse that has a tooltip, and the panel's control that shows it
 	void setHoveredTooltip(const Control *control, Tooltip *tooltip);
 
+	// Nancy18 movies can keep the mouse away from the panels for as long as they play
+	void lockMouseInput() { ++_mouseInputLocks; }
+	void unlockMouseInput() { if (_mouseInputLocks > 0) --_mouseInputLocks; }
+
 	const Graphics::ManagedSurface *getTexture(const Common::String &name);
 
 	// Creates a control from a template, as the last one of a panel
-	void createObject(const Common::String &name, const Common::String &templateName, const Common::String &parentName);
-	void destroyObject(const Common::String &name);
+	bool createObject(const Common::String &name, const Common::String &templateName, const Common::String &parentName);
+	bool destroyObject(const Common::String &name);
 
 	// Engine state shown by the UI
 	void update();
@@ -185,8 +215,18 @@ private:
 
 	void onLoaderAction(const Action &action);
 	void onSaverAction(const Action &action);
+
+	// Lights, Camera, Curses saves a game for every player, named after them,
+	// which the scripts list and pick as the profiles of the players
+	void onProfileLoaderAction(const Action &action);
+	void onProfileSaverAction(const Action &action);
+	void fillProfileList();
+	void sendToPlayerName(const char *action, const Common::String &text);
+	void getProfileNames(Common::Array<Common::String> &names) const;
+	void runProfileLoad();
 	void onSaveQueryAction(const Action &action);
 	void onSaveOverwriteAction(const Action &action);
+	void onExitQueryAction(const Action &action);
 	void onGameWindowAction(const Action &action);
 	void onCellPhoneAction(const Action &action);
 	void onItemStreamClicked(const InvButton &button);
@@ -194,14 +234,14 @@ private:
 	void onFlagsAction(const Action &action);
 	void askToSaveFirst(const Action &action);
 	uint fillSaveList(const Common::String &listName);
-	int findSaveSlot(const Common::String &name) const;
 	int runScummVMSaveLoadDialog(bool isSave, Common::String &saveName);
 	void setSaveScreenshot(const Graphics::ManagedSurface &image, const Common::Rect &src);
 
-	Panel *findPanel(const Common::String &name) const;
+	bool isItemButton(const Common::String &name) const;
 	InvButton *findItemButton(int16 itemID) const;
 
 	Common::Array<Panel *> _panels;
+	Common::Array<InvButton *> _attachedItemButtons;	// Buttons placed by the UI data that act as an item, like the PDA
 	Common::String _eventSender;
 	Common::String _caption;
 	Common::HashMap<Common::String, Graphics::ManagedSurface *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _textures;
@@ -212,6 +252,8 @@ private:
 	// Nancy17 tooltips are drawn on top of every panel
 	RenderObject _tooltipWindow{kTooltipZ};
 	const Control *_hoveredControl = nullptr;
+	uint _mouseInputLocks = 0;
+	uint16 _heldArrowKeys = 0;	// the input of the last frame, to tell when an arrow key goes down
 	Tooltip *_hoveredTooltip = nullptr;
 	const Control *_tooltipControl = nullptr;
 	uint32 _tooltipHoverStart = 0;
@@ -236,11 +278,29 @@ private:
 	Common::String _typedSaveName;	// in the save dialog
 	Common::String _lastSaveName;
 
+	// Lights, Camera, Curses
+	Common::String _pickedProfile;		// to be loaded, or made
+	Common::String _profileToSave;
+	Common::Array<Common::String> _listedProfiles;	// as the buttons show them
+	bool _isProfileLoadRequested = false;
+
 	// What the player was about to do when asked whether to save first
 	bool _hasPendingAction = false;
 	Action _pendingAction;
 
+	// Nancy21: the scripts say when the game can't be saved, e.g. during a
+	// cutscene. Leaving the game then asks whether to leave without saving.
+	bool _isSavingAllowed = true;
+
+	Common::String _autosaveName;
+	bool _isAutosavePending = false;
+
 	Request _request;
+
+	// Resorting to Danger saves on the spot, so a load, new game or quit asked
+	// for before a save goes on after it: "Save & Exit" asks for a new game,
+	// which goes back to the main menu, and then saves
+	Request _requestAfterSave;
 };
 
 } // End of namespace NDUI

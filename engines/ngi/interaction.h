@@ -28,23 +28,23 @@ namespace NGI {
 
 class GameObject;
 class MessageQueue;
-class StaticANIObject;
+class AniObject;
 
-int handleObjectInteraction(StaticANIObject *subject, GameObject *object, int invId);
+int handleObjectInteraction(AniObject *subject, GameObject *object, int invId);
 bool canInteractAny(GameObject *obj1, GameObject *obj2, int invId);
 
 
-class Interaction : public CObject {
+class Interact : public CObject {
  public:
-	int16 _objectId1;
-	int16 _objectId2;
-	int16 _objectId3;
-	int16 _staticsId1;
-	int16 _staticsId2;
+	int16 _objectId;
+	int16 _heroId;
+	int16 _cursorObjectId;
+	int16 _objectStaticId;
+	int16 _heroStaticId;
 	int _objectState1;
 	int _objectState2;
-	int _xOffs;
-	int _yOffs;
+	int _heroOffsetX;
+	int _heroOffsetY;
 	MessageQueue *_messageQueue;
 	int _sceneId;
 	int _field_28;
@@ -52,45 +52,45 @@ class Interaction : public CObject {
 	Common::String _actionName;
 
  public:
-	Interaction();
-	~Interaction() override;
+	Interact();
+	~Interact() override;
 
 	bool load(MfcArchive &file) override;
-	bool canInteract(GameObject *obj1, GameObject *obj2, int invId);
-	bool isOverlapping(StaticANIObject *subj, GameObject *obj);
+	bool canRun(GameObject *obj1, GameObject *obj2, int invId);
+	bool isOverlapping(AniObject *subj, GameObject *obj);
 };
 
 class InteractionController : public CObject {
 	friend bool canInteractAny(GameObject *obj1, GameObject *obj2, int invId);
 
 public:
-	typedef ObList<Interaction> InteractionList;
-	bool _flag24;
+	typedef ObList<Interact> InteractionList;
+	bool _enabled;
 
  private:
 	InteractionList _interactions;
-	static bool compareInteractions(const Interaction *i1, const Interaction *i2);
+	static bool compareInteractions(const Interact *i1, const Interact *i2);
 
  public:
-	InteractionController() : _flag24(true) {}
+	InteractionController() : _enabled(true) {}
 	~InteractionController() override;
 
 	bool load(MfcArchive &file) override;
 
-	void enableFlag24() { _flag24 = true; }
-	void disableFlag24() { _flag24 = false; }
+	void enable() { _enabled = true; }
+	void disable() { _enabled = false; }
 
 	void sortInteractions(int sceneId);
 
-	bool handleInteraction(StaticANIObject *subj, GameObject *obj, int invId);
+	bool handleInteraction(AniObject *subj, GameObject *obj, int invId);
 
-	Interaction *getInteractionByObjectIds(int obId, int obId2, int obId3);
+	Interact *findInteraction(int obId, int obId2, int obId3);
 };
 
-struct EntranceInfo {
+struct Entrance {
 	int32 _sceneId;
-	int32 _field_4;
-	int32 _messageQueueId;
+	int32 _id;
+	int32 _queueId;
 	int32 _field_130;
 
 	bool load(MfcArchive &file);

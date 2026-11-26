@@ -34,8 +34,8 @@
 namespace NGI {
 
 void sceneDbgMenu_initScene(Scene *sc) {
-	g_vars->selector = sc->getPictureObjectById(PIC_SCD_SEL, 0);
-	getGameLoaderInteractionController()->disableFlag24();
+	g_vars->selector = sc->findPictureObjectById(PIC_SCD_SEL, 0);
+	getGameLoaderInteractionController()->disable();
 	setInputDisabled(false);
 }
 
@@ -43,12 +43,12 @@ GameObject *sceneHandlerDbgMenu_getObjectAtXY(int x, int y) {
 	if (!g_nmi->_currentScene)
 		return nullptr;
 
-	for (uint i = 1; i < g_nmi->_currentScene->_picObjList.size(); i++) {
-		PictureObject *pic = g_nmi->_currentScene->_picObjList[i];
+	for (uint i = 1; i < g_nmi->_currentScene->_pictureObjects.size(); i++) {
+		PictureObject *pic = g_nmi->_currentScene->_pictureObjects[i];
 
-		if (x >= pic->_ox && y >= pic->_oy) {
-			const Dims dims = pic->getDimensions();
-			if (x <= pic->_ox + dims.x && y <= pic->_oy + dims.y && pic != g_vars->selector)
+		if (x >= pic->_x && y >= pic->_y) {
+			const Dims dims = pic->getFullSize();
+			if (x <= pic->_x + dims.x && y <= pic->_y + dims.y && pic != g_vars->selector)
 				return pic;
 		}
 	}
@@ -56,8 +56,8 @@ GameObject *sceneHandlerDbgMenu_getObjectAtXY(int x, int y) {
 	return nullptr;
 }
 
-int sceneHandlerDbgMenu(ExCommand *ex) {
-	if (ex->_messageKind != 17)
+int sceneHandlerDbgMenu(Command *ex) {
+	if (ex->_cmd != 17)
 		return 0;
 
 	int mx = g_nmi->_mouseScreenPos.x + g_nmi->_sceneRect.left;
@@ -66,7 +66,7 @@ int sceneHandlerDbgMenu(ExCommand *ex) {
 	if (ex->_messageNum == 29) {
 		GameObject *obj = sceneHandlerDbgMenu_getObjectAtXY(mx, my);
 		if (obj && canInteractAny(nullptr, obj, -3) ) {
-			getGameLoaderInteractionController()->enableFlag24();
+			getGameLoaderInteractionController()->enable();
 			handleObjectInteraction(nullptr, obj, 0);
 		}
 		return 0;
@@ -80,7 +80,7 @@ int sceneHandlerDbgMenu(ExCommand *ex) {
 	}
 
 	g_nmi->_cursorId = PIC_CSR_DEFAULT;
-	GameObject *obj = g_nmi->_currentScene->getStaticANIObjectAtPos(mx, my);
+	GameObject *obj = g_nmi->_currentScene->findAniObjectAtPos(mx, my);
 	if (obj) {
 		if (canInteractAny(nullptr, obj, -3)) {
 			g_nmi->_cursorId = PIC_CSR_DEFAULT;
@@ -91,7 +91,7 @@ int sceneHandlerDbgMenu(ExCommand *ex) {
 		obj = sceneHandlerDbgMenu_getObjectAtXY(mx, my);
 		if (obj && canInteractAny(nullptr, obj, -3) ) {
 			g_vars->selector->_flags |= 4;
-			g_vars->selector->setOXY(obj->_ox, obj->_oy);
+			g_vars->selector->setPos(obj->_x, obj->_y);
 			g_nmi->_cursorId = PIC_CSR_DEFAULT;
 			g_nmi->setCursor(PIC_CSR_DEFAULT);
 			return 0;

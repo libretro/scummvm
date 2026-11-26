@@ -26,7 +26,7 @@
 
 namespace NGI {
 
-class ExCommand;
+class Command;
 
 class StepArray : public CObject {
 	int _currPointIndex;
@@ -46,13 +46,13 @@ class StepArray : public CObject {
 	void insertPoints(const PointList &points);
 };
 
-class StaticPhase : public Picture {
+class StaticPhase : public Texture {
  public:
-	int16 _initialCountdown;
+	int16 _delay;     // Extra animation ticks in binary projects.
 	int16 _countdown;
-	int16 _field_68;
+	int16 _messageNum;
 	int16 _field_6A;
-	Common::ScopedPtr<ExCommand> _exCommand;
+	Common::ScopedPtr<Command> _command;
 
   public:
 	StaticPhase();
@@ -61,34 +61,41 @@ class StaticPhase : public Picture {
 
 	virtual Common::String toXML();
 
-	ExCommand *getExCommand() { return _exCommand.get(); }
+	Command *getCommand() { return _command.get(); }
 };
 
-class DynamicPhase : public StaticPhase {
+class Phase : public StaticPhase {
  public:
 	int _someX;
 	int _someY;
+	// XML phases can add both milliseconds and multiples of the movement's loop delay.
+	int _delayMs = 0;
+	int _delayRelative = 0;
+	uint16 _soundId = 0;
+	bool _loopSound = false;
 	Common::Rect _rect;
 	int16 _field_7C;
 	int16 _field_7E;
-	int _dynFlags;
+	int _flags;
 
   public:
-	DynamicPhase();
-	DynamicPhase(DynamicPhase *src, bool reverse);
+	Phase();
+	Phase(Phase *src, bool reverse);
+	void setPNG(const Common::Path &path, const Dims &size);
+	void enter(int objectId);
 
 	bool load(MfcArchive &file) override;
 
 	Common::String toXML() override;
 
-	int getDynFlags() { return _dynFlags; }
+	int getDynFlags() { return _flags; }
 };
 
-class Statics : public DynamicPhase {
+class Statics : public Phase {
  public:
  	int16 _staticsId;
 	Common::String _staticsName;
-	Picture _picture;
+	Texture _picture;
 
   public:
 	Statics();
@@ -102,7 +109,7 @@ class Statics : public DynamicPhase {
 	Common::Point getCenter() const;
 };
 
-class StaticANIObject;
+class AniObject;
 
 class Movement : public GameObject {
   public:
@@ -110,71 +117,73 @@ class Movement : public GameObject {
 	int _lastFrameSpecialFlag;
 	int _flipFlag;
 	int _updateFlag1;
-	Statics *_staticsObj1;
-	Statics *_staticsObj2;
-	int _mx;
-	int _my;
-	int _m2x;
-	int _m2y;
-	int _field_50;
-	int _counterMax;
+	Statics *_prevStatic;
+	Statics *_nextStatic;
+	bool _mirrorPrev = false;
+	bool _mirrorNext = false;
+	int _prevStepX;
+	int _prevStepY;
+	int _nextStepX;
+	int _nextStepY;
+	int _link;
+	int _loopDelay;
 	int _counter;
 	/** a confusing mix of owned and unowned items */
-	Common::Array<DynamicPhase *> _dynamicPhases;
+	Common::Array<Phase *> _phases;
 	int _field_78;
 	PointList _framePosOffsets;
 	Movement *_currMovement;
 	int _field_84;
-	DynamicPhase *_currDynamicPhase;
+	Phase *_curPhase;
 	int _field_8C;
-	int _currDynamicPhaseIndex;
+	int _curFrame;
 	int _field_94;
 
   public:
 	Movement();
 	~Movement() override;
 
-	Movement(Movement *src, StaticANIObject *ani);
-	Movement(Movement *src, int *flag1, int flag2, StaticANIObject *ani);
+	Movement(Movement *src, AniObject *ani);
+	Movement(Movement *src, int *flag1, int flag2, AniObject *ani);
 
 	bool load(MfcArchive &file) override;
-	bool load(MfcArchive &file, StaticANIObject *ani);
+	bool load(MfcArchive &file, AniObject *ani);
 
 	Common::Point getCurrDynamicPhaseXY() const;
 	Common::Point getCenter() const;
-	Dims getDimensionsOfPhase(int phaseIndex) const;
+	Dims getPhaseSize(int phaseIndex) const;
 
-	Common::Point calcSomeXY(int idx, int dynidx);
+	Common::Point getMovementSize(int idx, int dynidx);
 
-	void initStatics(StaticANIObject *ani);
+	void initStatics(AniObject *ani);
 	void updateCurrDynamicPhase();
 
 	void setAlpha(int alpha);
 
-	void setDynamicPhaseIndex(int index);
-	DynamicPhase *getDynamicPhaseByIndex(int idx);
+	void setCurFrame(int index);
+	Phase *getPhase(int idx);
 
 	int calcDuration();
 	int countPhasesWithFlag(int maxidx, int flag);
 
 	void removeFirstPhase();
-	bool gotoNextFrame(void (*_callback1)(int, Common::Point *point, int, int), void (*callback2)(int *));
+	bool setNext(void (*_callback1)(int, Common::Point *point, int, int), void (*callback2)(int *), bool mirror = false);
 	bool gotoPrevFrame();
 	void gotoFirstFrame();
-	void gotoLastFrame();
+	void setLast();
 
-	void loadPixelData();
-	void freePixelData();
+	void load();
+	void unload();
 
 	void draw(bool flipFlag, int angle);
 };
 
-class StaticANIObject : public GameObject {
+class AniObject : public GameObject {
  public:
 	Movement *_movement;
 	Statics *_statics;
 	int _shadowsOn;
-	int16 _field_30;
+	int16 _encodedRotation;
 	int16 _field_32;
 	int _field_34;
 	int _initialCounter;
@@ -190,25 +199,25 @@ class StaticANIObject : public GameObject {
 	int _messageNum;
 	int _animExFlag;
 	int _counter;
-	int _someDynamicPhaseIndex;
+	int _targetFrame;
 
 public:
 	int16 _sceneId;
 
 public:
-	StaticANIObject();
-	~StaticANIObject() override;
-	StaticANIObject(StaticANIObject *src);
+	AniObject();
+	~AniObject() override;
+	AniObject(AniObject *src);
 
 	bool load(MfcArchive &file) override;
 
-	void setOXY(int x, int y);
-	Statics *getStaticsById(int id);
+	void setPos(int x, int y);
+	Statics *getStatic(int id);
 	Statics *getStaticsByName(const Common::String &name);
-	Movement *getMovementById(int id);
+	Movement *getMovement(int id);
 	int getMovementIdById(int itemId) const;
 	Movement *getMovementByName(const Common::String &name);
-	Common::Point getCurrDimensions() const;
+	Common::Point getFullSize() const;
 
 	Common::Point getSomeXY() const;
 
@@ -217,33 +226,33 @@ public:
 	bool isIdle();
 	void setAlpha(int alpha);
 
-	void deleteFromGlobalMessageQueue();
-	bool queueMessageQueue(MessageQueue *msg);
+	void stopQueue();
+	bool setQueue(MessageQueue *msg);
 	void restartMessageQueue(MessageQueue *msg);
 	MessageQueue *getMessageQueue();
 	bool trySetMessageQueue(int msgNum, int qId);
 	void startMQIfIdle(int qId, int flag);
 
 	void initMovements();
-	void loadMovementsPixelData();
-	void freeMovementsPixelData();
+	void loadMovements();
+	void unloadMovements();
 	void preloadMovements(MovTable *mt);
 
-	void setSomeDynamicPhaseIndex(int val) { _someDynamicPhaseIndex = val; }
+	void setTargetFrame(int val) { _targetFrame = val; }
 	void adjustSomeXY();
 
-	bool startAnim(int movementId, int messageQueueId, int dynPhaseIdx);
+	bool startMovement(int movementId, int messageQueueId, int dynPhaseIdx, bool mirror = false);
 	bool startAnimEx(int movid, int parId, int flag1, int flag2);
-	void startAnimSteps(int movementId, int messageQueueId, int x, int y, const PointList &points, int someDynamicPhaseIndex);
+	void startSliding(int movementId, int messageQueueId, int x, int y, const PointList &points, int someDynamicPhaseIndex);
 
 	void hide();
 	void show1(int x, int y, int movementId, int mqId);
 	void show2(int x, int y, int movementId, int mqId);
 	void playIdle();
-	void update(int counterdiff);
+	bool update(int counterdiff);
 
 	Statics *addReverseStatics(Statics *ani);
-	void draw();
+	void render();
 	void draw2();
 
 	/** ownership of returned object is transferred to caller */
@@ -252,14 +261,14 @@ public:
 	void setSpeed(int speed);
 
 	void updateStepPos();
-	void stopAnim_maybe();
+	void stopMovement();
 	Common::Point *calcNextStep(Common::Point *point);
 
-	MessageQueue *changeStatics1(int msgNum);
-	void changeStatics2(int objId);
+	MessageQueue *moveToStatic(int msgNum);
+	void setStatic(int objId);
 
 	bool getPixelAtPos(int x, int y, uint32 *pixel, bool hitOnly = false);
-	bool isPixelHitAtPos(int x, int y);
+	bool hit(int x, int y);
 };
 
 } // End of namespace NGI

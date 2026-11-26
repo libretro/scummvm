@@ -19,6 +19,8 @@
  *
  */
 
+#include "common/textconsole.h"
+
 #include "mm/mm1/game/encounter.h"
 #include "mm/mm1/data/monsters.h"
 #include "mm/mm1/maps/maps.h"
@@ -31,7 +33,16 @@ namespace MM {
 namespace MM1 {
 namespace Game {
 
-void Encounter::execute() {
+void Encounter::execute(const Common::String &preCombatLog) {
+	if (g_events->isPresent("Combat") ||
+			g_events->isPresent("Encounter")) {
+		warning("MM1: Ignoring nested encounter request");
+		return;
+	}
+
+	// Clear stale event text, or retain text supplied by this encounter.
+	_preCombatLog = preCombatLog;
+
 	if (!g_globals->_encountersOn)
 		return;
 
@@ -130,7 +141,9 @@ exit_loop:
 
 		// Add monster details to list
 		_monsterLevel = _monsterSummaries[i]._level;
-		const Monster &srcMons = (*g_globals->_monsters)[_monsterSummaries[i]._num];
+		const Monster &srcMons = (*g_globals->_monsters)[
+			(_monsterSummaries[i]._level - 1) * 16 +
+			_monsterSummaries[i]._num];
 		_monsterList.push_back(srcMons);
 		Monster &mons = _monsterList.back();
 		mons._level = _monsterSummaries[i]._level;

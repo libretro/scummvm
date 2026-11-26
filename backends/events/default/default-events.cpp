@@ -122,13 +122,20 @@ bool DefaultEventManager::pollEvent(Common::Event &event) {
 
 	case Common::EVENT_HOTSPOTS_SHOW:
 		if (g_engine && ConfMan.getBool("enable_hotspots")) {
-			g_engine->showHotspots(true);
+			switch (g_engine->effectiveHotspotKeyMode()) {
+			case kHotspotKeyModeToggle:
+				g_engine->showHotspots(!g_engine->isShowingHotspots());
+				break;
+			default:
+				g_engine->showHotspots(true);
+				break;
+			}
 		}
 		forwardEvent = false;
 		break;
 
 	case Common::EVENT_HOTSPOTS_HIDE:
-		if (g_engine && ConfMan.getBool("enable_hotspots")) {
+		if (g_engine && ConfMan.getBool("enable_hotspots") && g_engine->effectiveHotspotKeyMode() == kHotspotKeyModeHold) {
 			g_engine->showHotspots(false);
 		}
 		forwardEvent = false;

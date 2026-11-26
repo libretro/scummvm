@@ -24,6 +24,7 @@
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -54,8 +55,9 @@ void Map01::special00() {
 }
 
 void Map01::special01() {
-	Common::String line1 = STRING["maps.map01.zam1"];
-	Common::String line2 = STRING["maps.map01.zam3"];
+	Common::String line1 = mapText("\"I am Zam, astral brother of Zom and\n"
+		"only living male residing in Portsmith\n");
+	Common::String line2 = "You're not the couriers!\"";
 
 	bool hasCourier = false;
 	for (uint i = 0; i < g_globals->_party.size() && !hasCourier; ++i) {
@@ -68,7 +70,7 @@ void Map01::special01() {
 			c._flags[0] |= CHARFLAG0_COURIER3 | CHARFLAG0_ZAM_CLUE;
 		}
 
-		line2 = STRING["maps.map01.zam2"];
+		line2 = "My clue is c-15\"";
 	}
 
 	send(InfoMessage(
@@ -88,10 +90,10 @@ void Map01::special03() {
 void Map01::special04() {
 	visitedExit();
 	send(SoundMessage(
-		STRING["maps.passage_outside2"],
+		"Passage outside, exit (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(3, 3);
-			g_maps->changeMap(0x101, 2);
+			g_maps->changeMapFromExit(0x101, 2);
 		}
 	));
 }
@@ -120,9 +122,24 @@ void Map01::special08() {
 	
 	// Show the message and wait for a keypress
 	send(SoundMessage(
-		STRING["maps.map01.secret"],
+		mapText("A sensuous female voice speaks from\n"
+			"within an intoxicating mist,\n"
+			"\"You've discovered my secret!\""),
 		[](const Common::KeyState &) {
 			g_events->close();
+
+			// This is a one-shot special encounter for the current map visit.
+			// Consume the special when the encounter actually starts so winning
+			// the fight does not immediately trigger the Queen again.
+			// Consume the Portsmith secret for this visit and record
+			// Lord Ironfist quest #3 (Discover the Secret of Portsmith)
+			// at the actual discovery site. In the original game,
+			// discovering the secret is sufficient; full victory is
+			// not required.
+			g_maps->clearSpecial();
+			for (uint i = 0; i < g_globals->_party.size(); ++i)
+				g_globals->_party[i]._flags[7] |= CHARFLAG7_4;
+
 			Game::Encounter &enc = g_globals->_encounters;
 			enc.clearMonsters();
 
@@ -141,42 +158,42 @@ void Map01::special08() {
 void Map01::special09() {
 	visitedExit();
 	send(SoundMessage(
-		STRING["maps.stairs_down"],
+		"Stairs going down! Take them (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(8, 0);
-			g_maps->changeMap(0xc01, 1);
+			g_maps->changeMapFromExit(0xc01, 1);
 		}
 	));
 }
 
 void Map01::special10() {
-	showSign(STRING["maps.map01.market"]);
+	showSign("\"Maid Marion's Market\"");
 }
 
 void Map01::special11() {
-	showSign(STRING["maps.map01.blacksmith"]);
+	showSign("\"B. Smith's Workshop\"");
 }
 
 void Map01::special12() {
-	showSign(STRING["maps.map01.inn"]);
+	showSign("\"Inn of Portsmith\"");
 }
 
 void Map01::special13() {
-	showSign(STRING["maps.map01.temple"]);
+	showSign("\"Temple Succubon\"");
 }
 
 void Map01::special14() {
 	send(SoundMessage(
-		0, 1, STRING["maps.map01.zam0"]
+		0, 1, "Note: Zam 12,2"
 	));
 }
 
 void Map01::special15() {
-	showSign(STRING["maps.map01.tavern"]);
+	showSign("\"Zorelda's Watering Hole\"");
 }
 
 void Map01::special16() {
-	showSign(STRING["maps.map01.training"]);
+	showSign("\"Amazonia's Training\"");
 }
 
 } // namespace Maps

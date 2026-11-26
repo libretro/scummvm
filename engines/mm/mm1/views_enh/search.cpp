@@ -20,6 +20,7 @@
  */
 
 #include "mm/mm1/views_enh/search.h"
+#include "mm/mm1/data/text.h"
 #include "mm/mm1/views_enh/select_number.h"
 #include "mm/mm1/views_enh/trap.h"
 #include "mm/mm1/views_enh/who_will_try.h"
@@ -47,8 +48,7 @@ bool Search::msgGame(const GameMessage &msg) {
 
 	} else {
 		// Otherwise send an info message to say nothing was found
-		Common::String line = STRING["dialogs.search.search"] +
-			STRING["dialogs.search.nothing"];
+		Common::String line = "Search: nothing";
 		send(InfoMessage(0, 1, line));
 	}
 
@@ -81,18 +81,21 @@ void Search::draw() {
 	switch (_mode) {
 	case INITIAL:
 		Sound::sound(SOUND_2);
-		line = STRING["dialogs.search.search"] +
-			STRING["dialogs.search.you_found"];
+		line = "Search: You found...";
 		writeString(0, 0, line);
 		delaySeconds(2);
 		break;
 
 	case OPTIONS:
-		writeString(0, 0, STRING["dialogs.search.options"]);
-		writeString(80, 0, STRING["dialogs.search.options1"]);
-		writeString(80, 9, STRING["dialogs.search.options2"]);
-		writeString(80, 18, STRING["dialogs.search.options3"]);
-		writeString(96, 32, STRING["enhdialogs.misc.go_back"]);
+		writeString(0, 0, "Options:");
+		writeString(80, 0, "1) Open It");
+		writeString(80, 9, "2) Find/Remove Trap");
+		writeString(80, 18, "3) Detect Magic/Trap");
+		writeString(96, 32, "Go back");
+		break;
+
+	case RESPONSE:
+		writeLine(_responseLine, _responseText, ALIGN_MIDDLE);
 		break;
 
 	case GET_TREASURE:
@@ -183,8 +186,7 @@ void Search::timeout() {
 
 		// Show the name of the container type in the game view
 		send("View", HeaderMessage(
-			STRING[Common::String::format("dialogs.search.containers.%d",
-				g_globals->_treasure._container)]
+			SEARCH_CONTAINERS[g_globals->_treasure._container]
 		));
 
 		// Display a graphic for the container type
@@ -201,8 +203,15 @@ void Search::timeout() {
 		break;
 
 	case GET_TREASURE:
-		setMode(GET_ITEMS);
-		draw();
+		// Gold and gems are already awarded by drawTreasure(). If there are
+		// no actual item slots left to show, close the Search view now rather
+		// than entering GET_ITEMS_DONE and requiring a second dismissal.
+		if (g_globals->_treasure.hasItems()) {
+			setMode(GET_ITEMS);
+			draw();
+		} else {
+			close();
+		}
 		break;
 
 	case GET_ITEMS:
@@ -273,28 +282,31 @@ void Search::detectMagicTrap2() {
 
 	if (c._class == PALADIN || c._class == CLERIC) {
 		Sound::sound(SOUND_2);
-		ScrollView::draw();
-		writeLine(2, STRING["dialogs.search.bad_class"], ALIGN_MIDDLE);
+		_responseLine = 2;
+		_responseText = "*** Bad class ***";
 		delaySeconds(4);
 
 	} else if (c._sp == 0) {
 		Sound::sound(SOUND_2);
-		ScrollView::draw();
-		writeLine(2, STRING["dialogs.search.no_sp"], ALIGN_MIDDLE);
+		_responseLine = 2;
+		_responseText = "*** No spell points ***";
 		delaySeconds(4);
 
 	} else {
 		c._sp._current--;
 		char magic = g_globals->_treasure.hasItems() ||
 			g_globals->_treasure.getGems() ? 'Y' : 'N';
-		char trapped = g_globals->_treasure._trapType == 1 ? 'Y' : 'N';
+		char trapped =
+			g_globals->_treasure._trapType == 1 ? 'Y' : 'N';
 
-		ScrollView::draw();
-		writeLine(1, Common::String::format(
-			STRING["dialogs.search.magic_trap"].c_str(),
-			magic, trapped), ALIGN_MIDDLE);
+		_responseLine = 1;
+		_responseText = Common::String::format(
+			"Magic (%c)  Trap (%c)",
+			magic, trapped);
 		delaySeconds(8);
 	}
+
+	redraw();
 }
 
 bool Search::whoWillTry() {
@@ -348,7 +360,7 @@ void Search::getTreasure() {
 }
 
 void Search::drawTreasure() {
-	writeLine(0, STRING["dialogs.search.it_opens"], ALIGN_MIDDLE);
+	writeLine(0, "It opens!", ALIGN_MIDDLE);
 
 	// Split up the gold across the party
 	uint32 goldPerPerson = g_globals->_treasure.getGold() /
@@ -365,7 +377,7 @@ void Search::drawTreasure() {
 	}
 	
 	writeLine(2, Common::String::format(
-		STRING["dialogs.search.each_share"].c_str(),
+		"each share is worth %d gold",
 		goldPerPerson));
 	g_globals->_treasure.setGold(0);
 
@@ -380,58 +392,67 @@ void Search::drawTreasure() {
 		Character &c = g_globals->_party[charNum];
 
 		writeLine(_lineNum++, Common::String::format(
-			STRING["dialogs.search.found_gems"].c_str(),
+			"%s found %d gems",
 			c._name,
 			gems));
 		c._gems = MIN((int)c._gems + gems, 0xffff);
 	}
 
 	Sound::sound2(SOUND_5);
-	delaySeconds(2);
+	// Preserve the normal 2-second handoff when actual items remain.
+	// Gold/gem-only loot stays visible for 7 seconds unless the player
+	// dismisses the active delay early with a keypress or mouse click.
+	delaySeconds(g_globals->_treasure.hasItems() ? 2 : 7);
 }
 
 void Search::drawItem() {
 	Treasure &treasure = g_globals->_treasure;
-	int itemId = treasure.removeItem();
 	_lineNum = 0;
 
-	// Iterate through any treasure items
-	if (itemId != 0) {
-		// Find a person with free backpack space for the item
+	// Only remove the treasure item once somebody can carry it,
+	// otherwise it's lost when every backpack is full
+	if (treasure.hasItems()) {
+		Character *recipient = nullptr;
+
 		for (uint i = 0; i < g_globals->_party.size(); ++i) {
 			Character &c = g_globals->_party[i];
+			if (!c._backpack.full()) {
+				recipient = &c;
+				break;
+			}
+		}
 
-			// Check if character has backpack space
-			if (c._backpack.full())
-				continue;
+		if (!recipient) {
+			// Keep the item in Treasure so it can be collected after the
+			// player frees a backpack slot and Searches again.
+			writeLine(_lineNum++, "Party inventory is full!", ALIGN_MIDDLE);
+			setMode(GET_ITEMS_DONE);
+			delaySeconds(7);
+			return;
+		}
 
+		const int itemId = treasure.removeItem();
+		if (itemId != 0) {
 			Item *item = g_globals->_items.getItem(itemId);
-			c._backpack.add(itemId, item->_maxCharges);
+			recipient->_backpack.add(itemId, item->_maxCharges);
 
-			// Add line for found item
 			writeLine(_lineNum++, Common::String::format(
-				STRING["dialogs.search.found_item"].c_str(),
-				c._name,
+				"%s found %s",
+				recipient->_name,
 				item->_name.c_str()
 			));
 
 			if (treasure.hasItems()) {
 				delaySeconds(2);
 				return;
-			} else {
-				// Finished final item, so go down below to switch to items done
-				break;
 			}
 		}
 	}
 
-	// At this point we've either displayed the up to 3 item
-	// lines (in addition to gold and/or gems), or the party's backpacks
-	// were completely full up. Wait for 7 seconds and close the view
+	// Finished the final item. Keep the existing acknowledgement timing.
 	setMode(GET_ITEMS_DONE);
 	delaySeconds(7);
 }
-
 void Search::setMode(Mode mode) {
 	_mode = mode;
 

@@ -30,37 +30,49 @@ namespace ViewsEnh {
 namespace Interactions {
 
 Ghost::Ghost() : Interaction("Ghost", 33) {
-	_title = STRING["maps.emap37.okrim"];
+	_title = "Okrim";
 }
 
 bool Ghost::msgFocus(const FocusMessage &msg) {
 	Interaction::msgFocus(msg);
-	addText(STRING["maps.map37.okrim1"]);
+	addText("A ghostlike figure rises from the body of Okrim and speaks, \"In exchange for my ring, "
+		"forfeit a life. Accept (Y/N)?\"");
 
 	clearButtons();
-	addButton(STRING["maps.accept"], 'Y');
-	addButton(STRING["maps.decline"], 'N');
+	addButton("Accept", 'Y');
+	addButton("Decline", 'N');
 
 	return true;
 }
 
 bool Ghost::msgKeypress(const KeypressMessage &msg) {
-	if (!_buttons.empty()) {
-		MM1::Maps::Map37 &map = *static_cast<MM1::Maps::Map37 *>(g_maps->_currentMap);
+	if (_buttons.empty()) {
+		viewAction();
+		return true;
+	}
 
-		if (msg.keycode == Common::KEYCODE_y) {
-			g_globals->_party[0]._condition = ERADICATED;
-			close();
-			return true;
+	MM1::Maps::Map37 &map = *static_cast<MM1::Maps::Map37 *>(g_maps->_currentMap);
 
-		} else if (msg.keycode == Common::KEYCODE_n) {
-			map[MM1::Maps::MAP_29] = 32;
-			map[MM1::Maps::MAP_47] = 8;
+	if (msg.keycode == Common::KEYCODE_y) {
+		g_globals->_party[0]._condition = ERADICATED;
 
-			addText(STRING["maps.map37.okrim2"]);
-			clearButtons();
-			return true;
-		}
+		// Match Classic/original MM1: Okrim's Ring is awarded whether
+		// the party accepts or declines the ghost's demand.
+		g_globals->_treasure._items[2] = RING_OF_OKRIM_ID;
+		close();
+		g_events->addAction(KEYBIND_SEARCH);
+		return true;
+
+	} else if (msg.keycode == Common::KEYCODE_n) {
+		map[MM1::Maps::MAP_29] = 32;
+		map[MM1::Maps::MAP_47] = 8;
+
+		// Preserve Enhanced's acknowledgement text, but stage the same
+		// Ring reward that Classic places in treasure immediately.
+		g_globals->_treasure._items[2] = RING_OF_OKRIM_ID;
+		addText("\"May the shadow of death greet you with open arms!\"");
+		clearButtons();
+		return true;
 	}
 
 	return true;
@@ -69,6 +81,7 @@ bool Ghost::msgKeypress(const KeypressMessage &msg) {
 void Ghost::viewAction() {
 	if (_buttons.empty()) {
 		close();
+		g_events->addAction(KEYBIND_SEARCH);
 	}
 }
 

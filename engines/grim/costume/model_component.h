@@ -28,19 +28,20 @@ namespace Grim {
 
 class Model;
 class AnimManager;
+struct ScreenBounds;
 
 class ModelComponent : public Component {
 public:
 	ModelComponent(Component *parent, int parentID, const char *filename, Component *prevComponent, tag32 tag);
 	~ModelComponent();
 
-	void init();
-	void setKey(int val);
-	int update(uint time);
-	void animate();
-	void reset();
-	void resetColormap();
-	void restoreState(SaveGame *state);
+	void init() override;
+	void setKey(int val) override;
+	int update(uint time) override;
+	void animate() override;
+	void reset() override;
+	void resetColormap() override;
+	void restoreState(SaveGame *state) override;
 	void translateObject(bool reset);
 	static void translateObject(ModelNode *node, bool reset);
 	AnimManager *getAnimManager() const;
@@ -48,8 +49,8 @@ public:
 	ModelNode *getHierarchy() { return _hier; }
 	int getNumNodes();
 	Model *getModel() { return _obj; }
-	void draw();
-	void getBoundingBox(int *x1, int *y1, int *x2, int *y2);
+	void draw() override;
+	void getBoundingBox(const Math::Matrix4 &matrix, ScreenBounds &bounds);
 
 protected:
 	Model *_obj;

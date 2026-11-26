@@ -21,6 +21,7 @@
 
 #include "engines/advancedDetector.h"
 
+#include "engines/nancy/detection.h"
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/input.h"
@@ -112,14 +113,14 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 	AD_EXTRA_GUI_OPTIONS_TERMINATOR
 };
 
-class NancyMetaEngine : public AdvancedMetaEngine<Nancy::NancyGameDescription> {
+class NancyMetaEngine : public AdvancedMetaEngine<ADGameDescription> {
 public:
 	const char *getName() const override {
 		return "nancy";
 	}
 
 	bool hasFeature(MetaEngineFeature f) const override;
-	Common::Error createInstance(OSystem *syst, Engine **engine, const Nancy::NancyGameDescription *gd) const override;
+	Common::Error createInstance(OSystem *syst, Engine **engine, const ADGameDescription *gd) const override;
 
 	int getMaximumSaveSlot() const override;
 	SaveStateDescriptor querySaveMetaInfos(const char *target, int slot) const override;
@@ -131,6 +132,11 @@ public:
 	void registerDefaultSettings(const Common::String &target) const override;
 
 	const ADExtraGuiOptionsMap *getAdvancedExtraGuiOptions() const override;
+
+	Common::AchievementsPlatform getAchievementsPlatform(const Common::String &target) const override;
+	const Common::AchievementDescriptionList *getAchievementDescriptionList() const override;
+
+	Nancy::GameType getGameType(const char *gameId) const;
 };
 
 Common::KeymapArray NancyMetaEngine::initKeymaps(const char *target) const {
@@ -145,28 +151,46 @@ bool NancyMetaEngine::hasFeature(MetaEngineFeature f) const {
 		checkExtendedSaves(f);
 }
 
-Common::Error NancyMetaEngine::createInstance(OSystem *syst, Engine **engine, const Nancy::NancyGameDescription *gd) const {
+Nancy::GameType NancyMetaEngine::getGameType(const char *gameId) const {
+	const Nancy::GameIdToType *gameInfo = Nancy::gameIdToType;
+
+	while (gameInfo->gameId != nullptr) {
+		if (!strcmp(gameId, gameInfo->gameId))
+			return gameInfo->gameType;
+		gameInfo++;
+	}
+
+	error("Unknown game ID: %s", gameId);
+}
+
+Common::Error NancyMetaEngine::createInstance(OSystem *syst, Engine **engine, const ADGameDescription *gd) const {
+	if (!gd) {
+		return Common::Error(Common::kUnsupportedGameidError, _s("Game description is null"));
+	}
+
+	Nancy::GameType gameType = getGameType(gd->gameId);
+
 #ifndef ENABLE_NANCY_V3A
-	if (gd && gd->gameType == Nancy::kGameTypeNancy18) {
+	if (gameType == Nancy::kGameTypeNancy18) {
 		return Common::Error(Common::kUnsupportedGameidError, _s("Support for Nancy Drew 18 is not compiled in"));
 	}
 #endif
 
 #ifndef ENABLE_NANCY_V4
-	if (gd && gd->gameType >= Nancy::kGameTypeNancy19) {
+	if (gameType >= Nancy::kGameTypeNancy19) {
 		return Common::Error(Common::kUnsupportedGameidError, _s("Support for Nancy Drew 19 and newer is not compiled in"));
 	}
 #endif
 
-	if (gd) {
-		*engine = Nancy::NancyEngine::create(gd->gameType, syst, gd);
+	// Nancy26 needs the scripts of Nancy19 as well
+#if !defined(ENABLE_NANCY_V4) || !defined(ENABLE_NANCY_V5)
+	if (gameType >= Nancy::kGameTypeNancy26) {
+		return Common::Error(Common::kUnsupportedGameidError, _s("Support for Nancy Drew 26 and newer is not compiled in"));
 	}
+#endif
 
-	if (gd) {
-		return Common::kNoError;
-	} else {
-		return Common::Error();
-	}
+	*engine = Nancy::NancyEngine::create(gameType, syst, gd);
+	return Common::kNoError;
 }
 
 int NancyMetaEngine::getMaximumSaveSlot() const { int r = ConfMan.getInt("nancy_max_saves"); return r ? r : AdvancedMetaEngine::getMaximumSaveSlot(); }
@@ -182,6 +206,12 @@ SaveStateDescriptor NancyMetaEngine::querySaveMetaInfos(const char *target, int 
 }
 
 void NancyMetaEngine::getSavegameThumbnail(Graphics::Surface &thumb) {
+	// A picture a script took for the saved game it asked for
+	Graphics::ManagedSurface savePicture;
+	if (Nancy::g_nancy->_graphics->takeSavePicture(savePicture) && createThumbnail(&thumb, &savePicture)) {
+		return;
+	}
+
 	if (Nancy::g_nancy->getState() == Nancy::NancyState::kLoadSave) {
 		// Do not screenshot the screen if we're in the engine's original menus,
 		// since that would just screenshot the menu itself
@@ -211,6 +241,29 @@ void NancyMetaEngine::registerDefaultSettings(const Common::String &target) cons
 	ConfMan.registerDefault("character_speech", true);
 	ConfMan.registerDefault("nancy_max_saves", 999);
 	ConfMan.registerDefault("originalsaveload", true);
+}
+
+// Nancy28 is the only game with Steam achievements. The other games with
+// achievements keep them in a file.
+Common::AchievementsPlatform NancyMetaEngine::getAchievementsPlatform(const Common::String &target) const {
+	if (ConfMan.get("gameid", target) == "nancy28") {
+		return Common::STEAM_ACHIEVEMENTS;
+	}
+
+	return Common::UNK_ACHIEVEMENTS;
+}
+
+const Common::AchievementDescriptionList *NancyMetaEngine::getAchievementDescriptionList() const {
+	static const Common::AchievementDescriptionList achievementDescriptionList[] = {
+		{ "nancy28", Common::STEAM_ACHIEVEMENTS, "226820" },
+		{ "nancy29", Common::UNK_ACHIEVEMENTS, "nancy29" },
+		{ "nancy30", Common::UNK_ACHIEVEMENTS, "nancy30" },
+		{ "nancy31", Common::UNK_ACHIEVEMENTS, "nancy31" },
+		{ "nancy32", Common::UNK_ACHIEVEMENTS, "nancy32" },
+		ACHIEVEMENT_DESC_TABLE_END_MARKER
+	};
+
+	return achievementDescriptionList;
 }
 
 const ADExtraGuiOptionsMap *NancyMetaEngine::getAdvancedExtraGuiOptions() const {

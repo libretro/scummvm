@@ -36,8 +36,8 @@
 namespace NGI {
 
 void scene36_initScene(Scene *sc) {
-	g_vars->scene36_rotohrust = sc->getStaticANIObject1ById(ANI_ROTOHRUST, -1);
-	g_vars->scene36_scissors = sc->getStaticANIObject1ById(ANI_SCISSORS_36, -1);
+	g_vars->scene36_rotohrust = sc->findAniObjectById(ANI_ROTOHRUST, -1);
+	g_vars->scene36_scissors = sc->findAniObjectById(ANI_SCISSORS_36, -1);
 }
 
 int scene36_updateCursor() {
@@ -52,8 +52,8 @@ int scene36_updateCursor() {
 	return g_nmi->_cursorId;
 }
 
-int sceneHandler36(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler36(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch (cmd->_messageNum) {
@@ -65,14 +65,14 @@ int sceneHandler36(ExCommand *cmd) {
 						if (!(g_nmi->_aniMan->_flags & 0x100) && g_nmi->_msgObjectId2 != g_vars->scene36_scissors->_id ) {
 							handleObjectInteraction(g_nmi->_aniMan, g_vars->scene36_scissors, cmd->_param);
 
-							cmd->_messageKind = 0;
+							cmd->_cmd = 0;
 						}
 
 		break;
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x < g_nmi->_sceneRect.left + 200)
 				g_nmi->_currentScene->_x = x - 300 - g_nmi->_sceneRect.left;
@@ -81,7 +81,7 @@ int sceneHandler36(ExCommand *cmd) {
 				g_nmi->_currentScene->_x = x + 300 - g_nmi->_sceneRect.right;
 		}
 
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_behaviorManager->update();
 		g_nmi->startSceneTrack();
 
 		break;

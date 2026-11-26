@@ -19,6 +19,7 @@
  *
  */
 
+#include "common/algorithm.h"
 #include "common/serializer.h"
 #include "common/stack.h"
 #include "common/config-manager.h"
@@ -86,6 +87,9 @@ void ActionManager::handleInput(NancyInput &input) {
 					}
 				} else {
 					rec->_state = ActionRecord::ExecutionState::kActionTrigger;
+					if (rec->runsOnClick()) {
+						rec->execute();
+					}
 
 					input.eatMouseInput();
 
@@ -311,9 +315,13 @@ void ActionManager::processActionRecords() {
 			record->execute();
 		}
 
-		if (g_nancy->getGameType() >= kGameTypeNancy4 && NancySceneState.getState() == State::Scene::kLoad) {
-			// changeScene() must have been called, abort any further processing.
-			// Both old and new behavior is needed (nancy3 intro narration, nancy4 garden gate)
+		// changeScene() must have been called, abort any further processing.
+		// Both old and new behavior is needed (nancy3 intro narration, nancy4 garden gate).
+		// Nancy17 runs the rest of the records first, and changes the scene in the
+		// next frame (scene 2075, where Bess puts on the costume and a record after
+		// the scene change marks that she's wearing it)
+		if (g_nancy->getGameType() >= kGameTypeNancy4 && g_nancy->getGameType() < kGameTypeNancy17 &&
+				NancySceneState.getState() == State::Scene::kLoad) {
 			return;
 		}
 	}
@@ -863,25 +871,43 @@ void ActionManager::onPause(bool pause) {
 	}
 }
 
+static bool dependsOnFlags(const DependencyRecord &dependency, const Common::Array<int16> &flags) {
+	if (dependency.type == DependencyType::kEvent && Common::find(flags.begin(), flags.end(), dependency.label) != flags.end()) {
+		return true;
+	}
+
+	for (const DependencyRecord &child : dependency.children) {
+		if (dependsOnFlags(child, flags)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// The sounds that the frames of a skipped movie start are a part of it, like
+// its music, and stop with it; so does the speech that plays when it gets skipped.
 // A stopped sound lets its record finish on its own, the same way it would at the
-// end of the line
-void ActionManager::stopSpeechSounds() {
+// end of the line. Sounds that change the scene play out.
+void ActionManager::stopSkippedMovieSounds(const Common::Array<int16> &movieFlags, bool stopsSpeech) {
 	const Common::Array<byte> &speechChannels = g_nancy->getStaticData().soundChannelInfo.speechChannels;
 	bool stoppedCaptionedSound = false;
 
 	for (ActionRecord *record : _records) {
 		PlaySound *sound = dynamic_cast<PlaySound *>(record);
 		if (!sound || !sound->_isActive || sound->_isDone || sound->_state != ActionRecord::kRun ||
-				sound->_sceneChange.sceneID != kNoScene) {
+				sound->_sceneChange.sceneID != kNoScene || !g_nancy->_sound->isSoundPlaying(sound->_sound)) {
 			continue;
 		}
 
-		for (byte channel : speechChannels) {
-			if (sound->_sound.channelID == channel) {
-				g_nancy->_sound->stopSound(sound->_sound);
-				stoppedCaptionedSound |= !sound->_ccText.empty();
-				break;
-			}
+		bool isStopped = dependsOnFlags(sound->_dependencies, movieFlags);
+		if (stopsSpeech && !isStopped) {
+			isStopped = Common::find(speechChannels.begin(), speechChannels.end(), (byte)sound->_sound.channelID) != speechChannels.end();
+		}
+
+		if (isStopped) {
+			g_nancy->_sound->stopSound(sound->_sound);
+			stoppedCaptionedSound |= !sound->_ccText.empty();
 		}
 	}
 

@@ -50,7 +50,8 @@ bool SoundList::load(MfcArchive &file, const Common::Path &fname) {
 	}
 
 	for (uint i = 0; i < count; i++) {
-		_soundItems[i].load(file, _libHandle.get());
+		_soundItems[i].reset(new Sound());
+		_soundItems[i]->load(file, _libHandle.get());
 	}
 
 	return true;
@@ -67,10 +68,10 @@ bool SoundList::loadFile(const Common::Path &fname, const Common::Path &libname)
 	return load(archive, libname);
 }
 
-Sound *SoundList::getSoundItemById(int id) {
+Sound *SoundList::getSound(int id) {
 	for (uint i = 0; i < _soundItems.size(); ++i) {
-		if (_soundItems[i].getId() == id)
-			return &_soundItems[i];
+		if (_soundItems[i]->getId() == id)
+			return _soundItems[i].get();
 	}
 	return nullptr;
 }
@@ -81,8 +82,25 @@ Sound::Sound() :
 	_handle(new Audio::SoundHandle()),
 	_objectId(0) {}
 
+Sound::Sound(int id, const Common::Path &path, int flags) : Sound() {
+	_id = id;
+	_flags = flags;
+	_memfilename = path;
+}
+
+void SoundList::addSound(int id, const Common::Path &path, int flags) {
+	_soundItems.emplace_back(new Sound(id, path, flags));
+}
+
+void SoundList::stopByCreator(int objectId) {
+	for (const auto &sound : _soundItems) {
+		if (sound->_objectId == objectId)
+			sound->stop();
+	}
+}
+
 Sound::~Sound() {
-	freeSound();
+	unload();
 	delete _handle;
 }
 
@@ -119,33 +137,33 @@ void Sound::setPanAndVolumeByStaticAni() {
 	if (!_objectId)
 		return;
 
-	StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObject1ById(_objectId, -1);
+	AniObject *ani = g_nmi->_currentScene->findAniObjectById(_objectId, -1);
 	if (!ani)
 		return;
 
 	int a, b;
 
-	if (ani->_ox >= g_nmi->_sceneRect.left) {
+	if (ani->_x >= g_nmi->_sceneRect.left) {
 		int par, pan;
 
-		if (ani->_ox <= g_nmi->_sceneRect.right) {
+		if (ani->_x <= g_nmi->_sceneRect.right) {
 			int dx;
 
-			if (ani->_oy <= g_nmi->_sceneRect.bottom) {
-				if (ani->_oy >= g_nmi->_sceneRect.top) {
-					setPanAndVolume(g_nmi->_sfxVolume, 0);
+			if (ani->_y <= g_nmi->_sceneRect.bottom) {
+				if (ani->_y >= g_nmi->_sceneRect.top) {
+					attenuate(g_nmi->_sfxVolume, 0);
 
 					return;
 				}
-				dx = g_nmi->_sceneRect.top - ani->_oy;
+				dx = g_nmi->_sceneRect.top - ani->_y;
 			} else {
-				dx = ani->_oy - g_nmi->_sceneRect.bottom;
+				dx = ani->_y - g_nmi->_sceneRect.bottom;
 			}
 
 			par = 0;
 
 			if (dx > 800) {
-				setPanAndVolume(-3500, 0);
+				attenuate(-3500, 0);
 				return;
 			}
 
@@ -153,10 +171,10 @@ void Sound::setPanAndVolumeByStaticAni() {
 			a = g_nmi->_sfxVolume - (-3500);
 			b = 800 - dx;
 		} else {
-			int dx = ani->_ox - g_nmi->_sceneRect.right;
+			int dx = ani->_x - g_nmi->_sceneRect.right;
 
 			if (dx > 800) {
-				setPanAndVolume(-3500, 0);
+				attenuate(-3500, 0);
 				return;
 			}
 
@@ -168,12 +186,12 @@ void Sound::setPanAndVolumeByStaticAni() {
 
 		int32 pp = b * a;
 
-		setPanAndVolume(pan + pp / 800, par);
+		attenuate(pan + pp / 800, par);
 
 		return;
 	}
 
-	int dx = g_nmi->_sceneRect.left - ani->_ox;
+	int dx = g_nmi->_sceneRect.left - ani->_x;
 	if (dx <= 800) {
 		int32 s = (800 - dx) * (g_nmi->_sfxVolume - (-3500));
 		int32 p = -3500 + s / 800;
@@ -181,33 +199,61 @@ void Sound::setPanAndVolumeByStaticAni() {
 		if (p > g_nmi->_sfxVolume)
 			p = g_nmi->_sfxVolume;
 
-		setPanAndVolume(p, dx * (-3500) / 800);
+		attenuate(p, dx * (-3500) / 800);
 	} else {
-		setPanAndVolume(-3500, 0);
+		attenuate(-3500, 0);
 	}
 }
 
-void Sound::setPanAndVolume(int vol, int pan) {
+void Sound::attenuate(int vol, int pan) {
 	g_nmi->_mixer->setChannelVolume(*_handle, MIN((vol + 10000) / 39, 255)); // -10000..0
 	g_nmi->_mixer->setChannelBalance(*_handle, CLIP(pan / 78, -127, 127)); // -10000..10000
 }
 
-void Sound::play(int flag) {
+void Sound::play(int loop, int creator) {
 	Audio::SoundHandle *handle = getHandle();
 
-	if (g_nmi->_mixer->isSoundHandleActive(*handle)) { // We need to restart the music
+	Audio::RewindableAudioStream *stream = nullptr;
+	const bool android = g_nmi->getPlatform() == Common::kPlatformAndroid;
+	if (android) {
+#ifdef USE_VORBIS
+		Common::SeekableReadStream *data = SearchMan.createReadStreamForMember(_memfilename);
+		if (data)
+			stream = Audio::makeVorbisStream(data, DisposeAfterUse::YES);
+#endif
+	} else {
+		byte *soundData = loadData();
+		Common::MemoryReadStream *data = new Common::MemoryReadStream(soundData, getDataSize());
+		stream = Audio::makeWAVStream(data, DisposeAfterUse::YES);
+	}
+	if (!stream) {
+		warning("Could not play sound %d (%s)", _id, _memfilename.toString().c_str());
+		return;
+	}
+	Audio::AudioStream *audioStream = new Audio::LoopingAudioStream(stream, (loop == 1) ? 0 : 1);
+
+	if (android) {
+		// The last creator stops all instances of a non-looping phase sound.
+		_objectId = loop ? 0 : creator;
+		for (uint i = _overlappingHandles.size(); i > 0; --i) {
+			if (!g_nmi->_mixer->isSoundHandleActive(_overlappingHandles[i - 1]))
+				_overlappingHandles.remove_at(i - 1);
+		}
+		if (g_nmi->_mixer->isSoundHandleActive(*handle))
+			_overlappingHandles.push_back(*handle);
+	} else {
 		g_nmi->_mixer->stopHandle(*handle);
 	}
-
-	byte *soundData = loadData();
-	Common::MemoryReadStream *dataStream = new Common::MemoryReadStream(soundData, getDataSize());
-	Audio::RewindableAudioStream *wav = Audio::makeWAVStream(dataStream, DisposeAfterUse::YES);
-	Audio::AudioStream *audioStream = new Audio::LoopingAudioStream(wav, (flag == 1) ? 0 : 1);
-
-	g_nmi->_mixer->playStream(Audio::Mixer::kSFXSoundType, handle, audioStream);
+	const Audio::Mixer::SoundType type = android && _flags == kMusic ? Audio::Mixer::kMusicSoundType : Audio::Mixer::kSFXSoundType;
+	g_nmi->_mixer->playStream(type, handle, audioStream);
+	debugC(3, kDebugEvents, "Playing sound %d (%s), loop %d", _id, _memfilename.toString().c_str(), loop);
 }
 
-void Sound::freeSound() {
+bool Sound::isPlaying() const {
+	return g_nmi->_mixer->isSoundHandleActive(*_handle);
+}
+
+void Sound::unload() {
 	stop();
 
 	free(_soundData);
@@ -217,8 +263,17 @@ int Sound::getVolume() {
 	return g_nmi->_mixer->getChannelVolume(*_handle) * 39;  // 0..10000
 }
 
+void Sound::pause(bool paused) {
+	g_nmi->_mixer->pauseHandle(*_handle, paused);
+	for (const Audio::SoundHandle &handle : _overlappingHandles)
+		g_nmi->_mixer->pauseHandle(handle, paused);
+}
+
 void Sound::stop() {
 	g_nmi->_mixer->stopHandle(*_handle);
+	for (const Audio::SoundHandle &handle : _overlappingHandles)
+		g_nmi->_mixer->stopHandle(handle);
+	_overlappingHandles.clear();
 }
 
 void NGIEngine::setSceneMusicParameters(GameVar *gvar) {
@@ -361,10 +416,12 @@ void NGIEngine::playOggSound(const Common::Path &trackName, Audio::SoundHandle &
 #endif
 }
 
-void NGIEngine::stopAllSounds() {
+void NGIEngine::stopAllSounds(int flags) {
 	for (int i = 0; i < _currSoundListCount; i++)
 		for (int j = 0; j < _currSoundList1[i]->getCount(); j++) {
-			_currSoundList1[i]->getSoundByIndex(j).stop();
+			Sound &sound = _currSoundList1[i]->getSoundByIndex(j);
+			if (flags == -1 || sound.getFlags() == flags)
+				sound.stop();
 		}
 }
 
@@ -376,22 +433,23 @@ void NGIEngine::toggleMute() {
 	}
 }
 
-void NGIEngine::playSound(int id, int flag) {
-	Sound *sound = nullptr;
-
+Sound *NGIEngine::findSound(int id) const {
 	for (int i = 0; i < _currSoundListCount; i++) {
-		sound = _currSoundList1[i]->getSoundItemById(id);
-
+		Sound *sound = _currSoundList1[i]->getSound(id);
 		if (sound)
-			break;
+			return sound;
 	}
+	return nullptr;
+}
 
+void NGIEngine::playSound(int id, int flag, int creator) {
+	Sound *sound = findSound(id);
 	if (!sound) {
 		warning("playSound: Can't find sound with ID %d", id);
 		return;
 	}
 
-	sound->play(flag);
+	sound->play(flag, creator);
 }
 
 void NGIEngine::playTrack(GameVar *sceneVar, const char *name, bool delayed) {
@@ -453,29 +511,28 @@ void NGIEngine::playTrack(GameVar *sceneVar, const char *name, bool delayed) {
 	}
 }
 
-void global_messageHandler_handleSound(ExCommand *cmd) {
+void global_messageHandler_handleSound(Command *cmd) {
 	if (!g_nmi->_soundEnabled)
 		return;
 
-	Sound *snd = nullptr;
-
-	for (int i = 0; i < g_nmi->_currSoundListCount; i++)
-		if ((snd = g_nmi->_currSoundList1[i]->getSoundItemById(cmd->_messageNum)) != nullptr)
-			break;
-
+	Sound *snd = g_nmi->findSound(cmd->_messageNum);
 	if (!snd)
 		return;
 
 	if (cmd->_z & 1) {
+		if (g_nmi->getPlatform() == Common::kPlatformAndroid) {
+			snd->play(cmd->_param);
+			return;
+		}
 		if (!g_nmi->_flgSoundList && (cmd->_z & 4))
-			snd->freeSound();
+			snd->unload();
 
 		snd->updateVolume();
 
-		if (snd->_objectId && g_nmi->_currentScene->getStaticANIObject1ById(snd->_objectId, -1))
+		if (snd->_objectId && g_nmi->_currentScene->findAniObjectById(snd->_objectId, -1))
 			snd->setPanAndVolumeByStaticAni();
 		else
-			snd->setPanAndVolume(g_nmi->_sfxVolume, 0);
+			snd->attenuate(g_nmi->_sfxVolume, 0);
 
 		if (snd->getVolume() > -3500)
 			snd->play(cmd->_param);
@@ -504,7 +561,7 @@ void NGIEngine::stopAllSoundStreams() {
 
 void NGIEngine::stopAllSoundInstances(int id) {
 	for (int i = 0; i < _currSoundListCount; i++) {
-		Sound *sound = _currSoundList1[i]->getSoundItemById(id);
+		Sound *sound = _currSoundList1[i]->getSound(id);
 
 		if (sound)
 			sound->stop();
@@ -517,7 +574,7 @@ void NGIEngine::updateSoundVolume() {
 
 	for (int i = 0; i < _currSoundListCount; i++)
 		for (int j = 0; j < _currSoundList1[i]->getCount(); j++) {
-			_currSoundList1[i]->getSoundByIndex(j).setPanAndVolume(_sfxVolume, 0);
+			_currSoundList1[i]->getSoundByIndex(j).attenuate(_sfxVolume, 0);
 		}
 }
 

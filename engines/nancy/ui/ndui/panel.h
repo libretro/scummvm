@@ -84,9 +84,15 @@ public:
 	// Whether saved games keep what was done to the panel and its controls
 	void setSavesState(bool savesState) { _savesState = savesState; }
 
+	bool hasControl(const Common::String &name) const;
+
+	// Nancy19: a panel that doesn't capture clicks only takes the mouse over its controls
+	void setCapturesClicks(bool capturesClicks) { _capturesClicks = capturesClicks; }
+
 	// Nancy17 keeps the items apart from the panel that shows them, which comes
 	// with nothing but a template for their buttons
-	void addItemButtons(const Common::Array<byte> &buttonTemplate);
+	void addItemButtons(const Common::Array<byte> &buttonTemplate, const Common::Array<int16> &skippedItems);
+	InvButton *findInvButton(const Common::String &name) const;
 	Tooltip *getTooltip() const { return _tooltip; }
 
 	void updateGraphics() override;
@@ -116,9 +122,12 @@ public:
 	Control *addNewControl(int32 type, Common::SeekableReadStream &stream);
 	bool removeControl(const Common::String &name);
 	InvButton *findItemButton(int16 itemID) const;
+	bool isItemButton(const Common::String &name) const;
 
-	// The edit box that gets typed into, when the panel is up
+	// The edit box that gets typed into, when the panel is up: the one that was
+	// clicked or cycled to last, or else the first one
 	EditBox *getKeyboardFocus() const;
+	void setKeyboardFocus(EditBox *editBox) { _focus = editBox; }
 
 	// Places the visible controls one after another, when the panel asks for it
 	void arrangeControls();
@@ -136,15 +145,19 @@ private:
 	void readControl(Common::SeekableReadStream &stream);
 	void show();
 	void hide();
-	void fireEvent(int32 eventType);
+	void setCollapsed(bool isCollapsed);
+	void fireEvent(int32 eventType, double value = 0.0);
 	void redraw();
+	void redrawArea(const Common::Rect &area);
 	Control *getControlAt(const Common::Point &pos) const;
 	void showItem(int16 itemID, bool show);
+	void cycleFocus();
 
 	Manager *_manager;
 	byte _kind;
 	bool _isPlaced = false;
 	bool _savesState = true;
+	bool _capturesClicks = true;
 	ObjectFactory *_objectFactory = nullptr;
 	const INVD::Item *_newItem = nullptr;	// the item whose button is being made
 
@@ -155,6 +168,8 @@ private:
 	Common::Array<Control *> _arrangeOrder;
 	Common::Array<RadioButton *> _radioButtons;
 	Common::Array<EditBox *> _editBoxes;
+	Common::Array<InvButton *> _invButtons;	// Item buttons placed by the UI data, not made for the inventory
+	EditBox *_focus = nullptr;
 	int _nextID = 1;
 
 	Arrangement _arrangement = kArrangeNone;
@@ -167,6 +182,11 @@ private:
 	int32 _scrollOffset = 0;
 
 	int32 _initialState = kStartVisible;
+
+	// A collapsed panel stays out of sight, and shows again when it gets
+	// expanded, if it would have been showing by then
+	bool _isCollapsed = false;
+	bool _isShownWhenExpanded = false;
 	int _showCount = 0;
 	bool _enabled = true;
 	uint32 _lastUpdateTime = 0;

@@ -67,9 +67,6 @@ public:
 	 */
 	void flipBuffer(bool opportunistic = false) override;
 
-	void getScreenBoundingBox(const Mesh *mesh, int *x1, int *y1, int *x2, int *y2) override;
-	void getScreenBoundingBox(const EMIModel *model, int *x1, int *y1, int *x2, int *y2) override;
-	void getActorScreenBBox(const Actor *actor, Common::Point &p1, Common::Point &p2) override;
 	void startActorDraw(const Actor *actor) override;
 
 	void finishActorDraw() override;
@@ -97,8 +94,6 @@ public:
 
 	void enableLights() override;
 	void disableLights() override;
-	void setupLight(Light *light, int lightId) override;
-	void turnOffLight(int lightId) override;
 
 	void createTexture(Texture *texture, const uint8 *data, const CMap *cmap, bool clamp) override;
 	void selectTexture(const Texture *texture) override;
@@ -217,11 +212,12 @@ protected:
 	GLuint compileShader(const char *vertex, const char *fragment);
 	GLuint compileShader(const char *shader) { return compileShader(shader, shader); }
 	void createSpecialtyTextureFromScreen(uint id, uint8 *data, int x, int y, int width, int height) override;
+	void setupLight(Light *light, int lightId) override;
+	void turnOffLight(int lightId) override;
 
 private:
 	const Actor *_currentActor;
 	float _alpha;
-	int _maxLights;
 	GLuint _emergTexture;
 	OpenGL::Shader* _emergProgram;
 
@@ -253,7 +249,6 @@ private:
 	float _fclip;
 	Math::Matrix4 _projMatrix;
 	Math::Matrix4 _viewMatrix;
-	Math::Matrix4 _mvpMatrix;
 	Math::Matrix4 _overworldProjMatrix;
 
 	void setupTexturedCenteredQuad();
@@ -286,6 +281,7 @@ private:
 	GLuint _dimVBO;
 	GLuint _dimRegionVBO;
 	GLuint _blastVBO;
+	int _blastVBOCapacity;
 	GLuint _storedDisplay;
 };
 

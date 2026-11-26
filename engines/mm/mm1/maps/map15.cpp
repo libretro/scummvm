@@ -23,7 +23,9 @@
 #include "mm/mm1/maps/maps.h"
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
+#include "mm/mm1/mm1.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -58,7 +60,6 @@ void Map15::special() {
 			if (_data[VAL1] > 14)
 				_data[VAL1] = 14;
 
-			g_globals->_activeSpells._s.fire = 0;
 			enc.clearMonsters();
 			for (uint i = 0; i < _data[VAL1]; ++i)
 				enc.addMonster(7, 8);
@@ -68,13 +69,18 @@ void Map15::special() {
 			enc.execute();
 
 		} else {
-			send(SoundMessage(16, 1, STRING["maps.map15.its_hot"]));
+			send(SoundMessage(16, 1, "It's hot!"));
 
 			if (!g_globals->_activeSpells._s.fire) {
 				for (uint i = 0; i < g_globals->_party.size(); ++i) {
 					Character &c = g_globals->_party[i];
 					c._hpCurrent = MAX((int)c._hpCurrent - 15, 0);
+					if (!c._hpCurrent) {
+						if (!(c._condition & BAD_CONDITION))
+							c._condition = UNCONSCIOUS;
+					}
 				}
+				checkPartyDead();
 			}
 		}
 	} else if (getRandomNumber(100) != 100) {
@@ -97,7 +103,7 @@ void Map15::special() {
 }
 
 void Map15::special00() {
-	send(SoundMessage(STRING["maps.map15.lava"]));
+	send(SoundMessage("Lava fills the Valley of Fire!"));
 }
 
 void Map15::special01() {
@@ -105,7 +111,10 @@ void Map15::special01() {
 
 	if (_data[VAL2]) {
 		SoundMessage msg(
-			STRING["maps.map15.body"],
+			g_engine->isEnhanced() ?
+				"The dragon's body disappears, except for a shiny tooth!" :
+				"The dragons body disappears, except\n"
+					"for a shiny tooth!",
 			[]() {
 				g_globals->_treasure._items[2] = DRAGONS_TOOTH_ID;
 				g_events->addAction(KEYBIND_SEARCH);
@@ -167,14 +176,16 @@ void Map15::special05() {
 
 void Map15::special06() {
 	g_maps->clearSpecial();
-	send(SoundMessage(STRING["maps.map15.percella1"],
+	send(SoundMessage(mapText("I am Percella the druid and i have what\n"
+		"you need. But promise me that you won't\n"
+		"help that demonic menace. Accept (Y/N)?"),
 		[]() {
 			g_globals->_treasure._items[2] = KINGS_PASS_ID;
 			g_events->addAction(KEYBIND_SEARCH);
 		},
 		[]() {
 			SoundMessage msg(
-				STRING["maps.map15.percella2"],
+				"Then meet my pets!",
 				[]() {
 					g_maps->_mapPos = Common::Point(14, 2);
 					g_maps->_currentMap->updateGame();
@@ -192,10 +203,15 @@ void Map15::special08() {
 }
 
 void Map15::cove() {
-	send(SoundMessage(STRING["maps.map15.cove"],
+	send(SoundMessage("A pirates secret cove, search (Y/N)?",
 		[]() {
 			Map15 &map = *static_cast<Map15 *>(g_maps->_currentMap);
 			g_maps->clearSpecial();
+
+			// Discovering Pirate's Secret Cove satisfies
+			// Lord Ironfist quest #4 for the entire party.
+			for (uint i = 0; i < g_globals->_party.size(); ++i)
+				g_globals->_party[i]._flags[7] |= CHARFLAG7_8;
 
 			for (uint i = 0; i < g_globals->_party.size(); ++i) {
 				Character &c = g_globals->_party[i];

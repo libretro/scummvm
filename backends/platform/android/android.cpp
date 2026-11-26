@@ -95,15 +95,15 @@ const char *android_log_tag = "ScummVM";
 extern "C" {
 	void __assert(const char *file, int line, const char *expr) {
 		__android_log_assert(expr, android_log_tag,
-								"Assertion failure: '%s' in %s:%d",
-								 expr, file, line);
+		                     "Assertion failure: '%s' in %s:%d",
+		                     expr, file, line);
 	}
 
 	void __assert2(const char *file, int line, const char *func,
 					const char *expr) {
 		__android_log_assert(expr, android_log_tag,
-								"Assertion failure: '%s' in %s:%d (%s)",
-								 expr, file, line, func);
+		                     "Assertion failure: '%s' in %s:%d (%s)",
+		                     expr, file, line, func);
 	}
 }
 
@@ -414,12 +414,10 @@ void OSystem_Android::initBackend() {
 	Common::String basePath = JNI::getScummVMBasePath();
 
 	_savefileManager = new AndroidSaveFileManager(Common::Path(basePath, Common::Path::kNativeSeparator).joinInPlace("saves"));
-	// TODO remove the debug message eventually
 	LOGD("Setting DefaultSaveFileManager path to: %s", ConfMan.getPath("savepath").toString(Common::Path::kNativeSeparator).c_str());
 
 
 	ConfMan.registerDefault("iconspath", Common::Path(basePath, Common::Path::kNativeSeparator).joinInPlace("icons"));
-	// TODO remove the debug message eventually
 	LOGD("Setting Default Icons and Shaders path to: %s", ConfMan.getPath("iconspath").toString(Common::Path::kNativeSeparator).c_str());
 
 	_timerManager = new DefaultTimerManager();
@@ -678,7 +676,6 @@ void OSystem_Android::setPause(bool value) {
 	}
 }
 
-// TODO Re-eval if we need this here
 Common::HardwareInputSet *OSystem_Android::getHardwareInputSet() {
 	using namespace Common;
 
@@ -688,12 +685,6 @@ Common::HardwareInputSet *OSystem_Android::getHardwareInputSet() {
 	inputSet->addHardwareInputSet(new JoystickHardwareInputSet(defaultJoystickButtons, defaultJoystickAxes));
 
 	return inputSet;
-}
-
-// TODO Re-eval if we need this here
-Common::KeymapArray OSystem_Android::getGlobalKeymaps() {
-	Common::KeymapArray globalMaps = BaseBackend::getGlobalKeymaps();
-	return globalMaps;
 }
 
 Common::KeymapperDefaultBindings *OSystem_Android::getKeymapperDefaultBindings() {
@@ -853,8 +844,8 @@ void OSystem_Android::logMessage(LogMessageType::Type type, const char *message)
 
 Common::String OSystem_Android::getSystemLanguage() const {
 	return Common::String::format("%s_%s",
-							getSystemProperty("persist.sys.language").c_str(),
-							getSystemProperty("persist.sys.country").c_str());
+	                              getSystemProperty("persist.sys.language").c_str(),
+	                              getSystemProperty("persist.sys.country").c_str());
 }
 
 bool OSystem_Android::openUrl(const Common::String &url) {

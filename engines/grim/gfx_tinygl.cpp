@@ -49,7 +49,7 @@ GfxBase *CreateGfxTinyGL() {
 
 GfxTinyGL::GfxTinyGL() :
 		_alpha(1.f),
-		_currentActor(nullptr), _smushImage(nullptr),
+		_currentActor(nullptr), _smushImage(nullptr), _storedImage(nullptr), _storedImageDirty(false),
 		_storedDisplay(nullptr) {
 	type = Graphics::RendererType::kRendererTypeTinyGL;
 	// TGL_LEQUAL as tglDepthFunc ensures that subsequent drawing attempts for
@@ -67,6 +67,7 @@ GfxTinyGL::~GfxTinyGL() {
 	_storedDisplay->free();
 	delete _storedDisplay;
 	releaseMovieFrame();
+	tglDeleteBlitImage(_storedImage);
 	for (unsigned int i = 0; i < _numSpecialtyTextures; i++) {
 		destroyTexture(&_specialtyTextures[i]);
 	}
@@ -86,7 +87,11 @@ void GfxTinyGL::setupScreen(int screenW, int screenH) {
 
 	_pixelFormat = g_system->getScreenFormat();
 	debug(2, "INFO: TinyGL front buffer pixel format: %s", _pixelFormat.toString().c_str());
-	TinyGL::createContext(screenW, screenH, _pixelFormat, 256, true, ConfMan.getBool("dirtyrects"));
+
+	// The default 5 MB per-frame draw call allocator is not enough for the Blue Casket interior (bi.set)
+	// during the cutscene where Olivia and Nick kiss
+	TinyGL::createContext(screenW, screenH, _pixelFormat, 256, true, ConfMan.getBool("dirtyrects"),
+	                      6 * 1024 * 1024);
 
 	_storedDisplay = new Graphics::Surface;
 	_storedDisplay->create(_gameWidth, _gameHeight, _pixelFormat);
@@ -104,6 +109,8 @@ void GfxTinyGL::setupScreen(int screenW, int screenH) {
 	if (g_grim->getGameType() == GType_GRIM) {
 		tglPolygonOffset(-6.0, -6.0);
 	}
+
+	tglGetIntegerv(TGL_MAX_LIGHTS, &_maxLights);
 }
 
 const char *GfxTinyGL::getVideoDeviceName() {
@@ -253,208 +260,6 @@ static void shadowProjection(const Math::Vector3d &light, const Math::Vector3d &
 	mat[15] = -d;
 
 	tglMultMatrixf(mat);
-}
-
-void GfxTinyGL::getScreenBoundingBox(const Mesh *model, int *x1, int *y1, int *x2, int *y2) {
-	if (_currentShadowArray) {
-		*x1 = -1;
-		*y1 = -1;
-		*x2 = -1;
-		*y2 = -1;
-		return;
-	}
-
-	TGLfloat top = 1000;
-	TGLfloat right = -1000;
-	TGLfloat left = 1000;
-	TGLfloat bottom = -1000;
-
-	for (int i = 0; i < model->_numFaces; i++) {
-		Math::Vector3d obj;
-		float *pVertices;
-
-		for (int j = 0; j < model->_faces[i].getNumVertices(); j++) {
-			TGLfloat modelView[16], projection[16];
-			TGLint viewPort[4];
-
-			tglGetFloatv(TGL_MODELVIEW_MATRIX, modelView);
-			tglGetFloatv(TGL_PROJECTION_MATRIX, projection);
-			tglGetIntegerv(TGL_VIEWPORT, viewPort);
-
-			pVertices = model->_vertices + 3 * model->_faces[i].getVertex(j);
-
-			obj.set(*(pVertices), *(pVertices + 1), *(pVertices + 2));
-
-			Math::Vector3d win;
-			Math::gluMathProject<TGLfloat, TGLint>(obj, modelView, projection, viewPort, win);
-
-			if (win.x() > right)
-				right = win.x();
-			if (win.x() < left)
-				left = win.x();
-			if (win.y() < top)
-				top = win.y();
-			if (win.y() > bottom)
-				bottom = win.y();
-		}
-	}
-
-	float t = bottom;
-	bottom = _gameHeight - top;
-	top = _gameHeight - t;
-
-	if (left < 0)
-		left = 0;
-	if (right >= _gameWidth)
-		right = _gameWidth - 1;
-	if (top < 0)
-		top = 0;
-	if (bottom >= _gameHeight)
-		bottom = _gameHeight - 1;
-
-	if (top >= _gameHeight || left >= _gameWidth || bottom < 0 || right < 0) {
-		*x1 = -1;
-		*y1 = -1;
-		*x2 = -1;
-		*y2 = -1;
-		return;
-	}
-
-	*x1 = (int)left;
-	*y1 = (int)top;
-	*x2 = (int)right;
-	*y2 = (int)bottom;
-}
-
-void GfxTinyGL::getScreenBoundingBox(const EMIModel *model, int *x1, int *y1, int *x2, int *y2) {
-	if (_currentShadowArray) {
-		*x1 = -1;
-		*y1 = -1;
-		*x2 = -1;
-		*y2 = -1;
-		return;
-	}
-
-	TGLfloat top = 1000;
-	TGLfloat right = -1000;
-	TGLfloat left = 1000;
-	TGLfloat bottom = -1000;
-
-	TGLfloat modelView[16], projection[16];
-	TGLint viewPort[4];
-
-	tglGetFloatv(TGL_MODELVIEW_MATRIX, modelView);
-	tglGetFloatv(TGL_PROJECTION_MATRIX, projection);
-	tglGetIntegerv(TGL_VIEWPORT, viewPort);
-
-	for (uint i = 0; i < model->_numFaces; i++) {
-		uint16 *indices = (uint16 *)model->_faces[i]._indexes;
-
-		for (uint j = 0; j < model->_faces[i]._faceLength * 3; j++) {
-			uint16 index = indices[j];
-			Math::Vector3d obj = model->_drawVertices[index];
-			Math::Vector3d win;
-			Math::gluMathProject<TGLfloat, TGLint>(obj, modelView, projection, viewPort, win);
-
-			if (win.x() > right)
-				right = win.x();
-			if (win.x() < left)
-				left = win.x();
-			if (win.y() < top)
-				top = win.y();
-			if (win.y() > bottom)
-				bottom = win.y();
-		}
-	}
-
-	float t = bottom;
-	bottom = _gameHeight - top;
-	top = _gameHeight - t;
-
-	if (left < 0)
-		left = 0;
-	if (right >= _gameWidth)
-		right = _gameWidth - 1;
-	if (top < 0)
-		top = 0;
-	if (bottom >= _gameHeight)
-		bottom = _gameHeight - 1;
-
-	if (top >= _gameHeight || left >= _gameWidth || bottom < 0 || right < 0) {
-		*x1 = -1;
-		*y1 = -1;
-		*x2 = -1;
-		*y2 = -1;
-		return;
-	}
-
-	*x1 = (int)left;
-	*y1 = (int)(_gameHeight - bottom);
-	*x2 = (int)right;
-	*y2 = (int)(_gameHeight - top);
-}
-
-void GfxTinyGL::getActorScreenBBox(const Actor *actor, Common::Point &p1, Common::Point &p2) {
-	// Get the actor's bounding box information (describes a 3D box)
-	Math::Vector3d bboxPos, bboxSize;
-	actor->getBBoxInfo(bboxPos, bboxSize);
-
-	// Translate the bounding box to the actor's position
-	Math::Matrix4 m = actor->getFinalMatrix();
-	bboxPos = bboxPos + actor->getWorldPos();
-
-	// Set up the camera coordinate system
-	tglMatrixMode(TGL_MODELVIEW);
-	tglPushMatrix();
-
-	// Apply the view transform.
-	Math::Matrix4 worldRot = _currentRot;
-	tglMultMatrixf(worldRot.getData());
-	tglTranslatef(-_currentPos.x(), -_currentPos.y(), -_currentPos.z());
-
-	// Get the current OpenGL state
-	TGLfloat modelView[16], projection[16];
-	TGLint viewPort[4];
-	tglGetFloatv(TGL_MODELVIEW_MATRIX, modelView);
-	tglGetFloatv(TGL_PROJECTION_MATRIX, projection);
-	tglGetIntegerv(TGL_VIEWPORT, viewPort);
-
-	// Set values outside of the screen range
-	p1.x = 1000;
-	p1.y = 1000;
-	p2.x = -1000;
-	p2.y = -1000;
-
-	// Project all of the points in the 3D bounding box
-	Math::Vector3d p, projected;
-	for (int x = 0; x < 2; x++) {
-		for (int y = 0; y < 2; y++) {
-			for (int z = 0; z < 2; z++) {
-				Math::Vector3d added(bboxSize.x() * 0.5f * (x * 2 - 1), bboxSize.y() * 0.5f * (y * 2 - 1), bboxSize.z() * 0.5f * (z * 2 - 1));
-				m.transform(&added, false);
-				p = bboxPos + added;
-				Math::gluMathProject<TGLfloat, TGLint>(p, modelView, projection, viewPort, projected);
-
-				// Find the points
-				if (projected.x() < p1.x)
-					p1.x = projected.x();
-				if (projected.y() < p1.y)
-					p1.y = projected.y();
-				if (projected.x() > p2.x)
-					p2.x = projected.x();
-				if (projected.y() > p2.y)
-					p2.y = projected.y();
-			}
-		}
-	}
-
-	// Swap the p1/p2 y coorindates
-	int16 tmp = p1.y;
-	p1.y = 480 - p2.y;
-	p2.y = 480 - tmp;
-
-	// Restore the state
-	tglPopMatrix();
 }
 
 void GfxTinyGL::startActorDraw(const Actor *actor) {
@@ -854,7 +659,12 @@ void GfxTinyGL::disableLights() {
 }
 
 void GfxTinyGL::setupLight(Light *light, int lightId) {
+	if (lightId >= _maxLights) {
+		return;
+	}
+
 	tglEnable(TGL_LIGHTING);
+	tglEnable(TGL_LIGHT0 + lightId);
 	float lightColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	float lightPos[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	float lightDir[] = { 0.0f, 0.0f, -1.0f };
@@ -888,14 +698,12 @@ void GfxTinyGL::setupLight(Light *light, int lightId) {
 		q_attenuation = 0.0f;
 	}
 
-	tglDisable(TGL_LIGHT0 + lightId);
 	tglLightfv(TGL_LIGHT0 + lightId, TGL_DIFFUSE, lightColor);
 	tglLightfv(TGL_LIGHT0 + lightId, TGL_POSITION, lightPos);
 	tglLightfv(TGL_LIGHT0 + lightId, TGL_SPOT_DIRECTION, lightDir);
 	tglLightf(TGL_LIGHT0 + lightId, TGL_SPOT_EXPONENT, spot_exp);
 	tglLightf(TGL_LIGHT0 + lightId, TGL_SPOT_CUTOFF, cutoff);
 	tglLightf(TGL_LIGHT0 + lightId, TGL_QUADRATIC_ATTENUATION, q_attenuation);
-	tglEnable(TGL_LIGHT0 + lightId);
 }
 
 void GfxTinyGL::turnOffLight(int lightId) {
@@ -1206,6 +1014,7 @@ Bitmap *GfxTinyGL::getScreenshot(int w, int h, bool useStored) {
 	if (useStored) {
 		bmp = createScreenshotBitmap(_storedDisplay, w, h, true);
 	} else {
+		TinyGL::presentBuffer();
 		Graphics::Surface *src = TinyGL::copyFromFrameBuffer(_pixelFormat);
 		bmp = createScreenshotBitmap(src, w, h, true);
 		src->free();
@@ -1224,19 +1033,45 @@ void GfxTinyGL::storeDisplay() {
 	_storedDisplay->free();
 	delete _storedDisplay;
 	_storedDisplay = TinyGL::copyFromFrameBuffer(_pixelFormat);
+	_storedImageDirty = true;
 }
 
 void GfxTinyGL::copyStoredToDisplay() {
-	Bitmap *bitmap = getScreenshot(_gameWidth, _gameHeight, true);
-	drawBitmap(bitmap, 0, 0, 0);
-	delete bitmap;
+	if (_storedImageDirty && _storedDisplay) {
+		if (_storedImage == nullptr)
+			_storedImage = tglGenBlitImage();
+		tglUploadBlitImage(_storedImage, *_storedDisplay, 0, false);
+		_storedImageDirty = false;
+	}
+	if (_storedImage)
+		tglBlitFast(_storedImage, 0, 0);
 }
 
 void GfxTinyGL::dimScreen() {
-	dimRegion(0, 0, _gameWidth, _gameHeight, 0.2f);
+	if (!_storedDisplay)
+		return;
+
+	Graphics::Surface dimmed;
+	dimmed.create(_storedDisplay->w, _storedDisplay->h, _storedDisplay->format);
+	for (int y = 0; y < dimmed.h; y++) {
+		for (int x = 0; x < dimmed.w; x++) {
+			uint8 r, g, b;
+			_storedDisplay->format.colorToRGB(_storedDisplay->getPixel(x, y), r, g, b);
+			uint8 v = dimScreenRGB(r, g, b);
+			dimmed.setPixel(x, y, dimmed.format.RGBToColor(v, v, v));
+		}
+	}
+
+	if (_storedImage == nullptr)
+		_storedImage = tglGenBlitImage();
+	tglUploadBlitImage(_storedImage, dimmed, 0, false);
+	_storedImageDirty = false;
+	dimmed.free();
 }
 
 void GfxTinyGL::dimRegion(int x, int y, int w, int h, float level) {
+	level = CLIP(level, 0.0f, 1.0f);
+
 	tglMatrixMode(TGL_PROJECTION);
 	tglLoadIdentity();
 	tglOrthof(0, _gameWidth, _gameHeight, 0, 0, 1);
@@ -1245,11 +1080,12 @@ void GfxTinyGL::dimRegion(int x, int y, int w, int h, float level) {
 
 	tglDisable(TGL_LIGHTING);
 	tglDisable(TGL_DEPTH_TEST);
+	tglDisable(TGL_TEXTURE_2D);
 	tglDepthMask(TGL_FALSE);
 	tglEnable(TGL_BLEND);
 	tglBlendFunc(TGL_SRC_ALPHA, TGL_ONE_MINUS_SRC_ALPHA);
 
-	tglColor4f(0, 0, 0, 1 - level);
+	tglColor4f(0.0f, 0.0f, 0.0f, 1.0f - level);
 
 	tglBegin(TGL_QUADS);
 	tglVertex2f(x, y);

@@ -31,8 +31,8 @@ class Statics;
 struct MGMSubItem {
 	Movement *movement;
 	int staticsIndex;
-	int field_8;
-	int field_C;
+	int movementCount;
+	int frameCount;
 	int x;
 	int y;
 
@@ -41,8 +41,8 @@ struct MGMSubItem {
 	void reset() {
 		movement = nullptr;
 		staticsIndex = 0;
-		field_8 = 0;
-		field_C = 0;
+		movementCount = 0;
+		frameCount = 0;
 		x = 0;
 		y = 0;
 	}
@@ -50,23 +50,23 @@ struct MGMSubItem {
 
 struct MGMItem {
 	int16 objId;
-	Common::Array<MGMSubItem> subItems;
+	Common::Array<MGMSubItem> transitions;
 	Common::Array<Statics *> statics;
-	Common::Array<Movement *> movements1;
-	Common::Array<int> movements2;
+	Common::Array<Movement *> movements;
+	Common::Array<int> visitedMovements;
 
 	MGMItem();
 };
 
 struct MakeQueueStruct {
-	StaticANIObject *ani;
+	AniObject *ani;
 	int staticsId1;
 	int staticsId2;
 	int movementId;
-	int field_10;
+	int cycleCount;
 	int x1;
 	int y1;
-	int field_1C;
+	int destZ;
 	int x2;
 	int y2;
 	int flags;
@@ -78,10 +78,10 @@ struct MakeQueueStruct {
 		staticsId1 = 0;
 		staticsId2 = 0;
 		movementId = 0;
-		field_10 = 0;
+		cycleCount = 0;
 		x1 = 0;
 		y1 = 0;
-		field_1C = 0;
+		destZ = 0;
 		x2 = 0;
 		y2 = 0;
 		flags = 0;
@@ -99,15 +99,15 @@ public:
 	int getIndex(int objId);
 
 	MessageQueue *makeRunQueue(MakeQueueStruct *mkQueue);
-	void putObjectToStatics(StaticANIObject *ani, int staticsId);
+	void putObjectToStatic(AniObject *ani, int staticsId);
 	Common::Point getTransitionSize(int aniId, int staticsId1, int staticsId2);
-	int getStaticsIndexById(int idx, int16 id);
-	int getStaticsIndex(int idx, Statics *st);
+	int getStaticIndex(int idx, int16 id);
+	int getStaticIndex(int idx, Statics *st);
 	void clearVisitsList(int idx);
-	int seekWay(int idx, int st1idx, int st2idx, bool flip, bool flop);
+	int seekWay(int idx, int st1idx, int st2idx, bool allowReverse, bool linkedOnly);
 	Common::Point getNumCycles(Movement *mov, int x, int y, int *mult, int *len, int flag);
 	ExCommand2 *createCommand(Movement *mov, int objId, int x1, int y1, Common::Point &x2, Common::Point &y2, int len);
-	MessageQueue *makeQueue(StaticANIObject *ani, int staticsIndex, int staticsId, int *resStatId, Common::Point **pointArr);
+	MessageQueue *makeQueue(AniObject *ani, int staticsIndex, int staticsId, int *resStatId, Common::Point **pointArr);
 	int getFramesCount(int idx, int subIdx, int subOffset, int flag);
 	int getNumMovements(int objectId, int idx1, int idx2);
 };

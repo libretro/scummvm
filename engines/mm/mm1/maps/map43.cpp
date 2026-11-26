@@ -24,6 +24,7 @@
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -31,8 +32,10 @@ namespace Maps {
 
 #define TREASURE_STATE 142
 
+// Lord Ironfist's quest completions are now recorded at the actual
+// discovery sites. Do not substitute inventory items as surrogate proof.
 static const byte MATCH_ITEMS[7] = {
-	0, 0, MAP_OF_DESERT_ID, 0, 0, 0, 0
+	0, 0, 0, 0, 0, 0, 0
 };
 static const byte MATCH_FLAGS[8] = {
 	1, 2, 4, 8, 0x10, 0x20, 0x40, 0x80
@@ -71,10 +74,10 @@ void Map43::special01() {
 		visitedExit();
 
 		send(SoundMessage(
-			STRING["maps.map43.exit"],
+			"Exit castle, (Y/N)?",
 			[]() {
 				g_maps->_mapPos = Common::Point(9, 13);
-				g_maps->changeMap(0x101, 2);
+				g_maps->changeMapFromExit(0x101, 2);
 			}
 		));
 	} else {
@@ -84,7 +87,7 @@ void Map43::special01() {
 
 void Map43::special02() {
 	send(SoundMessage(
-		STRING["maps.map43.button"],
+		"Button on the wall, push it (Y/N)?",
 		[]() {
 			Map43 &map = *static_cast<Map43 *>(g_maps->_currentMap);
 			map._states[101] = 17;
@@ -94,13 +97,13 @@ void Map43::special02() {
 }
 
 void Map43::special03() {
-	send(SoundMessage(STRING["maps.map43.message_b"]));
+	send(SoundMessage(mapText("Etched in silver, message B reads:\nrstia-,e1,;/11rn;/m-")));
 }
 
 void Map43::special04() {
 	if (!g_globals->_party.hasItem(MERCHANTS_PASS_ID)) {
 		send(SoundMessage(
-			STRING["maps.map43.guards"],
+			mapText("Castle guards exclaim,\n\"No merchants pass! Begone peasants.\""),
 			[](const Common::KeyState &) {
 				g_events->focusedView()->close();
 				g_maps->_mapPos = Common::Point(9, 13);
@@ -119,7 +122,7 @@ void Map43::special05() {
 void Map43::special06() {
 	if (_data[TREASURE_STATE]) {
 		g_globals->_treasure.setGold(18000);
-		g_maps->clearSpecial();
+		g_maps->clearSpecialAndRememberReward();
 		g_events->addAction(KEYBIND_SEARCH);
 	} else {
 		Game::Encounter &enc = g_globals->_encounters;
@@ -136,11 +139,11 @@ void Map43::special06() {
 }
 
 void Map43::special07() {
-	send(SoundMessage(STRING["maps.map43.tower"]));
+	send(SoundMessage("The Tower"));
 }
 
 void Map43::special08() {
-	send(SoundMessage(STRING["maps.map43.throne_room"]));
+	send(SoundMessage("Throne Room"));
 }
 
 void Map43::updateFlags() {
@@ -154,7 +157,7 @@ void Map43::updateFlags() {
 
 			// Scan list of items to match against
 			for (int arrIdx = 0; arrIdx < 7; ++arrIdx) {
-				if (itemId == MATCH_ITEMS[arrIdx]) {
+				if (MATCH_ITEMS[arrIdx] && itemId == MATCH_ITEMS[arrIdx]) {
 					c._flags[7] |= MATCH_FLAGS[arrIdx];
 					break;
 				}
@@ -201,7 +204,10 @@ Common::String Map43::checkQuestComplete() {
 	int qIndex = leader._quest - 1;
 
 	if (leader._flags[7] & MATCH_FLAGS[qIndex] & 0x7f) {
-		// The quest was complete
+		// The quest was complete. Retain it in the Quest Log using
+		// the high bit of a reserved, already-serialized map cell.
+		_visited[15 * MAP_W + qIndex] |= 0x80;
+
 		for (uint i = 0; i < g_globals->_party.size(); ++i) {
 			Character &c = g_globals->_party[i];
 			c._quest = 0;
@@ -210,11 +216,11 @@ Common::String Map43::checkQuestComplete() {
 		}
 
 		return Common::String::format(
-			STRING["maps.map43.ironfist5"].c_str(),
+			"Well done, quest complete! +%u exp",
 			QUEST_EXPERIENCE[qIndex]);
 	} else {
 		// The quest isn't yet complete
-		return STRING["maps.map43.ironfist3"];
+		return "\"Return not until thy quest is complete\"";
 	}
 }
 

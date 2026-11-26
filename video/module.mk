@@ -4,8 +4,9 @@ MODULE_OBJS := \
 	3do_decoder.o \
 	4xm_decoder.o \
 	4xm_utils.o \
+	asf.o \
+	asf_decoder.o \
 	avi_decoder.o \
-	coktel_decoder.o \
 	dxa_decoder.o \
 	flic_decoder.o \
 	mpegps_decoder.o \
@@ -20,8 +21,15 @@ MODULE_OBJS := \
 
 ifdef USE_BINK
 MODULE_OBJS += \
-	bink_decoder.o
+	bink_decoder.o \
+	bink2_decoder.o
 endif
+
+ifdef USE_COKTEL_DECODER
+MODULE_OBJS += \
+	coktel_decoder.o
+endif
+
 
 ifdef USE_HNM
 MODULE_OBJS += \

@@ -58,6 +58,11 @@ public:
 
 	// The area the control draws to, which can reach past its bounds
 	virtual Common::Rect getDrawBounds() const { return _bounds; }
+
+	// Whether a change of its colors shows inside getDrawBounds() only, so the
+	// rest of the panel doesn't have to be drawn again
+	virtual bool isDrawnInBounds() const { return false; }
+
 	virtual void onMouseHover(const Common::Point &pos) {}
 	virtual bool onMouseDown(const Common::Point &pos) { return false; }
 	virtual void onMouseMove(const Common::Point &pos) {}
@@ -67,6 +72,9 @@ public:
 	void setVisible(bool visible);
 	void setEnabled(bool enabled);
 	void setText(const Common::String &text);
+
+	// Makes the control as large as the picture it draws, keeping its top left
+	void fitToPicture();
 
 	const Common::String &getName() const { return _name; }
 	void setName(const Common::String &name) { _name = name; }
@@ -94,6 +102,17 @@ protected:
 	virtual bool isOwnEvent(int32 eventType) const { return false; }
 
 	ControlState getState() const;
+
+	// Nancy22: a control that was told to flash goes back and forth between
+	// looking hovered over and looking disabled. Its resting state is the one
+	// it is heading for, which turns around once the colors get there.
+	void updateFlash();
+	ControlState getFlashState() const;
+
+	// Nancy21: what a "setImage" action asks for. A text picks another texture,
+	// and a value above 0 a source rect.
+	void setImage(uint element, const Action &action);
+
 	void drawSprite(Graphics::ManagedSurface &surface, uint element, const Common::Rect &dest) const;
 	void drawSprite(Graphics::ManagedSurface &surface, uint element, const Common::Rect &src, const Common::Rect &dest) const;
 
@@ -110,6 +129,8 @@ protected:
 	bool _visible = true;
 	bool _enabled = true;
 	bool _autoHeight = false;	// controls without a height are as tall as their text
+	int _numFlashes = 0;		// flashes left
+	bool _isFlashOn = false;
 	Common::Array<Action> _events;
 	EventHandler *_eventHandler = nullptr;
 	Common::Array<Element> _elements;

@@ -19,6 +19,7 @@
  *
  */
 
+#include "engines/grim/colormap.h"
 #include "engines/grim/model.h"
 #include "engines/grim/costume/model_component.h"
 #include "engines/grim/costume/main_model_component.h"
@@ -55,6 +56,10 @@ MainModelComponent::~MainModelComponent() {
 
 	if (_parentModel) {
 		_parentModel->_children.remove(this);
+
+		// The model goes back to the colormap of the costumes below
+		if (_cmap)
+			_parentModel->refreshColormap();
 	}
 }
 
@@ -64,11 +69,33 @@ void MainModelComponent::init() {
 	_hier->_hierVisible = _visible;
 }
 
-void MainModelComponent::setColormap(CMap *cmap) {
-	Component::setColormap(cmap);
+void MainModelComponent::refreshColormap() {
+	Component::refreshColormap();
 	if (_parentModel) {
-		_parentModel->setColormap(cmap);
+		_parentModel->refreshColormap();
 	}
+}
+
+CMap *MainModelComponent::getStackCMap() const {
+	if (_cmap)
+		return _cmap;
+	for (MainModelComponent *child : _children) {
+		CMap *cmap = child->getStackCMap();
+		if (cmap)
+			return cmap;
+	}
+	return nullptr;
+}
+
+void MainModelComponent::resetColormap() {
+	const MainModelComponent *root = this;
+	while (root->_parentModel)
+		root = root->_parentModel;
+	CMap *cmap = root->getStackCMap();
+	if (!cmap)
+		cmap = getCMap();
+	if (_obj && cmap)
+		_obj->reload(cmap);
 }
 
 void MainModelComponent::reset() {

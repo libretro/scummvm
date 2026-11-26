@@ -1,0 +1,594 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/file.h"
+#include "ultima/ultima2/console.h"
+#include "ultima/ultima2/ultima2.h"
+#include "ultima/ultima2/data/tiles.h"
+#include "ultima/ultima2/logic/dungeon_logic.h"
+#include "ultima/ultima2/logic/overworld_logic.h"
+#include "ultima/ultima2/logic/space_logic.h"
+
+namespace Ultima {
+namespace Ultima2 {
+
+Console::Console() : GUI::Debugger() {
+	registerCmd("map", WRAP_METHOD(Console, cmdMap));
+	registerCmd("tiles", WRAP_METHOD(Console, cmdTiles));
+	registerCmd("teleport", WRAP_METHOD(Console, cmdTeleport));
+	registerCmd("locations", WRAP_METHOD(Console, cmdLocations));
+	registerCmd("intangible", WRAP_METHOD(Console, cmdIntangible));
+	registerCmd("enemy", WRAP_METHOD(Console, cmdEnemy));
+	registerCmd("hp", WRAP_METHOD(Console, cmdHP));
+	registerCmd("food", WRAP_METHOD(Console, cmdFood));
+	registerCmd("gold", WRAP_METHOD(Console, cmdGold));
+	registerCmd("transport", WRAP_METHOD(Console, cmdTransport));
+	registerCmd("stats", WRAP_METHOD(Console, cmdStats));
+	registerCmd("inventory", WRAP_METHOD(Console, cmdInventory));
+	registerCmd("space", WRAP_METHOD(Console, cmdSpace));
+	registerCmd("load", WRAP_METHOD(Console, cmdLoad));
+	registerCmd("save", WRAP_METHOD(Console, cmdSave));
+}
+
+Console::~Console() {
+}
+
+bool Console::cmdMap(int argc, const char **argv) {
+	if (argc != 3) {
+		debugPrintf("map <era> <map type>\n");
+		return true;
+	}
+
+	Data::Savegame &sg = _G(savegame);
+	int mapEra = atoi(argv[1]);
+	int mapType = atoi(argv[2]);
+
+	if (!Common::File::exists(Data::mapFilename(mapEra, mapType).c_str())) {
+		debugPrintf("No such map: %s\n", Data::mapFilename(mapEra, mapType).c_str());
+		return true;
+	}
+
+	if (!sg.hasCharacter())
+		sg.setupDummyCharacter();
+
+	if (sg._mapType == 0) {
+		sg._overworldReturnX = sg._mapX;
+		sg._overworldReturnY = sg._mapY;
+	}
+	if (mapType >= 4) {
+		sg._mapX = 5;
+		sg._mapY = 5;
+		sg._dungeonLevel = 0;
+		sg._facingX = 1;
+		sg._facingY = 0;
+	} else if (mapType != 0) {
+		sg._mapX = 31;
+		sg._mapY = 62;
+	}
+
+	sg._mapEra = mapEra;
+	sg._mapType = mapType;
+	_G(map).load(mapEra, mapType);
+	_G(logic)->entering();
+	return false;
+}
+
+bool Console::cmdTiles(int, const char **) {
+	Graphics::Surface tiles[Data::TILE_COUNT];
+	Data::loadTiles(tiles, g_engine->getRenderMode());
+
+	debugPrintf("Loaded %d tiles\n", Data::TILE_COUNT);
+	for (int t = 0; t < Data::TILE_COUNT; ++t) {
+		uint32 sum = 0;
+		const byte *pixels = (const byte *)tiles[t].getPixels();
+		for (int i = 0; i < Data::TILE_WIDTH * Data::TILE_HEIGHT; ++i)
+			sum += pixels[i];
+
+		debugPrintf("Tile %2d: pixel sum=%u\n", t, sum);
+	}
+
+	// Tile 6 (Town) has a distinctive twin-tower shape, useful as a
+	// visual sanity check that the decode is correct
+	debugPrintf("Tile %d (Town):\n", (int)Data::TILE_TOWN);
+	const byte *townPixels = (const byte *)tiles[Data::TILE_TOWN].getPixels();
+	for (int y = 0; y < Data::TILE_HEIGHT; ++y) {
+		Common::String line;
+		for (int x = 0; x < Data::TILE_WIDTH; ++x)
+			line += (char)('0' + townPixels[y * Data::TILE_WIDTH + x]);
+		debugPrintf("%s\n", line.c_str());
+	}
+
+	for (int t = 0; t < Data::TILE_COUNT; ++t)
+		tiles[t].free();
+
+	return true;
+}
+
+bool Console::cmdTeleport(int argc, const char **argv) {
+	Data::Savegame &sg = _G(savegame);
+
+	if (argc == 3) {
+		sg._mapX = atoi(argv[1]);
+		sg._mapY = atoi(argv[2]);
+		g_engine->focusedView()->redraw();
+	} else if (argc != 1) {
+		debugPrintf("teleport [<x> <y>]\n");
+		return true;
+	}
+
+	debugPrintf("Position: (%d,%d)\n", sg._mapX, sg._mapY);
+	return true;
+}
+
+bool Console::cmdLocations(int argc, const char **argv) {
+	static const struct {
+		Data::TileId tile;
+		const char *name;
+	} LOCATION_TILES[] = {
+		{ Data::TILE_VILLAGE, "VILLAGE" },
+		{ Data::TILE_TOWN, "TOWN" },
+		{ Data::TILE_TOWER, "TOWER" },
+		{ Data::TILE_CASTLE, "CASTLE" },
+		{ Data::TILE_DUNGEON_ENTRANCE, "DUNGEON" },
+		{ Data::TILE_SIGNPOST, "SIGNPOST" }
+	};
+
+	Common::Array<Common::Point> positions;
+	Common::Array<const char *> names;
+	for (int y = 0; y < Data::MAP_HEIGHT; ++y) {
+		for (int x = 0; x < Data::MAP_WIDTH; ++x) {
+			Data::TileId tile = _G(map).tileAt(x, y);
+			for (const auto &entry : LOCATION_TILES) {
+				if (tile == entry.tile) {
+					positions.push_back(Common::Point(x, y));
+					names.push_back(entry.name);
+					break;
+				}
+			}
+		}
+	}
+
+	if (argc == 2) {
+		int index = atoi(argv[1]);
+		if (index < 0 || index >= (int)positions.size()) {
+			debugPrintf("Invalid location index\n");
+			return true;
+		}
+
+		_G(savegame)._mapX = positions[index].x;
+		_G(savegame)._mapY = positions[index].y;
+		g_engine->focusedView()->redraw();
+		debugPrintf("Teleported to %d: %s (%d,%d)\n", index, names[index],
+			positions[index].x, positions[index].y);
+		return true;
+	} else if (argc != 1) {
+		debugPrintf("locations [<index>]\n");
+		return true;
+	}
+
+	for (uint i = 0; i < positions.size(); ++i)
+		debugPrintf("%2d: %-8s (%d,%d)\n", i, names[i], positions[i].x, positions[i].y);
+
+	return true;
+}
+
+bool Console::cmdEnemy(int argc, const char **argv) {
+	Data::Savegame &sg = _G(savegame);
+
+	if (dynamic_cast<Logic::DungeonLogic *>(_G(logic).get()))
+		return spawnDungeonEnemy(argc, argv);
+
+	if (sg._mapType != 0) {
+		debugPrintf("Only supported on the overworld map and in dungeons\n");
+		return true;
+	}
+
+	Logic::OverworldLogic *logic = dynamic_cast<Logic::OverworldLogic *>(_G(logic).get());
+	if (!logic) {
+		debugPrintf("Only supported when walking about\n");
+		return true;
+	}
+
+	Data::MapMonsters &monsters = _G(map)._monsters;
+
+	int slot = -1;
+	for (int i = 1; i <= 31; ++i) {
+		if (!monsters.isActive(i)) {
+			slot = i;
+			break;
+		}
+	}
+	if (slot < 0) {
+		slot = 1;
+		monsters._type[slot] = 0;
+		debugPrintf("No free monster slots; evicted the monster in slot %d\n", slot);
+	}
+
+	int spawnX = -1, spawnY = -1;
+	for (int radius = 1; radius <= 10 && spawnX < 0; ++radius) {
+		for (int dy = -radius; dy <= radius && spawnX < 0; ++dy) {
+			for (int dx = -radius; dx <= radius && spawnX < 0; ++dx) {
+				if (MAX(ABS(dx), ABS(dy)) != radius)
+					continue;
+
+				int x = (sg._mapX + dx + Data::MAP_WIDTH) % Data::MAP_WIDTH;
+				int y = (sg._mapY + dy + Data::MAP_HEIGHT) % Data::MAP_HEIGHT;
+				if (!logic->isWalkable(_G(map).tileAt(x, y)))
+					continue;
+
+				bool occupied = false;
+				for (int i = 1; i <= 31; ++i) {
+					if (monsters.isActive(i) && monsters._mapX[i] == x && monsters._mapY[i] == y) {
+						occupied = true;
+						break;
+					}
+				}
+				if (!occupied) {
+					spawnX = x;
+					spawnY = y;
+					break;
+				}
+			}
+		}
+	}
+
+	if (spawnX < 0) {
+		debugPrintf("Couldn't find a free tile nearby\n");
+		return true;
+	}
+
+	monsters._mapX[slot] = spawnX;
+	monsters._mapY[slot] = spawnY;
+	monsters._spellHP[slot] = 0x10;
+	monsters._type[slot] = Data::TILE_ORC * 4;
+	monsters._glyphTile[slot] = 0;
+	monsters._offerFlag[slot] = 0;
+	monsters._tempX[slot] = 0;
+	monsters._tempY[slot] = 0;
+
+	g_engine->focusedView()->redraw();
+	debugPrintf("Spawned enemy in slot %d at (%d,%d)\n", slot, spawnX, spawnY);
+	return true;
+}
+
+bool Console::spawnDungeonEnemy(int argc, const char **argv) {
+	if (argc > 3) {
+		debugPrintf("enemy [<monster number> [<distance>]]\n");
+		return true;
+	}
+
+	Data::Savegame &sg = _G(savegame);
+	Data::MapMonsters &monsters = _G(map)._monsters;
+	const int level = sg._dungeonLevel;
+	const int type = argc > 1 ? atoi(argv[1]) : 1;
+	const int distance = argc > 2 ? atoi(argv[2]) : 1;
+
+	if (type < 1 || type > 7) {
+		debugPrintf("Monster number must be from 1 to 7\n");
+		return true;
+	}
+	if (distance < 1) {
+		debugPrintf("Distance must be at least 1\n");
+		return true;
+	}
+
+	const int x = sg._mapX + sg._facingX * distance;
+	const int y = sg._mapY + sg._facingY * distance;
+	if (x < 0 || y < 0 || x >= Data::DUNGEON_WIDTH || y >= Data::DUNGEON_HEIGHT) {
+		debugPrintf("(%d,%d) is outside the map\n", x, y);
+		return true;
+	}
+
+	byte &cell = _G(dungeon).cell(level, x, y);
+	if (cell & 0x80) {
+		debugPrintf("(%d,%d) is a wall\n", x, y);
+		return true;
+	}
+	if (cell & 7) {
+		debugPrintf("(%d,%d) already has a monster\n", x, y);
+		return true;
+	}
+
+	// The level's own slots are used first, as the game does
+	int slot = -1;
+	for (int i = level * 2; i <= level * 2 + 1 && slot < 0; ++i) {
+		if (i >= 1 && !monsters.isActive(i))
+			slot = i;
+	}
+	for (int i = 31; i >= 1 && slot < 0; --i) {
+		if (!monsters.isActive(i))
+			slot = i;
+	}
+	if (slot < 0) {
+		debugPrintf("No free monster slots\n");
+		return true;
+	}
+
+	monsters._mapX[slot] = x;
+	monsters._mapY[slot] = y;
+	monsters._glyphTile[slot] = level;
+	monsters._type[slot] = type;
+	monsters._spellHP[slot] = (byte)((type * 2 + level) * 8) | 0x10;
+	monsters._offerFlag[slot] = 0;
+	monsters._tempX[slot] = 0;
+	monsters._tempY[slot] = 0;
+	cell |= type;
+
+	g_engine->focusedView()->redraw();
+	debugPrintf("Spawned monster %d in slot %d at (%d,%d)\n", type, slot, x, y);
+	return true;
+}
+
+bool Console::cmdIntangible(int, const char **) {
+	_G(intangible) = !_G(intangible);
+	debugPrintf("Intangible mode %s\n", _G(intangible) ? "ON" : "OFF");
+	return true;
+}
+
+bool Console::cmdHP(int argc, const char **argv) {
+	int hp = argc == 2 ? atoi(argv[1]) : 9999;
+	_G(savegame)._hp = hp;
+	g_engine->baseView()->findView("Stats")->draw();
+	debugPrintf("HP set to %d\n", hp);
+	return true;
+}
+
+bool Console::cmdFood(int, const char **) {
+	_G(savegame)._food = 9999;
+	_G(savegame)._foodTurnCtr = 0;
+	g_engine->baseView()->findView("Stats")->draw();
+	debugPrintf("Food set to 9999\n");
+	return true;
+}
+
+bool Console::cmdGold(int, const char **) {
+	_G(savegame)._gold = 9999;
+	g_engine->baseView()->findView("Stats")->draw();
+	debugPrintf("Gold set to 9999\n");
+	return true;
+}
+
+bool Console::cmdTransport(int argc, const char **argv) {
+	static const Data::TileId TRANSPORTS[] = {
+		Data::TILE_HORSE, Data::TILE_SHIP, Data::TILE_AIRPLANE, Data::TILE_ROCKET
+	};
+	static const char *const NAMES[] = { "horse", "ship", "airplane", "rocket" };
+
+	// The items each needs, to board and then to launch
+	static const int ITEMS[][2] = {
+		{ -1, -1 },
+		{ Data::ITEM_BLUE_TASSLE, -1 },
+		{ Data::ITEM_SKULL_KEY, Data::ITEM_BRASS_BUTTON },
+		{ Data::ITEM_ANKH, Data::ITEM_TRI_LITHIUM }
+	};
+
+	int type = (argc == 2) ? atoi(argv[1]) : -1;
+	if (type < 0 || type >= (int)ARRAYSIZE(TRANSPORTS)) {
+		debugPrintf("transport <type>, where type is 0 for a horse, 1 for a ship, 2 for an airplane or 3 for a rocket\n");
+		return true;
+	}
+
+	Data::Savegame &sg = _G(savegame);
+	if (sg._mapType != 0) {
+		debugPrintf("Only supported on the overworld map\n");
+		return true;
+	}
+
+	Logic::OverworldLogic *logic = dynamic_cast<Logic::OverworldLogic *>(_G(logic).get());
+	if (!logic) {
+		debugPrintf("Only supported when walking about\n");
+		return true;
+	}
+
+	// Ships need water, and the others are put on grass
+	Data::TileId transport = TRANSPORTS[type];
+	Data::TileId terrain = (transport == Data::TILE_SHIP) ? Data::TILE_WATER : Data::TILE_GRASS;
+	Data::MapMonsters &monsters = _G(map)._monsters;
+
+	// Boarding means stepping onto it from the side, so one that's only
+	// diagonally next to somewhere to walk from can't be reached
+	auto reachable = [&](int x, int y) {
+		static const int OFFSETS[4][2] = { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } };
+		for (int i = 0; i < 4; ++i) {
+			int nx = (x + OFFSETS[i][0] + Data::MAP_WIDTH) % Data::MAP_WIDTH;
+			int ny = (y + OFFSETS[i][1] + Data::MAP_HEIGHT) % Data::MAP_HEIGHT;
+			if (logic->isWalkable(_G(map).tileAt(nx, ny)))
+				return true;
+		}
+
+		return false;
+	};
+
+	// Prefer tiles that can be reached, but settle for any if there aren't any
+	for (int pass = 0; pass < 2; ++pass) {
+		for (int radius = 1; radius <= 10; ++radius) {
+			for (int dy = -radius; dy <= radius; ++dy) {
+				for (int dx = -radius; dx <= radius; ++dx) {
+					if (MAX(ABS(dx), ABS(dy)) != radius)
+						continue;
+
+					int x = (sg._mapX + dx + Data::MAP_WIDTH) % Data::MAP_WIDTH;
+					int y = (sg._mapY + dy + Data::MAP_HEIGHT) % Data::MAP_HEIGHT;
+					if (_G(map).tileAt(x, y) != terrain || (pass == 0 && !reachable(x, y)))
+						continue;
+
+					bool occupied = false;
+					for (int i = 0; i < Data::MAP_MONSTER_COUNT && !occupied; ++i)
+						occupied = monsters.isActive(i) && monsters._mapX[i] == x && monsters._mapY[i] == y;
+					if (occupied)
+						continue;
+
+					_G(map)._tiles[y][x] = transport;
+					g_engine->focusedView()->redraw();
+					debugPrintf("Spawned a %s at (%d,%d)\n", NAMES[type], x, y);
+
+					// Give any items needed to board and launch it that aren't already owned
+					for (int i = 0; i < 2 && ITEMS[type][i] >= 0; ++i) {
+						int item = ITEMS[type][i];
+						if (sg._items[item] == 0) {
+							sg._items[item] = 1;
+							debugPrintf("Added %s\n", Data::itemName(item));
+						}
+					}
+
+					return true;
+				}
+			}
+		}
+	}
+
+	debugPrintf("Couldn't find a free %s tile nearby\n", (terrain == Data::TILE_WATER) ? "water" : "grass");
+	return true;
+}
+
+bool Console::cmdStats(int, const char **) {
+	Data::Savegame &sg = _G(savegame);
+
+	sg._strength = sg._agility = sg._stamina = Data::MAX_BCD_BYTE;
+	sg._charisma = sg._wisdom = sg._intelligence = Data::MAX_BCD_BYTE;
+	debugPrintf("Attributes set to %d\n", Data::MAX_BCD_BYTE);
+	return true;
+}
+
+bool Console::cmdInventory(int, const char **) {
+	Data::Savegame &sg = _G(savegame);
+
+	for (int i = 1; i < Data::ARMOR_COUNT; ++i)
+		sg._armorOwned[i] = 9;
+	for (int i = 1; i < Data::WEAPON_COUNT; ++i)
+		sg._weaponOwned[i] = 9;
+	for (int i = 1; i < Data::SPELL_COUNT; ++i)
+		sg._spellCharges[i] = 99;
+	for (int i = 0; i < Data::ITEM_COUNT; ++i)
+		sg._items[i] = 9;
+
+	sg._torches = 99;
+	sg._keys = 99;
+	sg._thievesTools = 99;
+	sg._enilnoOwned = true;
+	sg._hp = sg._food = sg._gold = 9999;
+	sg._foodTurnCtr = 0;
+
+	// Equip the best that the character's strength and agility allow -
+	// mirrors ReadyWeapon/WearArmor's own BCD-byte comparisons
+	sg._readiedWeapon = Data::WEAPON_HANDS;
+	for (int i = Data::WEAPON_COUNT - 1; i > 0; --i) {
+		if (i * 8 < Data::toBcd(sg._agility)) {
+			sg._readiedWeapon = (Data::WeaponType)i;
+			break;
+		}
+	}
+
+	sg._readiedArmor = Data::ARMOR_SKIN;
+	for (int i = Data::ARMOR_COUNT - 1; i > 0; --i) {
+		if (i * 8 < Data::toBcd(sg._strength)) {
+			sg._readiedArmor = (Data::ArmorType)i;
+			break;
+		}
+	}
+
+	g_engine->baseView()->findView("Stats")->draw();
+	debugPrintf("Full inventory given; readied %s and %s armour\n",
+		Data::WEAPON_NAMES[sg._readiedWeapon], Data::ARMOR_NAMES[sg._readiedArmor]);
+	return true;
+}
+
+bool Console::cmdSpace(int, const char **) {
+	// The first launch from Earth remembers where to come back to
+	Data::Savegame &sg = _G(savegame);
+	if (sg._orbitTarget == 0 && sg._mapType == 0) {
+		sg._launchMapX = sg._mapX;
+		sg._launchMapY = sg._mapY;
+		sg._inSpace = true;
+	}
+
+	// Ensure we have necessary equipment
+	sg._readiedArmor = Data::ARMOR_REFLECT;
+	sg._items[Data::ITEM_TRI_LITHIUM] = 9;
+
+	Logic::SpaceLogic::takeOff();
+
+	return false;
+}
+
+bool Console::cmdLoad(int argc, const char **argv) {
+	if (argc > 2) {
+		debugPrintf("load [<filename>]  - imports an original DOS PLAYER save; defaults to \"PLAYER\"\n");
+		return true;
+	}
+
+	Common::String filename = (argc == 2) ? argv[1] : "PLAYER";
+	Common::File f;
+	if (!f.open(filename.c_str())) {
+		debugPrintf("Could not open %s\n", filename.c_str());
+		return true;
+	}
+
+	Data::Savegame &sg = _G(savegame);
+	bool success = sg.importOriginal(f);
+	f.close();
+
+	if (!success) {
+		debugPrintf("%s is too short to be a PLAYER save\n", filename.c_str());
+		return true;
+	}
+
+	if (!Common::File::exists(Data::mapFilename(sg._mapEra, sg._mapType).c_str())) {
+		debugPrintf("Imported %s, but no map file for era %d type %d\n",
+			filename.c_str(), sg._mapEra, sg._mapType);
+		return true;
+	}
+
+	_G(map).clearSaved();
+	_G(map).load(sg._mapEra, sg._mapType);
+	_G(logic)->entering();
+	debugPrintf("Imported %s: %s, HP=%d food=%d gold=%d, at (%d,%d) era %d type %d\n",
+		filename.c_str(), sg._name, sg._hp, sg._food, sg._gold, sg._mapX, sg._mapY, sg._mapEra, sg._mapType);
+	return false;
+}
+
+bool Console::cmdSave(int argc, const char **argv) {
+	if (argc > 2) {
+		debugPrintf("save [<filename>]  - exports an original DOS PLAYER save; defaults to \"PLAYER\"\n");
+		return true;
+	}
+
+	Data::Savegame &sg = _G(savegame);
+	if (!sg.hasCharacter()) {
+		debugPrintf("No character to save\n");
+		return true;
+	}
+
+	Common::String filename = (argc == 2) ? argv[1] : "PLAYER";
+	Common::DumpFile f;
+	if (!f.open(Common::Path(filename), true)) {
+		debugPrintf("Could not create %s\n", filename.c_str());
+		return true;
+	}
+
+	sg.exportOriginal(f);
+	f.close();
+	debugPrintf("Exported %s\n", filename.c_str());
+	return true;
+}
+
+} // namespace Ultima2
+} // namespace Ultima

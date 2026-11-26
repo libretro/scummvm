@@ -37,7 +37,7 @@
 namespace NGI {
 
 struct Bat {
-	StaticANIObject *ani;
+	AniObject *ani;
 	double power;
 	double angle;
 	double currX;
@@ -47,24 +47,24 @@ struct Bat {
 };
 
 void scene27_initScene(Scene *sc) {
-	g_vars->scene27_hitZone = sc->getPictureObjectById(PIC_SC27_HITZONE2, 0);
-	g_vars->scene27_driver = sc->getStaticANIObject1ById(ANI_VODILLA, -1);
-	g_vars->scene27_maid = sc->getStaticANIObject1ById(ANI_MAID, -1);
-	g_vars->scene27_batHandler = sc->getStaticANIObject1ById(ANI_BITAHANDLER, -1);
+	g_vars->scene27_hitZone = sc->findPictureObjectById(PIC_SC27_HITZONE2, 0);
+	g_vars->scene27_driver = sc->findAniObjectById(ANI_VODILLA, -1);
+	g_vars->scene27_maid = sc->findAniObjectById(ANI_MAID, -1);
+	g_vars->scene27_batHandler = sc->findAniObjectById(ANI_BITAHANDLER, -1);
 
 	g_vars->scene27_balls.clear();
 	g_vars->scene27_bats.clear();
 	g_vars->scene27_var07.clear();
 
 	g_vars->scene27_driverHasVent = true;
-	g_vars->scene27_bat = sc->getStaticANIObject1ById(ANI_BITA, -1);
+	g_vars->scene27_bat = sc->findAniObjectById(ANI_BITA, -1);
 
 	for (int i = 0; i < 4; i++) {
-		StaticANIObject *newbat = new StaticANIObject(g_vars->scene27_bat);
+		AniObject *newbat = new AniObject(g_vars->scene27_bat);
 
 		g_vars->scene27_balls.push_back(newbat);
 
-		sc->addStaticANIObject(newbat, 1);
+		sc->addAni(newbat, 1);
 	}
 
 	g_vars->scene27_dudeIsAiming = false;
@@ -78,12 +78,12 @@ void scene27_initScene(Scene *sc) {
 	Scene *oldsc = g_nmi->_currentScene;
 	g_nmi->_currentScene = sc;
 
-	if (g_nmi->getObjectState(sO_Maid) == g_nmi->getObjectEnumState(sO_Maid, sO_WithSwab)) {
-		g_vars->scene27_maid->changeStatics2(ST_MID_SWAB2);
-	} else if (g_nmi->getObjectState(sO_Maid) == g_nmi->getObjectEnumState(sO_Maid, sO_WithBroom)) {
-		g_vars->scene27_maid->changeStatics2(ST_MID_BROOM);
-	} else if (g_nmi->getObjectState(sO_Maid) == g_nmi->getObjectEnumState(sO_Maid, sO_WithSpade)) {
-		g_vars->scene27_maid->changeStatics2(ST_MID_SPADE);
+	if (g_nmi->getStateId(sO_Maid) == g_nmi->getStateValue(sO_Maid, sO_WithSwab)) {
+		g_vars->scene27_maid->setStatic(ST_MID_SWAB2);
+	} else if (g_nmi->getStateId(sO_Maid) == g_nmi->getStateValue(sO_Maid, sO_WithBroom)) {
+		g_vars->scene27_maid->setStatic(ST_MID_BROOM);
+	} else if (g_nmi->getStateId(sO_Maid) == g_nmi->getStateValue(sO_Maid, sO_WithSpade)) {
+		g_vars->scene27_maid->setStatic(ST_MID_SPADE);
 	}
 
 	g_nmi->_currentScene = oldsc;
@@ -108,33 +108,33 @@ int scene27_updateCursor() {
 }
 
 void sceneHandler27_driverGiveVent() {
-	g_vars->scene27_driver->changeStatics2(ST_DRV_VENT);
+	g_vars->scene27_driver->setStatic(ST_DRV_VENT);
 	g_vars->scene27_driver->startMQIfIdle(QU_DRV_GIVEVENT, 1);
 
 	g_vars->scene27_driverHasVent = false;
 
 	getCurrSceneSc2MotionController()->activate();
-	getGameLoaderInteractionController()->enableFlag24();
+	getGameLoaderInteractionController()->enable();
 
-	g_nmi->_behaviorManager->setFlagByStaticAniObject(g_nmi->_aniMan, 1);
+	g_nmi->_behaviorManager->enableAllQueuesForAni(g_nmi->_aniMan, 1);
 }
 
 void sceneHandler27_winArcade() {
-	if (g_nmi->getObjectState(sO_Driver) == g_nmi->getObjectEnumState(sO_Driver, sO_WithSteering)) {
+	if (g_nmi->getStateId(sO_Driver) == g_nmi->getStateValue(sO_Driver, sO_WithSteering)) {
 		g_vars->scene27_dudeIsAiming = false;
 
 		g_nmi->_aniMan->_callback2 = nullptr; // Really NULL
-		g_nmi->_aniMan->changeStatics2(ST_MAN_RIGHT);
+		g_nmi->_aniMan->setStatic(ST_MAN_RIGHT);
 
 		sceneHandler27_driverGiveVent();
 	}
 }
 
 void sceneHandler27_takeVent() {
-	if (g_nmi->getObjectState(sO_Maid) == g_nmi->getObjectEnumState(sO_Maid, sO_WithSwab)) {
+	if (g_nmi->getStateId(sO_Maid) == g_nmi->getStateValue(sO_Maid, sO_WithSwab)) {
 		if (g_vars->scene27_maid->isIdle()) {
 			if (g_vars->scene27_maid->_flags & 4) {
-				g_vars->scene27_maid->changeStatics2(ST_MID_SWAB2);
+				g_vars->scene27_maid->setStatic(ST_MID_SWAB2);
 				g_vars->scene27_maid->startMQIfIdle(QU_MID_CLEANVENT, 1);
 			}
 		}
@@ -143,19 +143,19 @@ void sceneHandler27_takeVent() {
 
 void sceneHandler27_showNextBat() {
 	if (g_vars->scene27_bat) {
-		MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->getMessageQueueById(QU_SC27_SHOWBET), 0, 1);
+		MessageQueue *mq = new MessageQueue(g_nmi->_currentScene->findMessageQueue(QU_SC27_SHOWBET), 0, 1);
 
-		mq->setParamInt(-1, g_vars->scene27_bat->_odelay);
-		mq->chain(nullptr);
+		mq->setObjectCopy(-1, g_vars->scene27_bat->_copyId);
+		mq->run(nullptr);
 	}
 
-	g_vars->scene27_batHandler->_priority = 1045;
+	g_vars->scene27_batHandler->_z = 1045;
 }
 
 int sceneHandler27_updateScreenCallback() {
 	int res;
 
-	res = g_nmi->drawArcadeOverlay(getGameLoaderInteractionController()->_flag24 == 0);
+	res = g_nmi->drawArcadeOverlay(getGameLoaderInteractionController()->_enabled == 0);
 
 	if (!res)
 		g_nmi->_updateScreenCallback = nullptr;
@@ -173,38 +173,38 @@ void sceneHandler27_aniManCallback(int *phase) {
 }
 
 void sceneHandler27_throwBat() {
-	if (getGameLoaderInteractionController()->_flag24)
+	if (getGameLoaderInteractionController()->_enabled)
 		g_nmi->_updateScreenCallback = sceneHandler27_updateScreenCallback;
 
 	g_nmi->_aniMan->_callback2 = sceneHandler27_aniManCallback;
 
-	g_nmi->_aniMan->startAnim(MV_MAN27_THROWBET, 0, -1);
+	g_nmi->_aniMan->startMovement(MV_MAN27_THROWBET, 0, -1);
 
 	getCurrSceneSc2MotionController()->deactivate();
-	getGameLoaderInteractionController()->disableFlag24();
+	getGameLoaderInteractionController()->disable();
 
-	g_nmi->_behaviorManager->setFlagByStaticAniObject(g_nmi->_aniMan, 0);
+	g_nmi->_behaviorManager->enableAllQueuesForAni(g_nmi->_aniMan, 0);
 
 	g_vars->scene27_maxPhaseReached = false;
 
 	g_vars->scene27_bat->hide();
 }
 
-void sceneHandler27_clickBat(ExCommand *cmd) {
-	int bx = g_vars->scene27_bat->_ox - 5;
-	int by = g_vars->scene27_bat->_oy - 71;
+void sceneHandler27_clickBat(Command *cmd) {
+	int bx = g_vars->scene27_bat->_x - 5;
+	int by = g_vars->scene27_bat->_y - 71;
 
 #if DBG
 	sceneHandler27_throwBat();
 	return;
 #endif
 
-	if (ABS(bx - g_nmi->_aniMan->_ox) > 1 || ABS(by - g_nmi->_aniMan->_oy) > 1
+	if (ABS(bx - g_nmi->_aniMan->_x) > 1 || ABS(by - g_nmi->_aniMan->_y) > 1
 		|| g_nmi->_aniMan->_movement || g_nmi->_aniMan->_statics->_staticsId != ST_MAN_RIGHT) {
 		MessageQueue *mq = getCurrSceneSc2MotionController()->startMove(g_nmi->_aniMan, bx, by, 1, ST_MAN_RIGHT);
 
 		if (mq) {
-			mq->addExCommandToEnd(cmd->createClone());
+			mq->addCommandToEnd(cmd->createClone());
 
 			postExCommand(g_nmi->_aniMan->_id, 2, bx, by, 0, -1);
 		}
@@ -217,11 +217,11 @@ void sceneHandler27_maidSwab() {
 #if DBG
 	return;
 #endif
-	if (g_nmi->getObjectState(sO_Maid) == g_nmi->getObjectEnumState(sO_Maid, sO_WithSwab))
-		g_vars->scene27_maid->changeStatics2(ST_MID_SWAB);
+	if (g_nmi->getStateId(sO_Maid) == g_nmi->getStateValue(sO_Maid, sO_WithSwab))
+		g_vars->scene27_maid->setStatic(ST_MID_SWAB);
 }
 
-void sceneHandler27_startBat(StaticANIObject *bat) {
+void sceneHandler27_startBat(AniObject *bat) {
 	debugC(2, kDebugSceneLogic, "scene27: startBat");
 
 	Bat *newbat = new Bat;
@@ -231,11 +231,11 @@ void sceneHandler27_startBat(StaticANIObject *bat) {
 	newbat->ani = bat;
 	newbat->powerCos = newbat->power * cos(0.0);
 	newbat->powerSin = newbat->power * sin(0.0);
-	newbat->currX = newbat->powerCos + (double)g_nmi->_aniMan->_ox + 42.0;
-	newbat->currY = newbat->powerSin + (double)g_nmi->_aniMan->_oy + 58.0;
+	newbat->currX = newbat->powerCos + (double)g_nmi->_aniMan->_x + 42.0;
+	newbat->currY = newbat->powerSin + (double)g_nmi->_aniMan->_y + 58.0;
 
 	bat->_statics = bat->_staticsList[0];
-	bat->setOXY((int)newbat->currX, (int)newbat->currY);
+	bat->setPos((int)newbat->currX, (int)newbat->currY);
 	bat->_flags |= 4;
 
 	g_vars->scene27_bats.push_back(newbat);
@@ -249,7 +249,7 @@ void sceneHandler27_startAiming() {
 
 	g_nmi->_aniMan->_callback2 = nullptr; // Really NULL
 
-	g_vars->scene27_launchPhase = g_nmi->_aniMan->_movement->_currDynamicPhaseIndex - 6;
+	g_vars->scene27_launchPhase = g_nmi->_aniMan->_movement->_curFrame - 6;
 
 	int phase = 21 - g_vars->scene27_launchPhase;
 
@@ -261,10 +261,10 @@ void sceneHandler27_startAiming() {
 
 	g_nmi->playSound(SND_27_044, 0);
 
-	g_nmi->_aniMan->_movement->setDynamicPhaseIndex(phase);
+	g_nmi->_aniMan->_movement->setCurFrame(phase);
 }
 
-void sceneHandler27_initAiming(ExCommand *cmd) {
+void sceneHandler27_initAiming(Command *cmd) {
 	g_vars->scene27_aimStartX = cmd->_x;
 	g_vars->scene27_aimStartY = cmd->_y;
 	g_vars->scene27_dudeIsAiming = true;
@@ -281,7 +281,7 @@ void sceneHandler27_aimDude() {
 		phase = 11;
 
 	if (g_nmi->_aniMan->_movement)
-		g_nmi->_aniMan->_movement->setDynamicPhaseIndex(phase);
+		g_nmi->_aniMan->_movement->setCurFrame(phase);
 }
 
 void sceneHandler27_wipeDo() {
@@ -304,14 +304,14 @@ bool sceneHandler27_batFallLogic(uint batn) {
 		return false;
 
 	if (bat->currX - y > 15.0 || bat->ani->_statics->_staticsId == ST_BTA_FALL) {
-		bat->ani->_priority = 2020;
+		bat->ani->_z = 2020;
 
 		g_vars->scene27_var07.push_back(bat);
 
 		if (batn != g_vars->scene27_bats.size() - 1)
 			g_vars->scene27_bats.remove_at(batn);
 	} else if (!bat->ani->_movement) {
-		bat->ani->startAnim(MV_BTA_FALL, 0, -1);
+		bat->ani->startMovement(MV_BTA_FALL, 0, -1);
 	}
 
 	return true;
@@ -405,15 +405,15 @@ void sceneHandler27_knockBats(int bat1n, int bat2n) {
 void sceneHandler27_batSetColors(int batn) {
 	Bat *bat = g_vars->scene27_bats[batn];
 
-	if (g_vars->scene27_hitZone->isPixelHitAtPos((int)bat->currX, (int)bat->currY) ) {
+	if (g_vars->scene27_hitZone->hit((int)bat->currX, (int)bat->currY) ) {
 		if (bat->ani->_statics->_staticsId == ST_BTA_NORM) {
 			if (!bat->ani->_movement)
-				bat->ani->_statics = bat->ani->getStaticsById(ST_BTA_HILITE);
+				bat->ani->_statics = bat->ani->getStatic(ST_BTA_HILITE);
 		}
 	} else {
 		if (bat->ani->_statics->_staticsId == ST_BTA_HILITE) {
 			if (!bat->ani->_movement)
-				bat->ani->_statics = bat->ani->getStaticsById(ST_BTA_NORM);
+				bat->ani->_statics = bat->ani->getStatic(ST_BTA_NORM);
 		}
 	}
 }
@@ -421,16 +421,16 @@ void sceneHandler27_batSetColors(int batn) {
 void sceneHandler27_driverPushButton() {
 	debugC(2, kDebugSceneLogic, "scene27: driverPushButton");
 
-	if (g_nmi->getObjectState(sO_Driver) == g_nmi->getObjectEnumState(sO_Driver, sO_WithSteering)) {
-		g_vars->scene27_driver->changeStatics2(ST_DRV_VENT);
-		chainQueue(QU_DRV_PUSHBUTTON, 1);
+	if (g_nmi->getStateId(sO_Driver) == g_nmi->getStateValue(sO_Driver, sO_WithSteering)) {
+		g_vars->scene27_driver->setStatic(ST_DRV_VENT);
+		runQueue(QU_DRV_PUSHBUTTON, 1);
 
 		g_vars->scene27_driverPushedButton = true;
 	} else {
-		g_vars->scene27_driver->changeStatics2(ST_DRV_SITNOVENT);
+		g_vars->scene27_driver->setStatic(ST_DRV_SITNOVENT);
 
 
-		chainQueue(QU_DRV_PUSHBUTTON_NOVENT, 1);
+		runQueue(QU_DRV_PUSHBUTTON_NOVENT, 1);
 
 		g_vars->scene27_driverPushedButton = true;
 	}
@@ -438,8 +438,8 @@ void sceneHandler27_driverPushButton() {
 
 void sceneHandler27_maidSwitchback() {
 #ifndef DBG
-	if (g_nmi->getObjectState(sO_Maid) == g_nmi->getObjectEnumState(sO_Maid, sO_WithSwab)) {
-		g_vars->scene27_maid->changeStatics2(ST_MID_SWAB);
+	if (g_nmi->getStateId(sO_Maid) == g_nmi->getStateValue(sO_Maid, sO_WithSwab)) {
+		g_vars->scene27_maid->setStatic(ST_MID_SWAB);
 		g_vars->scene27_maid->startMQIfIdle(QU_MID_SWITCHBACK, 1);
 	}
 #endif
@@ -475,12 +475,12 @@ void sceneHandler27_batLogic() {
 			break;
 
 		default:
-			chainQueue(QU_SC27_RESTARTBETS, 1);
+			runQueue(QU_SC27_RESTARTBETS, 1);
 
 			getCurrSceneSc2MotionController()->activate();
-			getGameLoaderInteractionController()->enableFlag24();
+			getGameLoaderInteractionController()->enable();
 
-			g_nmi->_behaviorManager->setFlagByStaticAniObject(g_nmi->_aniMan, 1);
+			g_nmi->_behaviorManager->enableAllQueuesForAni(g_nmi->_aniMan, 1);
 
 			return;
 		}
@@ -489,15 +489,15 @@ void sceneHandler27_batLogic() {
 
 		mq->setFlags(mq->getFlags() | 1);
 
-		ExCommand *ex = new ExCommand(g_vars->scene27_batHandler->_id, 1, mv, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(g_vars->scene27_batHandler->_id, 1, mv, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 2;
-		mq->addExCommandToEnd(ex);
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(0, 17, MSG_SC27_CLICKBET, 0, 0, 0, 1, 0, 0, 0);
+		ex = new Command(0, 17, MSG_SC27_CLICKBET, 0, 0, 0, 1, 0, 0, 0);
 		ex->_excFlags |= 3;
-		mq->addExCommandToEnd(ex);
+		mq->addCommandToEnd(ex);
 
-		mq->chain(nullptr);
+		mq->run(nullptr);
 	} else {
 		g_vars->scene27_bat = nullptr;
 	}
@@ -513,7 +513,7 @@ void sceneHandler27_calcWinArcade() {
 		}
 
 		if (numHilite >= 3) {
-			if (g_nmi->getObjectState(sO_Driver) == g_nmi->getObjectEnumState(sO_Driver, sO_WithSteering)) {
+			if (g_nmi->getStateId(sO_Driver) == g_nmi->getStateValue(sO_Driver, sO_WithSteering)) {
 				sceneHandler27_driverGiveVent();
 				sceneHandler27_maidSwitchback();
 
@@ -541,7 +541,7 @@ void sceneHandler27_regenBats() {
 	for (uint i = 0; i < g_vars->scene27_var07.size(); i++) {
 		g_vars->scene27_var07[i]->ani->hide();
 
-		StaticANIObject *newbat = g_vars->scene27_var07[i]->ani;
+		AniObject *newbat = g_vars->scene27_var07[i]->ani;
 
 		g_vars->scene27_balls.push_back(newbat);
 	}
@@ -565,8 +565,8 @@ void sceneHandler27_animateBats() {
 		bat->currX = cos(bat->angle) * bat->power + bat->currX;
 		bat->currY = sin(bat->angle) * bat->power + bat->currY;
 
-		bat->ani->setOXY((int)bat->currX, (int)bat->currY);
-		bat->ani->_priority = (int)(600.0 - bat->currY);
+		bat->ani->setPos((int)bat->currX, (int)bat->currY);
+		bat->ani->_z = (int)(600.0 - bat->currY);
 
 		double powerDelta;
 
@@ -602,7 +602,7 @@ void sceneHandler27_animateBats() {
 		} else {
 			bat->currX = bat->powerCos + bat->currX;
 			bat->currY = bat->powerSin + bat->currY;
-			bat->ani->setOXY((int)bat->currX, (int)bat->currY);
+			bat->ani->setPos((int)bat->currX, (int)bat->currY);
 			bat->powerSin = bat->powerSin + 1.0;
 		}
 	}
@@ -616,8 +616,8 @@ void sceneHandler27_animateBats() {
 	}
 }
 
-int sceneHandler27(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler27(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch (cmd->_messageNum) {
@@ -634,7 +634,7 @@ int sceneHandler27(ExCommand *cmd) {
 		break;
 
 	case MSG_SC27_HANDLERTOFRONT:
-		g_vars->scene27_batHandler->_priority = 1005;
+		g_vars->scene27_batHandler->_z = 1005;
 		break;
 
 	case MSG_SC27_STARTWIPE:
@@ -662,14 +662,14 @@ int sceneHandler27(ExCommand *cmd) {
 		break;
 
 	case 29:
-		if (g_nmi->_aniMan == g_nmi->_currentScene->getStaticANIObjectAtPos(g_nmi->_sceneRect.left + cmd->_x, g_nmi->_sceneRect.top + cmd->_y) && g_vars->scene27_maxPhaseReached) {
+		if (g_nmi->_aniMan == g_nmi->_currentScene->findAniObjectAtPos(g_nmi->_sceneRect.left + cmd->_x, g_nmi->_sceneRect.top + cmd->_y) && g_vars->scene27_maxPhaseReached) {
 			sceneHandler27_initAiming(cmd);
 		}
 		break;
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x < g_nmi->_sceneRect.left + 200)
 				g_nmi->_currentScene->_x = x - 300 - g_nmi->_sceneRect.left;
@@ -685,12 +685,12 @@ int sceneHandler27(ExCommand *cmd) {
 			sceneHandler27_wipeDo();
 
 			if (!g_nmi->_aniMan->_movement && g_nmi->_aniMan->_statics->_staticsId == ST_MAN_RIGHT)
-				g_nmi->_aniMan->startAnim(MV_MAN27_FLOW, 0, -1);
+				g_nmi->_aniMan->startMovement(MV_MAN27_FLOW, 0, -1);
 		}
 
 		sceneHandler27_animateBats();
 
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_behaviorManager->update();
 		g_nmi->startSceneTrack();
 
 		break;

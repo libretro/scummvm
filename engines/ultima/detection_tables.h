@@ -22,7 +22,9 @@
 namespace Ultima {
 
 #define GUI_OPTIONS_ULTIMA0	GUIO0()
-#define GUI_OPTIONS_ULTIMA1	GUIO0()
+#define GUI_OPTIONS_ULTIMA1	GUIO1(GAMEOPTION_ULTIMA1_PICTURE_DUNGEONS)
+#define GUI_OPTIONS_ULTIMA2	GUIO4(GAMEOPTION_ULTIMA2_STAT_BOOST, GAMEOPTION_ULTIMA2_MIXED_CASE, GAMEOPTION_LESS_HUNGER, GAMEOPTION_ULTIMA2_PICTURE_DUNGEONS)
+#define GUI_OPTIONS_ULTIMA3	GUIO6(GAMEOPTION_ULTIMA3_MORE_MONSTERS, GAMEOPTION_LESS_HUNGER, GAMEOPTION_ULTIMA3_MOON_ICONS, GAMEOPTION_ULTIMA3_MIDI_MUSIC, GAMEOPTION_ULTIMA3_TIMED_SOUNDS, GAMEOPTION_ULTIMA3_PICTURE_DUNGEONS)
 #define GUI_OPTIONS_ULTIMA4	GUIO1(GUIO_NOSPEECH)
 #define GUI_OPTIONS_ULTIMA6	GUIO0()
 #define GUI_OPTIONS_ULTIMA8	GUIO9(GAMEOPTION_ORIGINAL_SAVELOAD, GAMEOPTION_FRAME_SKIPPING, GAMEOPTION_FRAME_LIMITING, GAMEOPTION_CHEATS, GAMEOPTION_HIGH_RESOLUTION, GAMEOPTION_FOOTSTEP_SOUNDS, GAMEOPTION_JUMP_TO_MOUSE, GAMEOPTION_FONT_REPLACEMENT, GAMEOPTION_FONT_ANTIALIASING)
@@ -36,7 +38,7 @@ namespace Ultima {
 #define ENTRY_ULTIMA6_NORMAL(FILENAME, MD5, FILESIZE, LANG, PLATFORM) {{"ultima6", 0, AD_ENTRY1s(FILENAME, MD5, FILESIZE), LANG, PLATFORM, ADGF_NO_FLAGS, GUI_OPTIONS_ULTIMA6}, GAME_ULTIMA6, 0}
 
 // Ultima 6 enhanced mode only
-#define ENTRY_ULTIMA6_ENHANCED(FILENAME, MD5, FILESIZE, LANG, PLATFORM) {{"ultima6_enh", 0, AD_ENTRY1s(FILENAME, MD5, FILESIZE), LANG, PLATFORM, ADGF_NO_FLAGS, GUI_OPTIONS_ULTIMA6}, GAME_ULTIMA6, GF_VGA_ENHANCED}
+#define ENTRY_ULTIMA6_ENHANCED(FILENAME, MD5, FILESIZE, LANG, PLATFORM) {{"ultima6_enh", 0, AD_ENTRY1s(FILENAME, MD5, FILESIZE), LANG, PLATFORM, ADGF_NO_FLAGS, GUI_OPTIONS_ULTIMA6}, GAME_ULTIMA6, GF_ENHANCED}
 
 // Ultima 6 both normal and enhanced mode (this should normally be used)
 #define ENTRY_ULTIMA6(FILENAME, MD5, FILESIZE, LANG, PLATFORM) \
@@ -48,9 +50,11 @@ namespace Ultima {
 
 static const PlainGameDescriptor ULTIMA_GAMES[] = {
 	{ "akalabeth", "Akalabeth: World of Doom" },
-#ifndef RELEASE_BUILD
 	{ "ultima1", "Ultima I: The First Age of Darkness" },
-#endif
+	{ "ultima2", "Ultima II: Revenge of the Enchantress" },
+	{ "ultima2_enh", "Ultima II: Revenge of the Enchantress - Enhanced" },
+	{ "ultima3", "Ultima III: Exodus" },
+	{ "ultima3_enh", "Ultima III: Exodus - Enhanced" },
 	{ "ultima4", "Ultima IV: Quest of the Avatar" },
 	{ "ultima4_enh", "Ultima IV: Quest of the Avatar - Enhanced" },
 	{ "ultima6", "Ultima VI: The False Prophet" },
@@ -99,7 +103,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_ULTIMA1
 		},
 		GAME_ULTIMA1,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 
 	{
@@ -134,6 +138,66 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 	},
 
 	{
+		// Ultima II - Revenge of the Enchantress
+		{
+			"ultima2",
+			0,
+			AD_ENTRY1s("monsters", "29160ad200758650d8a4a6af2474d075", 2176),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_UNSTABLE,
+			GUI_OPTIONS_ULTIMA2
+		},
+		GAME_ULTIMA2,
+		0
+	},
+
+	{
+		// Ultima II - Revenge of the Enchantress - Enhanced
+		{
+			"ultima2_enh",
+			0,
+			AD_ENTRY1s("monsters", "29160ad200758650d8a4a6af2474d075", 2176),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_UNSTABLE,
+			GUI_OPTIONS_ULTIMA2
+		},
+		GAME_ULTIMA2,
+		GF_ENHANCED
+	},
+
+	{
+		// Ultima III - Exodus
+		{
+			"ultima3",
+			0,
+			AD_ENTRY1s("exod.ibm", "525bbaf8dd45a9bf737852f7719ae864", 16384),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_UNSTABLE,
+			GUI_OPTIONS_ULTIMA3
+		},
+		GAME_ULTIMA3,
+		0
+	},
+
+	{
+		// Ultima III - Exodus - Enhanced
+		{
+			"ultima3_enh",
+			0,
+			AD_ENTRY1s("exod.ibm", "525bbaf8dd45a9bf737852f7719ae864", 16384),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_UNSTABLE,
+			GUI_OPTIONS_ULTIMA3
+		},
+		GAME_ULTIMA3,
+		GF_ENHANCED
+	},
+
+	{
 		// Ultima IV - Quest of the Avatar
 		{
 			"ultima4",
@@ -160,7 +224,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_ULTIMA4
 		},
 		GAME_ULTIMA4,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 
 	{
@@ -190,7 +254,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_ULTIMA4
 		},
 		GAME_ULTIMA4,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 
 	// GOG Ultima VI
@@ -657,7 +721,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_MARTIAN_DREAMS
 		},
 		GAME_MARTIAN_DREAMS,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 	// Martian Dreams - Enhanced V1.4 VGA - Time saving installation (available on GOG)
 	{
@@ -675,7 +739,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_MARTIAN_DREAMS
 		},
 		GAME_MARTIAN_DREAMS,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 
 	// REMARK: SE can have many versions, so the detection is a bit tricky:
@@ -789,7 +853,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_SAVAGE_EMPIRE
 		},
 		GAME_SAVAGE_EMPIRE,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 	// The Savage Empire v1.6 VGA - Time saving installation
 	{
@@ -808,7 +872,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_SAVAGE_EMPIRE
 		},
 		GAME_SAVAGE_EMPIRE,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 
 	// REMARK: The next 4 versions are unsupported!
@@ -911,7 +975,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_SAVAGE_EMPIRE
 		},
 		GAME_SAVAGE_EMPIRE,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 	// The Savage Empire v2.1 VGA - Time saving installation
 	{
@@ -930,7 +994,7 @@ static const UltimaGameDescription GAME_DESCRIPTIONS[] = {
 			GUI_OPTIONS_SAVAGE_EMPIRE
 		},
 		GAME_SAVAGE_EMPIRE,
-		GF_VGA_ENHANCED
+		GF_ENHANCED
 	},
 
 	{ AD_TABLE_END_MARKER, (GameId)0, 0 }

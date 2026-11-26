@@ -30,19 +30,31 @@ namespace ViewsEnh {
 namespace Interactions {
 
 DogStatue::DogStatue() : Interaction("DogStatue") {
-	_title = STRING["maps.emap42.title"];
+	_title = "Dog Statue";
 }
 
 bool DogStatue::msgFocus(const FocusMessage &msg) {
 	Sound::sound(SOUND_2);
 
-	_completedQuests = false;
+	bool alreadyCompleted = false;
 	for (uint i = 0; i < g_globals->_party.size(); ++i) {
-		if ((g_globals->_party[i]._flags[0] &
-			(CHARFLAG0_COURIER3 | CHARFLAG0_FOUND_CHEST | CHARFLAG0_40)) ==
-			(CHARFLAG0_COURIER3 | CHARFLAG0_FOUND_CHEST | CHARFLAG0_40)) {
-			_completedQuests = true;
+		if (g_globals->_party[i]._flags[0] & CHARFLAG0_DOG_STATUE) {
+			alreadyCompleted = true;
 			break;
+		}
+	}
+
+	_completedQuests = alreadyCompleted &&
+		!g_globals->_party.hasItem(GOLD_KEY_ID);
+
+	if (!alreadyCompleted) {
+		for (uint i = 0; i < g_globals->_party.size(); ++i) {
+			if ((g_globals->_party[i]._flags[0] &
+				(CHARFLAG0_COURIER3 | CHARFLAG0_FOUND_CHEST | CHARFLAG0_40)) ==
+				(CHARFLAG0_COURIER3 | CHARFLAG0_FOUND_CHEST | CHARFLAG0_40)) {
+				_completedQuests = true;
+				break;
+			}
 		}
 	}
 
@@ -50,17 +62,18 @@ bool DogStatue::msgFocus(const FocusMessage &msg) {
 
 	if (_completedQuests) {
 		addText(Common::String::format("%s%s",
-			STRING["maps.map42.statue1"].c_str(),
-			STRING["maps.map42.statue2"].c_str()
+			"Standing atop a pedestal in the center of the room is a statue of a small sable and white "
+				"dog. ",
+			"It comes to life and speaks,\"Congratulations, you've completed a major quest (+10000 "
+				"exp) Remember B.J.!\""
 		));
 	} else {
-		addText(Common::String::format("%s%s",
-			STRING["maps.map42.statue1"].c_str(),
-			STRING["maps.map42.statue3"].c_str()
-		));
+		addText(Common::String::format("%sDesecrate it (Y/N)?",
+			"Standing atop a pedestal in the center of the room is a statue of a small sable and white "
+				"dog. "));
 
-		addButton(STRING["maps.yes"], 'Y');
-		addButton(STRING["maps.no"], 'N');
+		addButton("\x01""37Yes", 'Y');
+		addButton("\x01""37No", 'N');
 	}
 
 	return TextView::msgFocus(msg);
@@ -72,6 +85,7 @@ bool DogStatue::msgKeypress(const KeypressMessage &msg) {
 	if (_completedQuests) {
 		close();
 		map.dogSuccess();
+		g_events->addAction(KEYBIND_SEARCH);
 
 	} else if (msg.keycode == Common::KEYCODE_y || msg.keycode == Common::KEYCODE_n) {
 		close();
@@ -87,8 +101,10 @@ void DogStatue::viewAction() {
 	MM1::Maps::Map42 &map = *static_cast<MM1::Maps::Map42 *>(g_maps->_currentMap);
 
 	close();
-	if (_completedQuests)
+	if (_completedQuests) {
 		map.dogSuccess();
+		g_events->addAction(KEYBIND_SEARCH);
+	}
 }
 
 } // namespace Interactions

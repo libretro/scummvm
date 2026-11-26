@@ -33,6 +33,98 @@ namespace Maps {
 #define VAL1 63
 #define VAL2 64
 
+namespace {
+
+enum ArenkoStorage {
+	ARENKO_STATE_FIRST_OFFSET = 15 * MAP_W + 11,
+	ARENKO_STATE_CELL_COUNT = 5,
+	ARENKO_STATE_BIT = 0x80,
+	ARENKO_REWARDED_STATE = 21
+};
+
+} // namespace
+
+void Map28::load() {
+	Map::load();
+	restoreArenkoQuest();
+	// Tree marks occupy only the western tree area, not the state cells.
+	for (int i = 0; i < MAP_SIZE; ++i) {
+		if (i % MAP_W < 7 && (_visited[i] & ARENKO_STATE_BIT) &&
+				i != _data[51] && i != _data[52] && i != _data[53])
+			_states[i] &= ~CELL_SPECIAL;
+	}
+}
+
+byte Map28::arenkoStoredState() const {
+	byte state = 0;
+	for (int i = 0; i < ARENKO_STATE_CELL_COUNT; ++i) {
+		if (_visited[ARENKO_STATE_FIRST_OFFSET + i] & ARENKO_STATE_BIT)
+			state |= 1 << i;
+	}
+	return state;
+}
+
+void Map28::setArenkoStoredState(byte state) {
+	for (int i = 0; i < ARENKO_STATE_CELL_COUNT; ++i) {
+		byte &value = _visited[ARENKO_STATE_FIRST_OFFSET + i];
+		value &= ~ARENKO_STATE_BIT;
+		if (state & (1 << i))
+			value |= ARENKO_STATE_BIT;
+	}
+}
+
+void Map28::restoreArenkoQuest() {
+	const byte state = arenkoStoredState();
+	if (!state)
+		return;
+
+	_data[VAL2] = 1;
+	_data[VAL1] = MIN((int)state - 1, 19);
+	if (state >= ARENKO_REWARDED_STATE && _data[51] < MAP_SIZE)
+		_states[_data[51]] &= ~CELL_SPECIAL;
+}
+
+bool Map28::arenkoQuestActive() const {
+	return arenkoStoredState() != 0;
+}
+
+bool Map28::arenkoQuestCompleted() const {
+	return arenkoStoredState() >= ARENKO_REWARDED_STATE;
+}
+
+int Map28::arenkoClimbs() const {
+	const byte state = arenkoStoredState();
+	return state ? MIN((int)state - 1, 19) : 0;
+}
+
+void Map28::startArenkoQuest() {
+	if (!arenkoStoredState())
+		setArenkoStoredState(1);
+	_data[VAL1] = arenkoClimbs();
+	_data[VAL2] = 1;
+}
+
+void Map28::recordArenkoClimb() {
+	if (_visited[g_maps->_mapOffset] & ARENKO_STATE_BIT)
+		return;
+	_visited[g_maps->_mapOffset] |= ARENKO_STATE_BIT;
+	if (arenkoQuestCompleted())
+		return;
+	if (!arenkoQuestActive())
+		startArenkoQuest();
+
+	const int climbed = MIN(arenkoClimbs() + 1, 19);
+	_data[VAL1] = climbed;
+	_data[VAL2] = 1;
+	setArenkoStoredState(climbed + 1);
+}
+
+void Map28::completeArenkoQuest() {
+	_data[VAL1] = 19;
+	_data[VAL2] = 1;
+	setArenkoStoredState(ARENKO_REWARDED_STATE);
+}
+
 void Map28::special() {
 	// Scan for special actions on the map cell
 	for (uint i = 0; i < 3; ++i) {
@@ -54,21 +146,21 @@ void Map28::special() {
 
 	} else {
 		send(SoundMessage(
-			STRING["maps.map28.tree"],
+			"Climb tree (Y/N)?",
 			[]() {
 				Map28 &map = *static_cast<Map28 *>(g_maps->_currentMap);
 
 				if (!map[VAL2]) {
-					g_events->send(SoundMessage(STRING["maps.map28.nothing"]));
+					g_events->send(SoundMessage("Nothing here."));
 
 				} else {
 					g_maps->clearSpecial();
-					map[VAL1]++;
+					map.recordArenkoClimb();
 
 					int val = g_events->getRandomNumber(10);
 					switch (val) {
 					case 1:
-						g_events->send(SoundMessage(STRING["maps.map28.nothing"]));
+						g_events->send(SoundMessage("Nothing here."));
 						break;
 
 					case 2:
@@ -76,33 +168,33 @@ void Map28::special() {
 							Character &c = g_globals->_party[i];
 							c._food = MIN((int)c._food + 5, MAX_FOOD);
 						}
-						g_events->send(SoundMessage(STRING["maps.map28.food"]));
+						g_events->send(SoundMessage("+5 food"));
 						break;
 
 					case 3:
 						map.setCondition(POISONED);
 						map.reduceHpBase();
-						g_events->send(SoundMessage(STRING["maps.map28.thorns"]));
+						g_events->send(SoundMessage("Poison thorns"));
 						break;
 
 					case 4:
 						if (g_globals->_activeSpells._s.levitate) {
-							g_events->send(SoundMessage(STRING["maps.map28.nothing"]));
+							g_events->send(SoundMessage("Nothing here."));
 						} else {
 							map.reduceHpBase();
 							map.reduceHpBase();
-							g_events->send(SoundMessage(STRING["maps.map28.you_fell"]));
+							g_events->send(SoundMessage("You fell"));
 						}
 						break;
 
 					case 5:
-						g_events->send(SoundMessage(STRING["maps.map28.lightning"]));
+						g_events->send(SoundMessage("Lightning"));
 						break;
 
 					case 6:
 						map.setCondition(DISEASED);
 						map.reduceHpBase();
-						g_events->send(SoundMessage(STRING["maps.map28.lightning"]));
+						g_events->send(SoundMessage("Lightning"));
 						break;
 
 					case 7:
@@ -113,11 +205,11 @@ void Map28::special() {
 							}
 						}
 
-						g_events->send(SoundMessage(STRING["maps.map28.flash"]));
+						g_events->send(SoundMessage("Flash"));
 						break;
 
 					case 8:
-						g_events->send(SoundMessage(STRING["maps.map28.poof"]));
+						g_events->send(SoundMessage("Poof!"));
 						g_maps->_mapPos = Common::Point(
 							g_events->getRandomNumber(15),
 							g_events->getRandomNumber(15));
@@ -126,6 +218,7 @@ void Map28::special() {
 
 					default:
 						g_globals->_activeSpells._s.cursed = val;
+						g_events->send(SoundMessage("Cursed"));
 						break;
 					}
 				}
@@ -142,16 +235,16 @@ void Map28::special01() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.map28.cave"],
+		"A cave, enter (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(8, 8);
-			g_maps->changeMap(0x601, 1);
+			g_maps->changeMapFromExit(0x601, 1);
 		}
 	));
 }
 
 void Map28::special02() {
-	send(SoundMessage(STRING["maps.map28.sign"]));
+	send(SoundMessage("Roadsign: Algary S.9"));
 }
 
 void Map28::setCondition(byte condition) {

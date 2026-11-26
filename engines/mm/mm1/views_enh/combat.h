@@ -35,10 +35,15 @@ private:
 	uint _attackableCount = 0;
 	InfoMessage _spellResult;
 	bool _firstDraw = false;
+	bool _modeDrawn = false;
+	Common::StringArray _combatLogLines;
+	int _combatLogTop = 0;
+	bool _combatLogVisible = false;
+	bool _combatModeLogged = false;
 	// Combat options that have sub-option selection
 	enum SelectedOption {
 		OPTION_NONE, OPTION_DELAY, OPTION_EXCHANGE,
-		OPTION_FIGHT, OPTION_SHOOT
+		OPTION_FIGHT, OPTION_SHOOT, OPTION_SPELL_TARGET
 	};
 	SelectedOption _option = OPTION_NONE;
 
@@ -49,9 +54,19 @@ private:
 
 	void writeOptions();
 	void writeAllOptions();
+	void drawCombatLog();
+	void openCombatLog();
+	void closeCombatLog();
+	void scrollCombatLog(int delta);
+	void clearCombatLog();
+	void addCombatLog(const Common::String &text);
+	void addCombatLog(const LineArray &lines);
+	void addEncounterToCombatLog();
+	bool beginCombatLogEvent();
 	void writeAttackOptions();
 	void writeCastOption();
 	void writeShootOption();
+	void writeSpellTargetSelect();
 
 	void clearSurface() override;
 	void clearBottom();

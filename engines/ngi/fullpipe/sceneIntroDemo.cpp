@@ -49,16 +49,16 @@ void sceneIntroDemo_initScene(Scene *sc) {
 }
 
 void sceneHandlerIntroDemo_part1() {
-	g_nmi->_currentScene = g_nmi->accessScene(SC_INTRO1);
-	chainQueue(QU_INTR_FINISH, 0);
+	g_nmi->_currentScene = g_nmi->findScene(SC_INTRO1);
+	runQueue(QU_INTR_FINISH, 0);
 }
 
 void sceneHandlerIntroDemo_part2() {
-	chainQueue(QU_IN2_DO, 0);
+	runQueue(QU_IN2_DO, 0);
 }
 
-int sceneHandlerIntroDemo(ExCommand *ex) {
-	if (ex->_messageKind != 17)
+int sceneHandlerIntroDemo(Command *ex) {
+	if (ex->_cmd != 17)
 		return 0;
 
 	switch (ex->_messageNum) {

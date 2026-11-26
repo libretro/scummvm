@@ -35,16 +35,16 @@
 namespace NGI {
 
 void scene10_initScene(Scene *sc) {
-	g_vars->scene10_gum = sc->getStaticANIObject1ById(ANI_GUM, -1);
-	g_vars->scene10_packet = sc->getStaticANIObject1ById(ANI_PACHKA, -1);
-	g_vars->scene10_packet2 = sc->getStaticANIObject1ById(ANI_PACHKA2, -1);
-	g_vars->scene10_inflater = sc->getStaticANIObject1ById(ANI_NADUVATEL, -1);
-	g_vars->scene10_ladder = sc->getPictureObjectById(PIC_SC10_LADDER, 0);
+	g_vars->scene10_gum = sc->findAniObjectById(ANI_GUM, -1);
+	g_vars->scene10_packet = sc->findAniObjectById(ANI_PACHKA, -1);
+	g_vars->scene10_packet2 = sc->findAniObjectById(ANI_PACHKA2, -1);
+	g_vars->scene10_inflater = sc->findAniObjectById(ANI_NADUVATEL, -1);
+	g_vars->scene10_ladder = sc->findPictureObjectById(PIC_SC10_LADDER, 0);
 
 	g_nmi->lift_setButton(sO_Level1, ST_LBN_1N);
 	g_nmi->lift_init(sc, QU_SC10_ENTERLIFT, QU_SC10_EXITLIFT);
 
-	if (g_nmi->getObjectState(sO_Inflater) == g_nmi->getObjectEnumState(sO_Inflater, sO_WithGum)) {
+	if (g_nmi->getStateId(sO_Inflater) == g_nmi->getStateValue(sO_Inflater, sO_WithGum)) {
 		g_vars->scene10_hasGum = 1;
 	} else {
 		g_vars->scene10_hasGum = 0;
@@ -55,7 +55,7 @@ void scene10_initScene(Scene *sc) {
 bool sceneHandler10_inflaterIsBlind() {
 	return g_vars->scene10_inflater->_movement
 		&& g_vars->scene10_inflater->_movement->_id == MV_NDV_BLOW2
-		&& g_vars->scene10_inflater->_movement->_currDynamicPhaseIndex < 42;
+		&& g_vars->scene10_inflater->_movement->_curFrame < 42;
 }
 
 int scene10_updateCursor() {
@@ -77,31 +77,31 @@ void sceneHandler10_clickGum() {
 	if (g_vars->scene10_hasGum) {
 		if (sceneHandler10_inflaterIsBlind()) {
 			if (g_vars->scene10_hasGum) {
-				int x = g_vars->scene10_gum->_ox - 139;
-				int y = g_vars->scene10_gum->_oy - 48;
+				int x = g_vars->scene10_gum->_x - 139;
+				int y = g_vars->scene10_gum->_y - 48;
 
-				if (abs(x - g_nmi->_aniMan->_ox) > 1 || abs(y - g_nmi->_aniMan->_oy) > 1) {
+				if (abs(x - g_nmi->_aniMan->_x) > 1 || abs(y - g_nmi->_aniMan->_y) > 1) {
 					MessageQueue *mq = getCurrSceneSc2MotionController()->startMove(g_nmi->_aniMan, x, y, 1, ST_MAN_RIGHT);
 					if (mq) {
-						ExCommand *ex = new ExCommand(0, 17, MSG_SC10_CLICKGUM, 0, 0, 0, 1, 0, 0, 0);
+						Command *ex = new Command(0, 17, MSG_SC10_CLICKGUM, 0, 0, 0, 1, 0, 0, 0);
 						ex->_excFlags = 2;
-						mq->addExCommandToEnd(ex);
+						mq->addCommandToEnd(ex);
 
 						postExCommand(g_nmi->_aniMan->_id, 2, x, y, 0, -1);
 					}
 				} else {
 					g_vars->scene10_hasGum = 0;
 
-					chainQueue(QU_SC10_TAKEGUM, 1);
+					runQueue(QU_SC10_TAKEGUM, 1);
 				}
 			}
 		} else {
-			g_vars->scene10_inflater->changeStatics2(ST_NDV_SIT);
+			g_vars->scene10_inflater->setStatic(ST_NDV_SIT);
 
-			if (g_nmi->getObjectState(sO_Inflater) == g_nmi->getObjectEnumState(sO_Inflater, sO_WithGum))
-				g_vars->scene10_inflater->startAnim(MV_NDV_DENIES, 0, -1);
+			if (g_nmi->getStateId(sO_Inflater) == g_nmi->getStateValue(sO_Inflater, sO_WithGum))
+				g_vars->scene10_inflater->startMovement(MV_NDV_DENIES, 0, -1);
 			else
-				g_vars->scene10_inflater->startAnim(MV_NDV_DENY_NOGUM, 0, -1);
+				g_vars->scene10_inflater->startMovement(MV_NDV_DENY_NOGUM, 0, -1);
 		}
 	}
 }
@@ -121,8 +121,8 @@ void sceneHandler10_showGum() {
 }
 
 
-int sceneHandler10(ExCommand *ex) {
-	if (ex->_messageKind != 17)
+int sceneHandler10(Command *ex) {
+	if (ex->_cmd != 17)
 		return 0;
 
 	switch(ex->_messageNum) {
@@ -143,11 +143,11 @@ int sceneHandler10(ExCommand *ex) {
 		break;
 
 	case MSG_SC10_LADDERTOBACK:
-		g_vars->scene10_ladder->_priority = 49;
+		g_vars->scene10_ladder->_z = 49;
 		break;
 
 	case MSG_SC10_LADDERTOFORE:
-		g_vars->scene10_ladder->_priority = 0;
+		g_vars->scene10_ladder->_z = 0;
 		break;
 
 	case MSG_LIFT_GO:
@@ -157,7 +157,7 @@ int sceneHandler10(ExCommand *ex) {
 	case MSG_SC10_CLICKGUM:
 		sceneHandler10_clickGum();
 
-		ex->_messageKind = 0;
+		ex->_cmd = 0;
 		break;
 
 	case MSG_SC10_HIDEGUM:
@@ -175,17 +175,17 @@ int sceneHandler10(ExCommand *ex) {
 	case 29:
 		{
 			if (g_nmi->_currentScene->getPictureObjectIdAtPos(ex->_sceneClickX, ex->_sceneClickY) == PIC_SC10_LADDER) {
-				handleObjectInteraction(g_nmi->_aniMan, g_nmi->_currentScene->getPictureObjectById(PIC_SC10_DTRUBA, 0), ex->_param);
-				ex->_messageKind = 0;
+				handleObjectInteraction(g_nmi->_aniMan, g_nmi->_currentScene->findPictureObjectById(PIC_SC10_DTRUBA, 0), ex->_param);
+				ex->_cmd = 0;
 
 				return 0;
 			}
 
-			StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(ex->_sceneClickX, ex->_sceneClickY);
+			AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(ex->_sceneClickX, ex->_sceneClickY);
 
 			if (ani && ani->_id == ANI_LIFTBUTTON) {
 				g_nmi->lift_animateButton(ani);
-				ex->_messageKind = 0;
+				ex->_cmd = 0;
 
 				return 0;
 			}
@@ -197,16 +197,16 @@ int sceneHandler10(ExCommand *ex) {
 			int res = 0;
 
 			if (g_nmi->_aniMan2) {
-				if (g_nmi->_aniMan2->_ox < g_nmi->_sceneRect.left + 200)
-					g_nmi->_currentScene->_x = g_nmi->_aniMan2->_ox - g_nmi->_sceneRect.left - 300;
+				if (g_nmi->_aniMan2->_x < g_nmi->_sceneRect.left + 200)
+					g_nmi->_currentScene->_x = g_nmi->_aniMan2->_x - g_nmi->_sceneRect.left - 300;
 
-				if (g_nmi->_aniMan2->_ox > g_nmi->_sceneRect.right - 200)
-					g_nmi->_currentScene->_x = g_nmi->_aniMan2->_ox - g_nmi->_sceneRect.right + 300;
+				if (g_nmi->_aniMan2->_x > g_nmi->_sceneRect.right - 200)
+					g_nmi->_currentScene->_x = g_nmi->_aniMan2->_x - g_nmi->_sceneRect.right + 300;
 
 				res = 1;
 			}
 
-			g_nmi->_behaviorManager->updateBehaviors();
+			g_nmi->_behaviorManager->update();
 			g_nmi->startSceneTrack();
 
 			return res;

@@ -24,10 +24,18 @@
 
 #include "engines/nancy/script/api.h"
 #include "engines/nancy/script/convo.h"
+#include "engines/nancy/script/graphnode.h"
 #include "engines/nancy/script/luabind.h"
+#include "engines/nancy/script/luastate.h"
 #include "engines/nancy/script/mathtypes.h"
+#include "engines/nancy/script/particles.h"
+#include "engines/nancy/script/physics.h"
 #include "engines/nancy/script/record.h"
 #include "engines/nancy/script/types.h"
+
+#ifdef ENABLE_NANCY_V5
+#include "engines/nancy/script/v5/gamefunctions.h"
+#endif
 
 namespace Nancy {
 namespace Script {
@@ -41,6 +49,23 @@ void pushInventoryItem(lua_State *L, int16 itemID) {
 
 int16 checkInventoryItem(lua_State *L, int index) {
 	return *(int16 *)checkUserData(L, index, kInventoryItemType);
+}
+
+// item.name, Resorting to Danger: the name of the item, upper case like the
+// original keeps it
+static int inventoryItemIndex(lua_State *L) {
+	const int16 itemID = checkInventoryItem(L, 1);
+	const char *key = lua_tostring(L, 2);
+
+	const INVD *inventory = GetEngineData(INVD);
+	if (key && strcmp(key, "name") == 0 && inventory && itemID >= 0 && itemID < (int16)inventory->items.size()) {
+		Common::String name = inventory->items[itemID].name;
+		name.toUppercase();
+		lua_pushstring(L, name.c_str());
+		return 1;
+	}
+
+	return indexFunctions(L);
 }
 
 // Inventory.<name of an item>
@@ -67,6 +92,7 @@ void registerInventoryAPI(lua_State *L) {
 	};
 
 	static const luaL_Reg kInventoryItemFunctions[] = {
+		{ "__index", inventoryItemIndex },
 		{ nullptr, nullptr }
 	};
 
@@ -78,12 +104,27 @@ void registerAPI(lua_State *L) {
 	registerTypes(L);
 	registerMathTypes(L);
 	registerRefAPI(L);
-	registerBootAPI(L);
+
+	// The "Init" objects are only there for the boot scripts. Nancy32's inventory
+	// screen includes the boot script of the items, which checks for them.
+	if (!LuaState::getContext(L)) {
+		registerBootAPI(L);
+	}
+
 	registerInventoryAPI(L);
 	registerGameAPI(L);
+	registerGraphNodeAPI(L);
+	registerPhysicsAPI(L);
+	registerParticleAPI(L);
 	registerUIAPI(L);
 	registerConvoAPI(L);
 	registerRecordAPI(L);
+
+#ifdef ENABLE_NANCY_V5
+	if (g_nancy->getGameType() >= kGameTypeNancy26) {
+		registerNancy26GameAPI(L);
+	}
+#endif
 }
 
 } // End of namespace Script

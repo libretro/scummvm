@@ -1,0 +1,77 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef HOLLYWOOD_RUNAWAY_INTRO_H
+#define HOLLYWOOD_RUNAWAY_INTRO_H
+
+#include "hollywood/runaway/audio.h"
+#include "hollywood/runaway/graphics.h"
+#include "hollywood/runaway/presentation.h"
+#include "hollywood/runaway/scene2010.h"
+#include "hollywood/runaway/video.h"
+
+namespace Hollywood {
+
+// Publisher/Pendulo logos, then the demo story card or retail opening.
+// The engine supplies its pause-aware clock and handles input/presentation.
+class RunawayIntro : public RunawayPresentation {
+public:
+	enum Mode { kCompleteIntro, kLogoOnly, kOpeningOnly };
+	explicit RunawayIntro(Audio::Mixer *mixer) : _audio(mixer), _opening(_audio) {}
+	bool load(bool fullGame = false, byte chapter = 0, Mode mode = kCompleteIntro, bool publisherLogo = false);
+	void start(uint32 now);
+	void skip(uint32 now);
+	void skipSpeech(uint32 now);
+	void update(uint32 now);
+	void draw();
+	bool finished() const { return _phase == kFinished; }
+	bool failed() const { return _failed || _opening.failed(); }
+	const Common::U32String &subtitle() const { return _opening.subtitle(); }
+	byte subtitleColor() const { return _opening.subtitleColor(); }
+	Graphics::ManagedSurface &screen() { return _screen; }
+
+private:
+	void skipPresentation(uint32 now) override { skip(now); }
+	void skipPresentationSpeech(uint32 now) override { skipSpeech(now); }
+
+	enum Phase { kPublisher, kPublisherFade, kPublisherAudio, kLogo, kLogoAudio, kStoryFadeIn, kStory, kStoryFadeOut, kOpening, kFinished };
+	void startLogo(uint32 now);
+	void startStory(uint32 now);
+
+	RunawayAudio _audio;
+	RunawayOpening _opening;
+	RunawayVideo _publisher;
+	bool _failed = false;
+	bool _fullGame = false;
+	byte _chapter = 0;
+	Mode _mode = kCompleteIntro;
+	RunawayAnimation _logo[3];
+	Graphics::ManagedSurface _story, _screen;
+	Phase _phase = kFinished;
+	uint32 _phaseStarted = 0;
+	uint32 _storyFadeDuration = 0;
+	int _logoFrames[3] = { -1, -1, -1 };
+	uint _brightness = 255;
+};
+
+} // End of namespace Hollywood
+
+#endif // HOLLYWOOD_RUNAWAY_INTRO_H

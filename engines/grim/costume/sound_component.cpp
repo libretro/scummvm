@@ -24,15 +24,19 @@
 #include "engines/grim/debug.h"
 #include "engines/grim/costume.h"
 #include "engines/grim/costume/sound_component.h"
-#include "engines/grim/imuse/imuse.h"
+#include "engines/grim/imuse/imuse_engine.h"
 
 namespace Grim {
 
 SoundComponent::SoundComponent(Component *p, int parentID, const char *filename, tag32 t) :
-		Component(p, parentID, filename, t) {
+		Component(p, parentID, filename, t), _maxVolume(127), _pan(64), _priority(100), _minVolume(1) {
+	// The name can be followed by the maximum volume, the pan, the priority and the minimum volume
 	const char *comma = strchr(filename, ',');
 	if (comma) {
 		_name = Common::String(filename, comma);
+		sscanf(comma + 1, "%d,%d,%d,%d", &_maxVolume, &_pan, &_priority, &_minVolume);
+	} else {
+		_name = filename;
 	}
 }
 
@@ -44,19 +48,41 @@ SoundComponent::~SoundComponent() {
 void SoundComponent::setKey(int val) {
 	switch (val) {
 	case 0: // "Play"
-		// No longer a need to check the sound status, if it's already playing
-		// then it will just use the existing handle
-		g_imuse->startSfx(_name.c_str());
-		if (g_grim->getCurrSet()) {
-			Math::Vector3d pos = _cost->getMatrix().getPosition();
-			g_grim->getCurrSet()->setSoundPosition(_name.c_str(), pos);
+		if (!g_imuse->soundsIsSoundPlaying(_name.c_str())) {
+			// In the demo the last value is the group, and the sound isn't positioned in the set
+			bool demo = g_grim->getGameFlags() & ADGF_DEMO;
+
+			if (isComponentType('I','M','S','S')) {
+				g_imuse->soundStartVoiceStream(_name.c_str(), _maxVolume, _pan);
+				g_imuse->soundsSetParam(_name.c_str(), IMUSE_P_GROUP, demo ? _minVolume : IMUSE_GROUP_SFX);
+				g_imuse->soundsSetParam(_name.c_str(), IMUSE_P_PRIORITY, _priority);
+			} else if (demo) {
+				g_imuse->soundsLoadStartSound(_name.c_str(), _priority, _minVolume);
+				g_imuse->soundsSetParam(_name.c_str(), IMUSE_P_VOLUME, _maxVolume);
+				g_imuse->soundsSetParam(_name.c_str(), IMUSE_P_PAN, _pan);
+			} else {
+				g_imuse->soundsLoadStartSound(_name.c_str(), _priority, IMUSE_GROUP_SFX);
+
+				Set *currSet = g_grim->getCurrSet();
+				if (currSet) {
+					float maxDist, panFactor, maxRadius;
+					int roomMinVolume, roomMaxVolume;
+					currSet->getSoundParameters(&maxDist, &roomMinVolume, &roomMaxVolume, &panFactor, &maxRadius);
+
+					Math::Vector3d pos = _cost->getMatrix().getPosition();
+					currSet->setSoundPosition(_name.c_str(), pos, MAX(roomMinVolume, _minVolume), MIN(roomMaxVolume, _maxVolume), maxDist, maxRadius);
+				}
+			}
 		}
 		break;
 	case 1: // "Stop"
-		g_imuse->stopSound(_name.c_str());
+		if (isComponentType('I','M','S','S'))
+			g_imuse->soundStopVoiceStream();
+		else
+			g_imuse->soundsStopSound(_name.c_str());
 		break;
 	case 2: // "Stop Looping"
-		g_imuse->setHookId(_name.c_str(), 0x80);
+		g_imuse->iMUSESetHook(_name.c_str(), 0x80);
 		break;
 	default:
 		Debug::warning(Debug::Costumes, "Unknown key %d for sound %s", val, _name.c_str());
@@ -65,8 +91,8 @@ void SoundComponent::setKey(int val) {
 
 void SoundComponent::reset() {
 	// A lot of the sound components this gets called against aren't actually running
-	if (g_imuse && g_imuse->getSoundStatus(_name.c_str()))
-		g_imuse->stopSound(_name.c_str());
+	if (g_imuse && !_name.empty())
+		g_imuse->soundsStopSound(_name.c_str());
 }
 
 } // end of namespace Grim

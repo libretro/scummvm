@@ -21,7 +21,7 @@
 
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/sound.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/font.h"
 #include "engines/nancy/cursor.h"
@@ -87,11 +87,11 @@ void LightningOn::readData(Common::SeekableReadStream &stream) {
 
 void SpecialEffect::readData(Common::SeekableReadStream &stream) {
 	if (g_nancy->getGameType() <= kGameTypeNancy6) {
-		_type = stream.readByte();
+		_effectType = stream.readByte();
 		_fadeToBlackTime = stream.readUint16LE();
 		_frameTime = stream.readUint16LE();
 	} else {
-		_type = stream.readByte();
+		_effectType = stream.readByte();
 		_totalTime = stream.readUint16LE();
 		_fadeToBlackTime = stream.readUint16LE();
 		readRect(stream, _rect);
@@ -100,9 +100,9 @@ void SpecialEffect::readData(Common::SeekableReadStream &stream) {
 
 void SpecialEffect::execute() {
 	if (g_nancy->getGameType() <= kGameTypeNancy6) {
-		NancySceneState.specialEffect(_type, _fadeToBlackTime, _frameTime);
+		NancySceneState.specialEffect(_effectType, _fadeToBlackTime, _frameTime);
 	} else {
-		NancySceneState.specialEffect(_type, _totalTime, _fadeToBlackTime, _rect);
+		NancySceneState.specialEffect(_effectType, _totalTime, _fadeToBlackTime, _rect);
 	}
 
 	_isDone = true;
@@ -1875,6 +1875,15 @@ void Rain::execute() {
 	if (_areaIndex != -1 && !_dropSrcs.empty() && g_nancy->getTotalPlayTime() >= _nextDrawTime) {
 		_nextDrawTime = g_nancy->getTotalPlayTime() + _interval;
 		drawDrops();
+	}
+}
+
+// The rain stops once the record's dependencies don't hold anymore, e.g. in the
+// scenes that show something up close
+void Rain::updateGraphics() {
+	if (!_isActive && _areaIndex != -1) {
+		_areaIndex = -1;
+		setVisible(false);
 	}
 }
 

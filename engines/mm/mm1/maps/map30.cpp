@@ -23,11 +23,23 @@
 #include "mm/mm1/maps/maps.h"
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
+#include "mm/mm1/mm1.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
 namespace Maps {
+
+static const char *const ATTRIBUTES[7] = {
+	"intellect",
+	"might",
+	"personality",
+	"endurance",
+	"speed",
+	"accuracy",
+	"luck"
+};
 
 static const byte MONSTER_ID1[8] = { 2, 3, 8, 10, 14, 16, 17, 7 };
 static const byte MONSTER_ID2[8] = { 5, 6, 3, 8, 10, 12, 12, 12 };
@@ -73,10 +85,10 @@ void Map30::special00() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.map30.passage"],
+		"Passage to Dusk, enter (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(15, 7);
-			g_maps->changeMap(0x802, 1);
+			g_maps->changeMapFromExit(0x802, 1);
 		}
 	));
 }
@@ -85,10 +97,10 @@ void Map30::special01() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.map30.ruins"],
+		"Ruins of Castle Dragadune, enter (Y/N)?",
 		[]() {
 			g_maps->_mapPos = Common::Point(7, 15);
-			g_maps->changeMap(0x107, 3);
+			g_maps->changeMapFromExit(0x107, 3);
 		}
 	));
 }
@@ -99,7 +111,10 @@ void Map30::special02() {
 
 void Map30::special03() {
 	send(SoundMessage(
-		STRING["maps.map30.hourglass"],
+		g_engine->isEnhanced() ?
+			"At the center of the land that time forgot stands an hourglass, turn it (Y/N)?" :
+			"At the center of the land that time\n"
+				"forgot stands an hourglass,turn it(Y/N)?",
 		[]() {
 			g_maps->clearSpecial();
 			Sound::sound(SOUND_3);
@@ -116,7 +131,7 @@ void Map30::special03() {
 
 Common::String Map30::worthiness() {
 	Character &c = *g_globals->_currCharacter;
-	if ((c._flags[1] & ~CHARFLAG1_WORTHY) == ~CHARFLAG1_WORTHY)
+	if ((c._flags[1] & 0x7f) == 0x7f)
 		return worthy();
 	else
 		return unworthy();
@@ -128,26 +143,40 @@ Common::String Map30::worthy() {
 	c._exp += val;
 
 	Common::String line = Common::String::format(
-		STRING["maps.map30.worthy"].c_str(), '0' + (c._worthiness / 5));
-	line = Common::String::format("%s%d %s",
-		line.c_str(), val, STRING["maps.map30.experience"].c_str());
+		mapText("Your actions reflect your views %d of 6\n+").c_str(), c._worthiness / 32);
+	line = Common::String::format("%s%d experience",
+		line.c_str(), val);
 
 	if (c._worthiness & 0x80) {
 		int attrNum = getRandomNumber(7) - 1;
-		line += Common::String::format(", +3 %s",
-			STRING[Common::String::format("maps.map30.attributes.%d", attrNum)].c_str());
-
+		const Common::String attrName =
+			ATTRIBUTES[attrNum];
 		AttributePair &attrib = c.getAttribute(attrNum);
-		if (attrib._base < 43)
+
+		// The Statue uses the same rule for all seven attributes. Apply the
+		// reward to both current and base immediately, but preserve the
+		// original MM1 threshold: attributes with base >= 43 do not increase.
+		if (attrib._base < 43) {
 			attrib._current = attrib._base = attrib._base + 3;
+			line += Common::String::format(", +3 %s", attrName.c_str());
+		} else {
+			// Do not falsely advertise +3 when the original cap blocks it.
+			line += Common::String::format(", %s unchanged", attrName.c_str());
+		}
 	}
+
+	// Custom Quest Log completion marker: this character has actually
+	// claimed the Statue of Judgement result after all six prisoners.
+	// CHARFLAG1_WORTHY already occupies the unused high bit in the
+	// serialized prisoner-quest flag byte; no save-format change needed.
+	c._flags[1] |= CHARFLAG1_WORTHY;
 
 	c._worthiness = 0;
 	return line;
 }
 
 Common::String Map30::unworthy() {
-	return STRING["maps.map30.unworthy"];
+	return "Not worthy!";
 }
 
 } // namespace Maps

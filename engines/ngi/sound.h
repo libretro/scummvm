@@ -24,42 +24,45 @@
 
 #include "common/array.h"
 #include "common/ptr.h"
-
-namespace Audio {
-class SoundHandle;
-}
+#include "audio/mixer.h"
 
 namespace NGI {
 
 class Sound : public MemoryObject {
 	int _id;
+	int _flags = 0;
 	byte *_soundData;
 	Audio::SoundHandle *_handle;
+	Common::Array<Audio::SoundHandle> _overlappingHandles;
 
 public:
+	enum { kEffect = 0, kSpeech = 1, kMusic = 2 };
 	int16 _objectId;
 
-public:
 	Sound();
+	Sound(int id, const Common::Path &path, int flags);
 	~Sound() override;
 
 	virtual bool load(MfcArchive &file, NGIArchive *archive);
 	bool load(MfcArchive &file) override { assert(0); return false; } // Disable base class
 	void updateVolume();
 	int getId() const { return _id; }
+	int getFlags() const { return _flags; }
 	Audio::SoundHandle *getHandle() const { return _handle; }
+	bool isPlaying() const;
 
-	void play(int flag);
-	void freeSound();
+	void play(int loop, int creator = 0);
+	void unload();
 	int getVolume();
 	void stop();
+	void pause(bool paused);
 
 	void setPanAndVolumeByStaticAni();
-	void setPanAndVolume(int vol, int pan);
+	void attenuate(int vol, int pan);
 };
 
 class SoundList : public CObject {
-	Common::Array<Sound> _soundItems;
+	Common::Array<Common::ScopedPtr<Sound>> _soundItems;
 	Common::ScopedPtr<NGIArchive> _libHandle;
 
  public:
@@ -68,8 +71,10 @@ class SoundList : public CObject {
 	bool loadFile(const Common::Path &fname, const Common::Path &libname);
 
 	int getCount() { return _soundItems.size(); }
-	Sound &getSoundByIndex(int idx) { return _soundItems[idx]; }
-	Sound *getSoundItemById(int id);
+	Sound &getSoundByIndex(int idx) { return *_soundItems[idx]; }
+	void addSound(int id, const Common::Path &path, int flags);
+	void stopByCreator(int objectId);
+	Sound *getSound(int id);
 };
 
 } // End of namespace NGI

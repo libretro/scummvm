@@ -1,0 +1,109 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "ultima/ultima1/views/mondain_map.h"
+#include "ultima/ultima1/ultima1.h"
+#include "ultima/ultima1/metaengine.h"
+
+namespace Ultima {
+namespace Ultima1 {
+namespace Views {
+
+constexpr int TILE_WIDTH = 16;
+constexpr int TILE_HEIGHT = 16;
+
+
+bool MondainMap::msgFocus(const FocusMessage &msg) {
+	MetaEngine::setKeybindingMode(KBMODE_GAMEPLAY);
+	delayFrames(1);
+	return Map::msgFocus(msg);
+}
+
+bool MondainMap::msgUnfocus(const UnfocusMessage &msg) {
+	MetaEngine::setKeybindingMode(KBMODE_MINIMAL);
+	return Map::msgUnfocus(msg);
+}
+
+bool MondainMap::tick() {
+	redraw();
+	return Map::tick();
+}
+
+void MondainMap::draw() {
+	auto &map = g_engine->_map;
+	const Graphics::ManagedSurface *tiles = map.tiles();
+	auto s = getSurface();
+	const auto &pos = _G(savegame)._locationPosition;
+
+	Map::draw();
+
+	// Draw the visible map contents
+	for (int oy = 0; oy < Data::MONDAIN_HEIGHT; oy++) {
+		for (int ox = 0; ox < Data::MONDAIN_WIDTH; ox++) {
+			// Not getTileAt, which would pick up the location entities left over from the last city or castle
+			int tileId = _G(map).getMapTile(ox, oy);
+
+			const Graphics::ManagedSurface &tileImg = tiles[tileId];
+			s.blitFrom(tileImg, Common::Point(ox * TILE_WIDTH + 8, oy * TILE_HEIGHT + 8));
+		}
+	}
+
+#if 0
+	// Draw any people in the location
+	for (const auto &entity : _G(savegame)._locationEntities) {
+		if (entity._type != -1) {
+			const Graphics::ManagedSurface &tileImg = tiles[entity._type];
+			s.blitFrom(tileImg, Common::Point(entity._position.x * TILE_WIDTH + 8, entity._position.y * TILE_HEIGHT + 8));
+		}
+	}
+#endif
+
+	const auto &sg = _G(savegame);
+
+	// A hazard Mondain has conjured, mid-flash (the map cell already holds
+	// MTILE_HAZARD; this overlays the current animation frame on top)
+	if (sg._mondainHazardAnim >= 0 && sg._mondainHazardAnim < 6) {
+		const Graphics::ManagedSurface &hazImg = tiles[Data::MTILE_HAZARD + sg._mondainHazardAnim];
+		s.blitFrom(hazImg, Common::Point(sg._mondainHazardPos.x * TILE_WIDTH + 8,
+			sg._mondainHazardPos.y * TILE_HEIGHT + 8));
+	}
+
+	// While the gem is being struck, its animation plays over its own tile -
+	// it doesn't follow Mondain around the room
+	if (sg._mondainHitAnimFrame != 0) {
+		const Graphics::ManagedSurface &hitTileImg = tiles[sg._mondainHitAnimFrame + 5];
+		s.blitFrom(hitTileImg, Common::Point(Data::MONDAIN_GEM_X * TILE_WIDTH + 8, Data::MONDAIN_GEM_Y * TILE_HEIGHT + 8));
+	}
+
+	// Draw Mondain himself - his current pose
+	const auto &mondainPos = sg._mondainPos;
+
+	const Graphics::ManagedSurface &mondainTileImg = tiles[sg._mondainPhase + sg._mondainPhaseAnimOffset];
+	s.blitFrom(mondainTileImg, Common::Point(mondainPos.x * TILE_WIDTH + 8, mondainPos.y * TILE_HEIGHT + 8));
+
+	// Draw the player
+	const Graphics::ManagedSurface &tileImg = tiles[Data::MTILE_PLAYER];
+	s.blitFrom(tileImg, Common::Point(pos.x * TILE_WIDTH + 8, pos.y * TILE_HEIGHT + 8));
+}
+
+} // namespace Views
+} // namespace Ultima1
+} // namespace Ultima

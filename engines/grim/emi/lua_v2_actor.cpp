@@ -382,18 +382,8 @@ void Lua_V2::AdvanceChore() {
 	int chore = lua_getuserdata(choreObj);
 	float time = lua_getnumber(timeObj);
 	Chore *c = EMIChore::getPool().getObject(chore);
-	if (c) {
-		if (!c->isPlaying()) {
-			warning("AdvanceChore() called on stopped chore %s (%s)",
-					c->getName(), c->getOwner()->getFilename().c_str());
-			if (c->isLooping()) {
-				c->getOwner()->playChoreLooping(c->getName());
-			} else {
-				c->getOwner()->playChore(c->getName());
-			}
-		}
+	if (c && c->isPlaying())
 		c->advance(time * 1000);
-	}
 }
 
 // TODO: Implement, verify, and rename parameters
@@ -937,9 +927,7 @@ void Lua_V2::SetActorFOV() {
 
 	if (lua_isnumber(fovObj)) {
 		float fov = lua_getnumber(fovObj);
-		// FIXME: implement missing code
-		//actor->func(fov); // cos(fov * some tuntime val * 0.5)
-		warning("Lua_V2::SetActorFOV: implement opcode. actor: %s, param: %f", actor->getName().c_str(), fov);
+		actor->setFOV(fov);
 	}
 }
 
@@ -969,7 +957,7 @@ void Lua_V2::AttachActor() {
 	}
 
 	attached->attachToActor(actor, joint);
-	Debug::debug(Debug::Actors | Debug::Scripts, "Lua_V2::AttachActor: attaching %s to %s (on %s)", attached->getName().c_str(), actor->getName().c_str(), joint ? joint : "(none)");
+	Debug::debug(Debug::Scripts, "Lua_V2::AttachActor: attaching %s to %s (on %s)", attached->getName().c_str(), actor->getName().c_str(), joint ? joint : "(none)");
 
 	g_emi->invalidateSortOrder();
 }
@@ -985,7 +973,7 @@ void Lua_V2::DetachActor() {
 	if (!attached)
 		return;
 
-	Debug::debug(Debug::Actors | Debug::Scripts, "Lua_V2::DetachActor: detaching %s from parent actor", attached->getName().c_str());
+	Debug::debug(Debug::Scripts, "Lua_V2::DetachActor: detaching %s from parent actor", attached->getName().c_str());
 	attached->detach();
 
 	g_emi->invalidateSortOrder();

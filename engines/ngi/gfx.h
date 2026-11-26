@@ -31,7 +31,7 @@ namespace Graphics {
 
 namespace NGI {
 
-class DynamicPhase;
+class Phase;
 class Movement;
 struct PicAniInfo;
 
@@ -80,36 +80,39 @@ private:
 	Bitmap operator=(const Bitmap &);
 };
 
-class Picture : public MemoryObject {
+class Texture : public MemoryObject {
 public:
-	Picture();
-	~Picture() override;
+	Texture();
+	~Texture() override;
 
 	void freePicture();
-	void freePixelData();
+	void unload();
 
 	bool load(MfcArchive &file) override;
+	void loadPNG(const Common::Path &path, const Dims &sizeHint);
+	void blitTo(Graphics::ManagedSurface &target, const Common::Point &position, bool mirror = false) const;
+	void blitTo(Graphics::ManagedSurface &target, const Common::Rect &source, const Common::Point &position) const;
 	void setAOIDs();
 	virtual void init();
 	void getDibInfo();
 	const Bitmap *getPixelData();
-	virtual void draw(int x, int y, int style, int angle);
-	void drawRotated(int x, int y, int angle);
+	virtual void render(int x, int y, int style, int angle);
+	void renderRotate(int x, int y, int angle);
 
 	byte getAlpha() { return (byte)_alpha; }
 	void setAlpha(byte alpha) { _alpha = alpha; }
 
 	Dims getDimensions() const { return Dims(_width, _height); }
 	bool isPointInside(int x, int y);
-	bool isPixelHitAtPos(int x, int y);
-	int getPixelAtPos(int x, int y);
+	bool hit(int x, int y);
+	int getColor(int x, int y);
 	int getPixelAtPosEx(int x, int y);
 
 	const Bitmap *getConvertedBitmap() const { return _convertedBitmap.get(); }
 	const Palette &getPaletteData() const { return _paletteData; }
 	void setPaletteData(const Palette &pal);
 
-	void copyMemoryObject2(Picture &src);
+	void copyMemoryObject2(Texture &src);
 
 	int _x, _y;
 
@@ -120,7 +123,7 @@ protected:
 	int _width;
 	int _height;
 	Common::ScopedPtr<Bitmap> _bitmap;
-	int _field_54;
+	int _hasMirroredBitmap;
 	Common::ScopedPtr<MemoryObject2> _memoryObject2;
 	int _alpha;
 	Palette _paletteData;
@@ -128,25 +131,25 @@ protected:
 	void displayPicture();
 };
 
-class BigPicture : public Picture {
+class BigPicture : public Texture {
   public:
 	BigPicture() {}
 	~BigPicture() override {}
 
 	bool load(MfcArchive &file) override;
-	void draw(int x, int y, int style, int angle) override;
+	void render(int x, int y, int style, int angle) override;
 };
 
 class GameObject : public CObject {
   public:
-	int16 _odelay;
-	int _field_8;
+	int16 _copyId;
+	int _objectFlags;
 	int16 _flags;
 	int16 _id;
-	Common::String _objectName;
-	int _ox;
-	int _oy;
-	int _priority;
+	Common::String _title;
+	int _x;
+	int _y;
+	int _z;
 	int _field_20;
 
   public:
@@ -155,12 +158,12 @@ class GameObject : public CObject {
 
 	virtual Common::String toXML();
 	bool load(MfcArchive &file) override;
-	void setOXY(int x, int y);
-	void renumPictures(Common::Array<StaticANIObject *> *lst);
-	void renumPictures(Common::Array<PictureObject *> *lst);
+	void setPos(int x, int y);
+	void assignCopyId(Common::Array<AniObject *> *lst);
+	void assignCopyId(Common::Array<PictureObject *> *lst);
 	void setFlags(int16 flags) { _flags = flags; }
 	void clearFlags() { _flags = 0; }
-	Common::String getName() { return _objectName; }
+	Common::String getName() { return _title; }
 
 	bool getPicAniInfo(PicAniInfo &info);
 	bool setPicAniInfo(const PicAniInfo &info);
@@ -176,16 +179,16 @@ public:
 	virtual bool load(MfcArchive &file, bool bigPicture);
 	bool load(MfcArchive &file) override { assert(0); return false; } // Disable base class
 
-	Dims getDimensions() const { return _picture->getDimensions(); }
-	void draw();
-	void drawAt(int x, int y);
+	Dims getFullSize() const { return _picture->getDimensions(); }
+	void render();
+	void renderAtPos(int x, int y);
 
 	bool setPicAniInfo(const PicAniInfo &picAniInfo);
 	bool isPointInside(int x, int y);
-	bool isPixelHitAtPos(int x, int y);
+	bool hit(int x, int y);
 	void setOXY2();
 
-	Picture *_picture;
+	Texture *_picture;
 
 private:
 	Common::Array<GameObject> _pictureObject2List;
@@ -196,7 +199,7 @@ private:
 class Background : public CObject {
 public:
 	/** list items are owned */
-	Common::Array<PictureObject *> _picObjList;
+	Common::Array<PictureObject *> _pictureObjects;
 
 	Common::String _bgname;
 	int _x;
@@ -213,7 +216,7 @@ public:
 	~Background() override;
 
 	bool load(MfcArchive &file) override;
-	void addPictureObject(PictureObject *pct);
+	void addPicture(PictureObject *pct);
 
 	BigPicture *getBigPicture(int x, int y) { return _bigPictureArray[y * _bigPictureXDim + x]; }
 };
@@ -221,7 +224,7 @@ public:
 struct ShadowsItem {
 	int width;
 	int height;
-	DynamicPhase *dynPhase;
+	Phase *dynPhase;
 };
 
 typedef Common::Array<ShadowsItem> ShadowsItemArray;
@@ -237,8 +240,8 @@ class Shadows : public CObject {
 	bool load(MfcArchive &file) override;
 	void init();
 
-	void initMovement(Movement *mov);
-	DynamicPhase *findSize(int width, int height);
+	void fillData(Movement *mov);
+	Phase *findSize(int width, int height);
 };
 
 } // End of namespace NGI

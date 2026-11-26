@@ -68,31 +68,17 @@ void Training::checkCharacter() {
 	_class = c._class;
 
 	if (_class == KNIGHT || _class == CLERIC || _class == ROBBER) {
-		_expTotal = 1500;
-		_expAmount = 150000;
-
 		if (_currLevel != 0) {
 			_cost = _currLevel >= 8 ? 3000 :
 				TRAINING_COSTS1[_currLevel - 1];
 		}
 	} else {
-		_expTotal = 2000;
-		_expAmount = 200000;
 		_cost = _currLevel >= 8 ? 4000 :
 			TRAINING_COSTS2[_currLevel - 1];
 	}
 
-	for (int level = _currLevel - 1, ctr = 0; level > 0; --level) {
-		_expTotal *= 16;
-
-		if (++ctr >= 7) {
-			while (--level > 0)
-				_expTotal += _expAmount;
-			break;
-		}
-	}
-
-	_remainingExp = _expTotal - c._exp;
+	_expTotal = c.experienceForNextLevel();
+	_remainingExp = (int)_expTotal - (int)c._exp;
 	_canTrain = _remainingExp <= 0;
 	_canAfford = (int)c._gold >= _cost;
 }
@@ -100,21 +86,21 @@ void Training::checkCharacter() {
 void Training::draw() {
 	Location::draw();
 
-	writeString(18, 1, STRING["dialogs.training.for_level"]);
+	writeString(18, 1, "Training for level ");
 	writeNumber(_currLevel + 1);
 
 	if (_currLevel >= MAX_LEVEL) {
-		writeString(24, 3, STRING["dialogs.training.no_way"]);
+		writeString(24, 3, "No way!");
 
 	} else if (_remainingExp > 0) {
 		writeString(21, 3, Common::String::format(
-			STRING["dialogs.training.need"].c_str(), _remainingExp));
-		writeString(20, 5, STRING["dialogs.training.xp"]);
+			"Need %d more", _remainingExp));
+		writeString(20, 5, "experience points");
 
 	} else {
 		writeString(21, 3, Common::String::format(
-			STRING["dialogs.training.cost"].c_str(), _cost));
-		writeString(18, 5, STRING["dialogs.training.cost"]);
+			"Cost %d gold", _cost));
+		writeString(18, 5, "Cost %d gold");
 	}
 }
 
@@ -165,7 +151,7 @@ void Training::train() {
 	if (c._condition) {
 		Sound::sound(SOUND_3);
 		clearSurface();
-		writeString(8, 5, STRING["dialogs.training.condition"]);
+		writeString(8, 5, "*** Check condition ***");
 		delaySeconds(3);
 
 	} else if (!_canAfford) {
@@ -178,14 +164,14 @@ void Training::train() {
 		Sound::sound(SOUND_2);
 
 		clearSurface();
-		writeString(0, 3, STRING["dialogs.training.congrats"]);
+		writeString(0, 3, "Congratulations! you are now level ");
 		writeNumber(c._level._base);
 
 		writeString(7, 5, Common::String::format(
-			STRING["dialogs.training.hp"].c_str(), lvl._numHP));
+			"You gained %d hit points", lvl._numHP));
 
 		if (lvl._numSpells != 0)
-			writeString(7, 6, STRING["dialogs.training.new_spells"]);
+			writeString(7, 6, "You gained new spells!");
 
 		Sound::sound(SOUND_2);
 		delaySeconds(10);

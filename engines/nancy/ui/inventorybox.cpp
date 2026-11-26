@@ -21,7 +21,7 @@
 
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/graphics.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 #include "engines/nancy/cursor.h"
 #include "engines/nancy/sound.h"
 #include "engines/nancy/input.h"
@@ -134,7 +134,11 @@ void InventoryBox::handleInput(NancyInput &input) {
 
 					if (!disabled) {
 						// Item is not disabled
-						NancySceneState.removeItemFromInventory(itemID, item.keepItem != kInvItemNewSceneView);
+						bool pickUp = item.keepItem != kInvItemNewSceneView;
+						NancySceneState.removeItemFromInventory(itemID, pickUp);
+						if (pickUp) {
+							g_nancy->_sound->playSound("BUOK");
+						}
 						hoveredHotspot = -1;
 
 						if (item.keepItem == kInvItemNewSceneView) {

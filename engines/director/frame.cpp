@@ -123,10 +123,10 @@ void Frame::readChannel(Common::MemoryReadStreamEndian &stream, uint16 offset, u
 		readChannelD5(stream, offset, size);
 	} else if (version >= kFileVer600 && version < kFileVer700) {
 		readChannelD6(stream, offset, size);
-	} else if (version >= kFileVer700 && version < kFileVer1100) {
+	} else if (version >= kFileVer700 && version <= kFileVer1100) {
 		readChannelD7(stream, offset, size);
 	} else {
-		error("Frame::readChannel(): Unsupported Director version: %d", version);
+		error("Frame::readChannel(): Unsupported Director version: %d (0x%x)", version, version);
 	}
 }
 
@@ -1348,7 +1348,7 @@ static void writePadding(Common::SeekableWriteStream *writeStream, int size) {
 
 void Frame::writeMainChannelsD6(Common::SeekableWriteStream *writeStream) {
 	// Script
-	writeStream->writeUint32BE(_mainChannels.actionId.castLib);				// 0+0
+	writeStream->writeUint16BE(_mainChannels.actionId.castLib);				// 0+0
 	writeStream->writeUint16BE(_mainChannels.actionId.member);				// 0+2
 	writeStream->writeUint32BE(_mainChannels.scriptSpriteListIdx);			// 0+4
 	writeStream->writeByte(_mainChannels.colorScript);						// 0+8
@@ -1799,7 +1799,7 @@ void Frame::readMainChannelsD7(Common::MemoryReadStreamEndian &stream, uint16 of
 
 void Frame::writeMainChannelsD7(Common::SeekableWriteStream *writeStream) {
 	// Script
-	writeStream->writeUint32BE(_mainChannels.actionId.castLib);				// 0+0
+	writeStream->writeUint16BE(_mainChannels.actionId.castLib);				// 0+0
 	writeStream->writeUint16BE(_mainChannels.actionId.member);				// 0+2
 	writeStream->writeUint32BE(_mainChannels.scriptSpriteListIdx);			// 0+4
 	writeStream->writeByte(_mainChannels.colorScript);						// 0+8

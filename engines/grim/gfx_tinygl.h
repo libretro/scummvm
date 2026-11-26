@@ -59,10 +59,6 @@ public:
 	bool isHardwareAccelerated() override;
 	bool supportsShaders() override;
 
-	void getScreenBoundingBox(const Mesh *model, int *x1, int *y1, int *x2, int *y2) override;
-	void getScreenBoundingBox(const EMIModel *model, int *x1, int *y1, int *x2, int *y2) override;
-	void getActorScreenBBox(const Actor *actor, Common::Point &p1, Common::Point &p2) override;
-
 	void startActorDraw(const Actor *actor) override;
 	void finishActorDraw() override;
 	void setShadow(Shadow *shadow) override;
@@ -86,8 +82,6 @@ public:
 
 	void enableLights() override;
 	void disableLights() override;
-	void setupLight(Light *light, int lightId) override;
-	void turnOffLight(int lightId) override;
 
 	void createTexture(Texture *texture, const uint8 *data, const CMap *cmap, bool clamp) override;
 	void selectTexture(const Texture *texture) override;
@@ -129,11 +123,16 @@ public:
 
 protected:
 	void createSpecialtyTextureFromScreen(uint id, uint8 *data, int x, int y, int width, int height) override;
+	void setupLight(Light *light, int lightId) override;
+	void turnOffLight(int lightId) override;
 
 private:
 	Graphics::PixelFormat _pixelFormat;
 	TinyGL::BlitImage *_emergFont[96];
 	TinyGL::BlitImage *_smushImage;
+	TinyGL::BlitImage *_storedImage;
+	// _storedDisplay changed after _storedImage was uploaded
+	bool _storedImageDirty;
 	Graphics::Surface *_storedDisplay;
 	float _alpha;
 	const Actor *_currentActor;

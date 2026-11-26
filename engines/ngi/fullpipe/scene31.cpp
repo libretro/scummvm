@@ -37,44 +37,44 @@ namespace NGI {
 
 void scene31_initScene(Scene *sc) {
 	g_vars->scene31_chantingCountdown = 0;
-	g_vars->scene31_cactus = sc->getStaticANIObject1ById(ANI_CACTUS_31, -1);
+	g_vars->scene31_cactus = sc->findAniObjectById(ANI_CACTUS_31, -1);
 
-	if (g_nmi->getObjectState(sO_Cactus) == g_nmi->getObjectEnumState(sO_Cactus, sO_HasGrown)) {
+	if (g_nmi->getStateId(sO_Cactus) == g_nmi->getStateValue(sO_Cactus, sO_HasGrown)) {
 		Scene *oldsc = g_nmi->_currentScene;
 		g_nmi->_currentScene = sc;
 
-		g_vars->scene31_cactus->changeStatics2(ST_CTS31_GROWN2);
-		g_vars->scene31_cactus->_priority = 22;
+		g_vars->scene31_cactus->setStatic(ST_CTS31_GROWN2);
+		g_vars->scene31_cactus->_z = 22;
 
 		g_nmi->_currentScene = oldsc;
 	} else {
 		g_vars->scene31_cactus->hide();
 	}
 
-	g_vars->scene31_plusMinus = sc->getStaticANIObject1ById(ANI_PLUSMINUS, -1);
+	g_vars->scene31_plusMinus = sc->findAniObjectById(ANI_PLUSMINUS, -1);
 
-	if (g_nmi->getObjectState(sO_Guard_3) == g_nmi->getObjectEnumState(sO_Guard_3, sO_Off))
-		g_vars->scene31_plusMinus->_statics = g_vars->scene31_plusMinus->getStaticsById(ST_PMS_MINUS);
+	if (g_nmi->getStateId(sO_Guard_3) == g_nmi->getStateValue(sO_Guard_3, sO_Off))
+		g_vars->scene31_plusMinus->_statics = g_vars->scene31_plusMinus->getStatic(ST_PMS_MINUS);
 	else
-		g_vars->scene31_plusMinus->_statics = g_vars->scene31_plusMinus->getStaticsById(ST_PMS_PLUS);
+		g_vars->scene31_plusMinus->_statics = g_vars->scene31_plusMinus->getStatic(ST_PMS_PLUS);
 }
 
-void sceneHandler31_testCactus(ExCommand *cmd) {
+void sceneHandler31_testCactus(Command *cmd) {
 	if ((g_vars->scene31_cactus->_flags & 4) && g_vars->scene31_cactus->_statics->_staticsId == ST_CTS31_GROWN2) {
 		MessageQueue *mq = g_nmi->_globalMessageQueueList->getMessageQueueById(cmd->_parId);
 
 		if (mq) {
-			mq->getExCommandByIndex(0)->_messageKind = 0;
-			mq->getExCommandByIndex(0)->_excFlags |= 1;
+			mq->getCommandByIndex(0)->_cmd = 0;
+			mq->getCommandByIndex(0)->_excFlags |= 1;
 
-			mq->getExCommandByIndex(1)->_messageKind = 0;
-			mq->getExCommandByIndex(1)->_excFlags |= 1;
+			mq->getCommandByIndex(1)->_cmd = 0;
+			mq->getCommandByIndex(1)->_excFlags |= 1;
 		}
 	}
 }
 
-int sceneHandler31(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler31(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch (cmd->_messageNum) {
@@ -90,15 +90,15 @@ int sceneHandler31(ExCommand *cmd) {
 
 	case MSG_SC31_PULL:
 		if ( g_vars->scene31_plusMinus->_statics->_staticsId == ST_PMS_MINUS)
-			g_vars->scene31_plusMinus->_statics = g_vars->scene31_plusMinus->getStaticsById(ST_PMS_PLUS);
+			g_vars->scene31_plusMinus->_statics = g_vars->scene31_plusMinus->getStatic(ST_PMS_PLUS);
 		else
-			g_vars->scene31_plusMinus->_statics = g_vars->scene31_plusMinus->getStaticsById(ST_PMS_MINUS);
+			g_vars->scene31_plusMinus->_statics = g_vars->scene31_plusMinus->getStatic(ST_PMS_MINUS);
 
 		break;
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			int x = g_nmi->_aniMan2->_ox;
+			int x = g_nmi->_aniMan2->_x;
 
 			if (x < g_nmi->_sceneRect.left + 200)
 				g_nmi->_currentScene->_x = x - 300 - g_nmi->_sceneRect.left;
@@ -114,7 +114,7 @@ int sceneHandler31(ExCommand *cmd) {
 				g_nmi->playSound(SND_31_001, 1);
 		}
 
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_behaviorManager->update();
 
 		break;
 

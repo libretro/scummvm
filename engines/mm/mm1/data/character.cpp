@@ -21,6 +21,7 @@
 
 #include "common/algorithm.h"
 #include "mm/mm1/data/character.h"
+#include "mm/mm1/data/locations.h"
 #include "mm/shared/utils/strings.h"
 #include "mm/mm1/mm1.h"
 
@@ -260,7 +261,9 @@ void Character::clear() {
 	_intelligence = _might = _personality = _endurance = 0;
 	_speed = _accuracy = _luck = 0;
 	_level = 1;
-	_age = _ageDayCtr = 0;
+	// MM1 characters begin at age 18.
+	_age = 18;
+	_ageDayCtr = 0;
 	_exp = 0;
 	_sp = 0;
 	_spellLevel = 0;
@@ -287,13 +290,56 @@ void Character::clear() {
 
 
 void Character::gatherGold() {
-	uint total = 0;
-	for (uint i = 0; i < g_globals->_party.size(); ++i) {
-		total += g_globals->_party[i]._gold;
-		g_globals->_party[i]._gold = 0;
-	}
+	// Gold is stored in the original MM1 24-bit range. Move as much as
+	// possible to this character and leave any overflow with its owner.
+	static const uint32 MAX_GOLD = 0xffffff;
 
-	_gold = total;
+	if (_gold >= MAX_GOLD)
+		return;
+
+	for (uint i = 0; i < g_globals->_party.size(); ++i) {
+		Character &src = g_globals->_party[i];
+		if (&src == this)
+			continue;
+
+		const uint32 room = MAX_GOLD - _gold;
+		const uint32 amount = MIN(src._gold, room);
+		_gold += amount;
+		src._gold -= amount;
+
+		if (_gold == MAX_GOLD)
+			break;
+	}
+}
+
+void Character::gatherResources() {
+	// Original Character Profile G: gather gold, gems and food, each only up
+	// to the destination character's carrying limit. Any excess stays with
+	// the source character instead of being destroyed.
+	gatherGold();
+
+	for (uint i = 0; i < g_globals->_party.size(); ++i) {
+		Character &src = g_globals->_party[i];
+		if (&src == this)
+			continue;
+
+		if (_gems < 0xffff) {
+			const uint32 room = 0xffff - _gems;
+			const uint32 amount = MIN<uint32>(src._gems, room);
+			_gems += amount;
+			src._gems -= amount;
+		}
+
+		if (_food < MAX_FOOD) {
+			const uint room = MAX_FOOD - _food;
+			const uint amount = MIN<uint>(src._food, room);
+			_food += amount;
+			src._food -= amount;
+		}
+
+		if (_gems == 0xffff && _food == MAX_FOOD)
+			break;
+	}
 }
 
 Character::TradeResult Character::trade(int whoTo, int itemIndex) {
@@ -356,30 +402,25 @@ Character::LevelIncrease Character::increaseLevel() {
 	_hp = _hpMax = _hpCurrent;
 
 	int gainedSpells = 0;
-	if (classNum < ARCHER) {
-		if (_level._base < 7)
-			gainedSpells = 0;
-		else if (_level._base == 7)
-			gainedSpells = 1;
-		else if (_level._base == 9)
-			gainedSpells = 2;
-		else if (_level._base == 11)
-			gainedSpells = 3;
-		else if (_level._base == 13)
-			gainedSpells = 4;
-	} else if (classNum < SORCERER) {
-		if (_level._base == 3)
-			gainedSpells = 2;
-		else if (_level._base == 5)
-			gainedSpells = 3;
-		else if (_level._base == 7)
-			gainedSpells = 4;
-		else if (_level._base == 9)
-			gainedSpells = 5;
-		else if (_level._base == 11)
-			gainedSpells = 6;
-		else if (_level._base == 13)
-			gainedSpells = 7;
+
+	// Clerics and Sorcerers gain a spell level at character levels
+	// 3, 5, 7, 9, 11 and 13, up to spell level 7.
+	if (_class == CLERIC || _class == SORCERER) {
+		if (_level._base >= 3 && _level._base <= 13 &&
+				(_level._base & 1))
+			gainedSpells = (_level._base + 1) / 2;
+
+	// Paladins and Archers begin casting at character level 7 and
+	// gain another spell level at 9, 11 and 13, up to spell level 4.
+	} else if (_class == PALADIN || _class == ARCHER) {
+		if (_level._base >= 7 && _level._base <= 13 &&
+				(_level._base & 1))
+			gainedSpells = (_level._base - 5) / 2;
+	}
+
+	if (gainedSpells) {
+		_spellLevel = gainedSpells;
+		updateSP();
 	}
 
 	LevelIncrease result;
@@ -422,7 +463,10 @@ void Character::updateAttributes() {
 }
 
 void Character::updateAC() {
-	int ac = _ac._base;
+	// Leather Skin stores the caster's current level as a party-wide
+	// AC bonus. Rebuild current AC from base so repeated updates do not stack.
+	int ac = _ac._base +
+		g_globals->_activeSpells._s.leather_skin;
 
 	if (_speed >= 40)
 		ac += 9;
@@ -459,7 +503,7 @@ void Character::updateSP() {
 	int personality = _personality._current;
 	int level = _level._current;
 	int index = 3;
-	AttributePair newSP;
+	AttributePair16 newSP;
 
 	// Spell points only relevant for spell casters
 	if (_spellLevel._current) {
@@ -522,31 +566,31 @@ Common::String Character::getConditionString() const {
 	int cond = _condition;
 
 	if (cond == 0) {
-		result += STRING["stats.conditions.good"];
+		result += "Good";
 	} else if (cond == ERADICATED) {
-		result += STRING["stats.conditions.eradicated"];
+		result += "Eradicated";
 	} else {
 		if (cond & BAD_CONDITION) {
 			// Fatal conditions
 			if (cond & DEAD)
-				result += STRING["stats.conditions.dead"] + ",";
+				result += "Dead,";
 			if (cond & STONE)
-				result += STRING["stats.conditions.stone"] + ",";
+				result += "Stone,";
 		} else {
 			if (cond & UNCONSCIOUS)
-				result += STRING["stats.conditions.unconscious"] + ",";
+				result += "Unconscious,";
 			if (cond & PARALYZED)
-				result += STRING["stats.conditions.paralyzed"] + ",";
+				result += "Paralyzed,";
 			if (cond & POISONED)
-				result += STRING["stats.conditions.poisoned"] + ",";
+				result += "Poisoned,";
 			if (cond & DISEASED)
-				result += STRING["stats.conditions.diseased"] + ",";
+				result += "Diseased,";
 			if (cond & SILENCED)
-				result += STRING["stats.conditions.silenced"] + ",";
+				result += "Silenced,";
 			if (cond & BLINDED)
-				result += STRING["stats.conditions.blinded"] + ",";
+				result += "Blinded,";
 			if (cond & ASLEEP)
-				result += STRING["stats.conditions.asleep"] + ",";
+				result += "Asleep,";
 		}
 
 		result.deleteLastChar();
@@ -561,8 +605,13 @@ void Character::rest() {
 	if (_condition & BAD_CONDITION)
 		return;
 
-	updateSP();
+	// Restore temporary attribute and level drains before recalculating
+	// maximum SP. Food and disease still determine recovery below.
+	const int currentSP = _sp._current;
 	updateAttributes();
+	updateSP();
+	_sp._current = MIN(currentSP, (int)_sp._base);
+
 	updateAC();
 	updateResistances();
 
@@ -671,6 +720,40 @@ size_t Character::getPerformanceTotal() const {
 		+ totalFlags;
 }
 
+uint32 Character::experienceForNextLevel() const {
+	if (_level._base >= MAX_LEVEL)
+		return 0;
+
+	uint32 expTotal;
+	const uint32 expAmount =
+		(_class == KNIGHT || _class == CLERIC || _class == ROBBER) ?
+		150000 : 200000;
+
+	if (_class == KNIGHT || _class == CLERIC || _class == ROBBER)
+		expTotal = 1500;
+	else
+		expTotal = 2000;
+
+	// The requirement doubles for each level up to level 8, after which
+	// each further level adds a fixed amount
+	for (int level = _level._base - 1, ctr = 0; level > 0; --level) {
+		expTotal *= 2;
+
+		if (++ctr >= 7) {
+			while (--level > 0)
+				expTotal += expAmount;
+			break;
+		}
+	}
+
+	return expTotal;
+}
+
+bool Character::canLevelUp() const {
+	return _level._base < MAX_LEVEL &&
+		_exp >= experienceForNextLevel();
+}
+
 byte Character::statColor(int amount, int threshold) const {
 	if (amount < 1)
 		return 6;
@@ -725,17 +808,17 @@ ConditionEnum Character::worstCondition() const {
 
 Common::String Character::getConditionString(ConditionEnum cond) {
 	switch (cond) {
-	case C_ERADICATED: return STRING["stats.conditions.eradicated"];
-	case C_DEAD: return STRING["stats.conditions.dead"];
-	case C_STONE: return STRING["stats.conditions.stone"];
-	case C_UNCONSCIOUS: return STRING["stats.conditions.unconscious"];
-	case C_PARALYZED: return STRING["stats.conditions.paralyzed"];
-	case C_POISONED: return STRING["stats.conditions.poisoned"];
-	case C_DISEASED: return STRING["stats.conditions.diseased"];
-	case C_SILENCED: return STRING["stats.conditions.silenced"];
-	case C_BLINDED: return STRING["stats.conditions.blinded"];
-	case C_ASLEEP: return STRING["stats.conditions.asleep"];
-	default: return STRING["stats.conditions.good"];
+	case C_ERADICATED: return "Eradicated";
+	case C_DEAD: return "Dead";
+	case C_STONE: return "Stone";
+	case C_UNCONSCIOUS: return "Unconscious";
+	case C_PARALYZED: return "Paralyzed";
+	case C_POISONED: return "Poisoned";
+	case C_DISEASED: return "Diseased";
+	case C_SILENCED: return "Silenced";
+	case C_BLINDED: return "Blinded";
+	case C_ASLEEP: return "Asleep";
+	default: return "Good";
 	}
 }
 

@@ -56,6 +56,7 @@ class Dialog;
 }
 namespace Graphics {
 struct HotspotInfo;
+class HotspotRenderer;
 }
 
 /**
@@ -146,6 +147,11 @@ private:
 	friend class Engine;
 };
 
+enum HotspotKeyMode {
+	kHotspotKeyModeHold,
+	kHotspotKeyModeToggle
+};
+
 class Engine {
 public:
 	/**
@@ -205,6 +211,11 @@ protected:
 	 * overlay), and this remembers the state to restore afterwards.
 	 */
 	bool _hotspotPrevCursorVisible;
+	bool _hotspotCursorHidden = false;
+	Graphics::HotspotRenderer *_hotspotRenderer = nullptr;
+	Common::Array<Graphics::HotspotInfo> _hotspotScratch;
+	bool _hotspotShowText = true;
+	int _hotspotMarker = 0;
 
 private:
 	/**
@@ -550,6 +561,8 @@ protected:
 	 * circles, automatically converting from game coordinates to overlay coordinates.
 	 */
 	virtual void drawHotspots();
+	virtual Graphics::HotspotRenderer *createHotspotRenderer();
+	virtual bool hideCursorForHotspots() const { return effectiveHotspotKeyMode() == kHotspotKeyModeHold; }
 
 	/**
 	 * Returns whether hotspot markers need to be re-rendered this frame.
@@ -574,6 +587,11 @@ public:
 	 * @param show true to show hotspots, false to hide them
 	 */
 	virtual void showHotspots(bool show);
+	/** Release the hotspot overlay without changing the user's toggle state. */
+	void suspendHotspots();
+	bool isShowingHotspots() const { return _showHotspots; }
+	virtual HotspotKeyMode hotspotsKeyMode() const { return kHotspotKeyModeToggle; }
+	HotspotKeyMode effectiveHotspotKeyMode() const;
 
 	/**
 	 * Request the engine to quit.

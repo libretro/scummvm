@@ -1,0 +1,73 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "ultima/ultima2/views/interactions/direction.h"
+#include "ultima/ultima2/ultima2.h"
+#include "ultima/ultima2/metaengine.h"
+
+namespace Ultima {
+namespace Ultima2 {
+namespace Views {
+namespace Interactions {
+
+constexpr uint32 TIMEOUT = 5000;
+
+Direction::Direction() : Interaction("Direction") {
+}
+
+bool Direction::msgFocus(const FocusMessage &msg) {
+	MetaEngine::setKeybindingMode(KBMODE_MINIMAL);
+	_startTime = g_system->getMillis();
+	return Interaction::msgFocus(msg);
+}
+
+bool Direction::tick() {
+	// If no direction is given in time, the command is abandoned and a turn passes
+	if (g_system->getMillis() - _startTime >= TIMEOUT) {
+		writeString("Pass\n");
+		close();
+		_G(logic)->resumeTurn();
+		return true;
+	}
+
+	return Interaction::tick();
+}
+
+bool Direction::msgKeypress(const KeypressMessage &msg) {
+	Data::Direction dir;
+	switch (msg.keycode) {
+	case Common::KEYCODE_UP: dir = Data::DIR_UP; writeString("North"); break;
+	case Common::KEYCODE_DOWN: dir = Data::DIR_DOWN; writeString("South"); break;
+	case Common::KEYCODE_LEFT: dir = Data::DIR_LEFT; writeString("West"); break;
+	case Common::KEYCODE_RIGHT: dir = Data::DIR_RIGHT; writeString("East"); break;
+	default:
+		return true;
+	}
+
+	close();
+	_G(logic)->resolveDirection(dir);
+	return true;
+}
+
+} // namespace Interactions
+} // namespace Views
+} // namespace Ultima2
+} // namespace Ultima

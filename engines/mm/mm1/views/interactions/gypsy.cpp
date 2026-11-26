@@ -20,6 +20,7 @@
  */
 
 #include "mm/mm1/views/interactions/gypsy.h"
+#include "mm/mm1/data/text.h"
 #include "mm/mm1/globals.h"
 
 namespace MM {
@@ -70,13 +71,12 @@ void Gypsy::modeChanged(bool allowSelection) {
 void Gypsy::draw() {
 	clearSurface();
 	if (!_character) {
-		writeString(0, 1, STRING["maps.map23.gypsy"]);
+		writeString(0, 1, "A toothless Gypsy seer asks:\nWho would like to hear their sign (F1-F6)?");
 
 	} else {
 		Common::String line = Common::String::format(
-			STRING["maps.map23.your_sign_is"].c_str(),
-			STRING[Common::String::format("colors.%d",
-				_character->_flags[4] & CHARFLAG4_SIGN)].c_str()
+			"\"Your sign is the %s\"",
+			COLOR_NAMES[_character->_flags[4] & CHARFLAG4_SIGN]
 		);
 
 		writeString(0, 1, line);

@@ -19,6 +19,8 @@
  *
  */
 
+#include "common/system.h"
+
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/util.h"
@@ -174,7 +176,11 @@ void ListBox::draw(Graphics::ManagedSurface &surface, const Common::Point &offse
 
 void ListBox::onMouseHover(const Common::Point &pos) {
 	Common::Rect text = getTextBounds();
-	_hovered = (pos.x >= text.left && pos.x < text.right) ? getItemAt(pos) : -1;
+	const int hovered = (pos.x >= text.left && pos.x < text.right) ? getItemAt(pos) : -1;
+	if (hovered != _hovered) {
+		_hovered = hovered;
+		_panel->setDirty();
+	}
 }
 
 bool ListBox::onMouseDown(const Common::Point &pos) {
@@ -191,7 +197,7 @@ bool ListBox::onMouseDown(const Common::Point &pos) {
 	// A second click on the same item, shortly after the first
 	static const uint32 kDoubleClickTime = 500;
 
-	const uint32 now = g_nancy->getTotalPlayTime();
+	const uint32 now = g_system->getMillis();
 	const bool isDoubleClick = item == _lastClicked && now - _lastClickTime <= kDoubleClickTime;
 	_lastClicked = isDoubleClick ? -1 : item;
 	_lastClickTime = now;
@@ -254,11 +260,14 @@ bool ListBox::doAction(const Action &action) {
 		addItem(action.text, action.value < 0);
 		_panel->setDirty();
 		return true;
+	// From Nancy20 on, "collapse" empties a list box, e.g. the list of saved games
+	case kActionCollapse:
 	case kActionSetText:
 		_items.clear();
 		_selected = -1;
 		_hovered = -1;
 		_scrollBar->setRange(0);
+		_panel->setDirty();
 		return true;
 	case kActionSetValue:
 		_selected = CLIP<int>((int)action.value, -1, (int)_items.size() - 1);

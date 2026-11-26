@@ -36,7 +36,7 @@
 namespace NGI {
 
 void scene14_initScene(Scene *sc) {
-	g_vars->scene14_grandma = sc->getStaticANIObject1ById(ANI_GRANDMA, -1);
+	g_vars->scene14_grandma = sc->findAniObjectById(ANI_GRANDMA, -1);
 	g_vars->scene14_sceneDeltaX = 200;
 	g_vars->scene14_sceneDeltaY = 200;
 	g_vars->scene14_arcadeIsOn = false;
@@ -49,21 +49,21 @@ void scene14_initScene(Scene *sc) {
 	g_vars->scene14_flyingBall = nullptr;
 	g_vars->scene14_balls.clear();
 
-	if (g_nmi->getObjectState(sO_Grandma) == g_nmi->getObjectEnumState(sO_Grandma, sO_In_14)) {
+	if (g_nmi->getStateId(sO_Grandma) == g_nmi->getStateValue(sO_Grandma, sO_In_14)) {
 		g_vars->scene14_grandmaIsHere = true;
 
-		StaticANIObject *ball = sc->getStaticANIObject1ById(ANI_BALL14, -1);
+		AniObject *ball = sc->findAniObjectById(ANI_BALL14, -1);
 
 		ball->_flags &= 0xFFFB;
 		g_vars->scene14_balls.push_back(ball);
 
 		for (uint i = 0; i < 3; i++) {
-			ball = new StaticANIObject(ball); // create a copy
+			ball = new AniObject(ball); // create a copy
 
 			ball->_flags &= 0xFFFB;
 			g_vars->scene14_balls.push_back(ball);
 
-			sc->addStaticANIObject(ball, 1);
+			sc->addAni(ball, 1);
 		}
 	} else {
 		g_vars->scene14_grandmaIsHere = false;
@@ -115,7 +115,7 @@ int sceneHandler14_updateScreenCallback() {
 void sceneHandler14_showBallGrandmaHit2() {
 	if (g_vars->scene14_flyingBall) {
 		g_vars->scene14_flyingBall->show1(g_vars->scene14_grandmaX + 223, g_vars->scene14_grandmaY + 35, MV_BAL14_SPIN, 0);
-		g_vars->scene14_flyingBall->_priority = 27;
+		g_vars->scene14_flyingBall->_z = 27;
 
 		g_vars->scene14_pink = g_vars->scene14_flyingBall;
 
@@ -137,21 +137,21 @@ void sceneHandler14_showBallGrandmaDive() {
 void sceneHandler14_showBallGrandmaHit() {
 	if (g_vars->scene14_flyingBall) {
 		g_vars->scene14_flyingBall->show1(g_vars->scene14_grandmaX + 190, g_vars->scene14_grandmaY + 56, MV_BAL14_TOGMA, 0);
-		g_vars->scene14_flyingBall->_priority = 27;
+		g_vars->scene14_flyingBall->_z = 27;
 
 		MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
-		ExCommand *ex = new ExCommand(ANI_BALL14, 1, MV_BAL14_TOGMA, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(ANI_BALL14, 1, MV_BAL14_TOGMA, 0, 0, 0, 1, 0, 0, 0);
 
-		ex->_param = g_vars->scene14_flyingBall->_odelay;
+		ex->_param = g_vars->scene14_flyingBall->_copyId;
 		ex->_excFlags |= 2;
-		ex->_field_24 = 1;
-		mq->addExCommandToEnd(ex);
+		ex->_wait = 1;
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_BALL14, 6, 0, 0, 0, 0, 1, 0, 0, 0);
-		ex->_param = g_vars->scene14_flyingBall->_odelay;
+		ex = new Command(ANI_BALL14, 6, 0, 0, 0, 0, 1, 0, 0, 0);
+		ex->_param = g_vars->scene14_flyingBall->_copyId;
 		ex->_excFlags |= 3;
-		mq->addExCommandToEnd(ex);
-		mq->chain(nullptr);
+		mq->addCommandToEnd(ex);
+		mq->run(nullptr);
 
 		g_vars->scene14_balls.push_back(g_vars->scene14_flyingBall);
 		g_vars->scene14_flyingBall = nullptr;
@@ -162,40 +162,40 @@ void sceneHandler14_exitScene() {
 	g_vars->scene14_arcadeIsOn = false;
 
 	if (g_nmi->_aniMan->_movement)
-		g_nmi->_aniMan->_movement->gotoLastFrame();
+		g_nmi->_aniMan->_movement->setLast();
 
-	g_nmi->_aniMan->stopAnim_maybe();
+	g_nmi->_aniMan->stopMovement();
 
-	handleObjectInteraction(g_nmi->_aniMan, g_nmi->_currentScene->getPictureObjectById(PIC_SC14_RTRUBA, 0), 0);
+	handleObjectInteraction(g_nmi->_aniMan, g_nmi->_currentScene->findPictureObjectById(PIC_SC14_RTRUBA, 0), 0);
 
-	g_vars->scene14_grandma->changeStatics2(ST_GMA_SIT);
+	g_vars->scene14_grandma->setStatic(ST_GMA_SIT);
 
-	chainQueue(QU_SC14_ENDARCADE, 0);
+	runQueue(QU_SC14_ENDARCADE, 0);
 
-	getGameLoaderInteractionController()->disableFlag24();
+	getGameLoaderInteractionController()->disable();
 	getCurrSceneSc2MotionController()->deactivate();
 }
 
 void sceneHandler14_showBallMan() {
 	if (g_vars->scene14_flyingBall) {
 		g_vars->scene14_flyingBall->show1(g_vars->scene14_dudeX - 166, g_vars->scene14_dudeY + 40, MV_BAL14_TOGMA, 0);
-		g_vars->scene14_flyingBall->_priority = 27;
+		g_vars->scene14_flyingBall->_z = 27;
 
 		MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
-		ExCommand *ex = new ExCommand(ANI_BALL14, 1, MV_BAL14_TOGMA, 0, 0, 0, 1, 0, 0, 0);
+		Command *ex = new Command(ANI_BALL14, 1, MV_BAL14_TOGMA, 0, 0, 0, 1, 0, 0, 0);
 
-		ex->_param = g_vars->scene14_flyingBall->_odelay;
+		ex->_param = g_vars->scene14_flyingBall->_copyId;
 		ex->_excFlags |= 2;
-		ex->_field_24 = 1;
-		mq->addExCommandToEnd(ex);
+		ex->_wait = 1;
+		mq->addCommandToEnd(ex);
 
-		ex = new ExCommand(ANI_BALL14, 6, 0, 0, 0, 0, 1, 0, 0, 0);
-		ex->_param = g_vars->scene14_flyingBall->_odelay;
+		ex = new Command(ANI_BALL14, 6, 0, 0, 0, 0, 1, 0, 0, 0);
+		ex->_param = g_vars->scene14_flyingBall->_copyId;
 		ex->_excFlags |= 3;
-		mq->addExCommandToEnd(ex);
-		mq->chain(nullptr);
+		mq->addCommandToEnd(ex);
+		mq->run(nullptr);
 
-		g_vars->scene14_flyingBall->startAnim(MV_BAL14_TOGMA, 0, -1);
+		g_vars->scene14_flyingBall->startMovement(MV_BAL14_TOGMA, 0, -1);
 
 		g_vars->scene14_balls.push_back(g_vars->scene14_flyingBall);
 		g_vars->scene14_flyingBall = nullptr;
@@ -219,8 +219,8 @@ void sceneHandler14_manKickBall() {
 	g_vars->scene14_ballDeltaY = (g_vars->scene14_grandmaY - 102 - val * val / 2 - (g_vars->scene14_dudeY - 76)) / den;
 
 	g_vars->scene14_flyingBall->show1(g_vars->scene14_dudeX - 85, g_vars->scene14_dudeY - 76, -1, 0);
-	g_vars->scene14_flyingBall->startAnim(MV_BAL14_SPIN, 0, -1);
-	g_vars->scene14_flyingBall->_priority = 5;
+	g_vars->scene14_flyingBall->startMovement(MV_BAL14_SPIN, 0, -1);
+	g_vars->scene14_flyingBall->_z = 5;
 
 	g_vars->scene14_ballIsFlying = true;
 }
@@ -234,9 +234,9 @@ void sceneHandler14_showBallFly() {
 	int x, y;
 
 	if (g_vars->scene14_grandma->_movement) {
-		x = g_vars->scene14_grandma->_movement->_ox;
+		x = g_vars->scene14_grandma->_movement->_x;
 		g_vars->scene14_ballX = x;
-		y = g_vars->scene14_grandma->_movement->_oy;
+		y = g_vars->scene14_grandma->_movement->_y;
 	} else {
 		x = g_vars->scene14_grandmaX;
 		y = g_vars->scene14_grandmaY;
@@ -258,15 +258,15 @@ void sceneHandler14_showBallFly() {
 	g_vars->scene14_ballY = g_vars->scene14_ballDeltaY + y;
 
 	g_vars->scene14_flyingBall->show1(x + 32, g_vars->scene14_ballDeltaY + y, MV_BAL14_SPIN, 0);
-	g_vars->scene14_flyingBall->_priority = 5;
-	g_vars->scene14_flyingBall->startAnim(MV_BAL14_SPIN, 0, -1);
+	g_vars->scene14_flyingBall->_z = 5;
+	g_vars->scene14_flyingBall->startMovement(MV_BAL14_SPIN, 0, -1);
 
 	g_vars->scene14_ballIsFlying = true;
 }
 
 void sceneHandler14_grandmaJump() {
-	BehaviorMove *beh1 = g_nmi->_behaviorManager->getBehaviorMoveByMessageQueueDataId(g_vars->scene14_grandma, ST_GMA_SIT, QU_GMA_JUMPFW);
-	BehaviorMove *beh2 = g_nmi->_behaviorManager->getBehaviorMoveByMessageQueueDataId(g_vars->scene14_grandma, ST_GMA_SIT, QU_GMA_JUMPBK);
+	BehaviorMove *beh1 = g_nmi->_behaviorManager->getAniQueue(g_vars->scene14_grandma, ST_GMA_SIT, QU_GMA_JUMPFW);
+	BehaviorMove *beh2 = g_nmi->_behaviorManager->getAniQueue(g_vars->scene14_grandma, ST_GMA_SIT, QU_GMA_JUMPBK);
 
 	if (beh1) {
 		if (beh2) {
@@ -282,14 +282,14 @@ void sceneHandler14_endArcade() {
 
 	setInputDisabled(0);
 
-	getGameLoaderInteractionController()->enableFlag24();
+	getGameLoaderInteractionController()->enable();
 	getCurrSceneSc2MotionController()->activate();
 
-	BehaviorMove *beh = g_nmi->_behaviorManager->getBehaviorMoveByMessageQueueDataId(g_vars->scene14_grandma, ST_GMA_SIT, QU_GMA_BLINK);
+	BehaviorMove *beh = g_nmi->_behaviorManager->getAniQueue(g_vars->scene14_grandma, ST_GMA_SIT, QU_GMA_BLINK);
 	if (beh)
 		beh->_percent = 327;
 
-	beh = g_nmi->_behaviorManager->getBehaviorMoveByMessageQueueDataId(g_vars->scene14_grandma, ST_GMA_SIT, QU_GMA_THROW);
+	beh = g_nmi->_behaviorManager->getAniQueue(g_vars->scene14_grandma, ST_GMA_SIT, QU_GMA_THROW);
 	if (beh)
 		beh->_percent = 0;
 
@@ -305,7 +305,7 @@ void sceneHandler14_endArcade() {
 void sceneHandler14_winArcade() {
 	if (g_vars->scene14_arcadeIsOn) {
 		if (g_vars->scene14_dudeIsKicking) {
-			g_nmi->_aniMan->changeStatics2(ST_MAN_RIGHT | 0x4000);
+			g_nmi->_aniMan->setStatic(ST_MAN_RIGHT | 0x4000);
 
 			g_vars->scene14_dudeIsKicking = false;
 		}
@@ -323,9 +323,9 @@ void sceneHandler14_winArcade() {
 
 		g_vars->scene14_grandmaIsHere = false;
 
-		if (g_nmi->getObjectState(sO_Grandma) == g_nmi->getObjectEnumState(sO_Grandma, sO_In_14)) {
-			g_nmi->setObjectState(sO_Grandma, g_nmi->getObjectEnumState(sO_Grandma, sO_In_15));
-			g_vars->scene14_grandma->changeStatics2(ST_GMA_SIT);
+		if (g_nmi->getStateId(sO_Grandma) == g_nmi->getStateValue(sO_Grandma, sO_In_14)) {
+			g_nmi->setState(sO_Grandma, g_nmi->getStateValue(sO_Grandma, sO_In_15));
+			g_vars->scene14_grandma->setStatic(ST_GMA_SIT);
 			g_vars->scene14_grandma->_flags &= 0xFFFB;
 		}
 
@@ -342,7 +342,7 @@ void sceneHandler14_winArcade() {
 void sceneHandler14_showBallLast() {
 	if (g_vars->scene14_pink) {
 		g_vars->scene14_pink->show1(693, 491, MV_BAL14_SPIN, 0);
-		g_vars->scene14_pink->_priority = 27;
+		g_vars->scene14_pink->_z = 27;
 	}
 }
 
@@ -359,13 +359,13 @@ void sceneHandler14_startArcade() {
 	g_vars->scene14_dudeCanKick = true;
 
 	if (g_nmi->_aniMan->_movement) {
-		g_nmi->_aniMan->changeStatics2(ST_MAN_RIGHT | 0x4000);
-		g_nmi->_aniMan->setOXY(1237, 451);
-		g_nmi->_aniMan->_priority = 25;
+		g_nmi->_aniMan->setStatic(ST_MAN_RIGHT | 0x4000);
+		g_nmi->_aniMan->setPos(1237, 451);
+		g_nmi->_aniMan->_z = 25;
 	}
 
 	getCurrSceneSc2MotionController()->deactivate();
-	getGameLoaderInteractionController()->disableFlag24();
+	getGameLoaderInteractionController()->disable();
 
 	g_nmi->_aniMan2 = nullptr;
 	g_vars->scene14_sceneDeltaX = 50;
@@ -373,7 +373,7 @@ void sceneHandler14_startArcade() {
 	g_vars->scene14_hitsLeft = 4;
 	g_vars->scene14_pink = nullptr;
 
-	chainQueue(QU_SC14_STARTARCADE, 0);
+	runQueue(QU_SC14_STARTARCADE, 0);
 
 	g_nmi->_updateScreenCallback = sceneHandler14_updateScreenCallback;
 }
@@ -387,17 +387,17 @@ void sceneHandler14_kickAnimation() {
 	if (g_nmi->_aniMan->_movement) {
 		sceneHandler14_clearCallback();
 
-		if (g_vars->scene14_flyingBall && g_vars->scene14_dudeX - g_vars->scene14_flyingBall->_ox < 180) {
-			g_nmi->_aniMan->changeStatics2(g_nmi->_aniMan->_movement->_staticsObj2->_staticsId);
-			g_nmi->_aniMan->startAnim(MV_MAN14_KICK, 0, -1);
+		if (g_vars->scene14_flyingBall && g_vars->scene14_dudeX - g_vars->scene14_flyingBall->_x < 180) {
+			g_nmi->_aniMan->setStatic(g_nmi->_aniMan->_movement->_nextStatic->_staticsId);
+			g_nmi->_aniMan->startMovement(MV_MAN14_KICK, 0, -1);
 
 			g_vars->scene14_ballIsFlying = false;
 
-			g_vars->scene14_flyingBall->stopAnim_maybe();
+			g_vars->scene14_flyingBall->stopMovement();
 			g_vars->scene14_flyingBall->hide();
 		} else {
-			g_nmi->_aniMan->changeStatics2(g_nmi->_aniMan->_movement->_staticsObj2->_staticsId);
-			g_nmi->_aniMan->startAnim(MV_MAN14_KICKAIR, 0, -1);
+			g_nmi->_aniMan->setStatic(g_nmi->_aniMan->_movement->_nextStatic->_staticsId);
+			g_nmi->_aniMan->startMovement(MV_MAN14_KICKAIR, 0, -1);
 		}
 	}
 }
@@ -421,13 +421,13 @@ void sceneHandler14_dudeDecline() {
 	g_vars->scene14_mouseCursorPos.y = g_nmi->_mouseVirtY;
 
 	g_nmi->_aniMan->_callback2 = sceneHandler14_declineCallback;
-	g_nmi->_aniMan->changeStatics2(ST_MAN_RIGHT | 0x4000);
-	g_nmi->_aniMan->startAnim(MV_MAN14_DECLINE, 0, -1);
+	g_nmi->_aniMan->setStatic(ST_MAN_RIGHT | 0x4000);
+	g_nmi->_aniMan->startMovement(MV_MAN14_DECLINE, 0, -1);
 
 	g_vars->scene14_dudeIsKicking = true;
 }
 
-bool sceneHandler14_arcadeProcessClick(ExCommand *cmd) {
+bool sceneHandler14_arcadeProcessClick(Command *cmd) {
 	if (!getCurrSceneSc2MotionController()->_isEnabled)
 		return 0;
 
@@ -435,9 +435,9 @@ bool sceneHandler14_arcadeProcessClick(ExCommand *cmd) {
 		if (!cmd->_param) {
 			if (g_vars->scene14_pink) {
 				if (g_vars->scene14_pink->_flags & 4) {
-					if (cmd->_sceneClickX < g_vars->scene14_pink->_ox + 40) {
+					if (cmd->_sceneClickX < g_vars->scene14_pink->_x + 40) {
 						handleObjectInteraction(g_nmi->_aniMan, g_vars->scene14_pink, 0);
-						cmd->_messageKind = 0;
+						cmd->_cmd = 0;
 						return true;
 					}
 				}
@@ -449,7 +449,7 @@ bool sceneHandler14_arcadeProcessClick(ExCommand *cmd) {
 	if (getCurrSceneSc2MotionController()->_objtype != kObjTypeMctlCompound)
 		return false;
 
-	if (!getCurrSceneSc2MotionController()->_motionControllers[0]->_movGraphReactObj->pointInRegion(cmd->_sceneClickX, cmd->_sceneClickY))
+	if (!getCurrSceneSc2MotionController()->_motionControllers[0]->_movGraphReactObj->hitTest(cmd->_sceneClickX, cmd->_sceneClickY))
 		return false;
 
 	if (cmd->_sceneClickX > 1237)
@@ -460,54 +460,54 @@ bool sceneHandler14_arcadeProcessClick(ExCommand *cmd) {
 	if (!mq)
 		return false;
 
-	ExCommand *ex = new ExCommand(0, 17, MSG_SC14_STARTARCADE, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex = new Command(0, 17, MSG_SC14_STARTARCADE, 0, 0, 0, 1, 0, 0, 0);
 
 	ex->_excFlags |= 3;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 	mq->setFlags(mq->getFlags() | 1);
 
 	postExCommand(g_nmi->_aniMan->_id, 2, 1237, 451, 0, -1);
 
-	cmd->_messageKind = 0;
+	cmd->_cmd = 0;
 
 	getCurrSceneSc2MotionController()->deactivate();
-	getGameLoaderInteractionController()->disableFlag24();
+	getGameLoaderInteractionController()->disable();
 	return true;
 }
 
 void sceneHandler14_grandmaThrow() {
-	g_vars->scene14_grandma->changeStatics2(ST_GMA_SIT);
+	g_vars->scene14_grandma->setStatic(ST_GMA_SIT);
 
 	MessageQueue *mq = new MessageQueue(0);
-	ExCommand *ex = new ExCommand(ANI_GRANDMA, 2, 30, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex = new Command(ANI_GRANDMA, 2, 30, 0, 0, 0, 1, 0, 0, 0);
 
 	ex->_excFlags |= 2;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(ANI_GRANDMA, 1, MV_GMA_THROW, 0, 0, 0, 1, 0, 0, 0);
+	ex = new Command(ANI_GRANDMA, 1, MV_GMA_THROW, 0, 0, 0, 1, 0, 0, 0);
 	ex->_excFlags |= 2;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	mq->chain(nullptr);
+	mq->run(nullptr);
 }
 
 void sceneHandler14_passToGrandma() {
-	g_vars->scene14_flyingBall->stopAnim_maybe();
-	g_vars->scene14_flyingBall->_priority = 27;
+	g_vars->scene14_flyingBall->stopMovement();
+	g_vars->scene14_flyingBall->_z = 27;
 
 	MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
-	ExCommand *ex = new ExCommand(ANI_BALL14, 1, MV_BAL14_FALL, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex = new Command(ANI_BALL14, 1, MV_BAL14_FALL, 0, 0, 0, 1, 0, 0, 0);
 
-	ex->_param = g_vars->scene14_flyingBall->_odelay;
+	ex->_param = g_vars->scene14_flyingBall->_copyId;
 	ex->_excFlags |= 2;
-	ex->_field_24 = 1;
-	mq->addExCommandToEnd(ex);
+	ex->_wait = 1;
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(ANI_BALL14, 6, 0, 0, 0, 0, 1, 0, 0, 0);
-	ex->_param = g_vars->scene14_flyingBall->_odelay;
+	ex = new Command(ANI_BALL14, 6, 0, 0, 0, 0, 1, 0, 0, 0);
+	ex->_param = g_vars->scene14_flyingBall->_copyId;
 	ex->_excFlags |= 3;
-	mq->addExCommandToEnd(ex);
-	mq->chain(nullptr);
+	mq->addCommandToEnd(ex);
+	mq->run(nullptr);
 
 	g_vars->scene14_balls.push_back(g_vars->scene14_flyingBall);
 	g_vars->scene14_flyingBall = nullptr;
@@ -516,23 +516,23 @@ void sceneHandler14_passToGrandma() {
 }
 
 void sceneHandler14_grandmaJumpThrow() {
-	g_vars->scene14_grandma->changeStatics2(ST_GMA_SIT);
+	g_vars->scene14_grandma->setStatic(ST_GMA_SIT);
 
 	MessageQueue *mq = new MessageQueue(0);
-	ExCommand *ex = new ExCommand(ANI_GRANDMA, 2, 30, 0, 0, 0, 1, 0, 0, 0);
+	Command *ex = new Command(ANI_GRANDMA, 2, 30, 0, 0, 0, 1, 0, 0, 0);
 
 	ex->_excFlags |= 2;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(ANI_GRANDMA, 1, MV_GMA_JUMPFW, 0, 0, 0, 1, 0, 0, 0);
+	ex = new Command(ANI_GRANDMA, 1, MV_GMA_JUMPFW, 0, 0, 0, 1, 0, 0, 0);
 	ex->_excFlags |= 2;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	ex = new ExCommand(ANI_GRANDMA, 1, MV_GMA_THROW, 0, 0, 0, 1, 0, 0, 0);
+	ex = new Command(ANI_GRANDMA, 1, MV_GMA_THROW, 0, 0, 0, 1, 0, 0, 0);
 	ex->_excFlags |= 2;
-	mq->addExCommandToEnd(ex);
+	mq->addCommandToEnd(ex);
 
-	mq->chain(nullptr);
+	mq->run(nullptr);
 
 	g_vars->scene14_dude2X += 71;
 	g_nmi->_currentScene->_x = 71;
@@ -544,9 +544,9 @@ void sceneHandler14_dudeFall() {
 	if (!g_nmi->_aniMan->_movement || g_nmi->_aniMan->_movement->_id != MV_MAN14_FALL) {
 		sceneHandler14_clearCallback();
 
-		g_nmi->_aniMan->changeStatics2(ST_MAN_RIGHT | 0x4000);
-		g_nmi->_aniMan->startAnim(MV_MAN14_FALL, 0, -1);
-		g_vars->scene14_flyingBall->stopAnim_maybe();
+		g_nmi->_aniMan->setStatic(ST_MAN_RIGHT | 0x4000);
+		g_nmi->_aniMan->startMovement(MV_MAN14_FALL, 0, -1);
+		g_vars->scene14_flyingBall->stopMovement();
 		g_vars->scene14_flyingBall->hide();
 
 		sceneHandler14_grandmaJumpThrow();
@@ -555,8 +555,8 @@ void sceneHandler14_dudeFall() {
 }
 
 void sceneHandler14_grandmaStepForward() {
-	g_nmi->_aniMan->changeStatics2(ST_MAN_RIGHT | 0x4000);
-	g_nmi->_aniMan->startAnim(MV_MAN14_STEPFW, 0, -1);
+	g_nmi->_aniMan->setStatic(ST_MAN_RIGHT | 0x4000);
+	g_nmi->_aniMan->startMovement(MV_MAN14_STEPFW, 0, -1);
 
 	g_vars->scene14_dude2X -= 71;
 
@@ -565,7 +565,7 @@ void sceneHandler14_grandmaStepForward() {
 }
 
 void sceneHandler14_arcadeLogic() {
-	g_vars->scene14_flyingBall->stopAnim_maybe();
+	g_vars->scene14_flyingBall->stopMovement();
 	g_vars->scene14_flyingBall->hide();
 
 	if (g_vars->scene14_dudeIsKicking)
@@ -579,38 +579,38 @@ void sceneHandler14_arcadeLogic() {
 		g_vars->scene14_dudeCanKick = false;
 		g_nmi->_aniMan2 = nullptr;
 
-		chainQueue(QU_SC14_WINARCADE, 1);
+		runQueue(QU_SC14_WINARCADE, 1);
 
 		--g_vars->scene14_hitsLeft;
 	} else {
-		ExCommand *ex;
+		Command *ex;
 
-		g_vars->scene14_grandma->changeStatics2(ST_GMA_SIT);
+		g_vars->scene14_grandma->setStatic(ST_GMA_SIT);
 
 		if (g_vars->scene14_hitsLeft != 3 || g_vars->scene14_pink) {
 			MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
 
-			ex = new ExCommand(ANI_GRANDMA, 1, MV_GMA_BACKOFF, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(ANI_GRANDMA, 1, MV_GMA_BACKOFF, 0, 0, 0, 1, 0, 0, 0);
 			ex->_excFlags |= 2;
-			mq->addExCommandToEnd(ex);
+			mq->addCommandToEnd(ex);
 
-			ex = new ExCommand(ANI_GRANDMA, 1, MV_GMA_THROW, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(ANI_GRANDMA, 1, MV_GMA_THROW, 0, 0, 0, 1, 0, 0, 0);
 			ex->_excFlags |= 2;
-			mq->addExCommandToEnd(ex);
+			mq->addCommandToEnd(ex);
 
-			mq->chain(nullptr);
+			mq->run(nullptr);
 		} else {
 			MessageQueue *mq = new MessageQueue(g_nmi->_globalMessageQueueList->compact());
 
-			ex = new ExCommand(ANI_GRANDMA, 1, MV_GMA_BACKOFF2, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(ANI_GRANDMA, 1, MV_GMA_BACKOFF2, 0, 0, 0, 1, 0, 0, 0);
 			ex->_excFlags |= 2;
-			mq->addExCommandToEnd(ex);
+			mq->addCommandToEnd(ex);
 
-			ex = new ExCommand(ANI_GRANDMA, 1, MV_GMA_THROW, 0, 0, 0, 1, 0, 0, 0);
+			ex = new Command(ANI_GRANDMA, 1, MV_GMA_THROW, 0, 0, 0, 1, 0, 0, 0);
 			ex->_excFlags |= 2;
-			mq->addExCommandToEnd(ex);
+			mq->addCommandToEnd(ex);
 
-			mq->chain(nullptr);
+			mq->run(nullptr);
 		}
 
 		sceneHandler14_grandmaStepForward();
@@ -632,9 +632,9 @@ void sceneHandler14_animateBall() {
 			if (g_vars->scene14_ballDeltaX >= 0 || x >= g_vars->scene14_grandmaX + 65
 					|| x <= g_vars->scene14_grandmaX - 135 || y <= g_vars->scene14_grandmaY - 102) {
 				if (g_vars->scene14_flyingBall->_movement)
-					g_vars->scene14_flyingBall->_movement->setOXY(x, y);
+					g_vars->scene14_flyingBall->_movement->setPos(x, y);
 				else
-					g_vars->scene14_flyingBall->setOXY(x, y);
+					g_vars->scene14_flyingBall->setPos(x, y);
 			} else {
 				sceneHandler14_arcadeLogic();
 				g_vars->scene14_ballIsFlying = false;
@@ -649,8 +649,8 @@ void sceneHandler14_animateBall() {
 	}
 }
 
-int sceneHandler14(ExCommand *cmd) {
-	if (cmd->_messageKind != 17)
+int sceneHandler14(Command *cmd) {
+	if (cmd->_cmd != 17)
 		return 0;
 
 	switch(cmd->_messageNum) {
@@ -754,27 +754,27 @@ int sceneHandler14(ExCommand *cmd) {
 			Movement *mov = g_nmi->_aniMan->_movement;
 
 			if (mov) {
-				g_vars->scene14_dudeX = mov->_ox;
-				g_vars->scene14_dudeY = mov->_oy;
+				g_vars->scene14_dudeX = mov->_x;
+				g_vars->scene14_dudeY = mov->_y;
 
 				if (mov->_id == MV_MAN14_KICK)
-					g_vars->scene14_dudeX = mov->_ox + 2 * g_nmi->_aniMan->_movement->_currDynamicPhaseIndex;
+					g_vars->scene14_dudeX = mov->_x + 2 * g_nmi->_aniMan->_movement->_curFrame;
 			} else {
-				g_vars->scene14_dudeX = g_nmi->_aniMan->_ox;
-				g_vars->scene14_dudeY = g_nmi->_aniMan->_oy;
+				g_vars->scene14_dudeX = g_nmi->_aniMan->_x;
+				g_vars->scene14_dudeY = g_nmi->_aniMan->_y;
 			}
 
 			mov = g_vars->scene14_grandma->_movement;
 			if (mov) {
-				g_vars->scene14_grandmaX = mov->_ox;
-				g_vars->scene14_grandmaY = mov->_oy;
+				g_vars->scene14_grandmaX = mov->_x;
+				g_vars->scene14_grandmaY = mov->_y;
 			} else {
-				g_vars->scene14_grandmaX = g_vars->scene14_grandma->_ox;
-				g_vars->scene14_grandmaY = g_vars->scene14_grandma->_oy;
+				g_vars->scene14_grandmaX = g_vars->scene14_grandma->_x;
+				g_vars->scene14_grandmaY = g_vars->scene14_grandma->_y;
 			}
 
 			if (g_nmi->_aniMan2) {
-				int x = g_nmi->_aniMan2->_ox;
+				int x = g_nmi->_aniMan2->_x;
 				g_vars->scene14_dude2X = x;
 
 				if (x < g_nmi->_sceneRect.left + g_vars->scene14_sceneDeltaX) {
@@ -791,7 +791,7 @@ int sceneHandler14(ExCommand *cmd) {
 			if (g_vars->scene14_ballIsFlying)
 				sceneHandler14_animateBall();
 
-			g_nmi->_behaviorManager->updateBehaviors();
+			g_nmi->_behaviorManager->update();
 			g_nmi->startSceneTrack();
 		}
 		break;
@@ -809,23 +809,23 @@ int sceneHandler14(ExCommand *cmd) {
 
 	case 29:
 		if (g_vars->scene14_arcadeIsOn) {
-			if (g_vars->scene14_dudeCanKick && g_nmi->_aniMan->isPixelHitAtPos(cmd->_sceneClickX, cmd->_sceneClickY) && !g_nmi->_aniMan->_movement) {
+			if (g_vars->scene14_dudeCanKick && g_nmi->_aniMan->hit(cmd->_sceneClickX, cmd->_sceneClickY) && !g_nmi->_aniMan->_movement) {
 				sceneHandler14_dudeDecline();
 				break;
 			}
 		} else {
-			StaticANIObject *ani = g_nmi->_currentScene->getStaticANIObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
+			AniObject *ani = g_nmi->_currentScene->findAniObjectAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
 
 			if (ani && ani->_id == ANI_LIFTBUTTON) {
 				g_nmi->lift_animateButton(ani);
-				cmd->_messageKind = 0;
+				cmd->_cmd = 0;
 				break;
 			}
 
 			if (!sceneHandler14_arcadeProcessClick(cmd) && (!ani || !canInteractAny(g_nmi->_aniMan, ani, cmd->_param))) {
 				int picId = g_nmi->_currentScene->getPictureObjectIdAtPos(cmd->_sceneClickX, cmd->_sceneClickY);
 
-				PictureObject *pic = g_nmi->_currentScene->getPictureObjectById(picId, 0);
+				PictureObject *pic = g_nmi->_currentScene->findPictureObjectById(picId, 0);
 
 				if (!pic || !canInteractAny(g_nmi->_aniMan, pic, cmd->_param)) {
 					if ((g_nmi->_sceneRect.right - cmd->_sceneClickX < 47 && g_nmi->_sceneRect.right < g_nmi->_sceneWidth - 1)

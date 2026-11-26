@@ -1,0 +1,163 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/file.h"
+#include "common/system.h"
+#include "common/translation.h"
+#include "graphics/paletteman.h"
+#include "ultima/ultima2/data/data.h"
+#include "ultima/ultima2/gfx/dungeon_pictures.h"
+
+namespace Ultima {
+namespace Ultima2 {
+namespace Data {
+
+const byte CGA_PALETTE1[4 * 3] = {
+	0x00, 0x00, 0x00, // 0: black
+	0x55, 0xff, 0xff, // 1: light cyan
+	0xff, 0x55, 0xff, // 2: light magenta
+	0xff, 0xff, 0xff  // 3: white
+};
+
+const char *const RENDER_MODE_NAMES[RENDER_MODE_COUNT] = {
+	"Original", "Composite", "EGA", "EGA (v1.0)", "EGA (Wiltshire)", "EGA (C64)"
+};
+
+const char *const RENDER_MODE_LABELS[RENDER_MODE_COUNT] = {
+	_s("Original (CGA)"), _s("Composite monitor (CGA)"), _s("Standard EGA"),
+	_s("Classic EGA (v1.0)"), _s("Alternate EGA (Wiltshire Dragon)"), _s("Commodore 64")
+};
+
+// The standard 16-color EGA/VGA palette
+const byte EGA_PALETTE16[EGA_PALETTE_SIZE * 3] = {
+	0x00, 0x00, 0x00, // 0: black
+	0x00, 0x00, 0xaa, // 1: blue
+	0x00, 0xaa, 0x00, // 2: green
+	0x00, 0xaa, 0xaa, // 3: cyan
+	0xaa, 0x00, 0x00, // 4: red
+	0xaa, 0x00, 0xaa, // 5: magenta
+	0xaa, 0x55, 0x00, // 6: brown
+	0xaa, 0xaa, 0xaa, // 7: light gray
+	0x55, 0x55, 0x55, // 8: dark gray
+	0x55, 0x55, 0xff, // 9: light blue
+	0x55, 0xff, 0x55, // 10: light green
+	0x55, 0xff, 0xff, // 11: light cyan
+	0xff, 0x55, 0x55, // 12: light red
+	0xff, 0x55, 0xff, // 13: light magenta
+	0xff, 0xff, 0x55, // 14: yellow
+	0xff, 0xff, 0xff  // 15: white
+};
+
+const char *const PLANET_NAMES[PLANET_COUNT] = {
+	"Earth", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"
+};
+
+const byte PLANET_COORDS[PLANET_COUNT + 1][3] = {
+	{ 6, 6, 6 }, { 5, 4, 5 }, { 3, 3, 4 }, { 6, 2, 3 }, { 1, 3, 4 },
+	{ 2, 8, 5 }, { 9, 4, 6 }, { 4, 0, 5 }, { 0, 1, 4 }, { 9, 9, 9 }
+};
+
+// CGACOMP.PAL is a standard VGA palette file: 256 entries of 6-bit R, G, B.
+// The composite decode only ever produces the first 16
+static void loadCompositePalette(Graphics::Palette &palette) {
+	Common::File f;
+	if (!f.open("cgacomp.pal"))
+		return;
+
+	for (int i = 0; i < COMPOSITE_PALETTE_SIZE; ++i) {
+		byte rgb[3];
+		if (f.read(rgb, 3) != 3)
+			return;
+
+		for (int c = 0; c < 3; ++c)
+			rgb[c] = (rgb[c] << 2) | (rgb[c] >> 4);
+		palette.set(rgb, COMPOSITE_PALETTE_BASE + i, 1);
+	}
+}
+
+void setPalette() {
+	Graphics::Palette palette(COMPOSITE_PALETTE_BASE + COMPOSITE_PALETTE_SIZE);
+	palette.set(CGA_PALETTE1, 0, 4);
+
+	const byte green[3] = { 0x55, 0xff, 0x55 };
+	palette.set(green, PALETTE_PLAYER_MARKER, 1);
+
+	palette.set(EGA_PALETTE16, EGA_PALETTE_BASE, EGA_PALETTE_SIZE);
+	loadCompositePalette(palette);
+	Gfx::DungeonPictures::loadPalette(palette);
+	g_system->getPaletteManager()->setPalette(palette);
+}
+
+const char *const RACE_NAMES[RACE_COUNT] = {
+	"Human", "Elf", "Dwarf", "Hobbit"
+};
+
+const char *const CLASS_NAMES[CLASS_COUNT] = {
+	"Fighter", "Cleric", "Wizard", "Thief"
+};
+
+const char *const WEAPON_NAMES[WEAPON_COUNT] = {
+	"Hands", "Dagger", "Mace", "Axe", "Bow", "Sword",
+	"Great Sword", "Light Sword", "Phaser", "Quick Sword"
+};
+
+const char *const ARMOR_NAMES[ARMOR_COUNT] = {
+	"Skin", "Cloth", "Leather", "Chain", "Plate", "Reflect", "Power"
+};
+
+const char *const SPELL_NAMES[SPELL_COUNT] = {
+	"None", "Light", "Down Ladder", "Up Ladder", "PassWall",
+	"Surface", "Prayer", "Magic Missile", "Blink", "Kill"
+};
+
+const char *const ITEM_NAMES[ITEM_COUNT] = {
+	"Ring", "Wand", "Staff", "Boots", "Cloak", "Helm", "Gem", "Ankh",
+	"Red Gem", "Skull Key", "Green Gem", "Brass Button", "Blue Tassle",
+	"Strange Coin", "Green Idol", "Tri-lithium"
+};
+
+const char *raceName(Race race) {
+	return (race < RACE_COUNT) ? RACE_NAMES[race] : "";
+}
+
+const char *className(CharClass charClass) {
+	return (charClass < CLASS_COUNT) ? CLASS_NAMES[charClass] : "";
+}
+
+const char *weaponName(WeaponType weapon) {
+	return (weapon < WEAPON_COUNT) ? WEAPON_NAMES[weapon] : "";
+}
+
+const char *armorName(ArmorType armor) {
+	return (armor < ARMOR_COUNT) ? ARMOR_NAMES[armor] : "";
+}
+
+const char *spellName(SpellType spell) {
+	return (spell < SPELL_COUNT) ? SPELL_NAMES[spell] : "";
+}
+
+const char *itemName(int item) {
+	return (item >= 0 && item < ITEM_COUNT) ? ITEM_NAMES[item] : "";
+}
+
+} // namespace Data
+} // namespace Ultima2
+} // namespace Ultima

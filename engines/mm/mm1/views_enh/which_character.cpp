@@ -45,8 +45,7 @@ void WhichCharacter::draw() {
 	}
 
 	PartyView::draw();
-	writeString(10, 5, STRING[g_events->isInCombat() ?
-		"enhdialogs.misc.exchange" : "enhdialogs.trade.dest"]);
+	writeString(10, 5, g_events->isInCombat() ? "Exchange with whom?" : "Trade to whom?");
 }
 
 bool WhichCharacter::msgAction(const ActionMessage &msg) {
@@ -64,8 +63,15 @@ bool WhichCharacter::msgAction(const ActionMessage &msg) {
 	case KEYBIND_VIEW_PARTY6: {
 		uint charNum = msg._action - KEYBIND_VIEW_PARTY1;
 		if (charNum < g_globals->_party.size()) {
-			close();
-			selectCharacter(charNum);
+			if (dynamic_cast<Combat *>(g_events->priorView()) != nullptr) {
+				// Apply the exchange before closing so Combat
+				// redraws the updated party order immediately.
+				send("Combat", GameMessage("EXCHANGE", charNum));
+				close();
+			} else {
+				close();
+				selectCharacter(charNum);
+			}
 		}
 		return true;
 	}

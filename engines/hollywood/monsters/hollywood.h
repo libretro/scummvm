@@ -1,0 +1,138 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef HOLLYWOOD_MONSTERS_HOLLYWOOD_H
+#define HOLLYWOOD_MONSTERS_HOLLYWOOD_H
+
+#include "common/language.h"
+#include "common/platform.h"
+#include "engines/engine.h"
+#include "graphics/surface.h"
+
+#include "hollywood/monsters/gameplay/cursor.h"
+#include "hollywood/monsters/gameplay/game_state.h"
+#include "hollywood/monsters/game_strings.h"
+#include "hollywood/monsters/music.h"
+#include "hollywood/text_translation.h"
+
+struct ADGameDescription;
+
+namespace Common {
+class Serializer;
+}
+
+namespace Hollywood {
+
+class GameplayLoopDelegate;
+class HollywoodFont;
+
+class HollywoodEngine : public Engine {
+public:
+	HollywoodEngine(OSystem *syst, const ADGameDescription *gameDesc);
+	~HollywoodEngine() override;
+
+	Common::Error run() override;
+	void initializePath(const Common::FSNode &gamePath) override;
+	bool hasFeature(EngineFeature f) const override;
+	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
+	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
+	Common::Error loadGameStream(Common::SeekableReadStream *stream) override;
+	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave = false) override;
+	void syncSoundSettings() override;
+	void syncSoundSettingsFromGameState();
+
+	const ADGameDescription *getGameDescription() const { return _gameDescription; }
+	const char *getGameId() const;
+	Common::Language getLanguage() const;
+	Common::Platform getPlatform() const;
+	bool isDemo() const;
+	bool isFirstEdition() const;
+	bool hasSpeechData() const;
+	const TextTranslation *textTranslation() const { return &_translation; }
+	const HollywoodGameStrings &gameStrings() const { return _gameStrings; }
+	bool setSubtitleLanguage(const Common::String &language);
+	void cycleSubtitleLanguage();
+	Common::String nextSubtitleLanguageName() const;
+
+	HollywoodFont *font() const { return _font; }
+	HollywoodCursor *cursor() { return &_cursor; }
+	MusicPlayer *introMusic() { return &_introMusic; }
+	MusicPlayer *gameplayMusic() { return &_gameplayMusic; }
+	GameplayState &gameState() { return _gameState; }
+	const GameplayState &gameState() const { return _gameState; }
+	bool subtitlesEnabled() const;
+	bool restoredContentEnabled() const { return _restoredContent; }
+	bool positionalAudioEnabled() const { return _positionalAudio; }
+	void captureLastGameplayThumbnail();
+	bool copyLastGameplayThumbnail(Graphics::Surface &thumbnail) const;
+	bool isSceneRestartRequested() const { return _sceneRestartRequested; }
+	void requestSceneRestart() { _sceneRestartRequested = true; }
+	void clearSceneRestartRequest() { _sceneRestartRequested = false; }
+	void requestDebugSceneSolve(uint16 sceneNumber) { _debugSceneSolveRequest = sceneNumber; }
+	bool consumeDebugSceneSolveRequest(uint16 sceneNumber);
+	byte nextScene7100RescueFailureVariant() {
+		_scene7100RescueFailureVariant = !_scene7100RescueFailureVariant;
+		return _scene7100RescueFailureVariant ? 1 : 0;
+	}
+	bool canSave() const { return _canSave; }
+	void setCanSave(bool canSave) { _canSave = canSave; }
+	void drawSceneHotspots(const GameplayLoopDelegate *scene = nullptr);
+
+	enum {
+		kScreenWidth = 640,
+		kScreenHeight = 480,
+		kSceneBufferWidth = 1024,
+		kSceneBufferHeight = 480,
+		kSceneItemCount = 21
+	};
+
+protected:
+	void getHotspotPositions(Common::Array<Graphics::HotspotInfo> &hotspots) override;
+	Graphics::HotspotRenderer *createHotspotRenderer() override;
+	bool hideCursorForHotspots() const override { return false; }
+
+private:
+	uint nextSubtitleLanguageIndex() const;
+	Common::Error syncGameStream(Common::Serializer &s);
+	void normalizeLoadedGameState();
+
+	const ADGameDescription *_gameDescription;
+	const bool _restoredContent;
+	const bool _positionalAudio;
+	TextTranslation _translation;
+	HollywoodGameStrings _gameStrings;
+	HollywoodFont *_font;
+	HollywoodCursor _cursor;
+	MusicPlayer _introMusic;
+	MusicPlayer _gameplayMusic;
+	GameplayState _gameState;
+	Graphics::Surface _lastGameplayThumbnail;
+	bool _lastGameplayThumbnailValid;
+	bool _sceneRestartRequested;
+	uint16 _debugSceneSolveRequest;
+	bool _scene7100RescueFailureVariant;
+	bool _canSave;
+	const GameplayLoopDelegate *_hotspotScene;
+};
+
+} // End of namespace Hollywood
+
+#endif // HOLLYWOOD_MONSTERS_HOLLYWOOD_H

@@ -19,6 +19,7 @@
  *
  */
 
+#include "common/array.h"
 #include "common/random.h"
 #include "common/stream.h"
 #include "common/textconsole.h"
@@ -28,7 +29,7 @@
 #include "common/lua/lualib.h"
 
 #include "engines/nancy/nancy.h"
-#include "engines/nancy/resource.h"
+#include "engines/nancy/resource/resource.h"
 
 #include "engines/nancy/script/api.h"
 #include "engines/nancy/script/luastate.h"
@@ -36,8 +37,9 @@
 namespace Nancy {
 namespace Script {
 
-// Registry key of the scene a state belongs to
+// Registry keys of the scene a state belongs to, and of the state itself
 static const char kContextKey = 0;
+static const char kStateKey = 0;
 
 static void openLibrary(lua_State *L, lua_CFunction open, const char *name) {
 	lua_pushcfunction(L, open);
@@ -136,11 +138,209 @@ static int tableSort(lua_State *L) {
 	return 1;
 }
 
+// One part of a sort key of table.keysort(). Nils go first, then numbers,
+// then strings; other values count as nil.
+struct KeySortPart {
+	int type = LUA_TNIL;
+	lua_Number number = 0;
+	const char *string = nullptr;
+};
+
+struct KeySortEntry {
+	Common::Array<KeySortPart> parts;
+	int index = 0;
+};
+
+// Reads the value on top of the stack and pops it. The strings stay valid while
+// the table they are in is on the stack.
+static KeySortPart readKeySortPart(lua_State *L) {
+	KeySortPart part;
+	part.type = lua_type(L, -1);
+	if (part.type == LUA_TNUMBER) {
+		part.number = lua_tonumber(L, -1);
+	} else if (part.type == LUA_TSTRING) {
+		part.string = lua_tostring(L, -1);
+	} else {
+		part.type = LUA_TNIL;
+	}
+
+	lua_pop(L, 1);
+	return part;
+}
+
+static int compareKeySortParts(const KeySortPart &a, const KeySortPart &b, bool ignoreCase) {
+	static const int kOrder[] = { 0, 0, 0, 1, 2 };	// by Lua type: nil, -, -, number, string
+	if (kOrder[a.type] != kOrder[b.type]) {
+		return kOrder[a.type] < kOrder[b.type] ? -1 : 1;
+	}
+
+	if (a.type == LUA_TNUMBER) {
+		return a.number < b.number ? -1 : (a.number > b.number ? 1 : 0);
+	}
+
+	if (a.type == LUA_TSTRING) {
+		return ignoreCase ? scumm_stricmp(a.string, b.string) : strcmp(a.string, b.string);
+	}
+
+	return 0;
+}
+
+// Keys compare part by part; a key that runs out of parts first goes first
+static bool keySortsBefore(const KeySortEntry &a, const KeySortEntry &b, bool ignoreCase) {
+	for (uint i = 0; i < a.parts.size(); ++i) {
+		if (i >= b.parts.size()) {
+			return false;
+		}
+
+		const int result = compareKeySortParts(a.parts[i], b.parts[i], ignoreCase);
+		if (result != 0) {
+			return result < 0;
+		}
+	}
+
+	return a.parts.size() < b.parts.size();
+}
+
+// Nancy30's table.keysort(keys, count[, ignoreCase]) sorts the keys 1 to count
+// of the table and gives back their indices in order. A key is a number, a
+// string or an array of them; equal keys keep their order. List:Sort() moves
+// the items of a list with it.
+static int tableKeySort(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	const int count = luaL_checkint(L, 2);
+	const bool ignoreCase = lua_gettop(L) > 2 && lua_toboolean(L, 3);
+
+	Common::Array<KeySortEntry> entries;
+	for (int i = 1; i <= count; ++i) {
+		KeySortEntry entry;
+		entry.index = i;
+
+		lua_rawgeti(L, 1, i);
+		if (lua_istable(L, -1)) {
+			const int numParts = lua_objlen(L, -1);
+			for (int j = 1; j <= numParts; ++j) {
+				lua_rawgeti(L, -1, j);
+				entry.parts.push_back(readKeySortPart(L));
+			}
+
+			lua_pop(L, 1);
+		} else {
+			entry.parts.push_back(readKeySortPart(L));
+		}
+
+		// An insertion sort, which keeps equal keys in their order
+		uint position = entries.size();
+		while (position > 0 && keySortsBefore(entry, entries[position - 1], ignoreCase)) {
+			--position;
+		}
+
+		entries.insert_at(position, entry);
+	}
+
+	lua_createtable(L, count > 0 ? count : 0, 0);
+	for (uint i = 0; i < entries.size(); ++i) {
+		lua_pushinteger(L, entries[i].index);
+		lua_rawseti(L, -2, i + 1);
+	}
+
+	return 1;
+}
+
 // Nancy20's math.isnan(number)
 static int mathIsNaN(lua_State *L) {
 	const lua_Number number = luaL_checknumber(L, 1);
 	lua_pushboolean(L, number != number);
 	return 1;
+}
+
+// Nancy21's string.compare(a, b[, ordered]) and string.comparenocase(): whether
+// the strings are the same, or with "ordered" set, a number below, at or above 0
+static int compareStrings(lua_State *L, bool ignoreCase) {
+	const char *a = luaL_checkstring(L, 1);
+	const char *b = luaL_checkstring(L, 2);
+	const int result = ignoreCase ? scumm_stricmp(a, b) : strcmp(a, b);
+
+	if (lua_gettop(L) > 2 && lua_toboolean(L, 3)) {
+		lua_pushinteger(L, result);
+	} else {
+		lua_pushboolean(L, result == 0);
+	}
+
+	return 1;
+}
+
+static int stringCompare(lua_State *L) {
+	return compareStrings(L, false);
+}
+
+static int stringCompareNoCase(lua_State *L) {
+	return compareStrings(L, true);
+}
+
+static LuaState *getState(lua_State *L) {
+	lua_pushlightuserdata(L, (void *)const_cast<char *>(&kStateKey));
+	lua_rawget(L, LUA_REGISTRYINDEX);
+	LuaState *state = (LuaState *)lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	return state;
+}
+
+// The code of a coroutine runs on a thread of its own. The engine's functions
+// work on the thread that is running, which the two below keep track of; a
+// record that a coroutine reads a field of has to find the key on its stack.
+void LuaState::resume(lua_State *L, int functionIndex) {
+	LuaState *state = getState(L);
+	lua_State *previous = state->_running;
+	state->_running = lua_tothread(L, functionIndex + 1);
+
+	const int status = lua_pcall(L, lua_gettop(L) - functionIndex, LUA_MULTRET, 0);
+	state->_running = previous;
+	if (status != 0) {
+		lua_error(L);
+	}
+}
+
+// coroutine.resume(coroutine, ...)
+int LuaState::resumeCoroutine(lua_State *L) {
+	luaL_argcheck(L, lua_isthread(L, 1), 1, "coroutine expected");
+
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_insert(L, 1);
+	resume(L, 1);
+	return lua_gettop(L);
+}
+
+// coroutine.wrap(function) gives a function that resumes a new coroutine, and
+// raises its errors where it was called, like the one of the library
+int LuaState::wrapCoroutine(lua_State *L) {
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_pushvalue(L, 1);
+	lua_call(L, 1, 1);
+
+	lua_pushvalue(L, lua_upvalueindex(2));
+	lua_pushcclosure(L, callWrappedCoroutine, 2);
+	return 1;
+}
+
+int LuaState::callWrappedCoroutine(lua_State *L) {
+	lua_pushvalue(L, lua_upvalueindex(2));
+	lua_insert(L, 1);
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_insert(L, 2);
+	resume(L, 1);
+
+	if (!lua_toboolean(L, 1)) {
+		lua_settop(L, 2);
+		if (lua_isstring(L, -1)) {
+			luaL_where(L, 1);
+			lua_insert(L, -2);
+			lua_concat(L, 2);
+		}
+
+		lua_error(L);
+	}
+
+	return lua_gettop(L) - 1;
 }
 
 LuaState::LuaState(SceneContext *context) {
@@ -149,6 +349,8 @@ LuaState::LuaState(SceneContext *context) {
 		error("Could not create a Lua state");
 	}
 
+	_running = _state;
+
 	// Scripts get the base, table, string and math libraries, minus what
 	// would let them run other code or reach outside of the game
 	openLibrary(_state, luaopen_base, "");
@@ -156,9 +358,37 @@ LuaState::LuaState(SceneContext *context) {
 	openLibrary(_state, luaopen_string, LUA_STRLIBNAME);
 	openLibrary(_state, luaopen_math, LUA_MATHLIBNAME);
 
+	// resume and wrap go through the originals, the latter through create
+	lua_getglobal(_state, "coroutine");
+	lua_getfield(_state, -1, "create");
+	lua_getfield(_state, -2, "resume");
+	lua_pushvalue(_state, -1);
+	lua_pushcclosure(_state, resumeCoroutine, 1);
+	lua_setfield(_state, -4, "resume");
+	lua_pushcclosure(_state, wrapCoroutine, 2);
+	lua_setfield(_state, -2, "wrap");
+	lua_pop(_state, 1);
+
 	if (g_nancy->getGameType() >= kGameTypeNancy20) {
 		setLibraryFunction(_state, LUA_TABLIBNAME, "sort", tableSort);
 		setLibraryFunction(_state, LUA_MATHLIBNAME, "isnan", mathIsNaN);
+	}
+
+	if (g_nancy->getGameType() >= kGameTypeNancy21) {
+		setLibraryFunction(_state, LUA_STRLIBNAME, "compare", stringCompare);
+		setLibraryFunction(_state, LUA_STRLIBNAME, "comparenocase", stringCompareNoCase);
+	}
+
+	// Nancy30 has the debug library. Introspection_SC reads the local variables
+	// and upvalues of a calling function with debug.getlocal, debug.getinfo and
+	// debug.getupvalue. Lambda_SC compiles functions from strings that see the
+	// variables of the code that made them, which it gets from
+	// Introspection_SC, and adds debug.traceback to the error when one doesn't
+	// compile. The collection scripts (Dict, List, Set, View) use these
+	// lambdas, e.g. to filter and sort.
+	if (g_nancy->getGameType() >= kGameTypeNancy30) {
+		openLibrary(_state, luaopen_debug, LUA_DBLIBNAME);
+		setLibraryFunction(_state, LUA_TABLIBNAME, "keysort", tableKeySort);
 	}
 
 	removeGlobal(_state, "collectgarbage");
@@ -166,6 +396,15 @@ LuaState::LuaState(SceneContext *context) {
 	removeGlobal(_state, "load");
 	removeGlobal(_state, "loadfile");
 	removeGlobal(_state, "print");
+
+	// Nancy1New has loadstring again, which QueryTable_SC builds its lambdas with
+	if (g_nancy->getGameType() == kGameTypeNancy22) {
+		removeGlobal(_state, "loadstring");
+	}
+
+	if (g_nancy->getGameType() >= kGameTypeNancy22) {
+		removeGlobal(_state, "setfenv");
+	}
 
 	// The random numbers of the library come from one generator that all
 	// states share, so it is seeded with the first one
@@ -182,6 +421,10 @@ LuaState::LuaState(SceneContext *context) {
 
 	lua_pushlightuserdata(_state, (void *)const_cast<char *>(&kContextKey));
 	lua_pushlightuserdata(_state, context);
+	lua_rawset(_state, LUA_REGISTRYINDEX);
+
+	lua_pushlightuserdata(_state, (void *)const_cast<char *>(&kStateKey));
+	lua_pushlightuserdata(_state, this);
 	lua_rawset(_state, LUA_REGISTRYINDEX);
 
 	registerAPI(_state);
@@ -212,17 +455,17 @@ bool LuaState::runScript(const Common::String &name) {
 	delete stream;
 
 	Common::String chunkName = "=" + name;
-	int status = luaL_loadbuffer(_state, buffer, size, chunkName.c_str());
+	int status = luaL_loadbuffer(_running, buffer, size, chunkName.c_str());
 	delete[] buffer;
 
 	if (status != 0) {
-		warning("Could not load script %s: %s", name.c_str(), lua_tostring(_state, -1));
-		lua_pop(_state, 1);
+		warning("Could not load script %s: %s", name.c_str(), lua_tostring(_running, -1));
+		lua_pop(_running, 1);
 		return false;
 	}
 
 	Common::String what = "Failed initial run-through of script " + name;
-	return call(_state, 0, 0, what.c_str());
+	return call(_running, 0, 0, what.c_str());
 }
 
 bool LuaState::call(lua_State *L, int numArgs, int numResults, const char *what) {

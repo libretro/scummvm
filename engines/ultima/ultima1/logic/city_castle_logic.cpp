@@ -1,0 +1,803 @@
+
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "ultima/ultima1/logic/city_castle_logic.h"
+#include "ultima/ultima1/core/strings.h"
+#include "ultima/ultima1/metaengine.h"
+#include "ultima/ultima1/ultima1.h"
+
+namespace Ultima {
+namespace Ultima1 {
+namespace Logic {
+
+constexpr int LOCATION_STYLE_COUNT = 10;
+
+// Per map-style sets of widgets to populate a city/castle interior with,
+// indexed by Map::_mapStyle. The first two styles are castles (each has a
+// king and princess); the remaining eight are cities. Unused slots within
+// a style are padded with a _type of -1
+static const Data::LocationEntity CITY_WIDGETS[LOCATION_STYLE_COUNT][Data::LOCATION_ENTITY_COUNT] = {
+	// Style 0 - castle
+	{
+		{ 20, { 33, 4 }, 2000 }, { 22, { 35, 12 }, 1 }, { 17, { 1, 6 }, 500 },
+		{ 17, { 17, 6 }, 500 }, { 17, { 17, 11 }, 500 }, { 17, { 25, 7 }, 500 },
+		{ 17, { 25, 12 }, 500 }, { 17, { 36, 9 }, 500 }, { 19, { 35, 6 }, 1 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }
+	},
+	// Style 1 - castle
+	{
+		{ 20, { 25, 4 }, 2000 }, { 22, { 31, 2 }, 1 }, { 17, { 28, 12 }, 500 },
+		{ 17, { 34, 12 }, 500 }, { 17, { 0, 8 }, 500 }, { 17, { 11, 3 }, 500 },
+		{ 17, { 22, 1 }, 500 }, { 17, { 28, 1 }, 500 }, { 17, { 33, 5 }, 500 },
+		{ 19, { 22, 14 }, 1 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }
+	},
+	// Style 2 - city
+	{
+		{ 19, { 15, 5 }, 1 }, { 50, { 34, 6 }, 1 }, { 17, { 2, 9 }, 500 },
+		{ 17, { 16, 16 }, 500 }, { 17, { 18, 2 }, 500 }, { 17, { 20, 8 }, 500 },
+		{ 17, { 21, 16 }, 500 }, { 17, { 36, 8 }, 500 }, { 21, { 6, 3 }, 1 },
+		{ 21, { 6, 14 }, 1 }, { 21, { 13, 14 }, 1 }, { 21, { 25, 3 }, 1 },
+		{ 21, { 25, 12 }, 1 }, { 21, { 32, 3 }, 1 }, { -1, { 0, 0 }, 0 }
+	},
+	// Style 3 - city
+	{
+		{ 19, { 15, 9 }, 1 }, { 50, { 27, 3 }, 1 }, { 17, { 1, 10 }, 500 },
+		{ 17, { 9, 8 }, 500 }, { 17, { 16, 1 }, 500 }, { 17, { 21, 16 }, 500 },
+		{ 17, { 36, 7 }, 500 }, { 21, { 4, 16 }, 1 }, { 21, { 5, 3 }, 1 },
+		{ 21, { 12, 3 }, 1 }, { 21, { 30, 1 }, 1 }, { 21, { 34, 12 }, 1 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }
+	},
+	// Style 4 - city
+	{
+		{ 19, { 17, 3 }, 1 }, { 50, { 21, 5 }, 1 }, { 17, { 10, 10 }, 500 },
+		{ 17, { 15, 15 }, 500 }, { 17, { 22, 15 }, 500 }, { 17, { 23, 9 }, 500 },
+		{ 21, { 3, 12 }, 1 }, { 21, { 6, 3 }, 1 }, { 21, { 19, 1 }, 1 },
+		{ 21, { 34, 1 }, 1 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }
+	},
+	// Style 5 - city
+	{
+		{ 19, { 19, 12 }, 1 }, { 50, { 24, 3 }, 1 }, { 17, { 1, 7 }, 500 },
+		{ 17, { 1, 11 }, 500 }, { 17, { 8, 16 }, 500 }, { 17, { 14, 7 }, 500 },
+		{ 17, { 29, 16 }, 500 }, { 17, { 36, 11 }, 500 }, { 21, { 4, 1 }, 1 },
+		{ 21, { 12, 1 }, 1 }, { 21, { 17, 1 }, 1 }, { 21, { 22, 1 }, 1 },
+		{ 21, { 28, 1 }, 1 }, { 21, { 34, 1 }, 1 }, { -1, { 0, 0 }, 0 }
+	},
+	// Style 6 - city
+	{
+		{ 17, { 17, 2 }, 500 }, { 17, { 17, 15 }, 500 }, { 17, { 20, 2 }, 500 },
+		{ 17, { 20, 15 }, 500 }, { 21, { 12, 8 }, 1 }, { 21, { 25, 8 }, 1 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }
+	},
+	// Style 7 - city
+	{
+		{ 50, { 20, 4 }, 1 }, { 17, { 1, 1 }, 500 }, { 17, { 1, 16 }, 500 },
+		{ 17, { 8, 9 }, 500 }, { 17, { 16, 15 }, 500 }, { 17, { 18, 10 }, 500 },
+		{ 17, { 21, 15 }, 500 }, { 17, { 29, 9 }, 500 }, { 17, { 36, 1 }, 500 },
+		{ 17, { 36, 16 }, 500 }, { 21, { 8, 4 }, 1 }, { 21, { 9, 13 }, 1 },
+		{ 21, { 18, 2 }, 1 }, { 21, { 28, 13 }, 1 }, { 21, { 29, 4 }, 1 }
+	},
+	// Style 8 - city
+	{
+		{ 19, { 31, 14 }, 1 }, { 50, { 27, 6 }, 1 }, { 17, { 4, 11 }, 500 },
+		{ 17, { 17, 14 }, 500 }, { 17, { 20, 14 }, 500 }, { 21, { 7, 4 }, 1 },
+		{ 21, { 18, 4 }, 1 }, { 21, { 29, 3 }, 1 }, { -1, { 0, 0 }, 0 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 },
+		{ -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }
+	},
+	// Style 9 - city
+	{
+		{ 19, { 19, 10 }, 5 }, { 17, { 6, 12 }, 500 }, { 17, { 6, 15 }, 500 },
+		{ 17, { 7, 7 }, 500 }, { 17, { 9, 5 }, 500 }, { 17, { 28, 17 }, 500 },
+		{ 17, { 37, 8 }, 500 }, { 21, { 1, 13 }, 1 }, { 21, { 4, 1 }, 1 },
+		{ 21, { 16, 1 }, 1 }, { 21, { 24, 1 }, 1 }, { 21, { 33, 16 }, 1 },
+		{ 21, { 34, 1 }, 1 }, { -1, { 0, 0 }, 0 }, { -1, { 0, 0 }, 0 }
+	}
+};
+
+static const int8 DELTA_X[5] = { 0, -1, 1, 0, 0 };
+static const int8 DELTA_Y[5] = { 0, 0, 0, -1, 1 };
+
+
+CityCastleLogic::CityCastleLogic() {
+	// Done here rather than on entering, so it also applies when a savegame inside a location is loaded
+	_G(map).countSurroundingTiles();
+}
+
+void CityCastleLogic::entering() {
+	loadEntities();
+	_G(savegame)._guardsHostile = false;
+	prompt();
+}
+
+void CityCastleLogic::leaving() {
+	// Left the bounds of the map, returning to the overworld
+	_G(map).load(Data::MAP_OVERWORLD);
+}
+
+bool CityCastleLogic::move(Data::Direction dir) {
+	const int deltaX = DELTA_X[dir];
+	const int deltaY = DELTA_Y[dir];
+	const int x = _G(savegame)._locationPosition.x + deltaX;
+	const int y = _G(savegame)._locationPosition.y + deltaY;
+
+	if (x < 0 || y < 0 || x >= Data::CITY_WIDTH || y >= Data::CITY_HEIGHT) {
+		leaving();
+		prompt();		// Called since end of turn processing will be skipped
+		return false;
+
+	} else {
+		int tile = checkAt(x, y);
+
+		if (tile == -1 || tile == Data::CTILE_BLANK) {
+			// Write direction traveled
+			writeString(Common::String::format("%s\n", Data::DIRECTION_NAMES[dir]));
+
+			_G(savegame)._locationPosition = Common::Point(x, y);
+			playFX(4);
+			redrawMap();
+
+		} else {
+			// Can't move in that direction
+			writeString("Blocked!\n");
+			playFX(1);
+		}
+
+		return true;
+	}
+}
+
+void CityCastleLogic::updateCreatures() {
+	Common::Array<int> guardIndexes;
+
+	for (int i = 0; i < Data::LOCATION_ENTITY_COUNT; ++i) {
+		const auto &e = _G(savegame)._locationEntities[i];
+
+		switch (e._type) {
+		case Data::CTILE_BARD:
+			updateBardJester(i);
+			break;
+		case Data::CTILE_WENCH:
+			updateWench(i);
+			break;
+		case Data::CTILE_PRINCESS:
+			updatePrincess(i);
+			break;
+		case Data::CTILE_GUARD:
+			if (_G(savegame)._guardsHostile && !guardMove(i))
+				guardIndexes.push_back(i);
+			break;
+		default:
+			break;
+		}
+	}
+
+	// Handle guards' attacks
+	for (const int index : guardIndexes) {
+		guardAttack(index);
+		if (_G(savegame)._hits <= 0)
+			break;
+	}
+}
+
+void CityCastleLogic::damage(Data::Direction dir, int, int maxDistance, int strike, int hitChance, int) {
+	attackPerson(dir, maxDistance, strike, hitChance);
+}
+
+void CityCastleLogic::attackPerson(Data::Direction dir, int maxDistance, int strike, int hitChance) {
+	playFX(7);
+
+	int deltaX = DELTA_X[dir], deltaY = DELTA_Y[dir];
+	const auto &pos = _G(savegame)._locationPosition;
+
+	// Scan up to maxDistance tiles for whatever's there, just to pick which
+	// "Type! " message to show - stops as soon as anything but open ground
+	// is found
+	int tile = -1;
+	for (int step = 1; step <= maxDistance; ++step) {
+		tile = checkAt(pos.x + deltaX * step, pos.y + deltaY * step);
+		if (tile != -1 && tile != Data::CTILE_BLANK)
+			break;
+	}
+
+	// The actual attack always lands on whatever's directly adjacent,
+	// regardless of how far away the scan above found something - matching
+	// a quirk in the original
+	int idx = _G(savegame).getLocationEntityAt(pos.x + deltaX, pos.y + deltaY);
+	bool hit = (idx != -1) && (getRandomNumber(1, 100) <= hitChance);
+
+	if (!hit) {
+		writeString("Missed!\n");
+		endOfTurn();
+		return;
+	}
+
+	writeString("Hit ");
+	switch (tile) {
+	case Data::CTILE_WENCH:
+		writeString(_G(savegame)._sex == Data::SEX_MALE ? "Wench! " : "Lecher! ");
+		break;
+	case Data::CTILE_BARD:
+		writeString(_G(map)._mapType == Data::MAPTYPE_CITY ? "Bard! " : "Jester! ");
+		break;
+	case Data::CTILE_PRINCESS:
+		writeString("Princess! ");
+		break;
+	case Data::CTILE_MERCHANT:
+		writeString("Merchant! ");
+		break;
+	case Data::CTILE_GUARD:
+		writeString("Guard! ");
+		break;
+	case Data::CTILE_KING_WIDGET:
+		writeString("King! ");
+		break;
+	default:
+		break;
+	}
+
+	_G(savegame)._guardsHostile = 1;
+	playFX(2);
+
+	Data::LocationEntity &e = _G(savegame)._locationEntities[idx];
+	if (strike >= e._hitPoints) {
+		// Killed
+		writeString("Killed!\n");
+
+		if (tile == Data::CTILE_PRINCESS) {
+			_G(savegame)._freeingPrincess = 0;
+		} else {
+			++_G(savegame)._experience;
+			redrawStats();
+		}
+
+		e._type = -1;
+		e._position.x = 127;
+		redrawMap();
+
+		if (tile == Data::CTILE_GUARD)
+			_G(savegame)._experience += 14;
+
+		if (tile == Data::CTILE_BARD && _G(map)._mapType == Data::MAPTYPE_CASTLE) {
+			writeString("Thou hast found a key!\n");
+			_G(savegame)._hasCastleKey = 1;
+		}
+
+	} else {
+		// The king is invincible in Lord British's castle
+		if (!(tile == Data::CTILE_KING_WIDGET && _G(map)._isLordBritishCastle))
+			e._hitPoints -= strike;
+
+		writeString("%d damage!\n", strike);
+	}
+
+	endOfTurn();
+}
+
+bool CityCastleLogic::drop() {
+	g_engine->addView("Drop");
+	return false;
+}
+
+bool CityCastleLogic::get() {
+	writeString("Get");
+
+	if (_G(map)._mapType == Data::MAPTYPE_CASTLE) {
+		const auto &pos = _G(savegame)._locationPosition;
+
+		switch (_G(map).getTileAt(pos.x, pos.y)) {
+		case Data::CTILE_STEAL_WEAPON:
+			if (checkCastlePermission())
+				findWeapon(false);
+			break;
+		case Data::CTILE_STEAL_ARMOR:
+			if (checkCastlePermission())
+				findArmor(false);
+			break;
+		case Data::CTILE_STEAL_FOOD:
+			if (checkCastlePermission())
+				findFood(false);
+			break;
+		default:
+			writeString(" - nothing here!\n");
+			break;
+		}
+	} else {
+		if (_G(map)._mapType == Data::MAPTYPE_CITY)
+			writeString(" what");
+		writeString("?\n");
+		playFX(1);
+	}
+
+	return true;
+}
+
+bool CityCastleLogic::steal() {
+	writeString("Steal");
+
+	const auto &pos = _G(savegame)._locationPosition;
+	switch (_G(map).getTileAt(pos.x, pos.y)) {
+	case Data::CTILE_STEAL_FOOD:
+		findFood(true);
+		break;
+	case Data::CTILE_STEAL_WEAPON:
+		findWeapon(true);
+		break;
+	case Data::CTILE_STEAL_ARMOR:
+		findArmor(true);
+		break;
+	default:
+		writeString(" - nothing here!\n");
+		playFX(1);
+		break;
+	}
+
+	return true;
+}
+
+bool CityCastleLogic::unlock() {
+	// Cities have nothing to unlock (CastleLogic overrides this)
+	writeString("Unlock what?\n");
+	playFX(1);
+	return true;
+}
+
+bool CityCastleLogic::checkCastlePermission() {
+	if (_G(savegame)._castleItemAllowance <= 0) {
+		writeString("\n");
+		writeString("Thou hast not the king's\n");
+		writeString("permission!\n");
+		playFX(1);
+		return false;
+	}
+
+	--_G(savegame)._castleItemAllowance;
+	return true;
+}
+
+bool CityCastleLogic::checkCaughtStealing() {
+	auto &sg = _G(savegame);
+	int roll = getRandomNumber(1, 255);
+	bool caught = (sg._guardsHostile != 0) || (roll < 38);
+
+	if (!caught && sg._class == Data::CLASS_WIZARD)
+		return false;
+
+	if (!caught) {
+		if (roll > 77)
+			return false;
+		caught = true;
+	}
+
+	writeString("\n");
+	writeString("Oh no!  Thou wert caught!\n");
+	sg._guardsHostile = 1;
+	return true;
+}
+
+void CityCastleLogic::findWeapon(bool checkCaught) {
+	if (checkCaught && checkCaughtStealing())
+		return;
+
+	writeString("\n");
+	writeString("Thou dost find a");
+
+	int idx = getRandomNumber(1, 15);
+	const char *name = Data::WEAPON_NAMES[idx];
+
+	if (isVowel(*name))
+		writeString("n");
+	writeString(Common::String(name).size() > 8 ? "\n" : " ");
+	writeString("%s\n", name);
+
+	auto &sg = _G(savegame);
+	if (sg._weapons[idx] < 255)
+		++sg._weapons[idx];
+}
+
+void CityCastleLogic::findFood(bool checkCaught) {
+	if (checkCaught && checkCaughtStealing())
+		return;
+
+	writeString("\n");
+	writeString("Thou dost find ");
+
+	int amount = getRandomNumber(2, 31);
+	writeString("%d bags of\n", amount);
+	writeString("food!\n");
+
+	_G(savegame)._food += amount;
+	redrawStats();
+}
+
+void CityCastleLogic::findArmor(bool checkCaught) {
+	if (checkCaught && checkCaughtStealing())
+		return;
+
+	writeString("\n");
+	writeString("Thou dost find ");
+
+	int idx = getRandomNumber(1, 5);
+	if (idx <= 4)
+		writeString("a ");
+	writeString("%s\n", Data::ARMOR_NAMES[idx]);
+
+	auto &sg = _G(savegame);
+	if (sg._armor[idx] < 255)
+		++sg._armor[idx];
+}
+
+void CityCastleLogic::loadEntities() {
+	auto &map = _G(map);
+	auto &savegame = _G(savegame);
+	const Data::LocationEntity *widgets = CITY_WIDGETS[map._mapStyle];
+
+	for (int idx = 0; idx < Data::LOCATION_ENTITY_COUNT; ++idx)
+		savegame._locationEntities[idx] = widgets[idx];
+}
+
+int CityCastleLogic::checkAt(int x, int y) const {
+	if (x < 0 || x >= Data::CITY_WIDTH || y < 0 || y >= Data::CITY_HEIGHT)
+		return Data::CTILE_BLANK;
+
+	// The player or an NPC standing on the tile takes priority over
+	// whatever the map itself has there
+	if (x == _G(savegame)._locationPosition.x && y == _G(savegame)._locationPosition.y)
+		return Data::CTILE_PLAYER;
+
+	int idx = _G(savegame).getLocationEntityAt(x, y);
+	if (idx != -1)
+		return _G(savegame)._locationEntities[idx]._type;
+
+	int tile = _G(map).getMapTile(x, y);
+	if (tile == Data::CTILE_BLANK)
+		return tile;
+
+	if (tile == Data::CTILE_GROUND || tile >= Data::CTILE_DROP1)
+		return -1;
+
+	return 0;
+}
+
+int CityCastleLogic::randomWanderDelta() {
+	int delta = getRandomNumber(1, 215) % 3;
+	return (delta == 2) ? -1 : delta;
+}
+
+bool CityCastleLogic::moveEntityBy(int entityIndex, int deltaX, int deltaY) {
+	auto &e = _G(savegame)._locationEntities[entityIndex];
+	int x = e._position.x + deltaX;
+	int y = e._position.y + deltaY;
+
+	int tile = checkAt(x, y);
+	if (tile != -1 && tile != Data::CTILE_BLANK)
+		return false;
+
+	e._position = Common::Point(x, y);
+	redrawMap();
+	return true;
+}
+
+void CityCastleLogic::updateBardJester(int entityIndex) {
+	if (_G(savegame)._guardsHostile)
+		return;
+
+	auto &e = _G(savegame)._locationEntities[entityIndex];
+	int x = e._position.x + randomWanderDelta();
+	int y = e._position.y + randomWanderDelta();
+	int tile = checkAt(x, y);
+
+	bool stolen = false;
+	if (tile == -1) {
+		e._position = Common::Point(x, y);
+		redrawMap();
+		playFX(4);
+
+	} else if (tile == Data::CTILE_PLAYER) {
+		// Try to pickpocket a weapon that isn't currently readied
+		auto &sg = _G(savegame);
+		for (int idx = Data::WEAPON_COUNT - 1; idx >= 1 && !stolen; --idx) {
+			if (sg._weapons[idx] && idx != sg._equippedWeapon) {
+				--sg._weapons[idx];
+				stolen = true;
+			}
+		}
+
+		if (stolen && getRandomNumber(1, 255) < sg._agility + 128) {
+			writeString(_G(map)._mapType == Data::MAPTYPE_CITY ?
+				"Iolo stole something!\n" : "The jester stole something!\n");
+		}
+	}
+
+	if (!stolen && getRandomNumber(1, 255) < 15) {
+		if (_G(map)._mapType == Data::MAPTYPE_CITY) {
+			writeString("Iolo the Bard sings:\n");
+			writeString("Ho eyoh he hum!\n");
+		} else {
+			writeString("Gwenno the jester sings:\n");
+			writeString("I've got the key!\n");
+		}
+	}
+}
+
+void CityCastleLogic::updateWench(int entityIndex) {
+	if (_G(savegame)._guardsHostile)
+		return;
+
+	auto &e = _G(savegame)._locationEntities[entityIndex];
+	int x = e._position.x + randomWanderDelta();
+	int y = e._position.y + randomWanderDelta();
+
+	if (checkAt(x, y) == -1) {
+		e._position = Common::Point(x, y);
+		redrawMap();
+		playFX(4);
+	}
+}
+
+void CityCastleLogic::updatePrincess(int entityIndex) {
+	if (!_G(savegame)._guardsHostile) {
+		// Not currently being chased, so she just wanders like a wench
+		updateWench(entityIndex);
+		return;
+	}
+
+	const auto &e = _G(savegame)._locationEntities[entityIndex];
+	const auto &pos = _G(savegame)._locationPosition;
+
+	int diffX = e._position.x - pos.x;
+	int deltaX = (diffX == 0) ? 0 : (diffX > 0 ? -1 : 1);
+	int diffY = e._position.y - pos.y;
+	int deltaY = (diffY == 0) ? 0 : (diffY > 0 ? -1 : 1);
+
+	// Randomly vary which axis is tried first
+	bool moved = false;
+	if (getRandomNumber(1, 100) < 50) {
+		if (deltaY != 0)
+			moved = moveEntityBy(entityIndex, 0, deltaY);
+		if (!moved && deltaX != 0)
+			moved = moveEntityBy(entityIndex, deltaX, 0);
+	} else {
+		if (deltaX != 0)
+			moved = moveEntityBy(entityIndex, deltaX, 0);
+		if (!moved && deltaY != 0)
+			moved = moveEntityBy(entityIndex, 0, deltaY);
+	}
+
+	if (moved)
+		playFX(4);
+}
+
+bool CityCastleLogic::guardMove(int entityIndex) {
+	const auto &e = _G(savegame)._locationEntities[entityIndex];
+	const auto &pos = _G(savegame)._locationPosition;
+
+	int diffX = e._position.x - pos.x;
+	int diffY = e._position.y - pos.y;
+	int absDiffX = ABS(diffX);
+	int absDiffY = ABS(diffY);
+
+	// Already adjacent enough to attack instead, or too far away to bother
+	if (absDiffX < 2 && absDiffY < 2)
+		return false;
+	if (absDiffX + absDiffY >= 13)
+		return false;
+
+	int deltaX = (diffX == 0) ? 0 : (diffX > 0 ? -1 : 1);
+	int deltaY = (diffY == 0) ? 0 : (diffY > 0 ? -1 : 1);
+
+	bool moved = false;
+	if (deltaX != 0)
+		moved = moveEntityBy(entityIndex, deltaX, 0);
+	if (!moved && deltaY != 0)
+		moved = moveEntityBy(entityIndex, 0, deltaY);
+
+	if (moved)
+		playFX(4);
+
+	return moved;
+}
+
+void CityCastleLogic::guardAttack(int entityIndex) {
+	const auto &e = _G(savegame)._locationEntities[entityIndex];
+	const auto &pos = _G(savegame)._locationPosition;
+
+	if (ABS(e._position.x - pos.x) >= 2 || ABS(e._position.y - pos.y) >= 2)
+		return;
+
+	writeString("Attacked by guard!\n");
+	playFX(7);
+
+	auto &sg = _G(savegame);
+	int roll = getRandomNumber(1, 255);
+	int threshold = sg._stamina / 2 + sg._equippedArmor * 8 + 56;
+
+	if (roll < threshold) {
+		writeString("Missed!\n");
+		return;
+	}
+
+	writeString("Hit!...");
+	int damage = getRandomNumber(2, sg._hits / 128 + 15);
+	writeString("%d damage!\n", damage);
+	playFX(2);
+
+	sg._hits -= damage;
+	redrawStats();
+}
+
+/*-------------------------------------------------------------------*/
+
+CityLogic::CityLogic() {
+	_G(map)._tavernCtr = 0;
+	_G(map)._mapStyle = (_G(savegame)._mapNum - 1) % 8 + 2;
+	_G(map)._mapType = Data::MAPTYPE_CITY;
+}
+
+void CityLogic::entering() {
+	_G(savegame)._locationPosition = Common::Point(19, 17);
+	CityCastleLogic::entering();
+}
+
+bool CityLogic::transact() {
+	writeString("Transact");
+
+	if (_G(savegame)._guardsHostile) {
+		writeString("\n");
+		writeString("None will talk to thee!\n");
+		return true;
+	}
+
+	const auto &pos = _G(savegame)._locationPosition;
+	int tile = _G(map).getTileAt(pos.x, pos.y);
+	if (tile < Data::CTILE_ARMORY || tile > Data::CTILE_TRANSPORT) {
+		writeString("\n");
+		writeString("Thou art not by a counter!\n");
+		playFX(1);
+		return true;
+	}
+
+	g_engine->addView("Merchant");
+	return false;
+}
+
+/*-------------------------------------------------------------------*/
+
+CastleLogic::CastleLogic() {
+	_G(map)._castleNum = _G(savegame)._mapNum - 33;
+	_G(map)._mapStyle = (_G(savegame)._mapNum - 1) % 2;
+	_G(map)._castleNum2 = _G(map)._castleNum + 1;
+	_G(map)._mapType = Data::MAPTYPE_CASTLE;
+}
+
+bool CastleLogic::transact() {
+	writeString("Transact with king\n");
+
+	const auto &pos = _G(savegame)._locationPosition;
+	if (_G(map).getTileAt(pos.x, pos.y) != Data::CTILE_KING) {
+		writeString("He is not here!\n");
+		return true;
+	}
+
+	if (_G(savegame)._guardsHostile) {
+		writeString("He rejects thine offer!\n");
+		return true;
+	}
+
+	g_engine->addView("King");
+	return false;
+}
+
+bool CastleLogic::unlock() {
+	Data::Savegame &sg = _G(savegame);
+	const auto &pos = sg._locationPosition;
+
+	writeString("Unlock");
+
+	// The player has to be standing on one of the two lock tiles (the
+	// princess's barred cell is the cell directly above)
+	int tile = _G(map).getMapTile(pos.x, pos.y);
+	if (tile != Data::CTILE_LOCK1 && tile != Data::CTILE_LOCK2) {
+		writeString(" what?\n");
+		playFX(1);
+		return true;
+	}
+
+	writeString("\n");
+
+	if (!sg._hasCastleKey) {
+		writeString("Thou hast not a key!\n");
+		return true;
+	}
+
+	if (tile != sg._castleKeyVal) {
+		writeString("Thou hast not\n");
+		writeString("the correct key!\n");
+		return true;
+	}
+
+	writeString("The door is open!\n");
+	sg._freeingPrincess = 1;
+
+	// Clear the barred cell above the player so the princess can follow out
+	_G(map)[pos.y - 1][pos.x] = Data::CTILE_GROUND;
+	redrawMap();
+
+	return true;
+}
+
+void CastleLogic::entering() {
+	_G(savegame)._locationPosition = Common::Point(0, 9);
+	CityCastleLogic::entering();
+
+	_G(savegame)._guardsHostile = 0;
+	_G(savegame)._hasCastleKey = 0;
+	_G(savegame)._freeingPrincess = 0;
+	_G(savegame)._castleItemAllowance = 0;
+	_G(savegame)._castleKeyVal = getRandomNumber(1) == 1 ? 61 : 60;
+
+	// The two castle map styles are vertical mirrors of each other, so
+	// the row these two cells sit on differs between them
+	int row = (_G(map)._mapStyle == 0) ? 14 : 4;
+	_G(map)[row][35] = Data::CTILE_BARRED_DOOR;
+	_G(map)[row][31] = Data::CTILE_BARRED_DOOR;
+}
+
+void CastleLogic::leaving() {
+	// Check when leaving castles if we've saved the princess
+	if (isPrincessSaved()) {
+		princessSaved();
+	} else {
+		CityCastleLogic::leaving();
+	}
+}
+
+bool CastleLogic::isPrincessAtDelta(int deltaX, int deltaY) const {
+	const auto &pos = _G(savegame)._locationPosition;
+	int idx = _G(savegame).getLocationEntityAt(pos.x + deltaX, pos.y + deltaY);
+
+	// Widget type 22 is a princess
+	return idx != -1 && _G(savegame)._locationEntities[idx]._type == 22;
+}
+
+bool CastleLogic::isPrincessSaved() {
+	for (int deltaY = -1; deltaY <= 1; ++deltaY) {
+		for (int deltaX = -1; deltaX <= 1; ++deltaX) {
+			if ((deltaX || deltaY) && isPrincessAtDelta(deltaX, deltaY))
+				return true;
+		}
+	}
+
+	return false;
+}
+
+void CastleLogic::princessSaved() {
+	g_engine->addView("PrincessSaved");
+}
+
+} // namespace Logic
+} // namespace Ultima1
+} // namespace Ultima

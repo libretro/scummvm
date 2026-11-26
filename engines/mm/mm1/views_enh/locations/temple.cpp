@@ -72,27 +72,27 @@ void Temple::draw() {
 	Location::draw();
 
 	setReduced(false);
-	writeLine(0, STRING["enhdialogs.temple.title"], ALIGN_MIDDLE);
-	writeLine(1, STRING["enhdialogs.location.options_for"], ALIGN_MIDDLE);
+	writeLine(0, "Temple", ALIGN_MIDDLE);
+	writeLine(1, "options for", ALIGN_MIDDLE);
 	writeString(0, 23, camelCase(g_globals->_currCharacter->_name), ALIGN_MIDDLE);
 
 	setReduced(true);
-	writeOption(0, 'H', STRING["enhdialogs.temple.heal"],
+	writeOption(0, 'H', "\x01""37Heal",
 		_healCost ? Common::String::format("%d", _healCost) : "----");
-	writeOption(1, 'U', STRING["enhdialogs.temple.uncurse"],
+	writeOption(1, 'U', "\x01""37Uncurse",
 		_uncurseCost ? Common::String::format("%d", _uncurseCost) : "----");
-	writeOption(2, 'R', STRING["enhdialogs.temple.realign"],
+	writeOption(2, 'R', "\x01""37Re-align",
 		_alignmentCost ? Common::String::format("%d", _alignmentCost) : "----");
-	writeOption(3, 'D', STRING["enhdialogs.temple.donate"],
+	writeOption(3, 'D', "\x01""37Donate",
 		Common::String::format("%d", _donateCost));
 
 	setReduced(false);
-	writeLine(10, STRING["enhdialogs.location.gold"]);
+	writeLine(10, "Gold");
 	writeLine(10, Common::String::format("%d",
 		g_globals->_currCharacter->_gold), ALIGN_RIGHT);
 
 	setReduced(true);
-	writeString(27, 122, STRING["enhdialogs.location.esc"]);
+	writeString(27, 122, "Esc");
 }
 
 void Temple::writeOption(int row, char c, const Common::String &text,
@@ -154,10 +154,16 @@ bool Temple::msgAction(const ActionMessage &msg) {
 }
 
 bool Temple::msgGame(const GameMessage &msg) {
-	Location::msgGame(msg);
 	if (msg._name == "UPDATE")
 		updateCosts();
+
+	Location::msgGame(msg);
 	return true;
+}
+
+void Temple::charSwitched(Character *priorChar) {
+	updateCosts();
+	PartyView::charSwitched(priorChar);
 }
 
 void Temple::updateCosts() {
@@ -178,7 +184,7 @@ void Temple::updateCosts() {
 		_isEradicated = true;
 	} else if (c._condition & BAD_CONDITION) {
 		_healCost = HEAL_COST2[townNum];
-	} else if (c._condition || c._hp < c._hpMax) {
+	} else if (c._condition || c._hpCurrent < c._hpMax) {
 		_healCost = HEAL_COST3[townNum];
 	}
 
@@ -203,13 +209,15 @@ void Temple::restoreHealth() {
 	if (subtractGold(_healCost)) {
 		Character &c = *g_globals->_currCharacter;
 		c._condition = FINE;
-		c._hpCurrent = c._hp;
+		c._hpMax = c._hp;
+		c._hpCurrent = c._hpMax;
 
 		if (_isEradicated) {
 			c._age += 10;
 			--c._endurance;
 		}
 
+		updateCosts();
 		redraw();
 	}
 }
@@ -227,6 +235,7 @@ void Temple::uncurseItems() {
 			}
 		}
 
+		updateCosts();
 		redraw();
 	}
 }
@@ -235,8 +244,9 @@ void Temple::restoreAlignment() {
 	if (subtractGold(_alignmentCost)) {
 		Character &c = *g_globals->_currCharacter;
 		c._alignment = c._alignmentInitial;
-		c._alignmentCtr = ALIGNMENT_VALS[c._alignment];
+		c._alignmentCtr = ALIGNMENT_VALS[c._alignment - 1];
 
+		updateCosts();
 		redraw();
 	}
 }
@@ -259,9 +269,9 @@ void Temple::donate() {
 				g_globals->_activeSpells._arr[i] = 75;
 
 			Sound::sound(SOUND_3);
-			displayMessage(STRING["dialogs.temple.protected"]);
+			displayMessage("*** Today you shall be protected!");
 		} else {
-			displayMessage(STRING["dialogs.temple.thankyou"]);
+			displayMessage("Thank you!");
 		}
 	}
 }

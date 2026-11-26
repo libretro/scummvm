@@ -57,10 +57,16 @@ public:
 	void drawText(Graphics::ManagedSurface &surface, const Common::String &text, const Common::Rect &dest, const float *color, ControlState state, bool shadow) const;
 
 	uint32 getFontColor(ControlState state) const { return _fontColors[state]; }
+
+	// Whether the colors that get drawn are those of a state
+	bool hasReached(ControlState state) const;
 	int getFontHeight() const;
 
 	// The height the text takes up when it gets wrapped to the given width
 	int measureTextHeight(const Common::String &text, int width) const;
+	// The height the text takes up when drawn, which also goes for text that isn't
+	// wrapped but has several lines
+	int getDrawnTextHeight(const Common::String &text, int width) const;
 	const Graphics::Font *getSystemFont() const;
 	void setTextureName(const Common::String &textureName) { _textureName = textureName; }
 

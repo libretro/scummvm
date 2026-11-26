@@ -37,19 +37,19 @@
 namespace NGI {
 
 void scene02_initScene(Scene *sc) {
-	g_vars->scene02_guvTheDrawer = sc->getStaticANIObject1ById(ANI_DADAYASHIK, -1);
+	g_vars->scene02_guvTheDrawer = sc->findAniObjectById(ANI_DADAYASHIK, -1);
 
-	if (g_nmi->getObjectState(sO_GuvTheDrawer) == g_nmi->getObjectEnumState(sO_GuvTheDrawer, sO_IsSleeping)) {
+	if (g_nmi->getStateId(sO_GuvTheDrawer) == g_nmi->getStateValue(sO_GuvTheDrawer, sO_IsSleeping)) {
 		Scene *s = g_nmi->_currentScene;
 
 		g_nmi->_currentScene = sc;
-		g_vars->scene02_guvTheDrawer->changeStatics2(ST_DYAS_LIES);
+		g_vars->scene02_guvTheDrawer->setStatic(ST_DYAS_LIES);
 		g_nmi->_currentScene = s;
 	}
 
 	g_vars->scene02_boxDelay = 0;
 
-	StaticANIObject *box = sc->getStaticANIObject1ById(ANI_SC2_BOX, -1);
+	AniObject *box = sc->findAniObjectById(ANI_SC2_BOX, -1);
 
 	if (box && box->_flags & 4) {
 		g_vars->scene02_boxOpen = false;
@@ -62,22 +62,22 @@ void scene02_initScene(Scene *sc) {
 }
 
 void sceneHandler02_ladderClick() {
-	handleObjectInteraction(g_nmi->_aniMan2, g_nmi->_currentScene->getPictureObjectById(PIC_SC2_DTRUBA, 0), 0);
+	handleObjectInteraction(g_nmi->_aniMan2, g_nmi->_currentScene->findPictureObjectById(PIC_SC2_DTRUBA, 0), 0);
 }
 
-void sceneHandler02_showLadder() {
-	g_nmi->_currentScene->getPictureObjectById(PIC_SC2_LADDER, 0)->_flags |= 4;
+void sceneHandler02_onShowLadder() {
+	g_nmi->_currentScene->findPictureObjectById(PIC_SC2_LADDER, 0)->_flags |= 4;
 }
 
-void sceneHandler02_hideLadder() {
-	g_nmi->_currentScene->getPictureObjectById(PIC_SC2_LADDER, 0)->_flags &= 0xfffb;
-	g_nmi->_aniMan2->_priority = 25;
+void sceneHandler02_onHideLadder() {
+	g_nmi->_currentScene->findPictureObjectById(PIC_SC2_LADDER, 0)->_flags &= 0xfffb;
+	g_nmi->_aniMan2->_z = 25;
 }
 
-int sceneHandler02(ExCommand *ex) {
+int sceneHandler02(Command *ex) {
 	int res = 0;
 
-	if (ex->_messageKind != 17)
+	if (ex->_cmd != 17)
 		return 0;
 
 	switch(ex->_messageNum) {
@@ -86,24 +86,24 @@ int sceneHandler02(ExCommand *ex) {
 		break;
 
 	case MSG_SC2_SHOWLADDER:
-		sceneHandler02_showLadder();
+		sceneHandler02_onShowLadder();
 		break;
 
 	case MSG_SC2_PUTMANUP:
-		g_nmi->_aniMan2->_priority = 0;
+		g_nmi->_aniMan2->_z = 0;
 		break;
 
 	case MSG_SC2_HIDELADDER:
-		sceneHandler02_hideLadder();
+		sceneHandler02_onHideLadder();
 		break;
 
 	case 33:
 		if (g_nmi->_aniMan2) {
-			if (g_nmi->_aniMan2->_ox < g_nmi->_sceneRect.left + 200)
-				g_nmi->_currentScene->_x = g_nmi->_aniMan2->_ox - g_nmi->_sceneRect.left - 300;
+			if (g_nmi->_aniMan2->_x < g_nmi->_sceneRect.left + 200)
+				g_nmi->_currentScene->_x = g_nmi->_aniMan2->_x - g_nmi->_sceneRect.left - 300;
 
-			if (g_nmi->_aniMan2->_ox > g_nmi->_sceneRect.right - 200)
-				g_nmi->_currentScene->_x = g_nmi->_aniMan2->_ox - g_nmi->_sceneRect.right + 300;
+			if (g_nmi->_aniMan2->_x > g_nmi->_sceneRect.right - 200)
+				g_nmi->_currentScene->_x = g_nmi->_aniMan2->_x - g_nmi->_sceneRect.right + 300;
 
 			res = 1;
 		}
@@ -111,22 +111,22 @@ int sceneHandler02(ExCommand *ex) {
 		if (g_vars->scene02_boxOpen) {
 			if (g_vars->scene02_boxDelay >= 1) {
 				--g_vars->scene02_boxDelay;
-			} else if (g_nmi->_floaters->_array2.size() >= 1) {
-				if (g_nmi->_floaters->_array2[0].val5 == -50) {
-					g_nmi->_floaters->stopAll();
+			} else if (g_nmi->_floaters->_flies.size() >= 1) {
+				if (g_nmi->_floaters->_flies[0].y == -50) {
+					g_nmi->_floaters->deleteAllFlies();
 					g_vars->scene02_boxOpen = false;
 					g_vars->scene02_boxDelay = 100 * g_nmi->_rnd.getRandomNumber(32767) + 150;
 				} else {
-					g_nmi->_floaters->_array2[0].val3 = -50;
+					g_nmi->_floaters->_flies[0].targetY = -50;
 				}
 			} else {
-				g_nmi->_floaters->genFlies(g_nmi->_currentScene, g_nmi->_rnd.getRandomNumber(700) + 100, -50, 0, 0);
+				g_nmi->_floaters->addFly(g_nmi->_currentScene, g_nmi->_rnd.getRandomNumber(700) + 100, -50, 0, 0);
 				g_vars->scene02_boxDelay = 500 * g_nmi->_rnd.getRandomNumber(32767) + 1000;
 			}
 		}
 
-		g_nmi->_floaters->update();
-		g_nmi->_behaviorManager->updateBehaviors();
+		g_nmi->_floaters->onUpdate();
+		g_nmi->_behaviorManager->update();
 
 		g_nmi->startSceneTrack();
 		break;

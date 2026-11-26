@@ -24,6 +24,7 @@
 #include "mm/mm1/events.h"
 #include "mm/mm1/globals.h"
 #include "mm/mm1/sound.h"
+#include "mm/mm1/utils/strings.h"
 
 namespace MM {
 namespace MM1 {
@@ -51,11 +52,13 @@ void Map37::special() {
 	for (int i = 0; i < count; ++i)
 		g_maps->turnLeft();
 
-	send(SoundMessage(STRING["maps.map37.spins"]));
+	send(SoundMessage("The floor spins!"));
 }
 
 void Map37::special00() {
-	SoundMessage msg(STRING["maps.map37.message1"]);
+	SoundMessage msg(mapText("Etched in gold, message 1 reads:\n"
+		"Completion-must-each-kings-of-astral-\n"
+		"with-9th-sanctum-and-wondrous"));
 	msg._fontReduced = true;
 	send(msg);
 }
@@ -71,10 +74,10 @@ void Map37::special01() {
 		}
 
 		send(SoundMessage(
-			STRING["maps.map37.opening"],
+			mapText("An opening above leads outside,\nClimb out (Y/N)?"),
 			[]() {
 				g_maps->_mapPos = Common::Point(13, 5);
-				g_maps->changeMap(0xa00, 2);
+				g_maps->changeMapFromExit(0xa00, 2);
 			}
 		));
 	}
@@ -84,10 +87,10 @@ void Map37::special02() {
 	visitedExit();
 
 	send(SoundMessage(
-		STRING["maps.stairs_down"],
+		"Stairs going down! Take them (Y/N)?",
 		[]() {
 			g_maps->_mapPos.x = 15;
-			g_maps->changeMap(0x703, 3);
+			g_maps->changeMapFromExit(0x703, 3);
 		}
 	));
 }
@@ -98,14 +101,16 @@ void Map37::special03() {
 
 void Map37::special04() {
 	Game::Encounter &enc = g_globals->_encounters;
-	g_maps->clearSpecial();
 
 	if (_data[VAL1]) {
+		// Okrim has actually been defeated. Consume the square for this
+		// map visit and present his post-battle ghost interaction.
+		g_maps->clearSpecial();
 		g_events->addView("Ghost");
 
 	} else {
-		_data[VAL1]++;
-
+		// Do not mark Okrim defeated before combat. Enhanced combat sets
+		// VAL1 only after a real victory, so retreating cannot skip him.
 		enc.clearMonsters();
 		enc.addMonster(19, 12);
 		for (int i = 1; i < 4; ++i)
@@ -159,7 +164,9 @@ void Map37::special14() {
 }
 
 void Map37::special15() {
-	send(SoundMessage(STRING["maps.wall_painted"]));
+	send(SoundMessage(mapText("The wall is painted from ceiling to\n"
+		"floor in a black and white checkered\n"
+		"pattern!")));
 
 	if (!g_globals->_party.hasItem(B_QUEEN_IDOL_ID)) {
 		g_globals->_treasure._items[2] = B_QUEEN_IDOL_ID;
@@ -167,14 +174,14 @@ void Map37::special15() {
 }
 
 void Map37::special16() {
-	g_maps->clearSpecial();
+	g_maps->clearSpecialAndRememberReward();
 	g_globals->_treasure._container = GOLD_BOX;
 	g_globals->_treasure.setGems(100);
 	g_events->addAction(KEYBIND_SEARCH);
 }
 
 void Map37::special19() {
-	send(SoundMessage(STRING["maps.map37.archway"]));
+	send(SoundMessage(mapText("A gem encrusted archway reads:\nLair of the omnipotent wizard Okrim")));
 }
 
 } // namespace Maps
